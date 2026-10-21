@@ -405,6 +405,7 @@ pub struct ProjectTextFormattingView {
 pub struct ProjectTimelineClipView {
     pub clip_id: String,
     pub content_kind: TimelineClipContentKindView,
+    pub playback_rate: RationalRateView,
     pub media_id: Option<String>,
     pub text: Option<String>,
     pub formatting: Option<ProjectTextFormattingView>,
@@ -1469,6 +1470,77 @@ impl ProjectHostHandle {
                 fade_in,
                 fade_out,
             }),
+        ))
+    }
+
+    pub fn update_timeline_clip_playback_rate(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        rate: RationalRateView,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision, track_kind, clip) = match self
+            .find_timeline_clip_state(
+                &project_id,
+                &project_instance_id,
+                expected_revision,
+                &track_id,
+                &clip_id,
+            ) {
+            Ok(result) => result,
+            Err(error) => return action_error(error),
+        };
+        if !matches!(track_kind, TrackKind::Video | TrackKind::Audio) {
+            return action_error(ProjectBridgeError {
+                code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                message: "Playback speed is available for video and audio media clips.".to_owned(),
+            });
+        }
+        let rate = match RationalRate::new(rate.numerator, rate.denominator) {
+            Ok(rate) => rate,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_PLAYBACK_RATE".to_owned(),
+                    message: format!("The playback rate is invalid: {error}"),
+                });
+            }
+        };
+        let source_range = match &clip.content {
+            ClipContent::Media { source_range, .. } => *source_range,
+            ClipContent::Text { .. } | ClipContent::Caption { .. } => {
+                return action_error(ProjectBridgeError {
+                    code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                    message: "Playback speed is available for video and audio media clips."
+                        .to_owned(),
+                });
+            }
+        };
+        let timeline_duration = match RationalRate::new(rate.denominator(), rate.numerator())
+            .and_then(|inverse_rate| inverse_rate.apply(source_range.duration()))
+        {
+            Ok(duration) => duration,
+            Err(error) => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_PLAYBACK_RATE".to_owned(),
+                    message: format!("The playback rate cannot be represented exactly: {error}"),
+                });
+            }
+        };
+        let mut content = clip.content;
+        if let ClipContent::Media { playback_rate, .. } = &mut content {
+            *playback_rate = rate;
+        }
+        self.dispatch_command(CommandEnvelope::update_timeline_clip(
+            project_id,
+            project_instance_id,
+            revision,
+            clip.clip_id,
+            timeline_duration,
+            content,
+            clip.settings,
         ))
     }
 
@@ -3699,6 +3771,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     ProjectTimelineClipView {
         clip_id: clip.clip_id.to_string(),
         content_kind,
+        playback_rate: rational_rate_view(clip.content.playback_rate()),
         media_id,
         text,
         formatting,

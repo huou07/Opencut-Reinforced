@@ -435,7 +435,7 @@ mod tests {
     fn implausible_parameters_are_refused() {
         for noise_floor_db in [-200, 0, 12] {
             let error = clean_audio(&AudioCleanupRequest {
-                source: PathBuf::from("/etc/hostname"),
+                source: std::env::current_exe().unwrap(),
                 noise_floor_db,
                 ..request()
             })
@@ -443,7 +443,7 @@ mod tests {
             assert_eq!(error.code(), AudioCleanupErrorCode::InvalidArguments);
         }
         let error = clean_audio(&AudioCleanupRequest {
-            source: PathBuf::from("/etc/hostname"),
+            source: std::env::current_exe().unwrap(),
             reduction_db: 0,
             ..request()
         })
@@ -513,8 +513,8 @@ mod tests {
     #[test]
     fn writing_over_the_source_is_refused() {
         let error = clean_audio(&AudioCleanupRequest {
-            source: PathBuf::from("/etc/hostname"),
-            destination: PathBuf::from("/etc/hostname"),
+            source: std::env::current_exe().unwrap(),
+            destination: std::env::current_exe().unwrap(),
             ..request()
         })
         .unwrap_err();
@@ -533,7 +533,7 @@ mod tests {
             );
         }
         let error = clean_audio_file(
-            Path::new("/etc/hostname"),
+            &std::env::current_exe().unwrap(),
             Path::new("/tmp/or-out.wav"),
             -30,
             12,

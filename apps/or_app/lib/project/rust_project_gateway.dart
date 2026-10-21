@@ -341,6 +341,7 @@ class RustProjectGateway implements ProjectGateway {
             .map(
               (clip) => ProjectTimelineClip(
                 clipId: clip.clipId,
+                playbackRate: _projectRationalRate(clip.playbackRate),
                 contentKind: switch (clip.contentKind) {
                   rust.TimelineClipContentKindView.media =>
                     ProjectTimelineClipContentKind.media,
@@ -520,6 +521,27 @@ class RustProjectGateway implements ProjectGateway {
         panBasisPoints: settings.panBasisPoints,
         fadeIn: _rustTime(settings.fadeIn),
         fadeOut: _rustTime(settings.fadeOut),
+      ),
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) async => _action(
+    await _host(session).updateTimelineClipPlaybackRate(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      rate: rust.RationalRateView(
+        numerator: rate.numerator,
+        denominator: rate.denominator,
       ),
     ),
   );
@@ -1551,6 +1573,10 @@ class RustProjectGateway implements ProjectGateway {
   static ProjectRationalTime _projectRationalTime(
     rust.RationalTimeView value,
   ) => ProjectRationalTime(BigInt.from(value.numerator), value.denominator);
+
+  static ProjectRationalRate _projectRationalRate(
+    rust.RationalRateView value,
+  ) => ProjectRationalRate(value.numerator, value.denominator);
 
   static ProjectTextFormatting _projectTextFormatting(
     rust.ProjectTextFormattingView value,

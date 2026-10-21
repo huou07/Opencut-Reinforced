@@ -124,7 +124,7 @@ The original `.orproj` schema v1 contract is UTF-8 JSON with this envelope:
 }
 ```
 
-The current `.orproj` schema is v7. Its envelope keeps the format marker and project identity/revision/name, then stores ordered `media`, `timeline.tracks`, global `timeline.markers`, and the required nullable `timeline.sequence_frame_rate`. `ProjectDocument` owns a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, UTF-8 name, ordered media items, and canonical `ProjectTimeline`. Private versioned DTOs and explicit conversion keep domain changes from silently changing the file contract. The decoder strictly accepts v1–v7; v6 validates closed track/content enums, exact clip timing, track state, and bounded typed settings; v7 adds the typed `FileUri` / `AndroidSafDocumentUri` source union. All versions reject unknown fields. The Rust encoder emits deterministic pretty v7 JSON with a trailing newline; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The version probe rejects unsupported versions before decoding. Bounded load remains 64 MiB. Migrations from v1–v4 set the sequence rate to `null` and preserve project ID, revision, name, and existing media/timeline state. V5 preserves its nullable sequence rate and migrates media clips with their exact source duration and default typed settings. A clean open never rewrites the file, and the next explicit save writes v7 without a conversion-only revision increment.
+The current `.orproj` schema is v8. Its envelope keeps the format marker and project identity/revision/name, then stores ordered `media`, `timeline.tracks`, global `timeline.markers`, and the required nullable `timeline.sequence_frame_rate`. `ProjectDocument` owns a typed UUIDv4 `ProjectId`, persistent `ProjectRevision`, UTF-8 name, ordered media items, and canonical `ProjectTimeline`. Private versioned DTOs and explicit conversion keep domain changes from silently changing the file contract. The decoder accepts v1–v8; v6 validates closed track/content enums, exact clip timing, track state, and bounded typed settings; v7 adds the typed `FileUri` / `AndroidSafDocumentUri` source union; v8 adds exact `playback_rate` to media clips. Media clips loaded from v1–v7 default to the identity rate. All versions reject unknown fields. The Rust encoder emits deterministic pretty v8 JSON with a trailing newline; this is not a cross-implementation canonical JSON standard. `ProjectInstanceId` is runtime-only and is never persisted. The version probe rejects unsupported versions before decoding. Bounded load remains 64 MiB. Migrations from v1–v4 set the sequence rate to `null` and preserve project ID, revision, name, and existing media/timeline state. V5 preserves its nullable sequence rate and migrates media clips with their exact source duration and default typed settings. A clean open never rewrites the file, and the next explicit save writes v8 without a conversion-only revision increment.
 
 7F0 implements schema v5 with one strict `timeline.sequence_frame_rate` field
 encoded as either `null` or an exact `RationalRate`. Strict migrations from
@@ -141,8 +141,9 @@ caption clips have no synthetic media reference or source range. Persistent
 typed state also includes lock, visibility, mute, solo, transforms, crop,
 opacity, basic text formatting, audio gain/pan/fades, and basic transition and
 effect references. Transient selection, hover, zoom, viewport, and drag state
-remain presentation-only. Desktop playback speed stays 1x through MVP; 13B
-owns later speed and rate mapping.
+remain presentation-only. The initial Phase 8A scope kept playback at 1×;
+Phase 13B now persists exact media-clip rates in schema v8 and maps them through
+video preview/export and audio preview/export.
 
 Checkpoint 8C reuses the persisted visual settings without changing schema v6.
 The Inspector edits integer fixed-point values through the typed bridge and the

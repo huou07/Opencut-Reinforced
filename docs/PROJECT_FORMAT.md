@@ -1,6 +1,6 @@
 # `.orproj` project format
 
-Last reviewed: 2026-10-14
+Last reviewed: 2026-10-22
 
 Type: Reference
 
@@ -38,7 +38,7 @@ UTF-8 JSON. The top level is:
 ```json
 {
   "format": "opencut-reinforced-project",
-  "schema_version": 7,
+  "schema_version": 8,
   "project": {
     "id": "01234567-89ab-4def-8123-456789abcdef",
     "revision": 0,
@@ -50,7 +50,7 @@ UTF-8 JSON. The top level is:
 | Field | Type | Meaning |
 |---|---|---|
 | `format` | string | Always `opencut-reinforced-project`. A different marker is not an OR project |
-| `schema_version` | integer | Version of the document layout below. Current: **7** |
+| `schema_version` | integer | Version of the document layout below. Current: **8** |
 | `project` | object | Project identity and revision |
 
 The authoritative constant is `CURRENT_PROJECT_SCHEMA_VERSION` in
@@ -70,7 +70,8 @@ meaning is the thing external tooling breaks on.
 | 4 | Markers and Snap schema |
 | 5 | Text/caption clip types |
 | 6 | Transformation and formatting on clips |
-| 7 | Current. Exact rational timing and typed text properties |
+| 7 | Strict `FileUri` / `AndroidSafDocumentUri` media source identities |
+| 8 | Current. Exact rational `playback_rate` on media clips; absent legacy values mean 1× |
 
 The authoritative migration chain and per-version field detail is
 [TECHNICAL_PLAN.md](TECHNICAL_PLAN.md) section 3. The implementation is the
@@ -91,6 +92,11 @@ table and those tests ever disagree, the tests are right.
 4. **Snapshots and recovery are separate.** Recovery data has its own envelope
    and version (`CURRENT_RECOVERY_SCHEMA_VERSION`). It is not the project
    document, and a recovery record must never be written back as a project.
+5. **Playback rate maps exact source and timeline time.** A media clip's
+   `playback_rate` is the exact number of source-time units consumed per
+   timeline-time unit, bounded to 1/16×–16×. Its source range duration equals
+   `timeline_duration × playback_rate`. Files from v1–v7 omit the field and
+   decode it as the identity rate, 1/1.
 
 ## Writing a project safely
 

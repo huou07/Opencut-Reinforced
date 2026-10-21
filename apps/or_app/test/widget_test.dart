@@ -2723,6 +2723,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('AUDIO'), findsOneWidget);
     expect(gateway.getAudioSettingsCalls, 1);
+    final playbackRate = find.byKey(const ValueKey('inspector-playback-rate'));
+    expect(playbackRate, findsOneWidget);
+    await tester.tap(playbackRate);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2×').last);
+    await tester.pumpAndSettle();
+    expect(gateway.updatePlaybackRateCalls, 1);
+    expect(gateway.lastPlaybackRate?.canonical, '2/1');
+    expect(find.text('2×'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-gain_db')),
       '-6.25',
@@ -2739,8 +2748,15 @@ void main() {
       find.byKey(const ValueKey('inspector-audio-fade_out')),
       '1/3',
     );
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('inspector-audio-apply')),
+      120,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('inspector-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
     );
     await tester.tap(find.byKey(const ValueKey('inspector-audio-apply')));
     await tester.pumpAndSettle();
@@ -5461,6 +5477,8 @@ class _FakeProjectGateway implements ProjectGateway {
   int getAudioSettingsCalls = 0;
   int updateAudioSettingsCalls = 0;
   ProjectTimelineAudioSettings? lastAudioSettings;
+  int updatePlaybackRateCalls = 0;
+  ProjectRationalRate? lastPlaybackRate;
   int timelineMarkersCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
   int resolveTimelineSnapCalls = 0;
@@ -5973,6 +5991,61 @@ class _FakeProjectGateway implements ProjectGateway {
       return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
     }
     session.audioSettings[clipId] = settings;
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) async {
+    updatePlaybackRateCalls++;
+    lastPlaybackRate = rate;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final track = session.tracks.where((item) => item.trackId == trackId);
+    final clips = session.clips[trackId];
+    final clipIndex = clips?.indexWhere((item) => item.clipId == clipId) ?? -1;
+    if (track.isEmpty ||
+        !{
+          ProjectTimelineTrackKind.video,
+          ProjectTimelineTrackKind.audio,
+        }.contains(track.first.kind) ||
+        clips == null ||
+        clipIndex < 0 ||
+        clips[clipIndex].contentKind != ProjectTimelineClipContentKind.media) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    final clip = clips[clipIndex];
+    final durationNumerator =
+        clip.timelineDuration.numerator *
+        BigInt.from(clip.playbackRate.numerator) *
+        BigInt.from(rate.denominator);
+    final durationDenominator =
+        BigInt.from(clip.timelineDuration.denominator) *
+        BigInt.from(clip.playbackRate.denominator) *
+        BigInt.from(rate.numerator);
+    final duration = ProjectRationalTime.tryParse(
+      '$durationNumerator/$durationDenominator',
+    );
+    if (duration == null) {
+      return _timelineOperationFailure('INVALID_PLAYBACK_RATE');
+    }
+    clips[clipIndex] = ProjectTimelineClip(
+      clipId: clip.clipId,
+      contentKind: clip.contentKind,
+      playbackRate: rate,
+      mediaId: clip.mediaId,
+      text: clip.text,
+      formatting: clip.formatting,
+      timelineStart: clip.timelineStart,
+      timelineDuration: duration,
+      sourceStart: clip.sourceStart,
+    );
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }

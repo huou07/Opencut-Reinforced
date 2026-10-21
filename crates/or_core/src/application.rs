@@ -7823,22 +7823,18 @@ mod tests {
         assert_eq!(session.project_revision().value(), revision_before.value());
     }
 
-    /// Pins the invariant a speed change will have to move: today a media clip's
-    /// source window and its timeline duration must be exactly equal, so no clip can
-    /// play faster or slower than real time. The test is written now because the
-    /// Phase 1.5 rate change is precisely the edit that must fail it, and a format
-    /// change that silently relaxes this without a replacement rule would let a clip
-    /// reference more source material than it shows.
+    /// A media clip without an explicit rate still plays at identity speed, so its
+    /// source window and timeline duration must be exactly equal.
     #[test]
-    fn a_media_clip_cannot_yet_play_at_a_different_rate() {
+    fn a_media_clip_without_a_rate_cannot_map_different_source_and_timeline_durations() {
         let mut session = session_with_state("rate-invariant", 0);
         seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
         insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
         let before = clip_spans(&session, TRACK_A);
         let revision_before = session.project_revision();
 
-        // One second of source shown over half a second of timeline is a 2x speed,
-        // which the model has no way to express.
+        // One second of source over half a second of timeline needs an explicit 2x
+        // rate; omitting it means identity speed and remains invalid.
         let error = execute(
             &mut session,
             "timeline.clip.update",
@@ -7882,6 +7878,57 @@ mod tests {
         assert_eq!(error.code, super::OperationErrorCode::InvalidArguments);
         assert_eq!(session.project_revision().value(), revision_before.value());
         assert_eq!(clip_spans(&session, TRACK_A), before);
+    }
+
+    #[test]
+    fn a_media_clip_can_play_at_a_different_rate_and_undo_restores_identity() {
+        let mut session = session_with_state("rate-update", 0);
+        seed_media_and_track(&mut session, MEDIA_A, TRACK_A);
+        insert_clip_at(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
+        let revision_before = session.project_revision().value();
+
+        let media_id = MediaId::from_str(MEDIA_A).unwrap();
+        let clip_id = ClipId::from_str(CLIP_A).unwrap();
+        session
+            .execute_command(CommandEnvelope::update_timeline_clip(
+                session.project_id(),
+                session.project_instance_id(),
+                session.project_revision(),
+                clip_id,
+                RationalTime::new(1, 2).unwrap(),
+                ClipContent::Media {
+                    media_id,
+                    source_range: TimeRange::new(
+                        RationalTime::ZERO,
+                        RationalTime::new(1, 1).unwrap(),
+                    )
+                    .unwrap(),
+                    playback_rate: RationalRate::new(2, 1).unwrap(),
+                },
+                ClipSettings::default_for(TrackKind::Video),
+            ))
+            .unwrap();
+
+        let clip = &session.project().timeline().tracks()[0].clips()[0];
+        assert_eq!(clip.timeline_duration(), RationalTime::new(1, 2).unwrap());
+        assert_eq!(
+            clip.content().playback_rate(),
+            RationalRate::new(2, 1).unwrap()
+        );
+        assert_eq!(session.project_revision().value(), revision_before + 1);
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        let clip = &session.project().timeline().tracks()[0].clips()[0];
+        assert_eq!(clip.timeline_duration(), RationalTime::new(1, 1).unwrap());
+        assert_eq!(clip.content().playback_rate(), RationalRate::ONE);
+
+        execute(&mut session, "history.redo", json!({})).unwrap();
+        let clip = &session.project().timeline().tracks()[0].clips()[0];
+        assert_eq!(clip.timeline_duration(), RationalTime::new(1, 2).unwrap());
+        assert_eq!(
+            clip.content().playback_rate(),
+            RationalRate::new(2, 1).unwrap()
+        );
     }
 
     fn seed_video_track_and_clip(

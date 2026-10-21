@@ -490,18 +490,35 @@ class each claim actually has:
     against a 2.0 ms budget — it costs the track count, not the clip count, which is
     why it sits two orders of magnitude below the clip-level rows. The budget prints
     twenty-three rows and is PASS.
-- **Phase 1.5 clip speed/rate: the model forbids it today, and the change is sized
-  (2026-10-20). No code from this gap has landed; what follows is verified fact and
-  a decision request.**
-  - `validate_clip_content` refuses a media clip whose source duration differs from
-    its timeline duration (`source_duration != clip.timeline_duration` →
-    `TimelineValidationError`), so **speed is not expressible at all** in the current
-    canonical model. A test now pins that invariant
-    (`a_media_clip_cannot_yet_play_at_a_different_rate`): one second of source over
+- **Phase 1.5 clip speed/rate — implemented locally, acceptance pending (2026-10-22).**
+  - Media clips persist exact source-per-timeline playback rates from 1/16× to
+    16× in schema v8; v1–v7 clips default to 1×. The Inspector updates rate and
+    exact timeline duration through the shared project command path, preserving
+    revision checks and undo/redo. Audio and video clips have the speed selector.
+  - Video preview/export and the shared audio preview/export mixer map timeline
+    time to the corresponding source time. Audio uses linear interpolation, so
+    changing speed also changes pitch.
+  - `cargo test -p or_core` passed 359 unit tests and the core integration,
+    recovery, and storage suites (five real-media tests ignored).
+    `flutter analyze --no-pub` passed and
+    `flutter test --no-pub test/widget_test.dart` passed all 111 tests.
+  - `or_app_bridge` compiled, but its test process could not start because this
+    host lacks linked `libavutil.60.dylib` and provides FFmpeg 9's
+    `libavutil.61.1.101.dylib`; bridge runtime tests are `NOT RUN`. The real
+    macOS editing and MotionScene journeys and independent export validation
+    also remain `NOT RUN`. This is developer evidence, not `ACCEPTED`; the Mac
+    mission still requires those app journeys and export checks.
+  - The dated notes below preserve earlier design analysis and stopped attempts;
+    they do not describe the current implementation status.
+  - **Baseline before the rate model (2026-10-20):** `validate_clip_content`
+    refused a media clip whose source duration differed from its timeline duration
+    (`source_duration != clip.timeline_duration` → `TimelineValidationError`), so
+    speed was not expressible at that point. The then-current test pinned that
+    restriction: one second of source over
     half a second of timeline is refused, and the project is left untouched. The
     test exists so the rate change cannot silently relax the rule without replacing
     it — a clip that referenced more source than it shows would be a real defect.
-  - The preview maps timeline time to source time 1:1
+  - **Baseline before rate mapping:** the preview mapped timeline time to source time 1:1
     (`source_time = clip.source_start + (time - clip.timeline_start)`, in
     `crates/or_app_bridge/src/preview.rs`), and the export path has its own mapping.
     A rate that the model accepts but the mapping ignores would be a capability that
@@ -515,7 +532,7 @@ class each claim actually has:
     version is rejected. So a v8 with a `playback_rate` and a migration is an
     ordinary product change, not a control-plane one, and no owner decision is needed
     to start it.
-  - **Correction to the sizing below, verified against the codec (2026-10-19).** The
+  - **Earlier codec assessment (2026-10-19).** The
     format half is much smaller than the estimate assumed. The raw v6/v7 timeline types
     do **not** duplicate the clip content: `TimelineClipV6.content` is the canonical
     `ClipContent` itself, so a new field with a serde default is read from an older file
@@ -526,26 +543,17 @@ class each claim actually has:
     `RationalRate::ONE` and `RationalRate::apply` (exact rational scaling, tested with
     1/3 s at 3x and at 1/2x) have landed, so the mapping the preview and export paths
     need is one multiplication at each site.
-  - **The model now carries the rate, and the mapping honours it (2026-10-19).**
-    `ClipContent::Media` gained `playback_rate: RationalRate` with the identity as its
-    serde default, and both the preview's video mapping and its audio mapping scale the
-    timeline offset by it (`RationalRate::apply`), so a rate the model holds is a rate a
-    viewer would see. Validation now requires `source_duration == timeline_duration *
-    rate` with the rate bounded to 1/16..16 in **both** the domain validator and the
-    command-level check, so a clip whose source span disagrees with its rate is refused
-    at either entry point.
-  - **The written format is deliberately unchanged.** An identity rate is not
-    serialised (`skip_serializing_if`), so a project saved today is byte-identical to the
-    schema-7 document an older build wrote and reads back in it, and no version is
-    written with an undeclared field. The schema bump to 8 lands with the command that
-    can actually set a rate, which is the next step, together with the CLI, the bridge
-    view, both presentations and a journey. Until that command exists the field is inert
-    by construction: nothing can set a rate other than the identity, and the pinned
-    `a_media_clip_cannot_yet_play_at_a_different_rate` still describes the product
-    truthfully even though the model can now express one.
-  - **The rate command and the schema bump were attempted twice and are not landed
-    (2026-10-19).** Both times the work built cleanly and both times it was stopped rather
-    than half-landed, on the owner's instruction to stop gracefully.
+  - **Earlier model and video mapping work (2026-10-19):** `ClipContent::Media`
+    gained `playback_rate: RationalRate` with the identity as its serde default, and
+    video preview and export scaled the timeline offset. Audio mixing still ignored
+    rate changes; the current increment adds the corresponding resampling path.
+    Validation now requires `source_duration == timeline_duration * rate` with the
+    rate bounded to 1/16..16.
+  - **Earlier format decision:** identity rates were omitted from schema v7
+    (`skip_serializing_if`) until schema v8 and the setter could land together. Schema
+    v8 is now the current writer and the v7 decoder supplies identity for older clips.
+  - **Earlier command/schema attempts (2026-10-19):** two attempts were stopped before
+    landing, rather than left half-applied.
     - **Attempt 1 (stashed, then dropped):** `timeline.clip.rate` with a distinct
       `ProjectChange::TimelineClipRateChanged`, catalog entry and both frozen catalog
       expectations, plus the schema-8 envelope, dispatch arm and error variant. It was
@@ -559,24 +567,14 @@ class each claim actually has:
       until the conversion's error was mapped. With that mapping in place the or_core,
       recovery, storage and CLI expectations all passed — 0 failures — and the change was
       then lost to a line-range deletion that removed a test helper.
-    - **Method for the next attempt, so it is not re-derived:** map the conversion error
-      inside the version-8 arm; then classify each remaining expectation by *which
-      document it decodes* — `base = encode_project(...)` is version 8, a hand-written
-      literal is version 7 — and update the names that say `v7` to say `current` so they
-      stop drifting. The rate command also needs its guard: a 2x clip keeps its source
-      span and halves its timeline duration, undo restores both, and a text clip is
-      refused. `RationalRate::apply` and the identity default are already landed at
-      `a43535f`, so the arithmetic and the format field are not part of the next attempt.
-  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on  - **Sized, so the owner can choose the shape:** the field lives on
-    `ClipContent::Media` (18 construction and match sites across five files), with
-    validation as `source_duration == timeline_duration * rate`, a 1/1 default so v7
-    files migrate by opening, a schema bump to 8 with the migration test, the preview
-    and export mappings, then the usual command, CLI, bridge, both presentations, a
-    journey and a latency row. That is two to three rounds at this session's rate.
-  - **The alternative on the same critical path is Phase 4 (noise filtering)**, which
-    is a deliberate FFmpeg build-configuration change and touches no project format;
-    it is self-contained and could complete in the time Phase 1.5's model work alone
-    would take.
+    - **Resolved implementation notes:** schema-v8 conversion errors now report
+      `InvalidV8Data`; current writer expectations are v8 while explicit v7 fixtures
+      remain v7. A 2× clip retains its source range and halves its exact timeline
+      duration, undo/redo restore the expected state, and the rate setter refuses text
+      clips. The schema dispatch, command path, UI, preview and audio mapping are in the
+      current implementation above.
+  - The earlier size estimate and alternative Phase 4 priority are superseded by the
+    implementation and verification status at the top of this section.
 - **Phase 4 noise filtering: the build configuration and its measurement are in
   place; the audio path that uses it is not (2026-10-20).**
   - The packaged desktop helper now enables FFmpeg's own `afftdn` FFT noise
@@ -699,8 +697,9 @@ class each claim actually has:
     floor must be derived per clip rather than hard-coded.
 - **Phase 1 (complete basic editing) is not started in this revision.** The
   enumerated gaps stand exactly as the prompt lists them: overwrite edit mode,
-  ripple trim, slip/slide/roll, track reordering, clip speed/rate, clip linking
-  and grouping, keyframes. The compact insert defect above is the first Phase 1
+  ripple trim, slip/slide/roll, track reordering, clip linking and grouping,
+  keyframes. Clip speed/rate is implemented in the local worktree but still lacks
+  real-app acceptance evidence. The compact insert defect above is the first Phase 1
   task because it blocks the compact editing journey that every later gap has to
   clear.
 - **Next action for Phase 0:** drive the Android guest through
@@ -731,7 +730,8 @@ class each claim actually has:
   Flutter widget tests across tracks (add, remove, state and reorder), insert
   (insert and overwrite modes), move, trim (plain and ripple), slip, slide, roll,
   split, ripple delete, clip properties, markers, captions and undo/redo. Not
-  implemented: clip speed/rate change; keyframes; clip linking or grouping. Zoom, scroll and
+  implemented: keyframes; clip linking or grouping. Clip speed/rate is implemented
+  locally but remains unaccepted pending real-app evidence. Zoom, scroll and
   snap-guide rendering are presentation state, and snapping itself is the
   read-only `timeline.snap` query.
 - **Phase 5 release via hosted CI: the branch is published and the hosted run is the

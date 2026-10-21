@@ -76,6 +76,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onDeleteTimelineMarker,
     this.onUpdateTimelineClipVisualSettings,
     this.onUpdateTimelineClipAudioSettings,
+    this.onUpdateTimelineClipPlaybackRate,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -260,6 +261,13 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectTimelineAudioSettings settings,
   )?
   onUpdateTimelineClipAudioSettings;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+    ProjectRationalRate rate,
+  )?
+  onUpdateTimelineClipPlaybackRate;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -388,6 +396,23 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     for (final track
         in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
       if (track.trackId == selectedId) return track;
+    }
+    return null;
+  }
+
+  ProjectTimelineClip? get _selectedInspectorClip {
+    final selectedId = _selectedClipId;
+    final project = widget.project;
+    if (selectedId == null || project == null) return null;
+    for (final page in widget.timelineClipPages.values) {
+      if (page.projectId != project.projectId ||
+          page.projectInstanceId != project.projectInstanceId ||
+          page.projectRevision != project.revision) {
+        continue;
+      }
+      for (final clip in page.items) {
+        if (clip.clipId == selectedId) return clip;
+      }
     }
     return null;
   }
@@ -525,6 +550,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   session: widget.projectSession,
                   trackId: _selectedTrackId,
                   clipId: _selectedClipId,
+                  clip: _selectedInspectorClip,
                   isVisualTrack:
                       _selectedTrackKind == ProjectTimelineTrackKind.video ||
                       _selectedTrackKind == ProjectTimelineTrackKind.text ||
@@ -535,6 +561,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   busy: widget.busy,
                   onUpdate: widget.onUpdateTimelineClipVisualSettings,
                   onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
+                  onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
                 ),
               ),
             ],
@@ -739,6 +766,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 session: widget.projectSession,
                 trackId: _selectedTrackId,
                 clipId: _selectedClipId,
+                clip: _selectedInspectorClip,
                 isVisualTrack:
                     _selectedTrackKind == ProjectTimelineTrackKind.video ||
                     _selectedTrackKind == ProjectTimelineTrackKind.text ||
@@ -749,6 +777,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 busy: widget.busy,
                 onUpdate: widget.onUpdateTimelineClipVisualSettings,
                 onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
+                onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
                 onClose: onClose,
               ),
             );
@@ -2590,12 +2619,14 @@ class _InspectorPanel extends StatefulWidget {
     required this.session,
     required this.trackId,
     required this.clipId,
+    this.clip,
     required this.isVisualTrack,
     required this.isAudioTrack,
     required this.trackLocked,
     required this.busy,
     required this.onUpdate,
     required this.onUpdateAudio,
+    this.onUpdatePlaybackRate,
     this.onClose,
   });
 
@@ -2605,6 +2636,7 @@ class _InspectorPanel extends StatefulWidget {
   final ProjectSessionHandle? session;
   final String? trackId;
   final String? clipId;
+  final ProjectTimelineClip? clip;
   final bool isVisualTrack;
   final bool isAudioTrack;
   final bool trackLocked;
@@ -2623,6 +2655,13 @@ class _InspectorPanel extends StatefulWidget {
     ProjectTimelineAudioSettings,
   )?
   onUpdateAudio;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel,
+    String,
+    String,
+    ProjectRationalRate,
+  )?
+  onUpdatePlaybackRate;
   final VoidCallback? onClose;
 
   @override
@@ -2928,6 +2967,126 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     }
   }
 
+  Future<void> _applyPlaybackRate(ProjectRationalRate rate) async {
+    final project = widget.project;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    final onUpdate = widget.onUpdatePlaybackRate;
+    if (project == null ||
+        trackId == null ||
+        clipId == null ||
+        onUpdate == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await onUpdate(project, trackId, clipId, rate);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _playbackRateEditor() {
+    final clip = widget.clip;
+    if (clip == null ||
+        clip.contentKind != ProjectTimelineClipContentKind.media ||
+        widget.onUpdatePlaybackRate == null) {
+      return const SizedBox.shrink();
+    }
+    const presets = [
+      ProjectRationalRate(1, 4),
+      ProjectRationalRate(1, 2),
+      ProjectRationalRate(3, 4),
+      ProjectRationalRate(1, 1),
+      ProjectRationalRate(5, 4),
+      ProjectRationalRate(3, 2),
+      ProjectRationalRate(2, 1),
+      ProjectRationalRate(4, 1),
+    ];
+    final current = clip.playbackRate;
+    final currentValue = '${current.numerator}/${current.denominator}';
+    final choices =
+        presets.any(
+          (rate) =>
+              rate.numerator == current.numerator &&
+              rate.denominator == current.denominator,
+        )
+        ? presets
+        : [current, ...presets];
+    final enabled =
+        !widget.busy && !_saving && !_loading && !widget.trackLocked;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'CLIP',
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        InputDecorator(
+          decoration: const InputDecoration(
+            labelText: 'Playback speed',
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: OrSpacing.x2,
+              vertical: OrSpacing.x1,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              key: const ValueKey('inspector-playback-rate'),
+              value: currentValue,
+              isExpanded: true,
+              items: choices
+                  .map(
+                    (rate) => DropdownMenuItem<String>(
+                      value: '${rate.numerator}/${rate.denominator}',
+                      child: Text(
+                        _playbackRateLabel(rate),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: enabled
+                  ? (value) {
+                      if (value == null) return;
+                      final rate = choices.firstWhere(
+                        (candidate) =>
+                            '${candidate.numerator}/${candidate.denominator}' ==
+                            value,
+                      );
+                      unawaited(_applyPlaybackRate(rate));
+                    }
+                  : null,
+            ),
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x3),
+      ],
+    );
+  }
+
+  String _playbackRateLabel(ProjectRationalRate rate) =>
+      switch ('${rate.numerator}/${rate.denominator}') {
+        '1/4' => '0.25×',
+        '1/2' => '0.5×',
+        '3/4' => '0.75×',
+        '1/1' => '1×',
+        '5/4' => '1.25×',
+        '3/2' => '1.5×',
+        '2/1' => '2×',
+        '4/1' => '4×',
+        _ => '${rate.numerator}/${rate.denominator}×',
+      };
+
   Widget _numberField(String key, String label, {required bool signed}) {
     final expression = RegExp(signed ? r'^-?\d{0,7}$' : r'^\d{0,7}$');
     final limit = switch (key) {
@@ -3098,6 +3257,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     key: const ValueKey('inspector-scroll'),
     padding: const EdgeInsets.all(OrSpacing.x2),
     children: [
+      _playbackRateEditor(),
       Text(
         'AUDIO',
         style: TextStyle(
@@ -3238,6 +3398,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                 key: const ValueKey('inspector-scroll'),
                 padding: const EdgeInsets.all(OrSpacing.x2),
                 children: [
+                  _playbackRateEditor(),
                   Text(
                     'TRANSFORM',
                     style: TextStyle(

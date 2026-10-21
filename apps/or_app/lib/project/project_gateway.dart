@@ -490,6 +490,7 @@ class ProjectTimelineClip {
   const ProjectTimelineClip({
     required this.clipId,
     this.contentKind = ProjectTimelineClipContentKind.media,
+    this.playbackRate = const ProjectRationalRate(1, 1),
     this.mediaId,
     this.text,
     this.formatting,
@@ -500,6 +501,7 @@ class ProjectTimelineClip {
 
   final String clipId;
   final ProjectTimelineClipContentKind contentKind;
+  final ProjectRationalRate playbackRate;
   final String? mediaId;
   final String? text;
   final ProjectTextFormatting? formatting;
@@ -947,6 +949,13 @@ abstract interface class ProjectGateway {
     required String trackId,
     required String clipId,
     required ProjectTimelineAudioSettings settings,
+  });
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
   });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {

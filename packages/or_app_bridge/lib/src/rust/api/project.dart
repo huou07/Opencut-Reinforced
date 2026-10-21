@@ -449,6 +449,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required ProjectTimelineAudioSettingsView settings,
   });
 
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
+  });
+
   Future<ProjectActionResult> updateTimelineClipVisualSettings({
     required String projectId,
     required String projectInstanceId,
@@ -1206,6 +1215,7 @@ class ProjectTimelineClipPageView {
 class ProjectTimelineClipView {
   final String clipId;
   final TimelineClipContentKindView contentKind;
+  final RationalRateView playbackRate;
   final String? mediaId;
   final String? text;
   final ProjectTextFormattingView? formatting;
@@ -1216,6 +1226,7 @@ class ProjectTimelineClipView {
   const ProjectTimelineClipView({
     required this.clipId,
     required this.contentKind,
+    required this.playbackRate,
     this.mediaId,
     this.text,
     this.formatting,
@@ -1228,6 +1239,7 @@ class ProjectTimelineClipView {
   int get hashCode =>
       clipId.hashCode ^
       contentKind.hashCode ^
+      playbackRate.hashCode ^
       mediaId.hashCode ^
       text.hashCode ^
       formatting.hashCode ^
@@ -1242,6 +1254,7 @@ class ProjectTimelineClipView {
           runtimeType == other.runtimeType &&
           clipId == other.clipId &&
           contentKind == other.contentKind &&
+          playbackRate == other.playbackRate &&
           mediaId == other.mediaId &&
           text == other.text &&
           formatting == other.formatting &&

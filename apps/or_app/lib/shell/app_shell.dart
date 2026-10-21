@@ -499,6 +499,7 @@ class _AppShellState extends State<AppShell> {
                   _updateTimelineClipVisualSettings,
               onUpdateTimelineClipAudioSettings:
                   _updateTimelineClipAudioSettings,
+              onUpdateTimelineClipPlaybackRate: _updateTimelineClipPlaybackRate,
               onMoveTimelineClip: _moveTimelineClip,
               onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
@@ -2640,6 +2641,22 @@ class _AppShellState extends State<AppShell> {
       trackId: trackId,
       clipId: clipId,
       settings: settings,
+    ),
+  );
+
+  Future<ProjectReadModel?> _updateTimelineClipPlaybackRate(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    ProjectRationalRate rate,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.updateTimelineClipPlaybackRate(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      rate: rate,
     ),
   );
 

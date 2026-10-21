@@ -69,7 +69,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -260876208;
+  int get rustContentHash => 1279668420;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -613,6 +613,17 @@ abstract class RustLibApi extends BaseApi {
     required String trackId,
     required String clipId,
     required ProjectTimelineAudioSettingsView settings,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
   });
 
   Future<ProjectActionResult>
@@ -4234,6 +4245,73 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_box_autoadd_rational_rate_view(rate, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 70,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRateConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          rate,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRateConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_update_timeline_clip_playback_rate",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "rate",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult>
   crateApiProjectProjectHostHandleUpdateTimelineClipVisualSettings({
     required ProjectHostHandle that,
     required String projectId,
@@ -4263,7 +4341,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -4341,7 +4419,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 72,
             port: port_,
           );
         },
@@ -4397,7 +4475,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 73,
             port: port_,
           );
         },
@@ -4427,7 +4505,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 74,
             port: port_,
           );
         },
@@ -4454,7 +4532,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 75,
             port: port_,
           );
         },
@@ -4486,7 +4564,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 76,
             port: port_,
           );
         },
@@ -4520,7 +4598,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 77,
             port: port_,
           );
         },
@@ -4547,7 +4625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 78,
             port: port_,
           );
         },
@@ -4577,7 +4655,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 79,
             port: port_,
           );
         },
@@ -4617,7 +4695,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 80,
             port: port_,
           );
         },
@@ -4677,7 +4755,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 81,
             port: port_,
           );
         },
@@ -4724,7 +4802,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 82,
             port: port_,
           );
         },
@@ -5490,19 +5568,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return ProjectTimelineClipView(
       clipId: dco_decode_String(arr[0]),
       contentKind: dco_decode_timeline_clip_content_kind_view(arr[1]),
-      mediaId: dco_decode_opt_String(arr[2]),
-      text: dco_decode_opt_String(arr[3]),
+      playbackRate: dco_decode_rational_rate_view(arr[2]),
+      mediaId: dco_decode_opt_String(arr[3]),
+      text: dco_decode_opt_String(arr[4]),
       formatting: dco_decode_opt_box_autoadd_project_text_formatting_view(
-        arr[4],
+        arr[5],
       ),
-      timelineStart: dco_decode_rational_time_view(arr[5]),
-      timelineDuration: dco_decode_rational_time_view(arr[6]),
-      sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[7]),
+      timelineStart: dco_decode_rational_time_view(arr[6]),
+      timelineDuration: dco_decode_rational_time_view(arr[7]),
+      sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[8]),
     );
   }
 
@@ -6879,6 +6958,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_contentKind = sse_decode_timeline_clip_content_kind_view(
       deserializer,
     );
+    var var_playbackRate = sse_decode_rational_rate_view(deserializer);
     var var_mediaId = sse_decode_opt_String(deserializer);
     var var_text = sse_decode_opt_String(deserializer);
     var var_formatting =
@@ -6891,6 +6971,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return ProjectTimelineClipView(
       clipId: var_clipId,
       contentKind: var_contentKind,
+      playbackRate: var_playbackRate,
       mediaId: var_mediaId,
       text: var_text,
       formatting: var_formatting,
@@ -8230,6 +8311,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.clipId, serializer);
     sse_encode_timeline_clip_content_kind_view(self.contentKind, serializer);
+    sse_encode_rational_rate_view(self.playbackRate, serializer);
     sse_encode_opt_String(self.mediaId, serializer);
     sse_encode_opt_String(self.text, serializer);
     sse_encode_opt_box_autoadd_project_text_formatting_view(
@@ -9420,6 +9502,24 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         trackId: trackId,
         clipId: clipId,
         settings: settings,
+      );
+
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        clipId: clipId,
+        rate: rate,
       );
 
   Future<ProjectActionResult> updateTimelineClipVisualSettings({

@@ -480,6 +480,59 @@ void main() {
     );
     expect(updated.succeeded, isTrue);
     current = updated.view!;
+
+    final rateUpdated = await gateway.updateTimelineClipPlaybackRate(
+      session,
+      current,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+      rate: const ProjectRationalRate(2, 1),
+    );
+    expect(rateUpdated.succeeded, isTrue, reason: rateUpdated.message);
+    current = rateUpdated.view!;
+    var spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '2/1');
+    expect(spedClip.timelineDuration.canonical, '1/8');
+
+    final staleRate = await gateway.updateTimelineClipPlaybackRate(
+      session,
+      updated.view!,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+      rate: const ProjectRationalRate(3, 1),
+    );
+    expect(staleRate.succeeded, isFalse);
+    expect(staleRate.errorCode, 'REVISION_CONFLICT');
+
+    final undo = await gateway.undo(session, current);
+    expect(undo.succeeded, isTrue);
+    current = undo.view!;
+    spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '1/1');
+    expect(spedClip.timelineDuration.canonical, '1/4');
+
+    final redo = await gateway.redo(session, current);
+    expect(redo.succeeded, isTrue);
+    current = redo.view!;
+    spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '2/1');
+    expect(spedClip.timelineDuration.canonical, '1/8');
+
     expect((await gateway.save(session)).succeeded, isTrue);
     await gateway.close(session, discardUnsaved: false);
     activeSession = null;
@@ -508,6 +561,8 @@ void main() {
     expect(reopened.panBasisPoints, -3750);
     expect(reopened.fadeIn.canonical, '1/8');
     expect(reopened.fadeOut.canonical, '1/16');
+    expect(reopenedClip.playbackRate.canonical, '2/1');
+    expect(reopenedClip.timelineDuration.canonical, '1/8');
     expect(tester.takeException(), isNull);
   });
 
@@ -1847,6 +1902,21 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     trackId: trackId,
     clipId: clipId,
     settings: settings,
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) => _gateway.updateTimelineClipPlaybackRate(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    rate: rate,
   );
 
   @override

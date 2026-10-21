@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -260876208;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1279668420;
 
 // Section: executor
 
@@ -4054,6 +4054,71 @@ fn wire__crate__api__project__ProjectHostHandle_update_timeline_clip_audio_setti
         },
     )
 }
+fn wire__crate__api__project__ProjectHostHandle_update_timeline_clip_playback_rate_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_update_timeline_clip_playback_rate",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_project_instance_id = <String>::sse_decode(&mut deserializer);
+            let api_expected_revision = <u64>::sse_decode(&mut deserializer);
+            let api_track_id = <String>::sse_decode(&mut deserializer);
+            let api_clip_id = <String>::sse_decode(&mut deserializer);
+            let api_rate = <crate::api::project::RationalRateView>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = Ok::<_, ()>(
+                        crate::api::project::ProjectHostHandle::update_timeline_clip_playback_rate(
+                            &*api_that_guard,
+                            api_project_id,
+                            api_project_instance_id,
+                            api_expected_revision,
+                            api_track_id,
+                            api_clip_id,
+                            api_rate,
+                        ),
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__project__ProjectHostHandle_update_timeline_clip_visual_settings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5416,6 +5481,8 @@ impl SseDecode for crate::api::project::ProjectTimelineClipView {
         let mut var_clipId = <String>::sse_decode(deserializer);
         let mut var_contentKind =
             <crate::api::project::TimelineClipContentKindView>::sse_decode(deserializer);
+        let mut var_playbackRate =
+            <crate::api::project::RationalRateView>::sse_decode(deserializer);
         let mut var_mediaId = <Option<String>>::sse_decode(deserializer);
         let mut var_text = <Option<String>>::sse_decode(deserializer);
         let mut var_formatting =
@@ -5429,6 +5496,7 @@ impl SseDecode for crate::api::project::ProjectTimelineClipView {
         return crate::api::project::ProjectTimelineClipView {
             clip_id: var_clipId,
             content_kind: var_contentKind,
+            playback_rate: var_playbackRate,
             media_id: var_mediaId,
             text: var_text,
             formatting: var_formatting,
@@ -6390,7 +6458,13 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        70 => {
+        70 => wire__crate__api__project__ProjectHostHandle_update_timeline_clip_playback_rate_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        71 => {
             wire__crate__api__project__ProjectHostHandle_update_timeline_clip_visual_settings_impl(
                 port,
                 ptr,
@@ -6398,32 +6472,32 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        71 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
+        72 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__motion__materialize_motion_scene_impl(
+        73 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__motion__materialize_motion_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
+        81 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        81 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -7165,6 +7239,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTimelineClipV
         [
             self.clip_id.into_into_dart().into_dart(),
             self.content_kind.into_into_dart().into_dart(),
+            self.playback_rate.into_into_dart().into_dart(),
             self.media_id.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
             self.formatting.into_into_dart().into_dart(),
@@ -8492,6 +8567,7 @@ impl SseEncode for crate::api::project::ProjectTimelineClipView {
             self.content_kind,
             serializer,
         );
+        <crate::api::project::RationalRateView>::sse_encode(self.playback_rate, serializer);
         <Option<String>>::sse_encode(self.media_id, serializer);
         <Option<String>>::sse_encode(self.text, serializer);
         <Option<crate::api::project::ProjectTextFormattingView>>::sse_encode(

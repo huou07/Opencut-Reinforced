@@ -2538,21 +2538,27 @@ mod desktop {
             if overlap_start >= overlap_end {
                 continue;
             }
+            let timeline_offset = overlap_start
+                .checked_sub(clip.timeline_start)
+                .map_err(|_| "audio source offset overflowed".to_owned())?;
             let source_start = clip
                 .source_start
                 .checked_add(
-                    overlap_start
-                        .checked_sub(clip.timeline_start)
+                    clip.playback_rate
+                        .apply(timeline_offset)
                         .map_err(|_| "audio source offset overflowed".to_owned())?,
                 )
                 .map_err(|_| "audio source time overflowed".to_owned())?;
-            let range = TimeRange::new(
-                source_start,
-                overlap_end
-                    .checked_sub(overlap_start)
-                    .map_err(|_| "audio overlap duration overflowed".to_owned())?,
-            )
-            .map_err(|_| "audio source range is invalid".to_owned())?;
+            let source_duration = clip
+                .playback_rate
+                .apply(
+                    overlap_end
+                        .checked_sub(overlap_start)
+                        .map_err(|_| "audio overlap duration overflowed".to_owned())?,
+                )
+                .map_err(|_| "audio source duration overflowed".to_owned())?;
+            let range = TimeRange::new(source_start, source_duration)
+                .map_err(|_| "audio source range is invalid".to_owned())?;
             let snapshot = RenderSnapshot::new(key.project_id, key.revision, range);
             let queue = SnapshotQueue::new(snapshot, AUDIO_DECODE_QUEUE_CAPACITY)
                 .map_err(|error| error.to_string())?;
@@ -2616,37 +2622,157 @@ mod desktop {
         block_start: RationalTime,
         chunk: or_media::AudioChunk,
     ) -> Result<(), String> {
-        let clip_offset = chunk
-            .timestamp()
-            .checked_sub(clip.source_start)
-            .map_err(|_| "audio chunk starts before its clip source range".to_owned())?;
-        let chunk_timeline = clip
-            .timeline_start
-            .checked_add(clip_offset)
-            .map_err(|_| "audio chunk timeline time overflowed".to_owned())?;
-        let output_offset = audio_frame_difference_floor(chunk_timeline, block_start)
-            .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
-        let mut samples = chunk.samples().to_vec();
-        process_audio_clip(&mut samples, clip_offset, clip.duration, clip.settings)
-            .map_err(|error| error.to_string())?;
-        let source_frame = if output_offset < 0 {
-            usize::try_from(output_offset.unsigned_abs()).unwrap_or(usize::MAX)
-        } else {
-            0
-        };
-        let destination_frame = usize::try_from(output_offset.max(0)).unwrap_or(usize::MAX);
-        let available_source_frames = samples.len() / 2;
+        mix_audio_samples(
+            output,
+            clip,
+            block_start,
+            chunk.timestamp(),
+            chunk.samples(),
+        )
+    }
+
+    fn mix_audio_samples(
+        output: &mut [f32],
+        clip: &AudioClip,
+        block_start: RationalTime,
+        source_timestamp: RationalTime,
+        source_samples: &[f32],
+    ) -> Result<(), String> {
+        if !output.len().is_multiple_of(2) || !source_samples.len().is_multiple_of(2) {
+            return Err("audio mixer received an incomplete stereo frame".to_owned());
+        }
         let output_frames = output.len() / 2;
-        if source_frame >= available_source_frames || destination_frame >= output_frames {
+        let source_frames = source_samples.len() / 2;
+        if output_frames == 0 || source_frames == 0 {
             return Ok(());
         }
-        let mix_frames =
-            (available_source_frames - source_frame).min(output_frames - destination_frame);
-        for frame in 0..mix_frames {
-            let destination = (destination_frame + frame) * 2;
-            let source = (source_frame + frame) * 2;
-            output[destination] += samples[source];
-            output[destination + 1] += samples[source + 1];
+
+        let inverse_rate = RationalRate::new(
+            clip.playback_rate.denominator(),
+            clip.playback_rate.numerator(),
+        )
+        .map_err(|_| "audio playback rate could not be inverted".to_owned())?;
+        let source_offset = source_timestamp
+            .checked_sub(clip.source_start)
+            .map_err(|_| "audio source offset overflowed".to_owned())?;
+        let chunk_timeline_start = clip
+            .timeline_start
+            .checked_add(
+                inverse_rate
+                    .apply(source_offset)
+                    .map_err(|_| "audio chunk timeline offset overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio chunk timeline time overflowed".to_owned())?;
+        let source_chunk_duration = audio_time_for_frames(
+            u64::try_from(source_frames)
+                .map_err(|_| "audio chunk exceeds the sample clock".to_owned())?,
+        )
+        .map_err(|_| "audio chunk duration exceeds the sample clock".to_owned())?;
+        let chunk_timeline_end = clip
+            .timeline_start
+            .checked_add(
+                inverse_rate
+                    .apply(
+                        source_offset
+                            .checked_add(source_chunk_duration)
+                            .map_err(|_| "audio chunk source end overflowed".to_owned())?,
+                    )
+                    .map_err(|_| "audio chunk timeline duration overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio chunk timeline end overflowed".to_owned())?;
+        let block_end = block_start
+            .checked_add(
+                audio_time_for_frames(
+                    u64::try_from(output_frames)
+                        .map_err(|_| "audio block exceeds the sample clock".to_owned())?,
+                )
+                .map_err(|_| "audio block duration exceeds the sample clock".to_owned())?,
+            )
+            .map_err(|_| "audio block end overflowed".to_owned())?;
+        let clip_end = clip
+            .timeline_start
+            .checked_add(clip.duration)
+            .map_err(|_| "audio clip end overflowed".to_owned())?;
+        let overlap_start = chunk_timeline_start
+            .max(block_start)
+            .max(clip.timeline_start);
+        let overlap_end = chunk_timeline_end.min(block_end).min(clip_end);
+        if overlap_start >= overlap_end {
+            return Ok(());
+        }
+
+        let first_frame = usize::try_from(
+            audio_frame_difference_ceil(overlap_start, block_start)
+                .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?
+                .max(0),
+        )
+        .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
+        let end_frame = usize::try_from(
+            audio_frame_difference_ceil(overlap_end, block_start)
+                .map_err(|_| "audio chunk end exceeds the device clock".to_owned())?
+                .max(0),
+        )
+        .map_err(|_| "audio chunk end exceeds the device clock".to_owned())?
+        .min(output_frames);
+        if first_frame >= end_frame {
+            return Ok(());
+        }
+
+        let first_time = block_start
+            .checked_add(
+                audio_time_for_frames(
+                    u64::try_from(first_frame)
+                        .map_err(|_| "audio chunk offset exceeds the sample clock".to_owned())?,
+                )
+                .map_err(|_| "audio chunk offset exceeds the sample clock".to_owned())?,
+            )
+            .map_err(|_| "audio output time overflowed".to_owned())?;
+        let clip_offset = first_time
+            .checked_sub(clip.timeline_start)
+            .map_err(|_| "audio clip offset overflowed".to_owned())?;
+        let first_source_time = clip
+            .source_start
+            .checked_add(
+                clip.playback_rate
+                    .apply(clip_offset)
+                    .map_err(|_| "audio source time overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio source time overflowed".to_owned())?;
+        let source_delta = first_source_time
+            .checked_sub(source_timestamp)
+            .map_err(|_| "audio sample offset overflowed".to_owned())?;
+        let position_denominator =
+            i128::from(source_delta.denominator()) * i128::from(clip.playback_rate.denominator());
+        let mut position_numerator = i128::from(source_delta.numerator())
+            * i128::from(AUDIO_SAMPLE_RATE)
+            * i128::from(clip.playback_rate.denominator());
+        let position_step =
+            i128::from(clip.playback_rate.numerator()) * i128::from(source_delta.denominator());
+        let mut resampled = vec![0.0_f32; (end_frame - first_frame) * 2];
+        for frame in 0..resampled.len() / 2 {
+            let source_frame = usize::try_from(position_numerator.div_euclid(position_denominator))
+                .map_err(|_| "audio sample position is invalid".to_owned())?;
+            if source_frame >= source_frames {
+                break;
+            }
+            let next_source_frame = (source_frame + 1).min(source_frames - 1);
+            let fraction = position_numerator.rem_euclid(position_denominator) as f64
+                / position_denominator as f64;
+            let source_index = source_frame * 2;
+            let next_source_index = next_source_frame * 2;
+            for channel in 0..2 {
+                let first = f64::from(source_samples[source_index + channel]);
+                let second = f64::from(source_samples[next_source_index + channel]);
+                resampled[frame * 2 + channel] = (first + (second - first) * fraction) as f32;
+            }
+            position_numerator += position_step;
+        }
+        process_audio_clip(&mut resampled, clip_offset, clip.duration, clip.settings)
+            .map_err(|error| error.to_string())?;
+        for (frame, stereo) in resampled.chunks_exact(2).enumerate() {
+            let destination = (first_frame + frame) * 2;
+            output[destination] += stereo[0];
+            output[destination + 1] += stereo[1];
         }
         Ok(())
     }
@@ -2662,12 +2788,14 @@ mod desktop {
         i64::try_from(frames).map_err(|_| ())
     }
 
-    fn audio_frame_difference_floor(time: RationalTime, origin: RationalTime) -> Result<i64, ()> {
+    fn audio_frame_difference_ceil(time: RationalTime, origin: RationalTime) -> Result<i64, ()> {
         let numerator = (i128::from(time.numerator()) * i128::from(origin.denominator())
             - i128::from(origin.numerator()) * i128::from(time.denominator()))
             * i128::from(AUDIO_SAMPLE_RATE);
         let denominator = i128::from(time.denominator()) * i128::from(origin.denominator());
-        i64::try_from(numerator.div_euclid(denominator)).map_err(|_| ())
+        let quotient = numerator.div_euclid(denominator);
+        let rounded = quotient + i128::from(numerator.rem_euclid(denominator) != 0);
+        i64::try_from(rounded).map_err(|_| ())
     }
 
     fn set_audio_error(error: &Mutex<Option<String>>, message: &str) {
@@ -2720,14 +2848,68 @@ mod desktop {
         static TEST_LOCK: Mutex<()> = Mutex::new(());
 
         #[test]
-        fn audio_chunk_offset_uses_sample_clock_when_exact_rational_difference_overflows() {
+        fn audio_chunk_bounds_use_sample_clock_when_exact_rational_difference_overflows() {
             let chunk_timeline = RationalTime::new(741, 500_000_000).unwrap();
             let block_start = RationalTime::new(-221, 8_820).unwrap();
 
             assert!(chunk_timeline.checked_sub(block_start).is_err());
             assert_eq!(
-                audio_frame_difference_floor(chunk_timeline, block_start),
-                Ok(1_202)
+                audio_frame_difference_ceil(chunk_timeline, block_start),
+                Ok(1_203)
+            );
+        }
+
+        #[test]
+        fn audio_mixer_resamples_at_the_clip_playback_rate() {
+            let source =
+                MediaSourceRef::local_file("file:///tmp/or-preview-audio-speed.wav").unwrap();
+            let fast_clip = AudioClip {
+                source: source.clone(),
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(4, AUDIO_SAMPLE_RATE).unwrap(),
+                playback_rate: RationalRate::new(2, 1).unwrap(),
+                settings: AudioSettings::DEFAULT,
+            };
+            let source_samples = (0..8)
+                .flat_map(|sample| [sample as f32, sample as f32])
+                .collect::<Vec<_>>();
+            let mut fast_output = vec![0.0; 8];
+            mix_audio_samples(
+                &mut fast_output,
+                &fast_clip,
+                RationalTime::ZERO,
+                RationalTime::ZERO,
+                &source_samples,
+            )
+            .unwrap();
+            assert_eq!(fast_output, [0.0, 0.0, 2.0, 2.0, 4.0, 4.0, 6.0, 6.0]);
+
+            let slow_clip = AudioClip {
+                source,
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(8, AUDIO_SAMPLE_RATE).unwrap(),
+                playback_rate: RationalRate::new(1, 2).unwrap(),
+                settings: AudioSettings::DEFAULT,
+            };
+            let slow_source_samples = (0..4)
+                .flat_map(|sample| [sample as f32, sample as f32])
+                .collect::<Vec<_>>();
+            let mut slow_output = vec![0.0; 16];
+            mix_audio_samples(
+                &mut slow_output,
+                &slow_clip,
+                RationalTime::ZERO,
+                RationalTime::ZERO,
+                &slow_source_samples,
+            )
+            .unwrap();
+            assert_eq!(
+                slow_output,
+                [
+                    0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5, 2.0, 2.0, 2.5, 2.5, 3.0, 3.0, 3.0, 3.0,
+                ]
             );
         }
 
