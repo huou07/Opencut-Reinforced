@@ -28,11 +28,15 @@ See [TOOLING.md](TOOLING.md) and skill
   project cache; no FFmpeg ABI versions were substituted.
 - `flutter build macos --debug` passed at source SHA
   `5a957c30d58f3592fcfba0be5dced5dedd21c0a2`. It produced
-  `apps/or_app/build/macos/Build/Products/Debug/or_app.app`. The app process
-  already running on the host predated this build and was left untouched, so
-  this build was not launched. The current CUA surface is locked; real macOS
-  editing and MotionScene journeys and independent export validation remain
-  `NOT RUN`. These local checks do not establish `ACCEPTED`.
+  `apps/or_app/build/macos/Build/Products/Debug/or_app.app`. The existing app
+  process predated this build and was left untouched. A temporary copy with an
+  isolated bundle identifier was launched; its Home screen rendered in a
+  800×632-point window. Screenshot: `apps/or_app/build/local-mission-profile/home.png`.
+  This is `VERIFIED_NATIVE` and `VERIFIED_VISUAL` for Home only. The OS reported
+  `loginwindow` as frontmost and pointer events did not reach the app. No unlock
+  attempt was made. Editing and MotionScene journeys and independent export
+  validation remain `BLOCKED`/`NOT RUN`; the local evidence does not establish
+  `ACCEPTED`.
 
 ## Historical coverage inventory
 

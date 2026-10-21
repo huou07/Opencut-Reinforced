@@ -507,11 +507,15 @@ class each claim actually has:
     the matching cached FFmpeg 8.1.3 dylibs through `DYLD_LIBRARY_PATH`; no ABI
     versions were substituted. `flutter build macos --debug` also passed at
     the implementation SHA recorded in [TESTING.md](TESTING.md).
-  - The running app predated that build and was left untouched, so the new build
-    was not launched. The real macOS editing and MotionScene journeys and
-    independent export validation remain `NOT RUN` while the CUA surface is
-    locked. This is developer evidence, not `ACCEPTED`; the Mac mission still
-    requires those app journeys and export checks.
+  - The existing app process predated the build and was left untouched. A
+    temporary copy with an isolated bundle identifier was launched; Home
+    rendered in an 800×632-point window (screenshot path and source SHA are in
+    [TESTING.md](TESTING.md)). This is `VERIFIED_NATIVE` and `VERIFIED_VISUAL`
+    for Home only. `loginwindow` remained frontmost and pointer events did not
+    reach the app. No unlock attempt was made. The real macOS editing and
+    MotionScene journeys and independent export validation remain
+    `BLOCKED`/`NOT RUN`. This is developer evidence, not `ACCEPTED`; the Mac
+    mission still requires those app journeys and export checks.
   - The dated notes below preserve earlier design analysis and stopped attempts;
     they do not describe the current implementation status.
   - **Baseline before the rate model (2026-10-20):** `validate_clip_content`
