@@ -2,18 +2,22 @@
 
 Authority: this is OR's definition of "good" for the product. It does not replace
 [AGENTS.md](../AGENTS.md), `docs/AGENT_POLICY.md`, `docs/UX_ACCEPTANCE.md` or the
-project's gates; where they disagree, the source and the exact-SHA hosted runs
-decide.
+project's gates. Resolve conflicts in the owning authority; a passing hosted run
+cannot override a missing user outcome.
 
-Last reviewed: 2026-10-18.
+Last reviewed: 2026-10-20.
 
 ## Supported targets
 
-| Target | Claimed support | Evidence class | Last exact-source run |
-|---|---|---|---|
-| Debian Linux (developer preview) | full for the documented journeys | VERIFIED_BEHAVIORAL via `scripts/run_linux_ui_preflight.py` | hosted `ui-preflight` + local preflight |
-| macOS / Windows | built and packaged by CI | VERIFIED_NATIVE only when the hosted job passes | `platform-verification.yml` |
-| Android | software preview with SAF media; no audio | hosted emulator lane | `platform-verification.yml` |
+| Target | Verification path | Evidence boundary |
+|---|---|---|
+| Debian Linux | Existing bounded developer lane and hosted UI/platform jobs | Debug/Xvfb is local software-path evidence; each current journey needs its own observations |
+| macOS / Windows | Existing native packaged hosted jobs | Exact-source shipped dependencies and actual interactions; a build alone does not verify usability |
+| Android | Existing emulator, preview and DocumentsUI/SAF jobs | Software preview/emulator evidence is distinct from physical-device behavior; audio remains unsupported |
+
+These are verification paths, not a standing PASS for HEAD. Current results and
+reproduced defects belong in PRODUCT_ROADMAP and task evidence. Dated baseline
+measurements below are retained with their original limitations.
 
 Not claimed: pixel-identical parity across platforms, Android audio, an
 `apt`-mediated install/upgrade/purge of a locally built `.deb`, or `.deb` and
@@ -22,6 +26,39 @@ extracted into a disposable root and driven through the packaged journey at
 `33b84eb`; that run is recorded in
 [the 2026-10-18 local record](evidence/2026-10-18-linux-deb-local-acceptance.md),
 and hosted `platform-verification` remains the packaging authority.
+
+## User-journey acceptance contract
+
+A claim names the user goal, entry point, target platform/input, expected
+interaction, real fixture checksum and observable result before implementation.
+Complete the affected journey through the actual application, including relevant
+undo/error recovery and save/reopen. Flutter interactions must produce the
+intended canonical Rust state. Commands, widgets, screenshots, packages and
+human usability establish distinct claims.
+
+Use PASS for the executed/asserted scope, FAIL for an observed violation,
+BLOCKED for a required unavailable check and UNVERIFIED for an unobserved claim.
+No required skip passes; retain failure severity when combining results.
+Historical claim wire names and ACCEPTED authority remain unchanged.
+A report identifies tested SHA plus dirty diff/source fingerprints, platform,
+build/entrypoint, backend, fixture, actions, assertions, artifact hashes and limits.
+The or_ui schema-2 report records those available facts and refuses incomplete,
+reordered or failed transcripts; it grants behavioral evidence only for asserted
+canonical observations and separate preview evidence for changing viewer content.
+
+Import requires usable media through the supported file picker/provider for a
+native claim, preserved references and sensible invalid/missing/revoked recovery.
+Preview requires changing decoded and presented frames plus supported audio;
+surface creation, transport time and thumbnails are insufficient. Export requires
+actual UI completion followed by independent metadata/preset bounds, content
+decoding, expected audio and player reopening. Probe-only results leave player
+and perceived audio/synchronization UNVERIFIED.
+
+Independent ordinary-user evaluation is required to accept beginner usability.
+TESTING owns that procedure. Instrument self-tests may PASS while a diagnostic
+product journey FAILs; neither verdict overrides the other. Hosted CI remains
+the existing native/platform acceptance authority and is never automatic release
+approval.
 
 ## Attributes
 
@@ -263,6 +300,41 @@ resource use; they do not measure speed.
 To extend the budget: add one row to `scripts/bench_quality.py` with the command
 it times, a baseline measured on this named host and a stated margin, then let
 `acceptance` enforce it.
+
+## Application performance measurements
+
+Keep the existing Rust microbenchmarks and offscreen guards; they cannot
+substitute for users waiting on the app. Use the existing or_ui measure blocks
+for action-to-observed-result latency and `--build-mode profile` on Linux for
+Flutter profile traces. The runner retains build/raster frame timings (bounded
+to 1,200 samples) and current/peak process RSS. A profile option without an
+executed profile report remains UNVERIFIED.
+
+| User experience | Measurement and discriminator |
+|---|---|
+| Interaction latency | Action timestamp to asserted visible/canonical outcome, repeated samples with settle disabled; report p50/p95, spread and polling overhead |
+| Timeline drag | Continuous semantic gesture, canonical drop/undo, Flutter build/raster durations and trace during the gesture; distinguish harness gesture cadence from dropped app frames |
+| Seek and first preview frame | Request to first matching decoded/presented frame on the intended surface; record timestamps/frame identity and pixel change, not transport position alone |
+| Playback pacing | Presented-frame timestamps, missed deadlines and decode/queue metrics on a real window/device; Flutter raster time alone is insufficient |
+| Audio sync | Known flash/tick content and synchronized audio/video capture on a real sink/device; no-audio/dummy/emulator paths leave this UNVERIFIED |
+| Memory | App RSS/peak plus workload/cache/queue bounds; separate compiler, test driver and emulator processes |
+| Export throughput | Selected preset, frame count/media duration/output validity and elapsed time, with cold/warm state and decode/render/I/O cost identified |
+
+Every baseline/candidate record names hardware/CPU/GPU, OS, source SHA/diff,
+artifact hash, Flutter/Rust/media versions, build mode, render/decode/audio backend,
+fixture checksum, dimensions/fps/duration/clip/layer count, warmup/repetitions,
+method, raw samples, units, harness overhead and contention. Profile Flutter
+build/raster work separately from Rust application logic, decode, media I/O and
+GPU presentation. Record unsupported measurements explicitly; do not infer them.
+
+Use the same controlled representative workload, environment and settings for
+before/after comparisons. The existing pinned 30-second 1080p package workload
+is separate from tiny smoke media. Establish measured baselines and owner-reviewed
+product targets before enforcing new latency/pacing ceilings; no arbitrary limits
+chosen to obtain CI green. Debug builds, synthetic tiny clips, hosted virtual
+GPUs, Xvfb/llvmpipe and SwiftShader never become physical-device release-performance
+evidence. A contended-host observation is retained with context, not compared as
+though it came from the idle baseline machine.
 
 ## Known gaps
 

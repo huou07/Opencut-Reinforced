@@ -1,0 +1,11 @@
+{
+  "width": 160,
+  "height": 90,
+  "container": "webm",
+  "duration": 2,
+  "duration_tolerance": 0.15,
+  "video_codec": "vp9",
+  "audio_codec": "opus",
+  "moving_video": true,
+  "audible_audio": true
+}

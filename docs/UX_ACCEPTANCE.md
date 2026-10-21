@@ -2,6 +2,34 @@
 
 Last reviewed: 2026-10-20
 
+## Practical editing acceptance
+
+The user goal is a useful short video made without timestamp arithmetic.
+Common operations must be discoverable and responsive through direct pointer/
+touch interaction: add footage, position/move clips, drag trim edges, split at
+the playhead, undo, seek/play, save/reopen and export. Advanced exact numeric
+controls may remain; a compulsory numeric dialog is not acceptance of the
+corresponding natural interaction.
+
+Retain Focused Monochrome, established shell slots/terminology and shared command
+semantics across macOS, Windows and Linux, with Android touch adaptations.
+Check keyboard alternatives, visible/restorable focus, context actions, 24/44 px
+targets, screen-reader labels/actions, errors, empty states and discoverability.
+Existing contrast/type/compact guards below remain binding. A one-pixel viewer
+can satisfy an overflow check while failing practical usability.
+
+Preview acceptance requires changing decoded/presented content, reliable seek
+and supported audio. A transport clock, thumbnail, open texture or success return
+is insufficient. Export acceptance requires the app journey followed by
+independent preset metadata, decoding and player observations. Unsupported media
+and platform/audio limitations must be communicated accurately.
+
+[TESTING.md](TESTING.md#journey-regression-procedures) owns diagnostic commands,
+fixture checks, negative controls and the independent ordinary-user procedure.
+A failing diagnostic records a defect; it does not authorize repairing unrelated
+product behavior. Historical fixed-defect notes below remain dated evidence,
+not automatic acceptance of the current application.
+
 ## Purpose
 
 This checklist separates the frozen HTML prototype reference from behavior

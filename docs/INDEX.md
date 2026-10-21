@@ -1,14 +1,16 @@
 # Documentation index
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-20
 
 This file is the routing layer. Pick the row that matches your task, then read
 the authority that owns the answer. There is no need to read every document.
 
 ## Authority order
 
-When two documents disagree, the earlier entry wins and the later one is a
-documentation defect to repair:
+Host/session rules and the user's request govern first. The following map names
+responsibilities; a roadmap does not override architecture or UX acceptance.
+Resolve conflicts in the owning authority and report them, rather than choosing
+a lower standard:
 
 1. [AGENT_POLICY.md](AGENT_POLICY.md) — permanent execution, safety, acceptance
    and delivery rules.
@@ -25,10 +27,10 @@ documentation defect to repair:
 7. [DESIGN.md](../DESIGN.md) and [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md) —
    presentation and UX truth.
 
-This order mirrors entry 1 of that list, `docs/AGENT_POLICY.md`; a rank numbered
-differently here is a routing defect, not an alternative reading. Entry 4 is
-extended here with `PROJECT_FORMAT.md` and the ADRs, which the policy places in
-the same architecture-and-contracts tier rather than in a separate rank.
+The operating loop is in DEVELOPMENT_WORKFLOW; QUALITY owns the quality/evidence
+contract, TESTING owns check selection and human acceptance, TOOLING owns command
+usage, RELEASE owns publication requirements. AGENTS is the concise entry map;
+skills add narrow procedures, not duplicate authorities.
 
 Host and session security boundaries in [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md)
 and the agent harness remain higher authority than anything in this repository.

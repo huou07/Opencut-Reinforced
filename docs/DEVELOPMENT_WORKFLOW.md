@@ -1,6 +1,6 @@
 # Development Workflow
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-20
 
 ## Status
 
@@ -16,9 +16,10 @@ this document does not restate them and must never copy a checkpoint status.
 Before any feature, architecture, or automation work, establish what is actually
 next:
 
-1. Read [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) and identify the most valuable
-   incomplete capability. A continuation request ("continue", "next task")
-   selects that capability, not a historical checkpoint.
+1. Resume the user's existing authorized outcome. For an otherwise unbounded
+   product continuation, read [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md) to select
+   an incomplete capability. A named task takes precedence; no roadmap entry
+   expands its scope. An analysis/plan/review request ends at its artifact.
 2. Check the current machine and repository state:
 
 ```sh
@@ -60,10 +61,10 @@ Keep the Phase 5A `media probe` operation read-only: it accepts a local filesyst
 
 For project mutations, keep Flutter, headless, and attached CLI operations on the shared `ApplicationRequest` path. `LiveProjectHost` must own exactly one `ProjectFileSession`; its opaque Rust bridge handle and IPC server share the same state. Do not add a Dart-editable document or a second IPC-owned project session. Headless mutations execute shared commands through `ProjectFileSession` and save changed state with exact-base checks; attached commands use the existing `LiveProjectHost` and leave its live state dirty until explicit save. The Phase 6C/6D/6E1/6E2B Flutter timeline keeps only bounded disposable query pages and uses those same commands; project invalidation events refresh the open view so attached CLI edits appear there. Phase 6E2A marker commands and queries use the same Rust-owned path, and 6E2B exposes them through typed bridge/gateway methods without creating a second document. Timeline edits use exact `RationalTime`, append tracks, remove only empty tracks, sort inserted/moved clips by timeline start, reject same-track overlap, permit adjacency and cross-track overlap, and permit moves only between tracks of the same kind. Trim uses absolute start/end edges, split requires an exact interior point, and ripple delete shifts only later clips on the selected track without moving global markers. Pointer edits retain the original canonical exact time, quantize only the total delta to the nearest 1 ms, show a presentation-only ghost, resolve the appropriate canonical Snap query once at drop, and dispatch the existing move/trim command; the fixed snap threshold is `1/8` second over timeline zero, clip boundaries, and persistent markers. Rust validates final state; successful edits refresh from Rust and never optimistically change geometry. Timeline and marker commands remain disallowed inside grouped transactions. The running Flutter application and developer/headless `or session serve` can each host a live project. Preserve recovery inspection and exact-disk-base conflict checks on every open/save path. Android project access crosses SAF through an app-private managed working copy; retain provider URIs and permission grants as runtime metadata, and never send `content://` URIs to Rust path APIs. Canonical project mutations still use the shared `ApplicationRequest` and normal `ProjectFileSession` path.
 
-### Future MotionScene authoring
+### MotionScene contract
 
-MotionScene is future non-executable declarative source, not a product feature
-of the current execution checkpoint. Keep exact `RationalTime`, random-access
+MotionScene is non-executable declarative source. Current capability and evidence
+belong in PRODUCT_ROADMAP, not checkpoint-era descriptions here. Keep exact `RationalTime`, random-access
 evaluation, typed/bounded primitives, stable asset/font provenance, and the
 shared RenderSnapshot/wgpu path. Preview and materialization must share the
 evaluator, and materialization must register persistent output through normal
@@ -79,28 +80,47 @@ inputs/outputs, cancellation, and crash containment. It never runs in
 
 ## Feature path
 
-1. **Define product behavior.** State the user problem and intended result. Classify the work as domain, media, render, audio, AI, UI-only, or infrastructure. Check [PRODUCT.md](PRODUCT.md).
-2. **Inspect the existing system.** Read relevant documentation and code. Use CodeGraph where useful. Reuse existing concepts instead of duplicating abstractions.
-3. **Define affected surfaces.** For an editing capability, consider the Rust command and query, CLI, desktop GUI, mobile GUI, agent capability, docs, and tests. Not every feature needs every surface; record a reason for omissions.
-4. **Put behavior in the domain first.** Editing behavior belongs in the Rust domain or application layer. Flutter is not the source of truth.
-5. **Preserve state ownership.** Before implementing stateful editing behavior, identify canonical state in the Rust/domain/application layer. Flutter state must be presentation-local or a read-model/cache. If a proposal creates a second independently editable project state in Dart, CLI code, worker state, or an agent session, stop and redesign.
-6. **Define the command contract.** Reuse or create a stable command ID; specify inputs, schema version, validation, revision/preconditions, errors, ChangeSet, permissions, and undo behavior. Only the command/application execution path mutates canonical project state.
-7. **Test the command and domain.** Add unit, property, or contract coverage before relying on the UI.
-8. **Provide CLI parity where appropriate.** Expose semantic project operations and meaningful project queries where representable; presentation-only controls do not require CLI exposure. See [PRODUCT.md](PRODUCT.md).
-9. **Integrate with the UI.** Use a stable shell slot and check feature descriptors and the command registry first. Do not add a permanent navigation region without clear justification. Read [DESIGN.md](../DESIGN.md).
-10. **Adapt mobile presentation.** Use the same command and state model. Adapt layout with touch-native panels, sheets, or full-screen utility surfaces; do not duplicate domain logic.
-11. **Expose safe agent capabilities.** Add discovery, queries, permissions, dry-run, and diff preview where appropriate. Never expose secret access.
-12. **Review performance where it applies, plus security and licensing.** Apply the hot-path review below primarily to media, render, audio, timeline evaluation, export, AI processing, and large background jobs. Ordinary UI-only work does not need an unnecessary media-performance review. Consider supported platforms, permissions, dependency licenses, asset rights, and model rights for all relevant work.
-13. **Localize at the presentation boundary.** Do not scatter user-facing English strings through domain/business logic. Use localization-capable Flutter resources when production UI starts; keep command IDs, JSON field names, and machine-readable error codes stable.
-14. **Update documentation.** Update the existing source of truth. Create a new document only when the information needs a durable home.
-15. **Preserve regression guards.** Read [UX_ACCEPTANCE.md](UX_ACCEPTANCE.md). Add a permanent guard when a UI regression is fixed. Never remove or weaken a working guard to make a change pass.
-16. **Verify the affected system.** Follow the CI-first verification ladder below. Report checks that did not run with their actual status.
-17. **Commit one logical change.** Commit only a coherent change with no known-broken state. Use a clear Conventional Commit-style subject.
-18. **Open a focused pull request and pass CI.** External contributors use feature branches and pull requests. Explain what changed, why, architecture impact, tests, docs, and risks. CI must pass before merge. Early maintainer work may continue to fast-forward main pushes under repository policy.
+1. **Name the complete user goal.** Record entry point, platform/input, real fixture,
+   expected interaction/result, failure/recovery path and what would disprove
+   success. Example: import footage, drag/trim, split at playhead, undo, play,
+   save/reopen and export a playable short edit. Scope to the user's request.
+2. **Inspect what exists.** Try the current functionality and inspect its code,
+   semantics and tests. Record a baseline failure before repair where practical.
+   Reuse existing commands, UI, or_ui scenarios and packaged/SAF journeys.
+3. **Define the affected contract.** Identify canonical Rust state, command/query,
+   revision/schema/errors/undo and persistence. Select GUI/CLI/mobile surfaces
+   relevant to the requested outcome; document omissions. Keep presentation
+   disposable. Never create a second editable document.
+4. **Implement one coherent change.** Preserve architecture, existing shell slots
+   and Focused Monochrome. Natural pointer/touch operations and keyboard access
+   must work; numeric dialogs are optional precision, not the normal trim/split
+   journey. Localize presentation strings; keep machine IDs stable.
+5. **Prove each layer it claims.** Unit/command tests assert domain behavior.
+   Actual Flutter interactions assert canonical Rust outcomes and undo/reopen.
+   Preview must present changing decoded frames; export must independently
+   validate/decode/open against the chosen preset. Native picker and shipped
+   dependencies require the actual platform/package journey. See TESTING.
+6. **Check practical quality.** Inspect focus, keyboard/touch, error/empty states,
+   discoverability and accessibility per UX_ACCEPTANCE. Measure affected
+   app responsiveness per QUALITY; isolate decode/I/O/GPU/app/harness cost.
+   Select security/licensing review only for relevant boundaries.
+7. **Retain evidence and defects.** Reports bind source/diff/build, platform,
+   fixture checksum, actions, observations, artifacts and actual verdict.
+   A reproducible existing product failure remains FAIL in the roadmap backlog;
+   infrastructure repairs do not authorize repairing the product backlog.
+8. **Review and deliver.** Update the owning documents and relevant guards, run
+   proportionate checks below, review the diff and commit coherently. Prepare a
+   focused PR with exact-source CI and remaining gaps. No merge, release, tag,
+   publication or deployment follows merely from green checks.
+
+Independent ordinary-user acceptance in TESTING supplements automation. The
+coding agent cannot self-certify beginner usability. Do not repeat planning,
+load every skill, run unrelated platform jobs, or add a second framework for a
+task with an existing adequate command.
 
 For Flutter project lifecycle changes, run the fake-gateway widget tests and include the native Rust-bridge lifecycle test in hosted CI. Verify attached CLI parity in a process-level test against the same `LiveProjectHost`; a sandboxed macOS UI integration process cannot launch an external CLI binary itself. Confirm that IPC protocol v1 remains unchanged and that the Flutter read model refreshes from Rust summaries after ordered events.
 
-The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated synthetic fixtures. They verify the real `ffprobe` and `ffmpeg` paths; do not install FFmpeg locally or run these integration tests locally. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. The local-runtime rule is the one stated under the verification ladder below: headless by default, with the two bounded local lanes as the dated owner-granted exception.
+The real media-probe and media-artifact integration tests run on hosted Linux with CI-installed FFmpeg tooling and generated fixtures. Explicitly authorized local media verification may reuse installed FFmpeg within the bounded development lane; it remains local evidence. Do not install dependencies without the applicable authority. The native Flutter lifecycle and offline-media bridge integration tests run in hosted macOS CI. The local-runtime rule is the one stated under the verification ladder below: headless by default, with the two bounded local lanes as the dated owner-granted exception.
 
 ### CI-first verification ladder
 

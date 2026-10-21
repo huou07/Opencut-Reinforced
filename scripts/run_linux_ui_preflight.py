@@ -480,24 +480,40 @@ def exec_in_environment(argv: list[str]) -> int:
     for tool in ("cargo", "flutter"):
         if not shutil.which(tool):
             raise RuntimeError(f"BLOCKED: missing {tool}; do not change host privileges")
-    env = dict(os.environ, RUSTUP_TOOLCHAIN="stable", RUSTUP_AUTO_UPDATE="disable")
+    env = dict(os.environ, RUSTUP_TOOLCHAIN="stable", RUSTUP_AUTO_UPDATE="disable",
+               CARGO_BUILD_JOBS="1", CMAKE_BUILD_PARALLEL_LEVEL="1")
     writable_cargo_cache(env)
     writable_pub_cache(env)
     writable_flutter_root(env)
-    common = dict(cwd=APP, env=env, check=False)
-    with native_lock():
-        with linux_toolchain_target(manifest, linux_rust_target(), backup=backup):
-            if ffmpeg_prefix is None:
-                return subprocess.run(command, **common).returncode
-            cargo_home = Path(
-                env.get("CARGO_HOME")
-                or (Path(env.get("HOME", str(Path.home()))) / ".cargo")
-            )
-            if local_home is not None:
-                redirect_home(env, local_home)
-            with pinned_cargo_config(cargo_home, ffmpeg_prefix.resolve(),
-                                     codec_prefix.resolve() if codec_prefix else None):
-                return subprocess.run(command, **common).returncode
+    def run_prepared() -> int:
+        code, reason, elapsed, minimum = supervise(command, NATIVE_BUDGET_SECONDS, env)
+        print(f"prepared command: elapsed={elapsed}s min_available_ram={minimum}", flush=True)
+        if reason:
+            print(reason, flush=True)
+        return 3 if reason and reason.startswith("BLOCKED:") else code
+
+    def terminate_owned_run(signum, frame):
+        # Turn cancellation into stack unwinding so supervise kills its own
+        # process group and linux_toolchain_target restores the original bytes.
+        raise KeyboardInterrupt("prepared native command cancelled")
+
+    previous = signal.signal(signal.SIGTERM, terminate_owned_run)
+    try:
+        with native_lock():
+            with linux_toolchain_target(manifest, linux_rust_target(), backup=backup):
+                if ffmpeg_prefix is None:
+                    return run_prepared()
+                cargo_home = Path(
+                    env.get("CARGO_HOME")
+                    or (Path(env.get("HOME", str(Path.home()))) / ".cargo")
+                )
+                if local_home is not None:
+                    redirect_home(env, local_home)
+                with pinned_cargo_config(cargo_home, ffmpeg_prefix.resolve(),
+                                         codec_prefix.resolve() if codec_prefix else None):
+                    return run_prepared()
+    finally:
+        signal.signal(signal.SIGTERM, previous)
 
 
 def plan_lines() -> tuple[list[str], list[str], list[list[str]]]:

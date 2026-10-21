@@ -1,0 +1,758 @@
+{
+  "scope": "Local Linux debug, Xvfb/software path, synthetic file picker; no packaged/human/physical-device acceptance",
+  "normalization": "JSON host worktree path replaced with $REPO and home with $HOME. Original SHA256 retained; PNG bytes unchanged.",
+  "runs": [
+    {
+      "name": "split-at-playhead-diagnostic",
+      "result": "FAIL",
+      "reason": "the scenario runner exited 1:  | This indicates one of: |  * The content has changed on the server since you created the pubspec.lock. |  * The pubspec.lock has been corrupted. |  |  | For more information see: | https://dart.dev/go/content-hashes",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "30953e0c7fbe6d1b287677619e25a1cf8c411fbd6c77b78c6f19910ce56ed3f2",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "bf421e452917495e04596270a792631e6a8f81dc26947e8e9346a87923d9a6fa"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "35434b1e6966c9efb6a551b0d4abec42359dc5698e360331537fb2aa7f7f74a7"
+      },
+      "build": {
+        "mode": "UNVERIFIED",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/report.json",
+          "original_sha256": "8cc399b033853da78d70f82482054f0743f16d1a2b88803a46a690ccdf875f56",
+          "retained_sha256": "4c0c7c3a9858b6b6c39b43d29f690ea70d3606aae5b17e52781c89e750296153",
+          "bytes": 7230
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/scenario.json",
+          "original_sha256": "cddad9a195bc088d89eb1d3d2f5c3d638a6a3dd24b8e7d07149929cd32e826cd",
+          "retained_sha256": "cddad9a195bc088d89eb1d3d2f5c3d638a6a3dd24b8e7d07149929cd32e826cd",
+          "bytes": 2561
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/split-at-playhead-diagnostic.json",
+          "original_sha256": "d67d0f1f8d361bc626d3418c2fab57030a9349cfd70a00057b8984aeba004a0b",
+          "retained_sha256": "2e68d460d8d26108e8e75ee524b550c182dc58e636132a8b446d9591a61d0678",
+          "bytes": 53377
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/canonical-11.json",
+          "original_sha256": "cfa37475b5f27a11e1a44268775c1433b217834017b4e7ff6e8eb0d18bfc5af0",
+          "retained_sha256": "cfa37475b5f27a11e1a44268775c1433b217834017b4e7ff6e8eb0d18bfc5af0",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/shot-split-result-19.png",
+          "original_sha256": "b69f379a1689bdbcdd5be5cc239edb77ebfdf685881403229aedfb0d42f8ac9f",
+          "retained_sha256": "b69f379a1689bdbcdd5be5cc239edb77ebfdf685881403229aedfb0d42f8ac9f",
+          "bytes": 96532
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/split-at-playhead-diagnostic/tree-split-result-18.json",
+          "original_sha256": "296090594fe723fa4b7374f1c120cbee2ae13cf3f5a7222d1f70a0405331554c",
+          "retained_sha256": "296090594fe723fa4b7374f1c120cbee2ae13cf3f5a7222d1f70a0405331554c",
+          "bytes": 3992
+        }
+      ]
+    },
+    {
+      "name": "direct-trim-diagnostic",
+      "result": "PASS",
+      "reason": null,
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "30953e0c7fbe6d1b287677619e25a1cf8c411fbd6c77b78c6f19910ce56ed3f2",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "bf421e452917495e04596270a792631e6a8f81dc26947e8e9346a87923d9a6fa"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "35434b1e6966c9efb6a551b0d4abec42359dc5698e360331537fb2aa7f7f74a7"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/report.json",
+          "original_sha256": "a0fffbac5352f80f0ca70662d864b005cd1844b785af286cad00204d8fd3fe04",
+          "retained_sha256": "564152a8da03b5bcb806241b6985c0e3eb6f5f4644fd78a4fcfa771b6748f16f",
+          "bytes": 51750
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/scenario.json",
+          "original_sha256": "fc9590bc34f5fd060b377b4d0e40e98062652ba946c9604acc2797dd932ae34a",
+          "retained_sha256": "fc9590bc34f5fd060b377b4d0e40e98062652ba946c9604acc2797dd932ae34a",
+          "bytes": 2478
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/direct-trim-diagnostic.json",
+          "original_sha256": "d39e678145633d8226e9523904c40032f54d2161ef59a72736f6e488164a2ff3",
+          "retained_sha256": "c71a4c25e8a8b94ee6908280219f4f2e60b285e48563b9c0d1fff7c23307a0bb",
+          "bytes": 47807
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/canonical-11.json",
+          "original_sha256": "c4336eb3316fece759d4e37191b6e8dc9dc4911420ff8a7ad990a9e8914368fe",
+          "retained_sha256": "c4336eb3316fece759d4e37191b6e8dc9dc4911420ff8a7ad990a9e8914368fe",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/canonical-15.json",
+          "original_sha256": "1ce683fd9bb279993ce90c821f7d3dc2c9c3a67b275b3fc1cebdba51ae3dea3e",
+          "retained_sha256": "1ce683fd9bb279993ce90c821f7d3dc2c9c3a67b275b3fc1cebdba51ae3dea3e",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/canonical-17.json",
+          "original_sha256": "6591d46be96575c9ef4d63814caa5f93904768d1c34ea4df4cec74079950a246",
+          "retained_sha256": "6591d46be96575c9ef4d63814caa5f93904768d1c34ea4df4cec74079950a246",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/shot-before-edit-13.png",
+          "original_sha256": "269bfbcf007718ddcf745d86b7e04c030ad0a1059d5fa991af404fb940ba1211",
+          "retained_sha256": "269bfbcf007718ddcf745d86b7e04c030ad0a1059d5fa991af404fb940ba1211",
+          "bytes": 87316
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/direct-trim-diagnostic/tree-before-edit-12.json",
+          "original_sha256": "4cca0e4d564c126e20f9f22839cefb61061fcdfe48a1dce85d42d127b86159a0",
+          "retained_sha256": "4cca0e4d564c126e20f9f22839cefb61061fcdfe48a1dce85d42d127b86159a0",
+          "bytes": 23166
+        }
+      ]
+    },
+    {
+      "name": "preview-playback-diagnostic-repaired",
+      "result": "FAIL",
+      "reason": "decoded sequence/time and viewer pixels must change; sequences={1} times={0/1} pixels_changed=false. Native texture readback limitations require independent target capture, never PASS.",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7c4401149a5117bbabcdd07f09eea8db741847d58ae55c7ec6ebffd0cf39aab4"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "b7c00560de10783968f24dd9b7479b9d3a62fe60ba2ba52d10a889339ace6c80"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/or_app",
+            "sha256": "21772b6c0c8dc07879b94ec5bca03243f55b11d4c11870d10bce189dc5a42d63",
+            "bytes": 52144
+          },
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin",
+            "sha256": "5edc6ff00899d5e24ab6677b4b7e8036031637a3b154c0b6eec94137e8d8aa87",
+            "bytes": 59586336
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/report.json",
+          "original_sha256": "467793f14b9266277a0a37000142fa68f322336017998c926d04d0f4e3ac3741",
+          "retained_sha256": "f8fdecc00f445f53f6aaa610bf1cba98b61f0a9976f96049e791f89e98ab23e3",
+          "bytes": 50030
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/scenario.json",
+          "original_sha256": "43b7afc1672ab2c96d8def7f40e2f98c4e20f5403f8dc1c0ae0f3b57901772d5",
+          "retained_sha256": "c3a4f7bb260a30774df167ea1bc65b99d8877eb3393e812fd1d954ddcd7be2f9",
+          "bytes": 2192
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/preview-playback-diagnostic.json",
+          "original_sha256": "903f19956a3c2e2e1d3fe300f0e790f5c92d8714cbab732b880aa8a25bb3f9a5",
+          "retained_sha256": "55dbb1ffa6375b077e0b157aff042f7059aee41fe7aaa003eb42ca56e7976e8d",
+          "bytes": 45157
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/canonical-11.json",
+          "original_sha256": "61930a01b683cdfbdfa22f9a60c208f5d74de088c7843f1b667ff7ed5b864af8",
+          "retained_sha256": "61930a01b683cdfbdfa22f9a60c208f5d74de088c7843f1b667ff7ed5b864af8",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/shot-video-imported-13.png",
+          "original_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "retained_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "bytes": 91967
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-playback-diagnostic-repaired/tree-video-imported-12.json",
+          "original_sha256": "75c9d1198911dd50e05e3b36499c7cde69a3c080d6e02232ad72c76df155a564",
+          "retained_sha256": "75c9d1198911dd50e05e3b36499c7cde69a3c080d6e02232ad72c76df155a564",
+          "bytes": 23242
+        }
+      ]
+    },
+    {
+      "name": "preview-configured-playback-diagnostic",
+      "result": "FAIL",
+      "reason": "decoded sequence/time and viewer pixels must change; sequences={7, 14, 22} times={1/4, 2/3, 1/1} pixels_changed=false. Native texture readback limitations require independent target capture, never PASS.",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "a83978e5c2d05db962188713df98e007d7c5af13ecf169be8ab4eb296e256e2c",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "1b46a07db6e3bb897e034c3778001474c4054f3bbf83e4a411b202bac9be264d"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "158de199b6aa7f0c03b5a338f28287cdf5aba8807a690842ff8eb2c84ebf8ce8"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/or_app",
+            "sha256": "21772b6c0c8dc07879b94ec5bca03243f55b11d4c11870d10bce189dc5a42d63",
+            "bytes": 52144
+          },
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin",
+            "sha256": "648baa1f5eefd14bc1bb1462ae33e337e9069d19e9c89b5dcaa2e9aa123c6d50",
+            "bytes": 59587144
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/report.json",
+          "original_sha256": "cae8a9b6a216369926d0ab9b2436cd37d9e9a4a9200e364398bb176e7b1226fb",
+          "retained_sha256": "162af331f3bf0e850098a1c3786f7eff899c4263dbe907675020708d0e67773b",
+          "bytes": 56503
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/scenario.json",
+          "original_sha256": "d5a308485c7125f3a2417b28e7c429f38921335ceaf84a4e7bd65c0d7972e651",
+          "retained_sha256": "d85638a03202ed6810253ba19d9cc48a3cf28381602ba66183439c25796ef909",
+          "bytes": 2536
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/preview-configured-playback-diagnostic.json",
+          "original_sha256": "6c41b1e09e9a030052765d180919175bd8b0d84f6d94d91744f95cef9302944f",
+          "retained_sha256": "5a899e382b3e3d8aa1663d42e99d6090dca06188bd4a544d482b8fd25cc7e82a",
+          "bytes": 50780
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/canonical-11.json",
+          "original_sha256": "5ce15a06d05f2a5a63c92df8ebe7c1167177059102e607c816b36e0468ab2757",
+          "retained_sha256": "5ce15a06d05f2a5a63c92df8ebe7c1167177059102e607c816b36e0468ab2757",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/shot-failure-18.png",
+          "original_sha256": "ea32e382e48baecea8ed84996244f116299fbc27a77a35968c8bb337ab414717",
+          "retained_sha256": "ea32e382e48baecea8ed84996244f116299fbc27a77a35968c8bb337ab414717",
+          "bytes": 93518
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/preview-configured-playback-diagnostic/tree-failure-18.json",
+          "original_sha256": "8c112503b92a885c18c9d1f2b0a18c11914de1981df97452275c26f0d21a1594",
+          "retained_sha256": "8c112503b92a885c18c9d1f2b0a18c11914de1981df97452275c26f0d21a1594",
+          "bytes": 23396
+        }
+      ]
+    },
+    {
+      "name": "export-configured-diagnostic",
+      "result": "FAIL",
+      "reason": "incomplete or inconsistent evidence",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "a83978e5c2d05db962188713df98e007d7c5af13ecf169be8ab4eb296e256e2c",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "1b46a07db6e3bb897e034c3778001474c4054f3bbf83e4a411b202bac9be264d"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "158de199b6aa7f0c03b5a338f28287cdf5aba8807a690842ff8eb2c84ebf8ce8"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/or_app",
+            "sha256": "21772b6c0c8dc07879b94ec5bca03243f55b11d4c11870d10bce189dc5a42d63",
+            "bytes": 52144
+          },
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin",
+            "sha256": "cf6919e00718aac6bd56fc9b8bd36c12869336a79806a79036ff40d3687fb4f8",
+            "bytes": 59587144
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/report.json",
+          "original_sha256": "102878a6824c2d3fdce070ba11e32450264467acab1bccd73d15b44ce68f1c45",
+          "retained_sha256": "8523bb473d9e2d9a5554b57abeb3fa10da6acd98a8f16cb23918d25153d60106",
+          "bytes": 60556
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/scenario.json",
+          "original_sha256": "d55e44c94ea6c3998daac98dfaba528887cd47dc9936a46c94df3f04c6966355",
+          "retained_sha256": "e6dba0f9f1957fd755af30da6e1a679c48e6d1453cfd4d5c967ac32dd4f9dcef",
+          "bytes": 2807
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/export-playable-diagnostic.json",
+          "original_sha256": "927a0194e2ff571dccc91eb5b925980eb43d66d4196acba481223b92dc571f9e",
+          "retained_sha256": "320abbf066f54f82dcfdf4325441a68cd0295d5605a251172b34604a0c70432a",
+          "bytes": 55843
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/canonical-11.json",
+          "original_sha256": "870855bc4a829ddeba72a7738794572f28014e6c5876033047dd35bc84ede588",
+          "retained_sha256": "870855bc4a829ddeba72a7738794572f28014e6c5876033047dd35bc84ede588",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/canonical-20.json",
+          "original_sha256": "706d644c95906d3df5e65af74ec7a81148125981681b6571221e796d8af40a50",
+          "retained_sha256": "706d644c95906d3df5e65af74ec7a81148125981681b6571221e796d8af40a50",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/shot-video-imported-13.png",
+          "original_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "retained_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "bytes": 91967
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-configured-diagnostic/tree-video-imported-12.json",
+          "original_sha256": "00f34feb55bbdc9b0f63e61470d57eafe00522f40bbbff75b92fafd607a0b732",
+          "retained_sha256": "00f34feb55bbdc9b0f63e61470d57eafe00522f40bbbff75b92fafd607a0b732",
+          "bytes": 23242
+        }
+      ]
+    },
+    {
+      "name": "export-audio-track-diagnostic",
+      "result": "FAIL",
+      "reason": "duration 4.042, expected 2.0 +/- 0.15",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "1b46a07db6e3bb897e034c3778001474c4054f3bbf83e4a411b202bac9be264d"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "1d7f06432ca413b42f4e8581a0c4352ebe4422a89cc94aa2ce41fa69b0ee360b"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/or_app",
+            "sha256": "21772b6c0c8dc07879b94ec5bca03243f55b11d4c11870d10bce189dc5a42d63",
+            "bytes": 52144
+          },
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin",
+            "sha256": "0da274db57f2064737367692810bb301fec2f432e7612ca1612a8d6b8b7c1e80",
+            "bytes": 59587144
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/report.json",
+          "original_sha256": "77b899c7c2568ce1eb684a040a6485ac890e8659fdd3151e8539d40ed5b6db5f",
+          "retained_sha256": "43db680a8c60bb7ada3e7a19112eb0fdf91789d7431ec3b302ebda9040e12f28",
+          "bytes": 82188
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/scenario.json",
+          "original_sha256": "2c1ac04fdb6651c8cd8e37f8985ee41ad29c692975a8d29de9b92dbb0d8c8398",
+          "retained_sha256": "b46ab901e3c04b54023234e7028c9dfd82d50b1648fe0527473feb715be30184",
+          "bytes": 3424
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/export-playable-diagnostic.json",
+          "original_sha256": "232f1e39e2b739601c0a1b38468077c653bd19000d769af3423b5254d3dd015e",
+          "retained_sha256": "32a8734ef5f57c431e015e4cd9fe6ac16ec994df251aa0beebb933e25c38e9aa",
+          "bytes": 77119
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/canonical-11.json",
+          "original_sha256": "8a5c165f1a2f9825e7a6c20d27118ee7b9fccee7db69cb37c57ba8ebd235967b",
+          "retained_sha256": "8a5c165f1a2f9825e7a6c20d27118ee7b9fccee7db69cb37c57ba8ebd235967b",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/canonical-19.json",
+          "original_sha256": "348a3127514515ef96002275a7600ea5329e45a95c85b560a3e68edec7511512",
+          "retained_sha256": "348a3127514515ef96002275a7600ea5329e45a95c85b560a3e68edec7511512",
+          "bytes": 357
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/canonical-26.json",
+          "original_sha256": "448ff7c6754ac512b510745d19c88dff88a6f1295b14448a68c2118f2d56d771",
+          "retained_sha256": "448ff7c6754ac512b510745d19c88dff88a6f1295b14448a68c2118f2d56d771",
+          "bytes": 357
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/shot-video-imported-13.png",
+          "original_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "retained_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "bytes": 91967
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-audio-track-diagnostic/tree-video-imported-12.json",
+          "original_sha256": "5eccf86189ceea31226b7ad1309369781bae766b1b5d8dd01864355f6db1e138",
+          "retained_sha256": "5eccf86189ceea31226b7ad1309369781bae766b1b5d8dd01864355f6db1e138",
+          "bytes": 23242
+        }
+      ]
+    },
+    {
+      "name": "export-aligned-audio-diagnostic",
+      "result": "PASS",
+      "reason": null,
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "1b46a07db6e3bb897e034c3778001474c4054f3bbf83e4a411b202bac9be264d"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "32420c7523b9e33f6ac65ae3cd8639b7d7896042251c3e68561d3360fb081e96"
+      },
+      "build": {
+        "mode": "debug",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/or_app",
+            "sha256": "21772b6c0c8dc07879b94ec5bca03243f55b11d4c11870d10bce189dc5a42d63",
+            "bytes": 52144
+          },
+          {
+            "path": "apps/or_app/build/linux/x64/debug/bundle/data/flutter_assets/kernel_blob.bin",
+            "sha256": "314f6175b4b1b4b3106a179e265291d516308fb2eb877334c7ddbd609c05497b",
+            "bytes": 59587144
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/report.json",
+          "original_sha256": "3945a395429a621077b65df4e8941995538d46d3475a0e40c8bc733775e454c3",
+          "retained_sha256": "f8d1681b6f5192196d0f29b3c2229c71a373283555217eb223a90813209ce877",
+          "bytes": 90151
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/scenario.json",
+          "original_sha256": "72f71655dbd4ff445ae503446c655558698498d7b903ae77b4c083a02db5b362",
+          "retained_sha256": "1668698b35ba3b4f5ccd961328524b7a5035b5c82f5a6847ebc046eaa3f68e15",
+          "bytes": 3616
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/export-playable-diagnostic.json",
+          "original_sha256": "29448487382879b77202a44551f525e3d1d8520c2adc68df52b5dae7d9ab1922",
+          "retained_sha256": "beed67e42cd5cbd9563a4266f680d03c7e8777e428752479464a713ef618715c",
+          "bytes": 81056
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/export.webm",
+          "original_sha256": "3c41f1a0b89cc710ba39dd3b6cfa1d7cc14a7bb9b586be84690737426b1ca1f0",
+          "retained_sha256": "3c41f1a0b89cc710ba39dd3b6cfa1d7cc14a7bb9b586be84690737426b1ca1f0",
+          "bytes": 65742
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/canonical-11.json",
+          "original_sha256": "b7c3c523688843304f4f8283326d002a47137e0397ee2becd4df51cda55ea421",
+          "retained_sha256": "b7c3c523688843304f4f8283326d002a47137e0397ee2becd4df51cda55ea421",
+          "bytes": 283
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/canonical-20.json",
+          "original_sha256": "a2ea22469badf084c21362ca41a4dbbc72d3843c5f532634d52ebf8c2bb28a78",
+          "retained_sha256": "a2ea22469badf084c21362ca41a4dbbc72d3843c5f532634d52ebf8c2bb28a78",
+          "bytes": 353
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/canonical-27.json",
+          "original_sha256": "13edbed3f027db38209eff7f1ef444c4e28f1306d1cadec22512d6e36d74a775",
+          "retained_sha256": "13edbed3f027db38209eff7f1ef444c4e28f1306d1cadec22512d6e36d74a775",
+          "bytes": 353
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/shot-video-imported-13.png",
+          "original_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "retained_sha256": "20e0b3b911a48e144874169d28672730f57ce64bdb089decba5baeb40ecef149",
+          "bytes": 91967
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/export-aligned-audio-diagnostic/tree-video-imported-12.json",
+          "original_sha256": "f6aa018c26193285257a37a2fb0e8f06345b6c867127016d86213c15ce3fb05e",
+          "retained_sha256": "f6aa018c26193285257a37a2fb0e8f06345b6c867127016d86213c15ce3fb05e",
+          "bytes": 23242
+        }
+      ]
+    },
+    {
+      "name": "profile-direct-trim",
+      "result": "FAIL",
+      "reason": "text \"No timeline tracks\" never appeared within 20000ms",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "1b46a07db6e3bb897e034c3778001474c4054f3bbf83e4a411b202bac9be264d"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "53c4af2c3190c1b39a67c90931321f286ee899027a6882af51672ef723872dcd"
+      },
+      "build": {
+        "mode": "profile",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/profile/bundle/or_app",
+            "sha256": "b0688ef117c698c890bfc4cb581c7682b276613e859d11025f1cd55a59800f27",
+            "bytes": 24080
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim/report.json",
+          "original_sha256": "97f94a79435501f1c722733e570a30bd614e4c059ecc47d449d27c88f0927996",
+          "retained_sha256": "507b96e98018171ab3c2ed8f7daa49e1f671ca85a23b1f1b910522fcb7bc3989",
+          "bytes": 80597
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim/scenario.json",
+          "original_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "retained_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "bytes": 2480
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim/direct-trim-diagnostic.json",
+          "original_sha256": "6a6f8141732c45bfb50ec92e4668e012ad444ead7a85a758b4ebfcfdd1e76e99",
+          "retained_sha256": "ab15d7d72e212f832f9550397b7a71c46b3766b0a5199962ce47ddbbab5e9b85",
+          "bytes": 75524
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim/shot-failure-4.png",
+          "original_sha256": "7a97263ee0095ac93956ac226278340c46d225a3e14dae68fbdcbac6a93a451e",
+          "retained_sha256": "7a97263ee0095ac93956ac226278340c46d225a3e14dae68fbdcbac6a93a451e",
+          "bytes": 61195
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim/tree-failure-4.json",
+          "original_sha256": "a800c928b298c7063a3de101c2060d90556b2e9f6f5cc6ad4915cfbaed611ce5",
+          "retained_sha256": "a800c928b298c7063a3de101c2060d90556b2e9f6f5cc6ad4915cfbaed611ce5",
+          "bytes": 4055
+        }
+      ]
+    },
+    {
+      "name": "profile-direct-trim-input-repaired",
+      "result": "FAIL",
+      "reason": "Null check operator used on a null value",
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "2c88c9067038d7d76bac1982098f07c1d593fe52ad70099827fafa9b83a9ab62"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "6b2405761dfa06489b644de34e61454499c6caa1c2a34bb646d5b4ebfd57abb8"
+      },
+      "build": {
+        "mode": "profile",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/profile/bundle/or_app",
+            "sha256": "b0688ef117c698c890bfc4cb581c7682b276613e859d11025f1cd55a59800f27",
+            "bytes": 24080
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/report.json",
+          "original_sha256": "c3f9d0953c188c2899366a98ccbc88d6e0259046248cf454e1e7776c1fe6615d",
+          "retained_sha256": "4bfb72fbeb356bc9d413a9818b10051d0992f5b7d6cd7c714665aef93a279180",
+          "bytes": 51642
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/scenario.json",
+          "original_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "retained_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "bytes": 2480
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/direct-trim-diagnostic.json",
+          "original_sha256": "12b38e82a6161ca4184cb2dc0374c65fbc4ff0900c2fc289e14d174d61e5152e",
+          "retained_sha256": "1f6dc7da0d39b0dae52be461547a93ef0b8376e3bc9431a8e98fc514ad1e7bf3",
+          "bytes": 46862
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/canonical-11.json",
+          "original_sha256": "567ad544100de8fa46a461f1d2debebdfd27558decaae99ae801d1dc4f91c887",
+          "retained_sha256": "567ad544100de8fa46a461f1d2debebdfd27558decaae99ae801d1dc4f91c887",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/canonical-15.json",
+          "original_sha256": "d96cf316f6d5c1fb586088d1f3cd80a4dbd4f7ef1f4b2dd4e318a24ede5fb2c7",
+          "retained_sha256": "d96cf316f6d5c1fb586088d1f3cd80a4dbd4f7ef1f4b2dd4e318a24ede5fb2c7",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/shot-failure-16.png",
+          "original_sha256": "74ff01bfb0b96d6c162297cb409de358aef096b259c42068629307f51d4f2325",
+          "retained_sha256": "74ff01bfb0b96d6c162297cb409de358aef096b259c42068629307f51d4f2325",
+          "bytes": 95982
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-input-repaired/tree-failure-16.json",
+          "original_sha256": "f651a64f823e70379d35e79da3b9d7d2d5e7c10cc89aa4195a0e2b42221e4f67",
+          "retained_sha256": "f651a64f823e70379d35e79da3b9d7d2d5e7c10cc89aa4195a0e2b42221e4f67",
+          "bytes": 29237
+        }
+      ]
+    },
+    {
+      "name": "profile-direct-trim-key-repaired",
+      "result": "PASS",
+      "reason": null,
+      "source": {
+        "task_sources": {
+          "scripts/media_checks.py": "7ccebd02105d1812450f1e97a9a76c68237c941d5dd7fb604d67a71e7dcc3307",
+          "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+          "scripts/test_journey_evidence.py": "7cfdfa09d256605f88bb1cc20e3d17f1f6be927a0b7fd22d5ff4a70c7f38a191",
+          "scripts/or_ui.py": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+          "scripts/run_linux_ui_preflight.py": "51fd288d6def201731eb6987a031c9da9501e410dec6b2120a7996e72a82644c",
+          "apps/or_app/integration_test/or_ui_scenario_test.dart": "d9a059c10fb2eb8a6e2566bcd5f9730c1f43107c10e32bb89fff79d6ddb1a6c8"
+        },
+        "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+        "dirty": true,
+        "diff_sha256": "ad18fc3832c379c1ae8a6548e8f664966d027ca9b38b1d7fab026c2a73c5ea36"
+      },
+      "build": {
+        "mode": "profile",
+        "entrypoint": "integration_test/or_ui_scenario_test.dart",
+        "backend": "software",
+        "acceptance": false,
+        "artifacts": [
+          {
+            "path": "apps/or_app/build/linux/x64/profile/bundle/or_app",
+            "sha256": "b0688ef117c698c890bfc4cb581c7682b276613e859d11025f1cd55a59800f27",
+            "bytes": 24080
+          }
+        ]
+      },
+      "files": [
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/report.json",
+          "original_sha256": "dda5e3d2ca3a7b1ca1d03e0a7d886bd74292a360e0b9fca4f58fc5840da5f44f",
+          "retained_sha256": "ec611fb18c2793b80219661b0a836f28c3e9f9df249afb2b4ebcefe5966c4ea1",
+          "bytes": 51494
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/scenario.json",
+          "original_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "retained_sha256": "501e297751f464b1578af801b6cd0b07b6a830ef0e219dc09b968d0caf7a384e",
+          "bytes": 2480
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/direct-trim-diagnostic.json",
+          "original_sha256": "343ca752502667f8a1eabb5cbf2a6734cf20ae024bc79af4fd7b6cbcc307eded",
+          "retained_sha256": "ea2a82683c04c1c2cab5a554e39e6e68513a087b2fe1cadf0a9f64c79479f063",
+          "bytes": 46963
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/canonical-11.json",
+          "original_sha256": "2d9e115b349d37cff6aa82a667f725f9af3d6f4da4ecc58a31c987ea6840cdc7",
+          "retained_sha256": "2d9e115b349d37cff6aa82a667f725f9af3d6f4da4ecc58a31c987ea6840cdc7",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/canonical-15.json",
+          "original_sha256": "c75be18f8c3af1682f9f740de846ce9ebafb55438758f84bf84ea6795a6cbf85",
+          "retained_sha256": "c75be18f8c3af1682f9f740de846ce9ebafb55438758f84bf84ea6795a6cbf85",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/canonical-17.json",
+          "original_sha256": "dda9253ce2d9f1a443ded9330136eb4cde979bd9b2a85097742fbb5c4ddc0fc3",
+          "retained_sha256": "dda9253ce2d9f1a443ded9330136eb4cde979bd9b2a85097742fbb5c4ddc0fc3",
+          "bytes": 279
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/shot-before-edit-13.png",
+          "original_sha256": "269bfbcf007718ddcf745d86b7e04c030ad0a1059d5fa991af404fb940ba1211",
+          "retained_sha256": "269bfbcf007718ddcf745d86b7e04c030ad0a1059d5fa991af404fb940ba1211",
+          "bytes": 87316
+        },
+        {
+          "path": "docs/evidence/journey-acceptance-2026-10-20/profile-direct-trim-key-repaired/tree-before-edit-12.json",
+          "original_sha256": "77780d750f6df666e92c1722a72bd90e804004f8e53bb46e06cdaba3eee4a757",
+          "retained_sha256": "77780d750f6df666e92c1722a72bd90e804004f8e53bb46e06cdaba3eee4a757",
+          "bytes": 23164
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Development Tooling
 
-Last reviewed: 2026-10-18.
+Last reviewed: 2026-10-20.
 
 This tooling supports contributors and maintainers; it is not part of the Opencut Reinforced application.
 
@@ -90,6 +90,61 @@ Report each check as one of:
 - `NOT RUN` — it was intentionally skipped; for a native/runtime check skipped by policy, use `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`.
 
 When a required local check is environment-blocked and an equivalent Actions job exists, continue and inspect that remote job. The task may complete for that check only after the remote job passes. A blocked local check with no remote result is still unverified. A local native/runtime check intentionally skipped by policy is `NOT RUN — LOCAL NATIVE EXECUTION DISALLOWED BY POLICY`, not `LOCAL ENVIRONMENT BLOCKED`.
+
+## Harness operations and reproducible evidence
+
+Each or_ui invocation launches a fresh application/test session. `act` does
+not attach to a previous invocation's state; use one scenario for a multi-step
+journey. The default report directory is reused unless `--report-dir` is named.
+Use a unique task/scenario directory to retain evidence.
+
+Existing ops include tree/shot/screens, semantic tap/long_press, text entry,
+keyboard chords, scroll, wait and state assertions. Added ops:
+
+- `drag`: semantic selector plus fraction_x/fraction_y of the observed widget
+  size and bounded duration_ms. Geometry is derived from the current widget,
+  not an authored screen coordinate. An unhit-testable target fails.
+- `canonical`: nonempty equals and optional not_equals assertions over a
+  read-only Rust snapshot (counts, exact starts/durations, media IDs, revision).
+  It observes the same production session; no state injection or Dart document.
+  The diagnostic snapshot is bounded to 100 clips per track.
+- `preview_probe`: samples Rust decoded state and cropped viewer pixels.
+  Changing clock labels cannot satisfy playback. Native texture readback gaps
+  need another target capture and remain failed/unverified observations.
+
+```sh
+python3 scripts/or_ui.py --build-mode profile --report-dir apps/or_app/build/ui-harness/profile run scripts/ui_scenarios/interaction-latency.json
+python3 scripts/check_journey_diagnostic.py
+```
+
+Linux profile mode uses Flutter drive in the existing prepared environment;
+Android's staged harness APK remains debug-only. Reports retain actual mode,
+Flutter frame timings, RSS, source/diff/task-source hashes, artifact hashes,
+actions and actual outcomes. Profile/software data is not hardware performance.
+The known split diagnostic prints separate product and instrument verdicts;
+its infrastructure PASS never relabels a product FAIL.
+
+Fixtures and independent media checks are described in TESTING. Use installed
+ffmpeg/ffprobe and ffplay for those small developer probes. No new automation
+framework or dependency is required. Native desktop picker/package checks and
+Android SAF/provider checks remain in the existing platform-specific lanes.
+
+If Dart analysis tries to create an owner-home state directory, isolate only
+its supported cache variable:
+
+```sh
+ANALYZER_STATE_LOCATION_OVERRIDE="$PWD/.dart_tool/analyzer-state" dart analyze integration_test/or_ui_scenario_test.dart
+```
+
+This variable is provided by the
+[Dart analyzer resource provider](https://github.com/dart-lang/sdk/blob/main/pkg/analyzer/lib/file_system/physical_file_system.dart).
+Keep public package caches project-local and lockfiles unchanged; never copy
+credentials or retry a denied protected file. The existing preflight stages
+public Cargo/pub packages and scopes the toolchain. Its --exec mode now reuses
+the same process-group supervisor as the default journey: one compiler worker,
+a 600-second command budget, a 2 GiB runtime memory floor, owned-descendant
+cleanup and exact manifest restoration. Cancellation unwinds those contexts. A host block is recorded,
+never worked around by lowering headroom or changing shared services.
 
 ## Local development baseline
 

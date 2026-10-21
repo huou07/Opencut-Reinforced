@@ -1,0 +1,140 @@
+{
+  "name": "split-at-playhead-diagnostic",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "description": "Diagnostic: seek with keyboard, choose the visible Split action and require two Rust clips without entering a timestamp. A compulsory exact-time dialog is a reproducible UX failure; do not fill it in to make this journey pass.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Direct editing diagnostic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "media_count": 1,
+        "clip_count": 1,
+        "starts": [
+          "0/1"
+        ],
+        "durations": [
+          "1/1"
+        ]
+      }
+    },
+    {
+      "op": "tree",
+      "name": "before-edit"
+    },
+    {
+      "op": "shot",
+      "name": "before-edit"
+    },
+    {
+      "op": "key",
+      "chord": "period"
+    },
+    {
+      "op": "key",
+      "chord": "period"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-split-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "split-result"
+    },
+    {
+      "op": "shot",
+      "name": "split-result"
+    },
+    {
+      "op": "expect_absent",
+      "key": "timeline-split-time"
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "clip_count": 2
+      }
+    }
+  ],
+  "build_mode": "debug"
+}

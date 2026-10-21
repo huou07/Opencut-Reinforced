@@ -1,0 +1,129 @@
+{
+  "name": "preview-configured-playback-diagnostic",
+  "harness": "or_ui",
+  "description": "Distinguish a disabled initial Play control from configured playback. Select 24 fps through the existing UI, wait for enabled Play, then require decoded/presented frames and cropped viewer pixels to change. The separate first-play diagnostic retains the initial usability failure.",
+  "fixture_path": "$OR_UI_ROOT/apps/or_app/build/journey-fixtures/video-audio.webm",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Configured playback diagnostic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "video-audio.webm",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-video-track"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-video-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "media_count": 1,
+        "clip_count": 1
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-frame-rate"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "24 fps"
+      }
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "preview-play"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tree",
+      "name": "configured"
+    },
+    {
+      "op": "shot",
+      "name": "configured"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-play"
+      },
+      "settle": false
+    },
+    {
+      "op": "preview_probe",
+      "interval_ms": 250
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-play"
+      }
+    }
+  ]
+}

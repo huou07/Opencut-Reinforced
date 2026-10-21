@@ -249,6 +249,16 @@ if ! python3 scripts/test_or_ui.py; then
   fail "the UI harness contract checks failed"
 fi
 
+# Keep instruction references, narrow scopes and reviewed routing cases current.
+if ! python3 scripts/test_skill_contracts.py; then
+  fail "the project skill contracts failed"
+fi
+
+# Reject false completion from incomplete steps, frozen preview and invalid media.
+if ! python3 scripts/test_journey_evidence.py; then
+  fail "the journey evidence negative controls failed"
+fi
+
 # A packaged desktop bundle must carry the application entrypoint, not the
 # integration-test listener that `flutter test -d <device>` builds into the same
 # directory. The 2026-10-19 preview shipped that test build and opened to a black

@@ -1,10 +1,15 @@
 # Agent authority on this host
 
-Last reviewed: 2026-10-18. Source: the owner's direct instructions in the AEH
+Last reviewed: 2026-10-20. Source: the owner's direct instructions in the AEH
 sessions of 2026-10-17 and 2026-10-18. This file exists so a later agent does not
 have to ask again. It grants no host privilege, no credential beyond what is
 named here, and it does not override the evidence rules in `AGENTS.md`,
 `docs/TESTING.md` or `docs/UX_ACCEPTANCE.md`.
+
+The current request may narrow these historical standing grants. The 2026-10-20
+engineering-system assignment authorizes its commits/PR and necessary bounded
+runtime checks, but explicitly excludes merging, tagging, publishing and
+deploying OR. No standing release paragraph overrides that restriction.
 
 ## Granted without further approval
 
@@ -76,7 +81,7 @@ named here, and it does not override the evidence rules in `AGENTS.md`,
   daemons and the Flutter preflight are shared host resources: serialise them and
   use a dedicated AVD/serial so another project's guest is not disturbed.
 
-## Verified facts about this host (do not re-derive)
+## Dated host observations (probe current capability when needed)
 
 | Fact | Value |
 |---|---|
@@ -96,7 +101,7 @@ copied to a writable location builds, the shared one does not. `cd apps/or_app &
 | `~/.cargo` | **not writable** by the worker. Builds use the preflight's project-local offline cache; adding a new dependency needs a writable `CARGO_HOME` |
 | GPU | Intel UHD 770 (ADL-S GT1), Vulkan 1.4.305 / Mesa ANV 25.0.7, `/dev/dri/renderD128` readable and writable; llvmpipe is also present, so a wgpu backend choice must be explicit in any performance claim |
 | Linux UI preflight | `python3 scripts/run_linux_ui_preflight.py` is the supported entry point. A raw `flutter test -d linux` fails because rustup then tries to install the macOS targets declared in the bridge manifest; the preflight narrows that list to the host target and restores it byte-for-byte |
-| Shared Flutter hook cache | `apps/or_app/.dart_tool/hooks_runner/shared/**` is shared between worker UIDs. Artifacts built by another worker are unreadable and cargo fails with `failed to link or copy … build-script-build`; delete that cache so it is rebuilt by the current UID |
+| Shared Flutter hook cache | `apps/or_app/.dart_tool/hooks_runner/shared/**` can contain artifacts from other worker UIDs and fail with `failed to link or copy … build-script-build`. Use an isolated task checkout/cache; never delete another worker's artifacts or shared caches to obtain a pass |
 | Android emulator serial | Fixed 2026-10-18: the start script never passed `-port`, so a caller that reserved `emulator-5580` got a guest on the default 5554 while it waited 120 s for 5580 and then left the guest running. The script now derives the port from `OR_ANDROID_DEVICE_ID`, refuses a reserved port that is already in use (exit 3) and a non-emulator serial (exit 2), honours an explicit `ANDROID_AVD_HOME`, and only asks for the privileged `/dev/kvm` chown when the device is actually unusable. The lane marks the guest as its own *before* the emulator step, so a failed start is still reaped |
 | Android | **available.** SDK at `~/Android/Sdk` (platform-tools, emulator, NDK 26.3/27.2/28.2, `system-images;android-36;google_apis;x86_64`); AVD `an3-api36`; `/dev/kvm` readable+writable and `emulator -accel-check` reports "KVM (version 12) is installed and usable". A local x86_64 debug APK with NDK r28c FFmpeg libraries was built and installed on 2026-10-18. The staging root and commands are now recorded: `scripts/stage_android_ffmpeg.sh` builds the pinned x86_64 prefix and the guest link probe, and `scripts/build_android_case_apks.sh` builds the per-case APKs. On 2026-10-18 the prefix was then rebuilt with those scripts at `~/Android/or-android-ffmpeg-8.1.3/install/x86_64` with its probe at `~/Android/or-android-ffmpeg-8.1.3/probes/x86_64/ffmpeg-link-probe`; no guest drive has recorded a result yet |
 | GitHub | `gh` is authenticated as `huou07` through the owner-approved file exception; `git push` and release publication work |

@@ -1,0 +1,138 @@
+{
+  "name": "direct-trim-diagnostic",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "description": "Diagnostic, not a repaired-defect claim: drag the observed trim edge, require a canonical duration change, undo and inspect Rust state. Missing, inaccessible or inert handles must fail.",
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Direct editing diagnostic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      },
+      "state": "enabled"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "media_count": 1,
+        "clip_count": 1,
+        "starts": [
+          "0/1"
+        ],
+        "durations": [
+          "1/1"
+        ]
+      }
+    },
+    {
+      "op": "tree",
+      "name": "before-edit"
+    },
+    {
+      "op": "shot",
+      "name": "before-edit"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key_regex": "^timeline-trim-handle-end-.*$"
+      },
+      "fraction_x": -2,
+      "duration_ms": 500
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "clip_count": 1
+      },
+      "not_equals": {
+        "durations": [
+          "1/1"
+        ]
+      }
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+z"
+    },
+    {
+      "op": "canonical",
+      "equals": {
+        "clip_count": 1,
+        "durations": [
+          "1/1"
+        ]
+      }
+    },
+    {
+      "op": "tree",
+      "name": "after-undo"
+    }
+  ],
+  "build_mode": "debug"
+}

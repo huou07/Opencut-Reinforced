@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-20
 
 ## Authority and status
 
@@ -118,6 +118,29 @@ roadmap supplies the human mapping.
 The current Android app floor is API 26 (Android 8.0), matching CPAL's AAudio
 backend. This intentionally excludes older Android releases; the Android
 package and native linker both target API 26.
+
+## Acceptance defect backlog (2026-10-20)
+
+This is product work for subsequent explicit scopes. Infrastructure diagnostics
+do not authorize fixing these entries or imply a release decision. Priority
+ranks user impact; confidence names what was actually observed. Reproduction
+commands and artifacts are retained in the
+[journey acceptance record](evidence/2026-10-20-journey-acceptance-system.md).
+
+| Priority / ID | Confidence and observed failure | Reproduction / next scoped outcome |
+|---|---|---|
+| P1 / UX-SPLIT-PLAYHEAD | CONFIRMED on current Linux debug application and hosted Linux: after import, insert and seek, the visible Split action opens a required empty exact-time field; it does not split at the playhead. Canonical precondition is one 1-second clip; diagnostic stops with still_present on timeline-split-time. | Run split-at-playhead-diagnostic. Future product task: discoverable split at playhead with canonical two-clip, undo and save/reopen acceptance; keep optional precision controls. No fix in this task. |
+| P1 / UX-FIRST-PLAY | CONFIRMED initial-flow failure on local Linux: imported video and canonical clip exist, but Play does not start while the sequence displays Set rate; all observed states remain playing=false, frame sequence 1, presented time 0. | Run preview-playback-diagnostic. Compare configured-playback diagnostic before attributing this to a frozen decoder. Future product scope: discoverable first-play setup/defaults and useful readiness feedback. |
+| P1 / PREVIEW-CONTENT | SUSPECTED local software/native-surface gap: after selecting 24 fps and enabled Play, decoded sequences advance 7 → 14 → 22 and presented times 1/4 → 2/3 → 1, but captured viewer pixels remain unchanged. This does not distinguish native texture capture limitations from a presentation failure; it disproves a frozen decoder in that run. | Run preview-configured-playback-diagnostic with enabled Play and inspect decoded/presented state and native target capture. Packaged/physical targets remain separate. |
+| P2 / UX-AV-INSERT | CONFIRMED local setup friction: inserting video+audio media into V1 adds only video. Adding its audio separately defaults to the global content end (251/125), giving a 4.042-second export instead of aligned 2-second A/V. Manual start 0/1 yields a valid independently decoded/played export. This is interaction complexity, not a confirmed codec/export-engine defect. | Future scoped product work: discoverable, aligned A/V insertion without timestamp calculation, preserving independent advanced tracks and Rust semantics. Retain the three export diagnostic receipts. |
+| P2 / EXPORT-COMPATIBILITY | UNVERIFIED beyond the tested 160×90 VP9/Opus WebM with explicit A1/V1 alignment and 24 fps configuration. Its output passed duration/dimensions/codecs, changing-frame/non-silent-audio decode and independent ffplay reopening. Dummy audio cannot establish audibility/sync. | Broaden presets and native picker/packaged targets in scoped media work; do not extrapolate this smoke result to general export compatibility. |
+| P2 / USABILITY-PERFORMANCE | UNVERIFIED ordinary-user completion and physical-device responsiveness; historical microbenchmarks and debug software timing cannot settle these claims. | Run the independent user procedure in TESTING and same-environment profile/device measurements in QUALITY. |
+
+Not reproduced as defects in the covered local journey: the observed trim end
+handle was accessible, changed canonical duration from 1 second to 1/4 second,
+and undo restored 1 second. Real WebM import created usable canonical media and
+a timeline clip; broader codec/library/picker compatibility remains unverified.
+Do not create a confirmed defect merely from the owner's general report.
 
 ## Dependency graph
 

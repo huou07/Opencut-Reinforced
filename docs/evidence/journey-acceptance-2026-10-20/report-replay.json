@@ -1,0 +1,122 @@
+{
+  "base": "8abb41365ca0b2a89852fd60a6df64ab94a76195",
+  "candidate_sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+  "candidate_harness_sha256": "b5f28c32febb2a2371e746942859819252fa7c9cb53ec4f533e138e39d5bbd3e",
+  "scope": "Same synthetic transcripts through original and revised real finish functions; instrument grading only, not product behavior.",
+  "rows": [
+    {
+      "name": "missing-control",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000165
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.033424
+      }
+    },
+    {
+      "name": "omitted-step",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000286
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.030504
+      }
+    },
+    {
+      "name": "wrong-scenario",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000107
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.022237
+      }
+    },
+    {
+      "name": "canonical-mismatch",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.00012
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.024935
+      }
+    },
+    {
+      "name": "frozen-preview",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000195
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.027056
+      }
+    },
+    {
+      "name": "missing-screenshot",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000105
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.028708
+      }
+    },
+    {
+      "name": "framework-error",
+      "expected_exit": 1,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000112
+      },
+      "after": {
+        "exit": 1,
+        "result": "FAIL",
+        "seconds": 0.023192
+      }
+    },
+    {
+      "name": "positive-canonical",
+      "expected_exit": 0,
+      "before": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.000259
+      },
+      "after": {
+        "exit": 0,
+        "result": "PASS",
+        "seconds": 0.024369
+      }
+    }
+  ],
+  "before_correct": 1,
+  "after_correct": 8
+}

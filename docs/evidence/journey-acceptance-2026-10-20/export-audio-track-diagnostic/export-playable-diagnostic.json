@@ -1,0 +1,4186 @@
+{
+  "scenario": "export-playable-diagnostic",
+  "platform": "linux",
+  "viewport": {
+    "width": 1280.0,
+    "height": 800.0
+  },
+  "result": "PASS",
+  "fixture_path": "$REPO/apps/or_app/build/ui-harness/export-audio-track-diagnostic/artifacts/replacements/video-audio.webm",
+  "framework_errors": [],
+  "build_mode": "debug",
+  "performance": {
+    "current_rss_bytes": 690470912,
+    "max_rss_bytes": 715530240,
+    "flutter_frame_timings": [
+      {
+        "build_us": 2,
+        "raster_us": 11889,
+        "total_us": 11946
+      },
+      {
+        "build_us": 314517,
+        "raster_us": 0,
+        "total_us": 338645
+      },
+      {
+        "build_us": 33451,
+        "raster_us": 0,
+        "total_us": 34782
+      },
+      {
+        "build_us": 1528,
+        "raster_us": 0,
+        "total_us": 3511
+      },
+      {
+        "build_us": 756,
+        "raster_us": 0,
+        "total_us": 3332
+      },
+      {
+        "build_us": 800,
+        "raster_us": 0,
+        "total_us": 3463
+      },
+      {
+        "build_us": 739,
+        "raster_us": 1,
+        "total_us": 2449
+      },
+      {
+        "build_us": 739,
+        "raster_us": 1,
+        "total_us": 2760
+      },
+      {
+        "build_us": 768,
+        "raster_us": 0,
+        "total_us": 3183
+      },
+      {
+        "build_us": 768,
+        "raster_us": 0,
+        "total_us": 2988
+      },
+      {
+        "build_us": 804,
+        "raster_us": 0,
+        "total_us": 3413
+      },
+      {
+        "build_us": 764,
+        "raster_us": 0,
+        "total_us": 2973
+      },
+      {
+        "build_us": 725,
+        "raster_us": 0,
+        "total_us": 3298
+      },
+      {
+        "build_us": 752,
+        "raster_us": 0,
+        "total_us": 2880
+      },
+      {
+        "build_us": 767,
+        "raster_us": 1,
+        "total_us": 3026
+      },
+      {
+        "build_us": 535,
+        "raster_us": 0,
+        "total_us": 2540
+      },
+      {
+        "build_us": 531,
+        "raster_us": 0,
+        "total_us": 2370
+      },
+      {
+        "build_us": 698,
+        "raster_us": 0,
+        "total_us": 3268
+      },
+      {
+        "build_us": 718,
+        "raster_us": 0,
+        "total_us": 2732
+      },
+      {
+        "build_us": 692,
+        "raster_us": 0,
+        "total_us": 3028
+      },
+      {
+        "build_us": 426,
+        "raster_us": 0,
+        "total_us": 2455
+      },
+      {
+        "build_us": 354,
+        "raster_us": 0,
+        "total_us": 1974
+      },
+      {
+        "build_us": 431,
+        "raster_us": 0,
+        "total_us": 1893
+      },
+      {
+        "build_us": 344,
+        "raster_us": 1,
+        "total_us": 2728
+      },
+      {
+        "build_us": 593,
+        "raster_us": 1,
+        "total_us": 2722
+      },
+      {
+        "build_us": 637,
+        "raster_us": 0,
+        "total_us": 2015
+      },
+      {
+        "build_us": 337,
+        "raster_us": 0,
+        "total_us": 2314
+      },
+      {
+        "build_us": 543,
+        "raster_us": 1,
+        "total_us": 2127
+      },
+      {
+        "build_us": 538,
+        "raster_us": 0,
+        "total_us": 2252
+      },
+      {
+        "build_us": 486,
+        "raster_us": 0,
+        "total_us": 2169
+      },
+      {
+        "build_us": 479,
+        "raster_us": 0,
+        "total_us": 2491
+      },
+      {
+        "build_us": 743,
+        "raster_us": 0,
+        "total_us": 2760
+      },
+      {
+        "build_us": 524,
+        "raster_us": 0,
+        "total_us": 2976
+      },
+      {
+        "build_us": 470,
+        "raster_us": 1,
+        "total_us": 2911
+      },
+      {
+        "build_us": 474,
+        "raster_us": 0,
+        "total_us": 2579
+      },
+      {
+        "build_us": 588,
+        "raster_us": 0,
+        "total_us": 2521
+      },
+      {
+        "build_us": 556,
+        "raster_us": 0,
+        "total_us": 2672
+      },
+      {
+        "build_us": 600,
+        "raster_us": 0,
+        "total_us": 2769
+      },
+      {
+        "build_us": 694,
+        "raster_us": 0,
+        "total_us": 2765
+      },
+      {
+        "build_us": 670,
+        "raster_us": 0,
+        "total_us": 2992
+      },
+      {
+        "build_us": 711,
+        "raster_us": 0,
+        "total_us": 2831
+      },
+      {
+        "build_us": 765,
+        "raster_us": 1,
+        "total_us": 3048
+      },
+      {
+        "build_us": 733,
+        "raster_us": 1,
+        "total_us": 2897
+      },
+      {
+        "build_us": 758,
+        "raster_us": 0,
+        "total_us": 2974
+      },
+      {
+        "build_us": 22816,
+        "raster_us": 0,
+        "total_us": 24825
+      },
+      {
+        "build_us": 2120,
+        "raster_us": 0,
+        "total_us": 4178
+      },
+      {
+        "build_us": 1207,
+        "raster_us": 0,
+        "total_us": 6105
+      },
+      {
+        "build_us": 2944,
+        "raster_us": 0,
+        "total_us": 5104
+      },
+      {
+        "build_us": 2139,
+        "raster_us": 0,
+        "total_us": 4359
+      },
+      {
+        "build_us": 3808,
+        "raster_us": 0,
+        "total_us": 5994
+      },
+      {
+        "build_us": 2474,
+        "raster_us": 1,
+        "total_us": 4615
+      },
+      {
+        "build_us": 2614,
+        "raster_us": 0,
+        "total_us": 5263
+      },
+      {
+        "build_us": 2277,
+        "raster_us": 0,
+        "total_us": 4568
+      },
+      {
+        "build_us": 2885,
+        "raster_us": 0,
+        "total_us": 5164
+      },
+      {
+        "build_us": 2979,
+        "raster_us": 0,
+        "total_us": 4661
+      },
+      {
+        "build_us": 3140,
+        "raster_us": 0,
+        "total_us": 5836
+      },
+      {
+        "build_us": 3516,
+        "raster_us": 1,
+        "total_us": 6261
+      },
+      {
+        "build_us": 660,
+        "raster_us": 0,
+        "total_us": 3247
+      },
+      {
+        "build_us": 672,
+        "raster_us": 0,
+        "total_us": 3235
+      },
+      {
+        "build_us": 712,
+        "raster_us": 0,
+        "total_us": 2446
+      },
+      {
+        "build_us": 709,
+        "raster_us": 1,
+        "total_us": 2356
+      },
+      {
+        "build_us": 678,
+        "raster_us": 0,
+        "total_us": 2994
+      },
+      {
+        "build_us": 571,
+        "raster_us": 0,
+        "total_us": 2586
+      },
+      {
+        "build_us": 353,
+        "raster_us": 1,
+        "total_us": 1983
+      },
+      {
+        "build_us": 607,
+        "raster_us": 0,
+        "total_us": 2829
+      },
+      {
+        "build_us": 597,
+        "raster_us": 0,
+        "total_us": 2256
+      },
+      {
+        "build_us": 412,
+        "raster_us": 0,
+        "total_us": 2140
+      },
+      {
+        "build_us": 614,
+        "raster_us": 0,
+        "total_us": 2799
+      },
+      {
+        "build_us": 592,
+        "raster_us": 0,
+        "total_us": 3088
+      },
+      {
+        "build_us": 616,
+        "raster_us": 0,
+        "total_us": 3100
+      },
+      {
+        "build_us": 316,
+        "raster_us": 0,
+        "total_us": 1792
+      },
+      {
+        "build_us": 186,
+        "raster_us": 0,
+        "total_us": 2627
+      },
+      {
+        "build_us": 390,
+        "raster_us": 0,
+        "total_us": 2094
+      },
+      {
+        "build_us": 489,
+        "raster_us": 1,
+        "total_us": 2742
+      },
+      {
+        "build_us": 448,
+        "raster_us": 0,
+        "total_us": 2870
+      },
+      {
+        "build_us": 574,
+        "raster_us": 0,
+        "total_us": 4237
+      },
+      {
+        "build_us": 567,
+        "raster_us": 1,
+        "total_us": 3169
+      },
+      {
+        "build_us": 577,
+        "raster_us": 0,
+        "total_us": 2589
+      },
+      {
+        "build_us": 594,
+        "raster_us": 0,
+        "total_us": 2394
+      },
+      {
+        "build_us": 432,
+        "raster_us": 0,
+        "total_us": 2586
+      },
+      {
+        "build_us": 583,
+        "raster_us": 0,
+        "total_us": 2576
+      },
+      {
+        "build_us": 623,
+        "raster_us": 0,
+        "total_us": 2583
+      },
+      {
+        "build_us": 462,
+        "raster_us": 1,
+        "total_us": 2608
+      },
+      {
+        "build_us": 581,
+        "raster_us": 1,
+        "total_us": 2599
+      },
+      {
+        "build_us": 465,
+        "raster_us": 0,
+        "total_us": 2866
+      },
+      {
+        "build_us": 584,
+        "raster_us": 0,
+        "total_us": 3032
+      },
+      {
+        "build_us": 893,
+        "raster_us": 0,
+        "total_us": 2932
+      },
+      {
+        "build_us": 96785,
+        "raster_us": 1,
+        "total_us": 98806
+      },
+      {
+        "build_us": 25694,
+        "raster_us": 0,
+        "total_us": 28952
+      },
+      {
+        "build_us": 6006,
+        "raster_us": 0,
+        "total_us": 8082
+      },
+      {
+        "build_us": 6114,
+        "raster_us": 0,
+        "total_us": 7931
+      },
+      {
+        "build_us": 7179,
+        "raster_us": 0,
+        "total_us": 9028
+      },
+      {
+        "build_us": 6992,
+        "raster_us": 1,
+        "total_us": 8862
+      },
+      {
+        "build_us": 2051,
+        "raster_us": 0,
+        "total_us": 3951
+      },
+      {
+        "build_us": 2424,
+        "raster_us": 0,
+        "total_us": 4391
+      },
+      {
+        "build_us": 953,
+        "raster_us": 0,
+        "total_us": 2939
+      },
+      {
+        "build_us": 881,
+        "raster_us": 0,
+        "total_us": 3217
+      },
+      {
+        "build_us": 925,
+        "raster_us": 1,
+        "total_us": 2975
+      },
+      {
+        "build_us": 972,
+        "raster_us": 1,
+        "total_us": 3244
+      },
+      {
+        "build_us": 1533,
+        "raster_us": 0,
+        "total_us": 4294
+      },
+      {
+        "build_us": 908,
+        "raster_us": 0,
+        "total_us": 3079
+      },
+      {
+        "build_us": 694,
+        "raster_us": 0,
+        "total_us": 3080
+      },
+      {
+        "build_us": 878,
+        "raster_us": 0,
+        "total_us": 2782
+      },
+      {
+        "build_us": 1077,
+        "raster_us": 0,
+        "total_us": 3187
+      },
+      {
+        "build_us": 885,
+        "raster_us": 0,
+        "total_us": 3350
+      },
+      {
+        "build_us": 406,
+        "raster_us": 0,
+        "total_us": 1881
+      },
+      {
+        "build_us": 773,
+        "raster_us": 1,
+        "total_us": 2252
+      },
+      {
+        "build_us": 698,
+        "raster_us": 0,
+        "total_us": 3058
+      },
+      {
+        "build_us": 613,
+        "raster_us": 0,
+        "total_us": 2867
+      },
+      {
+        "build_us": 587,
+        "raster_us": 0,
+        "total_us": 3246
+      },
+      {
+        "build_us": 865,
+        "raster_us": 1,
+        "total_us": 3245
+      },
+      {
+        "build_us": 925,
+        "raster_us": 0,
+        "total_us": 3605
+      },
+      {
+        "build_us": 1160,
+        "raster_us": 0,
+        "total_us": 3478
+      },
+      {
+        "build_us": 905,
+        "raster_us": 0,
+        "total_us": 3435
+      },
+      {
+        "build_us": 1018,
+        "raster_us": 0,
+        "total_us": 3789
+      },
+      {
+        "build_us": 942,
+        "raster_us": 1,
+        "total_us": 3556
+      },
+      {
+        "build_us": 880,
+        "raster_us": 1,
+        "total_us": 3300
+      },
+      {
+        "build_us": 855,
+        "raster_us": 0,
+        "total_us": 3512
+      },
+      {
+        "build_us": 924,
+        "raster_us": 0,
+        "total_us": 3664
+      },
+      {
+        "build_us": 581,
+        "raster_us": 1,
+        "total_us": 2724
+      },
+      {
+        "build_us": 576,
+        "raster_us": 0,
+        "total_us": 2340
+      },
+      {
+        "build_us": 562,
+        "raster_us": 0,
+        "total_us": 3102
+      },
+      {
+        "build_us": 706,
+        "raster_us": 0,
+        "total_us": 2680
+      },
+      {
+        "build_us": 769,
+        "raster_us": 1,
+        "total_us": 2710
+      },
+      {
+        "build_us": 1185,
+        "raster_us": 0,
+        "total_us": 2995
+      },
+      {
+        "build_us": 404,
+        "raster_us": 0,
+        "total_us": 2035
+      },
+      {
+        "build_us": 736,
+        "raster_us": 0,
+        "total_us": 2398
+      },
+      {
+        "build_us": 709,
+        "raster_us": 0,
+        "total_us": 3085
+      },
+      {
+        "build_us": 843,
+        "raster_us": 0,
+        "total_us": 3246
+      },
+      {
+        "build_us": 952,
+        "raster_us": 0,
+        "total_us": 3728
+      },
+      {
+        "build_us": 671,
+        "raster_us": 0,
+        "total_us": 2567
+      },
+      {
+        "build_us": 8607,
+        "raster_us": 1,
+        "total_us": 11100
+      },
+      {
+        "build_us": 645,
+        "raster_us": 0,
+        "total_us": 2463
+      },
+      {
+        "build_us": 636,
+        "raster_us": 0,
+        "total_us": 2416
+      },
+      {
+        "build_us": 816,
+        "raster_us": 1,
+        "total_us": 3184
+      },
+      {
+        "build_us": 1034,
+        "raster_us": 0,
+        "total_us": 3654
+      },
+      {
+        "build_us": 843,
+        "raster_us": 0,
+        "total_us": 3337
+      },
+      {
+        "build_us": 989,
+        "raster_us": 0,
+        "total_us": 3768
+      },
+      {
+        "build_us": 898,
+        "raster_us": 0,
+        "total_us": 3510
+      },
+      {
+        "build_us": 931,
+        "raster_us": 0,
+        "total_us": 3303
+      },
+      {
+        "build_us": 841,
+        "raster_us": 0,
+        "total_us": 3461
+      },
+      {
+        "build_us": 873,
+        "raster_us": 0,
+        "total_us": 3324
+      },
+      {
+        "build_us": 1084,
+        "raster_us": 0,
+        "total_us": 3540
+      },
+      {
+        "build_us": 800,
+        "raster_us": 0,
+        "total_us": 3276
+      },
+      {
+        "build_us": 842,
+        "raster_us": 0,
+        "total_us": 3516
+      },
+      {
+        "build_us": 826,
+        "raster_us": 0,
+        "total_us": 3340
+      },
+      {
+        "build_us": 777,
+        "raster_us": 1,
+        "total_us": 3334
+      },
+      {
+        "build_us": 875,
+        "raster_us": 1,
+        "total_us": 3369
+      },
+      {
+        "build_us": 889,
+        "raster_us": 0,
+        "total_us": 3596
+      },
+      {
+        "build_us": 976,
+        "raster_us": 0,
+        "total_us": 2813
+      },
+      {
+        "build_us": 672,
+        "raster_us": 0,
+        "total_us": 2887
+      },
+      {
+        "build_us": 802,
+        "raster_us": 0,
+        "total_us": 3106
+      },
+      {
+        "build_us": 1048,
+        "raster_us": 0,
+        "total_us": 3519
+      },
+      {
+        "build_us": 1442,
+        "raster_us": 0,
+        "total_us": 2764
+      },
+      {
+        "build_us": 906,
+        "raster_us": 0,
+        "total_us": 3331
+      },
+      {
+        "build_us": 656,
+        "raster_us": 0,
+        "total_us": 3303
+      },
+      {
+        "build_us": 841,
+        "raster_us": 0,
+        "total_us": 3146
+      },
+      {
+        "build_us": 825,
+        "raster_us": 0,
+        "total_us": 3193
+      },
+      {
+        "build_us": 721,
+        "raster_us": 0,
+        "total_us": 3092
+      },
+      {
+        "build_us": 818,
+        "raster_us": 1,
+        "total_us": 3132
+      },
+      {
+        "build_us": 824,
+        "raster_us": 0,
+        "total_us": 3514
+      },
+      {
+        "build_us": 959,
+        "raster_us": 1,
+        "total_us": 2974
+      },
+      {
+        "build_us": 896,
+        "raster_us": 0,
+        "total_us": 3548
+      },
+      {
+        "build_us": 965,
+        "raster_us": 0,
+        "total_us": 2634
+      },
+      {
+        "build_us": 955,
+        "raster_us": 0,
+        "total_us": 2964
+      },
+      {
+        "build_us": 729,
+        "raster_us": 0,
+        "total_us": 2741
+      },
+      {
+        "build_us": 1082,
+        "raster_us": 0,
+        "total_us": 3306
+      },
+      {
+        "build_us": 582,
+        "raster_us": 0,
+        "total_us": 3041
+      },
+      {
+        "build_us": 759,
+        "raster_us": 1,
+        "total_us": 2779
+      },
+      {
+        "build_us": 843,
+        "raster_us": 0,
+        "total_us": 2950
+      },
+      {
+        "build_us": 887,
+        "raster_us": 0,
+        "total_us": 2954
+      },
+      {
+        "build_us": 921,
+        "raster_us": 0,
+        "total_us": 3173
+      },
+      {
+        "build_us": 876,
+        "raster_us": 0,
+        "total_us": 2952
+      },
+      {
+        "build_us": 9399,
+        "raster_us": 1,
+        "total_us": 11564
+      },
+      {
+        "build_us": 153546,
+        "raster_us": 1,
+        "total_us": 166244
+      },
+      {
+        "build_us": 51802,
+        "raster_us": 1,
+        "total_us": 52926
+      },
+      {
+        "build_us": 38908,
+        "raster_us": 0,
+        "total_us": 39919
+      },
+      {
+        "build_us": 12454,
+        "raster_us": 1,
+        "total_us": 13564
+      },
+      {
+        "build_us": 19010,
+        "raster_us": 0,
+        "total_us": 19942
+      },
+      {
+        "build_us": 426,
+        "raster_us": 1,
+        "total_us": 1321
+      },
+      {
+        "build_us": 1062,
+        "raster_us": 0,
+        "total_us": 2105
+      },
+      {
+        "build_us": 527,
+        "raster_us": 0,
+        "total_us": 2564
+      },
+      {
+        "build_us": 625,
+        "raster_us": 0,
+        "total_us": 2945
+      },
+      {
+        "build_us": 690,
+        "raster_us": 0,
+        "total_us": 2909
+      },
+      {
+        "build_us": 753,
+        "raster_us": 0,
+        "total_us": 3140
+      },
+      {
+        "build_us": 741,
+        "raster_us": 1,
+        "total_us": 2856
+      },
+      {
+        "build_us": 686,
+        "raster_us": 0,
+        "total_us": 3112
+      },
+      {
+        "build_us": 578,
+        "raster_us": 0,
+        "total_us": 2534
+      },
+      {
+        "build_us": 613,
+        "raster_us": 0,
+        "total_us": 2947
+      },
+      {
+        "build_us": 683,
+        "raster_us": 0,
+        "total_us": 2897
+      },
+      {
+        "build_us": 647,
+        "raster_us": 1,
+        "total_us": 3100
+      },
+      {
+        "build_us": 692,
+        "raster_us": 0,
+        "total_us": 2898
+      },
+      {
+        "build_us": 639,
+        "raster_us": 0,
+        "total_us": 2963
+      },
+      {
+        "build_us": 436,
+        "raster_us": 1,
+        "total_us": 2687
+      },
+      {
+        "build_us": 367,
+        "raster_us": 0,
+        "total_us": 2640
+      },
+      {
+        "build_us": 399,
+        "raster_us": 0,
+        "total_us": 1260
+      },
+      {
+        "build_us": 434,
+        "raster_us": 0,
+        "total_us": 1497
+      },
+      {
+        "build_us": 200,
+        "raster_us": 0,
+        "total_us": 2082
+      },
+      {
+        "build_us": 212,
+        "raster_us": 0,
+        "total_us": 1597
+      },
+      {
+        "build_us": 538,
+        "raster_us": 0,
+        "total_us": 3253
+      },
+      {
+        "build_us": 557,
+        "raster_us": 0,
+        "total_us": 2930
+      },
+      {
+        "build_us": 587,
+        "raster_us": 1,
+        "total_us": 2992
+      },
+      {
+        "build_us": 615,
+        "raster_us": 0,
+        "total_us": 3113
+      },
+      {
+        "build_us": 568,
+        "raster_us": 0,
+        "total_us": 2044
+      },
+      {
+        "build_us": 567,
+        "raster_us": 0,
+        "total_us": 2608
+      },
+      {
+        "build_us": 651,
+        "raster_us": 0,
+        "total_us": 2683
+      },
+      {
+        "build_us": 645,
+        "raster_us": 0,
+        "total_us": 2753
+      },
+      {
+        "build_us": 479,
+        "raster_us": 0,
+        "total_us": 2552
+      },
+      {
+        "build_us": 541,
+        "raster_us": 0,
+        "total_us": 2411
+      },
+      {
+        "build_us": 566,
+        "raster_us": 1,
+        "total_us": 3085
+      },
+      {
+        "build_us": 596,
+        "raster_us": 1,
+        "total_us": 2435
+      },
+      {
+        "build_us": 464,
+        "raster_us": 0,
+        "total_us": 2470
+      },
+      {
+        "build_us": 530,
+        "raster_us": 0,
+        "total_us": 2352
+      },
+      {
+        "build_us": 526,
+        "raster_us": 0,
+        "total_us": 2949
+      },
+      {
+        "build_us": 515,
+        "raster_us": 0,
+        "total_us": 2898
+      },
+      {
+        "build_us": 365,
+        "raster_us": 0,
+        "total_us": 2119
+      },
+      {
+        "build_us": 36752,
+        "raster_us": 0,
+        "total_us": 38968
+      },
+      {
+        "build_us": 74962,
+        "raster_us": 0,
+        "total_us": 75406
+      },
+      {
+        "build_us": 54687,
+        "raster_us": 0,
+        "total_us": 55597
+      },
+      {
+        "build_us": 32706,
+        "raster_us": 0,
+        "total_us": 33093
+      },
+      {
+        "build_us": 4668,
+        "raster_us": 0,
+        "total_us": 5616
+      },
+      {
+        "build_us": 7761,
+        "raster_us": 0,
+        "total_us": 12135
+      },
+      {
+        "build_us": 218,
+        "raster_us": 0,
+        "total_us": 1724
+      },
+      {
+        "build_us": 419,
+        "raster_us": 0,
+        "total_us": 2350
+      },
+      {
+        "build_us": 496,
+        "raster_us": 0,
+        "total_us": 2240
+      },
+      {
+        "build_us": 539,
+        "raster_us": 0,
+        "total_us": 3053
+      },
+      {
+        "build_us": 571,
+        "raster_us": 0,
+        "total_us": 2836
+      },
+      {
+        "build_us": 463,
+        "raster_us": 0,
+        "total_us": 3025
+      },
+      {
+        "build_us": 619,
+        "raster_us": 0,
+        "total_us": 3155
+      },
+      {
+        "build_us": 591,
+        "raster_us": 0,
+        "total_us": 3180
+      },
+      {
+        "build_us": 632,
+        "raster_us": 0,
+        "total_us": 2430
+      },
+      {
+        "build_us": 574,
+        "raster_us": 0,
+        "total_us": 3197
+      },
+      {
+        "build_us": 661,
+        "raster_us": 0,
+        "total_us": 3280
+      },
+      {
+        "build_us": 625,
+        "raster_us": 0,
+        "total_us": 2295
+      },
+      {
+        "build_us": 586,
+        "raster_us": 1,
+        "total_us": 2990
+      },
+      {
+        "build_us": 222,
+        "raster_us": 0,
+        "total_us": 1036
+      },
+      {
+        "build_us": 247,
+        "raster_us": 0,
+        "total_us": 2165
+      },
+      {
+        "build_us": 416,
+        "raster_us": 0,
+        "total_us": 2286
+      },
+      {
+        "build_us": 1255,
+        "raster_us": 0,
+        "total_us": 1471
+      },
+      {
+        "build_us": 468,
+        "raster_us": 0,
+        "total_us": 943
+      },
+      {
+        "build_us": 461,
+        "raster_us": 0,
+        "total_us": 2616
+      },
+      {
+        "build_us": 416,
+        "raster_us": 0,
+        "total_us": 3235
+      },
+      {
+        "build_us": 549,
+        "raster_us": 0,
+        "total_us": 3207
+      },
+      {
+        "build_us": 640,
+        "raster_us": 0,
+        "total_us": 3394
+      },
+      {
+        "build_us": 525,
+        "raster_us": 0,
+        "total_us": 2589
+      },
+      {
+        "build_us": 287,
+        "raster_us": 0,
+        "total_us": 2457
+      },
+      {
+        "build_us": 309,
+        "raster_us": 0,
+        "total_us": 2227
+      },
+      {
+        "build_us": 464,
+        "raster_us": 1,
+        "total_us": 1988
+      },
+      {
+        "build_us": 350,
+        "raster_us": 0,
+        "total_us": 1634
+      },
+      {
+        "build_us": 308,
+        "raster_us": 0,
+        "total_us": 2256
+      },
+      {
+        "build_us": 270,
+        "raster_us": 0,
+        "total_us": 1861
+      },
+      {
+        "build_us": 282,
+        "raster_us": 0,
+        "total_us": 1561
+      },
+      {
+        "build_us": 286,
+        "raster_us": 1,
+        "total_us": 2224
+      },
+      {
+        "build_us": 278,
+        "raster_us": 0,
+        "total_us": 1865
+      },
+      {
+        "build_us": 374,
+        "raster_us": 0,
+        "total_us": 1963
+      },
+      {
+        "build_us": 405,
+        "raster_us": 0,
+        "total_us": 2648
+      },
+      {
+        "build_us": 332,
+        "raster_us": 0,
+        "total_us": 2199
+      },
+      {
+        "build_us": 288,
+        "raster_us": 0,
+        "total_us": 2494
+      },
+      {
+        "build_us": 313,
+        "raster_us": 0,
+        "total_us": 1813
+      },
+      {
+        "build_us": 63801,
+        "raster_us": 0,
+        "total_us": 64937
+      },
+      {
+        "build_us": 39649,
+        "raster_us": 0,
+        "total_us": 40298
+      },
+      {
+        "build_us": 2885,
+        "raster_us": 0,
+        "total_us": 3565
+      },
+      {
+        "build_us": 3680,
+        "raster_us": 0,
+        "total_us": 5284
+      },
+      {
+        "build_us": 7476,
+        "raster_us": 0,
+        "total_us": 8783
+      },
+      {
+        "build_us": 8176,
+        "raster_us": 0,
+        "total_us": 9241
+      },
+      {
+        "build_us": 8854,
+        "raster_us": 0,
+        "total_us": 9492
+      },
+      {
+        "build_us": 2195,
+        "raster_us": 0,
+        "total_us": 2782
+      },
+      {
+        "build_us": 1971,
+        "raster_us": 1,
+        "total_us": 3135
+      },
+      {
+        "build_us": 391,
+        "raster_us": 0,
+        "total_us": 2798
+      },
+      {
+        "build_us": 498,
+        "raster_us": 0,
+        "total_us": 3054
+      },
+      {
+        "build_us": 545,
+        "raster_us": 0,
+        "total_us": 1943
+      },
+      {
+        "build_us": 449,
+        "raster_us": 0,
+        "total_us": 2177
+      },
+      {
+        "build_us": 399,
+        "raster_us": 0,
+        "total_us": 2627
+      },
+      {
+        "build_us": 405,
+        "raster_us": 0,
+        "total_us": 2212
+      },
+      {
+        "build_us": 414,
+        "raster_us": 0,
+        "total_us": 2594
+      },
+      {
+        "build_us": 465,
+        "raster_us": 1,
+        "total_us": 2288
+      },
+      {
+        "build_us": 382,
+        "raster_us": 0,
+        "total_us": 2638
+      },
+      {
+        "build_us": 491,
+        "raster_us": 0,
+        "total_us": 1466
+      },
+      {
+        "build_us": 243,
+        "raster_us": 0,
+        "total_us": 2551
+      },
+      {
+        "build_us": 419,
+        "raster_us": 0,
+        "total_us": 2542
+      },
+      {
+        "build_us": 594,
+        "raster_us": 0,
+        "total_us": 3002
+      },
+      {
+        "build_us": 544,
+        "raster_us": 0,
+        "total_us": 1015
+      },
+      {
+        "build_us": 585,
+        "raster_us": 1,
+        "total_us": 1784
+      },
+      {
+        "build_us": 597,
+        "raster_us": 0,
+        "total_us": 2985
+      },
+      {
+        "build_us": 598,
+        "raster_us": 1,
+        "total_us": 2537
+      },
+      {
+        "build_us": 611,
+        "raster_us": 0,
+        "total_us": 2973
+      },
+      {
+        "build_us": 640,
+        "raster_us": 1,
+        "total_us": 2622
+      },
+      {
+        "build_us": 671,
+        "raster_us": 0,
+        "total_us": 3169
+      },
+      {
+        "build_us": 661,
+        "raster_us": 0,
+        "total_us": 2883
+      },
+      {
+        "build_us": 677,
+        "raster_us": 1,
+        "total_us": 3145
+      },
+      {
+        "build_us": 668,
+        "raster_us": 1,
+        "total_us": 2726
+      },
+      {
+        "build_us": 707,
+        "raster_us": 0,
+        "total_us": 3177
+      },
+      {
+        "build_us": 658,
+        "raster_us": 0,
+        "total_us": 2750
+      },
+      {
+        "build_us": 666,
+        "raster_us": 0,
+        "total_us": 3124
+      },
+      {
+        "build_us": 629,
+        "raster_us": 0,
+        "total_us": 2683
+      },
+      {
+        "build_us": 675,
+        "raster_us": 0,
+        "total_us": 3186
+      },
+      {
+        "build_us": 662,
+        "raster_us": 0,
+        "total_us": 2707
+      },
+      {
+        "build_us": 710,
+        "raster_us": 1,
+        "total_us": 3062
+      },
+      {
+        "build_us": 707,
+        "raster_us": 0,
+        "total_us": 2918
+      },
+      {
+        "build_us": 634,
+        "raster_us": 0,
+        "total_us": 2882
+      },
+      {
+        "build_us": 645,
+        "raster_us": 0,
+        "total_us": 2626
+      },
+      {
+        "build_us": 632,
+        "raster_us": 0,
+        "total_us": 2866
+      },
+      {
+        "build_us": 45700,
+        "raster_us": 0,
+        "total_us": 47648
+      },
+      {
+        "build_us": 7828,
+        "raster_us": 0,
+        "total_us": 8957
+      },
+      {
+        "build_us": 1193,
+        "raster_us": 0,
+        "total_us": 2124
+      },
+      {
+        "build_us": 1655,
+        "raster_us": 0,
+        "total_us": 2262
+      },
+      {
+        "build_us": 3007,
+        "raster_us": 0,
+        "total_us": 4123
+      },
+      {
+        "build_us": 2594,
+        "raster_us": 0,
+        "total_us": 3493
+      },
+      {
+        "build_us": 1830,
+        "raster_us": 0,
+        "total_us": 2959
+      },
+      {
+        "build_us": 2036,
+        "raster_us": 0,
+        "total_us": 2958
+      },
+      {
+        "build_us": 1364,
+        "raster_us": 0,
+        "total_us": 2310
+      },
+      {
+        "build_us": 1346,
+        "raster_us": 0,
+        "total_us": 2583
+      },
+      {
+        "build_us": 1927,
+        "raster_us": 0,
+        "total_us": 3053
+      },
+      {
+        "build_us": 1883,
+        "raster_us": 0,
+        "total_us": 3101
+      },
+      {
+        "build_us": 8072,
+        "raster_us": 0,
+        "total_us": 8576
+      },
+      {
+        "build_us": 848,
+        "raster_us": 0,
+        "total_us": 3350
+      },
+      {
+        "build_us": 651,
+        "raster_us": 0,
+        "total_us": 2627
+      },
+      {
+        "build_us": 671,
+        "raster_us": 1,
+        "total_us": 2980
+      },
+      {
+        "build_us": 523,
+        "raster_us": 0,
+        "total_us": 2623
+      },
+      {
+        "build_us": 327,
+        "raster_us": 0,
+        "total_us": 1833
+      },
+      {
+        "build_us": 496,
+        "raster_us": 0,
+        "total_us": 2680
+      },
+      {
+        "build_us": 589,
+        "raster_us": 0,
+        "total_us": 1968
+      },
+      {
+        "build_us": 758,
+        "raster_us": 0,
+        "total_us": 3250
+      },
+      {
+        "build_us": 650,
+        "raster_us": 0,
+        "total_us": 3169
+      },
+      {
+        "build_us": 511,
+        "raster_us": 0,
+        "total_us": 2508
+      },
+      {
+        "build_us": 642,
+        "raster_us": 0,
+        "total_us": 1096
+      },
+      {
+        "build_us": 624,
+        "raster_us": 1,
+        "total_us": 3157
+      },
+      {
+        "build_us": 633,
+        "raster_us": 0,
+        "total_us": 3095
+      },
+      {
+        "build_us": 445,
+        "raster_us": 0,
+        "total_us": 2598
+      },
+      {
+        "build_us": 573,
+        "raster_us": 0,
+        "total_us": 2477
+      },
+      {
+        "build_us": 583,
+        "raster_us": 0,
+        "total_us": 3117
+      },
+      {
+        "build_us": 205,
+        "raster_us": 0,
+        "total_us": 1515
+      },
+      {
+        "build_us": 442,
+        "raster_us": 0,
+        "total_us": 2281
+      },
+      {
+        "build_us": 362,
+        "raster_us": 0,
+        "total_us": 1832
+      },
+      {
+        "build_us": 542,
+        "raster_us": 0,
+        "total_us": 3631
+      },
+      {
+        "build_us": 585,
+        "raster_us": 0,
+        "total_us": 2635
+      },
+      {
+        "build_us": 558,
+        "raster_us": 1,
+        "total_us": 2363
+      },
+      {
+        "build_us": 520,
+        "raster_us": 0,
+        "total_us": 2995
+      },
+      {
+        "build_us": 558,
+        "raster_us": 0,
+        "total_us": 2366
+      },
+      {
+        "build_us": 533,
+        "raster_us": 1,
+        "total_us": 2499
+      },
+      {
+        "build_us": 558,
+        "raster_us": 0,
+        "total_us": 3132
+      },
+      {
+        "build_us": 566,
+        "raster_us": 0,
+        "total_us": 2539
+      },
+      {
+        "build_us": 527,
+        "raster_us": 0,
+        "total_us": 2741
+      },
+      {
+        "build_us": 265,
+        "raster_us": 0,
+        "total_us": 1705
+      },
+      {
+        "build_us": 413,
+        "raster_us": 1,
+        "total_us": 1762
+      },
+      {
+        "build_us": 47010,
+        "raster_us": 0,
+        "total_us": 48023
+      },
+      {
+        "build_us": 51112,
+        "raster_us": 0,
+        "total_us": 51966
+      },
+      {
+        "build_us": 3440,
+        "raster_us": 0,
+        "total_us": 4339
+      },
+      {
+        "build_us": 4776,
+        "raster_us": 0,
+        "total_us": 5223
+      },
+      {
+        "build_us": 10449,
+        "raster_us": 0,
+        "total_us": 11605
+      },
+      {
+        "build_us": 8822,
+        "raster_us": 0,
+        "total_us": 9780
+      },
+      {
+        "build_us": 4883,
+        "raster_us": 1,
+        "total_us": 5810
+      },
+      {
+        "build_us": 428,
+        "raster_us": 0,
+        "total_us": 1886
+      },
+      {
+        "build_us": 518,
+        "raster_us": 0,
+        "total_us": 2486
+      },
+      {
+        "build_us": 556,
+        "raster_us": 0,
+        "total_us": 3190
+      },
+      {
+        "build_us": 565,
+        "raster_us": 1,
+        "total_us": 2147
+      },
+      {
+        "build_us": 491,
+        "raster_us": 0,
+        "total_us": 2332
+      },
+      {
+        "build_us": 432,
+        "raster_us": 0,
+        "total_us": 2837
+      },
+      {
+        "build_us": 387,
+        "raster_us": 0,
+        "total_us": 2440
+      },
+      {
+        "build_us": 387,
+        "raster_us": 0,
+        "total_us": 2286
+      },
+      {
+        "build_us": 424,
+        "raster_us": 0,
+        "total_us": 2743
+      },
+      {
+        "build_us": 374,
+        "raster_us": 0,
+        "total_us": 2412
+      },
+      {
+        "build_us": 373,
+        "raster_us": 1,
+        "total_us": 1937
+      },
+      {
+        "build_us": 339,
+        "raster_us": 0,
+        "total_us": 2386
+      },
+      {
+        "build_us": 374,
+        "raster_us": 0,
+        "total_us": 2521
+      },
+      {
+        "build_us": 492,
+        "raster_us": 0,
+        "total_us": 3921
+      },
+      {
+        "build_us": 447,
+        "raster_us": 0,
+        "total_us": 2272
+      },
+      {
+        "build_us": 190,
+        "raster_us": 0,
+        "total_us": 851
+      },
+      {
+        "build_us": 378,
+        "raster_us": 0,
+        "total_us": 2280
+      },
+      {
+        "build_us": 486,
+        "raster_us": 0,
+        "total_us": 2025
+      },
+      {
+        "build_us": 362,
+        "raster_us": 0,
+        "total_us": 2556
+      },
+      {
+        "build_us": 290,
+        "raster_us": 0,
+        "total_us": 1746
+      },
+      {
+        "build_us": 436,
+        "raster_us": 0,
+        "total_us": 2318
+      },
+      {
+        "build_us": 304,
+        "raster_us": 0,
+        "total_us": 2313
+      },
+      {
+        "build_us": 202,
+        "raster_us": 0,
+        "total_us": 1815
+      },
+      {
+        "build_us": 366,
+        "raster_us": 0,
+        "total_us": 2897
+      },
+      {
+        "build_us": 499,
+        "raster_us": 0,
+        "total_us": 3123
+      },
+      {
+        "build_us": 341,
+        "raster_us": 0,
+        "total_us": 2663
+      },
+      {
+        "build_us": 329,
+        "raster_us": 0,
+        "total_us": 2286
+      },
+      {
+        "build_us": 503,
+        "raster_us": 0,
+        "total_us": 2169
+      },
+      {
+        "build_us": 366,
+        "raster_us": 0,
+        "total_us": 2654
+      },
+      {
+        "build_us": 497,
+        "raster_us": 0,
+        "total_us": 2767
+      },
+      {
+        "build_us": 607,
+        "raster_us": 0,
+        "total_us": 2834
+      },
+      {
+        "build_us": 567,
+        "raster_us": 0,
+        "total_us": 2944
+      },
+      {
+        "build_us": 475,
+        "raster_us": 0,
+        "total_us": 2826
+      },
+      {
+        "build_us": 371,
+        "raster_us": 0,
+        "total_us": 2739
+      },
+      {
+        "build_us": 348,
+        "raster_us": 0,
+        "total_us": 2507
+      },
+      {
+        "build_us": 372,
+        "raster_us": 0,
+        "total_us": 3046
+      },
+      {
+        "build_us": 223,
+        "raster_us": 0,
+        "total_us": 2511
+      },
+      {
+        "build_us": 504,
+        "raster_us": 0,
+        "total_us": 2384
+      },
+      {
+        "build_us": 580,
+        "raster_us": 0,
+        "total_us": 3296
+      },
+      {
+        "build_us": 599,
+        "raster_us": 0,
+        "total_us": 2877
+      },
+      {
+        "build_us": 381,
+        "raster_us": 0,
+        "total_us": 2847
+      },
+      {
+        "build_us": 495,
+        "raster_us": 0,
+        "total_us": 2546
+      },
+      {
+        "build_us": 543,
+        "raster_us": 0,
+        "total_us": 2931
+      },
+      {
+        "build_us": 571,
+        "raster_us": 0,
+        "total_us": 2724
+      },
+      {
+        "build_us": 602,
+        "raster_us": 1,
+        "total_us": 2936
+      },
+      {
+        "build_us": 592,
+        "raster_us": 1,
+        "total_us": 2640
+      },
+      {
+        "build_us": 560,
+        "raster_us": 0,
+        "total_us": 2984
+      },
+      {
+        "build_us": 500,
+        "raster_us": 0,
+        "total_us": 2459
+      },
+      {
+        "build_us": 548,
+        "raster_us": 0,
+        "total_us": 2671
+      },
+      {
+        "build_us": 570,
+        "raster_us": 1,
+        "total_us": 2598
+      },
+      {
+        "build_us": 601,
+        "raster_us": 0,
+        "total_us": 2996
+      },
+      {
+        "build_us": 585,
+        "raster_us": 0,
+        "total_us": 2618
+      },
+      {
+        "build_us": 581,
+        "raster_us": 0,
+        "total_us": 3068
+      },
+      {
+        "build_us": 491,
+        "raster_us": 0,
+        "total_us": 2429
+      },
+      {
+        "build_us": 554,
+        "raster_us": 0,
+        "total_us": 2741
+      },
+      {
+        "build_us": 587,
+        "raster_us": 0,
+        "total_us": 2600
+      },
+      {
+        "build_us": 525,
+        "raster_us": 0,
+        "total_us": 2843
+      },
+      {
+        "build_us": 33813,
+        "raster_us": 0,
+        "total_us": 36120
+      },
+      {
+        "build_us": 59847,
+        "raster_us": 0,
+        "total_us": 62232
+      },
+      {
+        "build_us": 3338,
+        "raster_us": 0,
+        "total_us": 5451
+      },
+      {
+        "build_us": 4832,
+        "raster_us": 0,
+        "total_us": 6715
+      },
+      {
+        "build_us": 2912,
+        "raster_us": 0,
+        "total_us": 4473
+      },
+      {
+        "build_us": 6894,
+        "raster_us": 0,
+        "total_us": 9485
+      },
+      {
+        "build_us": 1453,
+        "raster_us": 0,
+        "total_us": 3931
+      },
+      {
+        "build_us": 1942,
+        "raster_us": 1,
+        "total_us": 4664
+      },
+      {
+        "build_us": 798,
+        "raster_us": 0,
+        "total_us": 2338
+      },
+      {
+        "build_us": 374,
+        "raster_us": 0,
+        "total_us": 2352
+      },
+      {
+        "build_us": 487,
+        "raster_us": 0,
+        "total_us": 2702
+      },
+      {
+        "build_us": 514,
+        "raster_us": 0,
+        "total_us": 2505
+      },
+      {
+        "build_us": 545,
+        "raster_us": 0,
+        "total_us": 2306
+      },
+      {
+        "build_us": 353,
+        "raster_us": 0,
+        "total_us": 2703
+      },
+      {
+        "build_us": 338,
+        "raster_us": 0,
+        "total_us": 2432
+      },
+      {
+        "build_us": 335,
+        "raster_us": 1,
+        "total_us": 2387
+      },
+      {
+        "build_us": 500,
+        "raster_us": 1,
+        "total_us": 2500
+      },
+      {
+        "build_us": 569,
+        "raster_us": 0,
+        "total_us": 2778
+      },
+      {
+        "build_us": 295,
+        "raster_us": 0,
+        "total_us": 1964
+      },
+      {
+        "build_us": 212,
+        "raster_us": 0,
+        "total_us": 1419
+      },
+      {
+        "build_us": 265,
+        "raster_us": 0,
+        "total_us": 2073
+      },
+      {
+        "build_us": 158,
+        "raster_us": 1,
+        "total_us": 2140
+      },
+      {
+        "build_us": 253,
+        "raster_us": 0,
+        "total_us": 2127
+      },
+      {
+        "build_us": 170,
+        "raster_us": 0,
+        "total_us": 2251
+      },
+      {
+        "build_us": 312,
+        "raster_us": 0,
+        "total_us": 2102
+      },
+      {
+        "build_us": 263,
+        "raster_us": 0,
+        "total_us": 2431
+      },
+      {
+        "build_us": 266,
+        "raster_us": 0,
+        "total_us": 2316
+      },
+      {
+        "build_us": 387,
+        "raster_us": 0,
+        "total_us": 2353
+      },
+      {
+        "build_us": 625,
+        "raster_us": 0,
+        "total_us": 1896
+      },
+      {
+        "build_us": 294,
+        "raster_us": 0,
+        "total_us": 2299
+      },
+      {
+        "build_us": 511,
+        "raster_us": 0,
+        "total_us": 3044
+      },
+      {
+        "build_us": 414,
+        "raster_us": 0,
+        "total_us": 2801
+      },
+      {
+        "build_us": 369,
+        "raster_us": 0,
+        "total_us": 2130
+      },
+      {
+        "build_us": 589,
+        "raster_us": 1,
+        "total_us": 2879
+      },
+      {
+        "build_us": 516,
+        "raster_us": 0,
+        "total_us": 2947
+      },
+      {
+        "build_us": 598,
+        "raster_us": 0,
+        "total_us": 2334
+      },
+      {
+        "build_us": 554,
+        "raster_us": 0,
+        "total_us": 2638
+      },
+      {
+        "build_us": 667,
+        "raster_us": 0,
+        "total_us": 2832
+      },
+      {
+        "build_us": 640,
+        "raster_us": 0,
+        "total_us": 2757
+      },
+      {
+        "build_us": 681,
+        "raster_us": 0,
+        "total_us": 3022
+      },
+      {
+        "build_us": 901,
+        "raster_us": 0,
+        "total_us": 3334
+      },
+      {
+        "build_us": 658,
+        "raster_us": 0,
+        "total_us": 2991
+      },
+      {
+        "build_us": 603,
+        "raster_us": 0,
+        "total_us": 2983
+      },
+      {
+        "build_us": 28666,
+        "raster_us": 0,
+        "total_us": 30695
+      },
+      {
+        "build_us": 6143,
+        "raster_us": 0,
+        "total_us": 9793
+      },
+      {
+        "build_us": 811,
+        "raster_us": 0,
+        "total_us": 2607
+      },
+      {
+        "build_us": 2367,
+        "raster_us": 0,
+        "total_us": 3904
+      },
+      {
+        "build_us": 3004,
+        "raster_us": 0,
+        "total_us": 5007
+      },
+      {
+        "build_us": 3026,
+        "raster_us": 0,
+        "total_us": 5800
+      },
+      {
+        "build_us": 2076,
+        "raster_us": 0,
+        "total_us": 4848
+      },
+      {
+        "build_us": 1814,
+        "raster_us": 0,
+        "total_us": 3486
+      },
+      {
+        "build_us": 2141,
+        "raster_us": 0,
+        "total_us": 4610
+      },
+      {
+        "build_us": 1850,
+        "raster_us": 0,
+        "total_us": 4203
+      },
+      {
+        "build_us": 1304,
+        "raster_us": 0,
+        "total_us": 3144
+      },
+      {
+        "build_us": 1305,
+        "raster_us": 0,
+        "total_us": 3388
+      },
+      {
+        "build_us": 4725,
+        "raster_us": 0,
+        "total_us": 6613
+      },
+      {
+        "build_us": 500,
+        "raster_us": 0,
+        "total_us": 2469
+      },
+      {
+        "build_us": 554,
+        "raster_us": 0,
+        "total_us": 2582
+      },
+      {
+        "build_us": 548,
+        "raster_us": 0,
+        "total_us": 2533
+      },
+      {
+        "build_us": 574,
+        "raster_us": 0,
+        "total_us": 3219
+      },
+      {
+        "build_us": 384,
+        "raster_us": 0,
+        "total_us": 2325
+      },
+      {
+        "build_us": 529,
+        "raster_us": 0,
+        "total_us": 2465
+      },
+      {
+        "build_us": 573,
+        "raster_us": 0,
+        "total_us": 3215
+      },
+      {
+        "build_us": 578,
+        "raster_us": 0,
+        "total_us": 2607
+      },
+      {
+        "build_us": 572,
+        "raster_us": 0,
+        "total_us": 2397
+      },
+      {
+        "build_us": 615,
+        "raster_us": 0,
+        "total_us": 2756
+      },
+      {
+        "build_us": 220,
+        "raster_us": 0,
+        "total_us": 2312
+      },
+      {
+        "build_us": 447,
+        "raster_us": 1,
+        "total_us": 2299
+      },
+      {
+        "build_us": 524,
+        "raster_us": 0,
+        "total_us": 2427
+      },
+      {
+        "build_us": 383,
+        "raster_us": 0,
+        "total_us": 2496
+      },
+      {
+        "build_us": 536,
+        "raster_us": 0,
+        "total_us": 2730
+      },
+      {
+        "build_us": 617,
+        "raster_us": 0,
+        "total_us": 2641
+      },
+      {
+        "build_us": 600,
+        "raster_us": 0,
+        "total_us": 3207
+      },
+      {
+        "build_us": 585,
+        "raster_us": 0,
+        "total_us": 2786
+      },
+      {
+        "build_us": 398,
+        "raster_us": 0,
+        "total_us": 1865
+      },
+      {
+        "build_us": 354,
+        "raster_us": 1,
+        "total_us": 2546
+      },
+      {
+        "build_us": 522,
+        "raster_us": 1,
+        "total_us": 2798
+      },
+      {
+        "build_us": 604,
+        "raster_us": 0,
+        "total_us": 2309
+      },
+      {
+        "build_us": 613,
+        "raster_us": 0,
+        "total_us": 3233
+      },
+      {
+        "build_us": 599,
+        "raster_us": 0,
+        "total_us": 2852
+      },
+      {
+        "build_us": 526,
+        "raster_us": 0,
+        "total_us": 2026
+      },
+      {
+        "build_us": 382,
+        "raster_us": 1,
+        "total_us": 2465
+      },
+      {
+        "build_us": 522,
+        "raster_us": 0,
+        "total_us": 2791
+      },
+      {
+        "build_us": 545,
+        "raster_us": 0,
+        "total_us": 2505
+      },
+      {
+        "build_us": 519,
+        "raster_us": 1,
+        "total_us": 2988
+      },
+      {
+        "build_us": 401,
+        "raster_us": 1,
+        "total_us": 1853
+      },
+      {
+        "build_us": 23714,
+        "raster_us": 0,
+        "total_us": 25671
+      },
+      {
+        "build_us": 4183,
+        "raster_us": 1,
+        "total_us": 6593
+      },
+      {
+        "build_us": 1319,
+        "raster_us": 0,
+        "total_us": 3239
+      },
+      {
+        "build_us": 2054,
+        "raster_us": 1,
+        "total_us": 3623
+      },
+      {
+        "build_us": 3040,
+        "raster_us": 0,
+        "total_us": 5361
+      },
+      {
+        "build_us": 2765,
+        "raster_us": 0,
+        "total_us": 4636
+      },
+      {
+        "build_us": 2727,
+        "raster_us": 1,
+        "total_us": 4442
+      },
+      {
+        "build_us": 2773,
+        "raster_us": 0,
+        "total_us": 5239
+      },
+      {
+        "build_us": 1824,
+        "raster_us": 1,
+        "total_us": 3686
+      },
+      {
+        "build_us": 1198,
+        "raster_us": 1,
+        "total_us": 2878
+      },
+      {
+        "build_us": 1775,
+        "raster_us": 0,
+        "total_us": 3986
+      },
+      {
+        "build_us": 793,
+        "raster_us": 0,
+        "total_us": 2847
+      },
+      {
+        "build_us": 339,
+        "raster_us": 0,
+        "total_us": 2578
+      },
+      {
+        "build_us": 361,
+        "raster_us": 0,
+        "total_us": 1984
+      },
+      {
+        "build_us": 350,
+        "raster_us": 0,
+        "total_us": 2901
+      },
+      {
+        "build_us": 474,
+        "raster_us": 0,
+        "total_us": 2666
+      },
+      {
+        "build_us": 525,
+        "raster_us": 0,
+        "total_us": 2548
+      },
+      {
+        "build_us": 579,
+        "raster_us": 0,
+        "total_us": 2564
+      },
+      {
+        "build_us": 598,
+        "raster_us": 1,
+        "total_us": 2338
+      },
+      {
+        "build_us": 281,
+        "raster_us": 0,
+        "total_us": 2256
+      },
+      {
+        "build_us": 520,
+        "raster_us": 0,
+        "total_us": 2787
+      },
+      {
+        "build_us": 528,
+        "raster_us": 0,
+        "total_us": 2301
+      },
+      {
+        "build_us": 407,
+        "raster_us": 0,
+        "total_us": 2488
+      },
+      {
+        "build_us": 588,
+        "raster_us": 0,
+        "total_us": 2644
+      },
+      {
+        "build_us": 598,
+        "raster_us": 1,
+        "total_us": 2531
+      },
+      {
+        "build_us": 584,
+        "raster_us": 0,
+        "total_us": 2871
+      },
+      {
+        "build_us": 606,
+        "raster_us": 0,
+        "total_us": 2856
+      },
+      {
+        "build_us": 612,
+        "raster_us": 0,
+        "total_us": 2382
+      },
+      {
+        "build_us": 556,
+        "raster_us": 0,
+        "total_us": 2800
+      },
+      {
+        "build_us": 659,
+        "raster_us": 0,
+        "total_us": 2919
+      },
+      {
+        "build_us": 489,
+        "raster_us": 0,
+        "total_us": 2882
+      },
+      {
+        "build_us": 429,
+        "raster_us": 0,
+        "total_us": 2486
+      },
+      {
+        "build_us": 512,
+        "raster_us": 0,
+        "total_us": 2279
+      },
+      {
+        "build_us": 408,
+        "raster_us": 0,
+        "total_us": 2257
+      },
+      {
+        "build_us": 496,
+        "raster_us": 0,
+        "total_us": 2353
+      },
+      {
+        "build_us": 368,
+        "raster_us": 1,
+        "total_us": 2572
+      },
+      {
+        "build_us": 547,
+        "raster_us": 0,
+        "total_us": 2464
+      },
+      {
+        "build_us": 388,
+        "raster_us": 0,
+        "total_us": 2694
+      },
+      {
+        "build_us": 375,
+        "raster_us": 0,
+        "total_us": 2550
+      },
+      {
+        "build_us": 572,
+        "raster_us": 0,
+        "total_us": 2622
+      },
+      {
+        "build_us": 556,
+        "raster_us": 1,
+        "total_us": 3082
+      },
+      {
+        "build_us": 595,
+        "raster_us": 1,
+        "total_us": 2899
+      },
+      {
+        "build_us": 577,
+        "raster_us": 0,
+        "total_us": 2248
+      },
+      {
+        "build_us": 21958,
+        "raster_us": 0,
+        "total_us": 23506
+      },
+      {
+        "build_us": 1847,
+        "raster_us": 0,
+        "total_us": 3499
+      },
+      {
+        "build_us": 1575,
+        "raster_us": 0,
+        "total_us": 3383
+      },
+      {
+        "build_us": 1554,
+        "raster_us": 0,
+        "total_us": 3124
+      },
+      {
+        "build_us": 3608,
+        "raster_us": 0,
+        "total_us": 5636
+      },
+      {
+        "build_us": 3081,
+        "raster_us": 0,
+        "total_us": 5249
+      },
+      {
+        "build_us": 3014,
+        "raster_us": 1,
+        "total_us": 4762
+      },
+      {
+        "build_us": 1167,
+        "raster_us": 0,
+        "total_us": 3927
+      },
+      {
+        "build_us": 1238,
+        "raster_us": 0,
+        "total_us": 3864
+      },
+      {
+        "build_us": 1103,
+        "raster_us": 0,
+        "total_us": 3270
+      },
+      {
+        "build_us": 7647,
+        "raster_us": 0,
+        "total_us": 9797
+      },
+      {
+        "build_us": 713,
+        "raster_us": 0,
+        "total_us": 2642
+      },
+      {
+        "build_us": 498,
+        "raster_us": 0,
+        "total_us": 2043
+      },
+      {
+        "build_us": 465,
+        "raster_us": 1,
+        "total_us": 2194
+      },
+      {
+        "build_us": 525,
+        "raster_us": 0,
+        "total_us": 2593
+      },
+      {
+        "build_us": 398,
+        "raster_us": 0,
+        "total_us": 3924
+      },
+      {
+        "build_us": 568,
+        "raster_us": 0,
+        "total_us": 3114
+      },
+      {
+        "build_us": 575,
+        "raster_us": 0,
+        "total_us": 3162
+      },
+      {
+        "build_us": 422,
+        "raster_us": 0,
+        "total_us": 2182
+      },
+      {
+        "build_us": 374,
+        "raster_us": 0,
+        "total_us": 2139
+      },
+      {
+        "build_us": 566,
+        "raster_us": 0,
+        "total_us": 2728
+      },
+      {
+        "build_us": 527,
+        "raster_us": 0,
+        "total_us": 2642
+      },
+      {
+        "build_us": 396,
+        "raster_us": 1,
+        "total_us": 2477
+      },
+      {
+        "build_us": 612,
+        "raster_us": 0,
+        "total_us": 3048
+      },
+      {
+        "build_us": 640,
+        "raster_us": 0,
+        "total_us": 2851
+      },
+      {
+        "build_us": 235,
+        "raster_us": 0,
+        "total_us": 2432
+      },
+      {
+        "build_us": 526,
+        "raster_us": 0,
+        "total_us": 3077
+      },
+      {
+        "build_us": 533,
+        "raster_us": 0,
+        "total_us": 2710
+      },
+      {
+        "build_us": 467,
+        "raster_us": 0,
+        "total_us": 2170
+      },
+      {
+        "build_us": 381,
+        "raster_us": 1,
+        "total_us": 2756
+      },
+      {
+        "build_us": 612,
+        "raster_us": 0,
+        "total_us": 2915
+      },
+      {
+        "build_us": 603,
+        "raster_us": 0,
+        "total_us": 2754
+      },
+      {
+        "build_us": 526,
+        "raster_us": 1,
+        "total_us": 2371
+      },
+      {
+        "build_us": 572,
+        "raster_us": 0,
+        "total_us": 3184
+      },
+      {
+        "build_us": 515,
+        "raster_us": 0,
+        "total_us": 2585
+      },
+      {
+        "build_us": 529,
+        "raster_us": 0,
+        "total_us": 2498
+      },
+      {
+        "build_us": 588,
+        "raster_us": 0,
+        "total_us": 3191
+      },
+      {
+        "build_us": 550,
+        "raster_us": 1,
+        "total_us": 2692
+      },
+      {
+        "build_us": 569,
+        "raster_us": 1,
+        "total_us": 2581
+      },
+      {
+        "build_us": 609,
+        "raster_us": 0,
+        "total_us": 3287
+      },
+      {
+        "build_us": 660,
+        "raster_us": 0,
+        "total_us": 3280
+      },
+      {
+        "build_us": 586,
+        "raster_us": 0,
+        "total_us": 2939
+      },
+      {
+        "build_us": 372,
+        "raster_us": 0,
+        "total_us": 1784
+      },
+      {
+        "build_us": 34700,
+        "raster_us": 0,
+        "total_us": 36985
+      },
+      {
+        "build_us": 53221,
+        "raster_us": 0,
+        "total_us": 54949
+      },
+      {
+        "build_us": 3223,
+        "raster_us": 1,
+        "total_us": 5025
+      },
+      {
+        "build_us": 4254,
+        "raster_us": 1,
+        "total_us": 9677
+      },
+      {
+        "build_us": 9108,
+        "raster_us": 0,
+        "total_us": 11639
+      },
+      {
+        "build_us": 6535,
+        "raster_us": 0,
+        "total_us": 8471
+      },
+      {
+        "build_us": 4716,
+        "raster_us": 0,
+        "total_us": 6498
+      },
+      {
+        "build_us": 409,
+        "raster_us": 0,
+        "total_us": 2776
+      },
+      {
+        "build_us": 472,
+        "raster_us": 1,
+        "total_us": 2856
+      },
+      {
+        "build_us": 538,
+        "raster_us": 0,
+        "total_us": 2787
+      },
+      {
+        "build_us": 570,
+        "raster_us": 0,
+        "total_us": 3131
+      },
+      {
+        "build_us": 588,
+        "raster_us": 0,
+        "total_us": 3283
+      },
+      {
+        "build_us": 602,
+        "raster_us": 0,
+        "total_us": 3291
+      },
+      {
+        "build_us": 559,
+        "raster_us": 1,
+        "total_us": 3091
+      },
+      {
+        "build_us": 551,
+        "raster_us": 0,
+        "total_us": 2959
+      },
+      {
+        "build_us": 607,
+        "raster_us": 1,
+        "total_us": 3169
+      },
+      {
+        "build_us": 584,
+        "raster_us": 0,
+        "total_us": 2987
+      },
+      {
+        "build_us": 632,
+        "raster_us": 0,
+        "total_us": 3162
+      },
+      {
+        "build_us": 539,
+        "raster_us": 0,
+        "total_us": 2418
+      },
+      {
+        "build_us": 273,
+        "raster_us": 0,
+        "total_us": 2363
+      },
+      {
+        "build_us": 560,
+        "raster_us": 0,
+        "total_us": 2645
+      },
+      {
+        "build_us": 180,
+        "raster_us": 0,
+        "total_us": 1738
+      },
+      {
+        "build_us": 303,
+        "raster_us": 0,
+        "total_us": 2540
+      },
+      {
+        "build_us": 377,
+        "raster_us": 0,
+        "total_us": 1912
+      },
+      {
+        "build_us": 406,
+        "raster_us": 0,
+        "total_us": 2282
+      },
+      {
+        "build_us": 342,
+        "raster_us": 0,
+        "total_us": 2003
+      },
+      {
+        "build_us": 352,
+        "raster_us": 0,
+        "total_us": 1782
+      },
+      {
+        "build_us": 366,
+        "raster_us": 0,
+        "total_us": 2166
+      },
+      {
+        "build_us": 333,
+        "raster_us": 0,
+        "total_us": 2815
+      },
+      {
+        "build_us": 466,
+        "raster_us": 0,
+        "total_us": 2865
+      },
+      {
+        "build_us": 473,
+        "raster_us": 1,
+        "total_us": 2693
+      },
+      {
+        "build_us": 480,
+        "raster_us": 0,
+        "total_us": 2574
+      },
+      {
+        "build_us": 509,
+        "raster_us": 0,
+        "total_us": 3084
+      },
+      {
+        "build_us": 544,
+        "raster_us": 0,
+        "total_us": 2275
+      },
+      {
+        "build_us": 396,
+        "raster_us": 0,
+        "total_us": 2813
+      },
+      {
+        "build_us": 372,
+        "raster_us": 0,
+        "total_us": 2520
+      },
+      {
+        "build_us": 508,
+        "raster_us": 0,
+        "total_us": 2300
+      },
+      {
+        "build_us": 487,
+        "raster_us": 0,
+        "total_us": 3090
+      },
+      {
+        "build_us": 549,
+        "raster_us": 1,
+        "total_us": 2938
+      },
+      {
+        "build_us": 548,
+        "raster_us": 0,
+        "total_us": 3067
+      },
+      {
+        "build_us": 601,
+        "raster_us": 0,
+        "total_us": 3267
+      },
+      {
+        "build_us": 480,
+        "raster_us": 0,
+        "total_us": 2200
+      },
+      {
+        "build_us": 451,
+        "raster_us": 0,
+        "total_us": 2299
+      },
+      {
+        "build_us": 25507,
+        "raster_us": 0,
+        "total_us": 27494
+      },
+      {
+        "build_us": 3786,
+        "raster_us": 0,
+        "total_us": 5292
+      },
+      {
+        "build_us": 2788,
+        "raster_us": 0,
+        "total_us": 4296
+      },
+      {
+        "build_us": 3159,
+        "raster_us": 0,
+        "total_us": 5656
+      },
+      {
+        "build_us": 6155,
+        "raster_us": 0,
+        "total_us": 8500
+      },
+      {
+        "build_us": 5270,
+        "raster_us": 0,
+        "total_us": 6726
+      },
+      {
+        "build_us": 5641,
+        "raster_us": 0,
+        "total_us": 7692
+      },
+      {
+        "build_us": 6343,
+        "raster_us": 1,
+        "total_us": 8741
+      },
+      {
+        "build_us": 5302,
+        "raster_us": 1,
+        "total_us": 7290
+      },
+      {
+        "build_us": 4121,
+        "raster_us": 0,
+        "total_us": 6492
+      },
+      {
+        "build_us": 4502,
+        "raster_us": 0,
+        "total_us": 7901
+      },
+      {
+        "build_us": 385,
+        "raster_us": 0,
+        "total_us": 2887
+      },
+      {
+        "build_us": 495,
+        "raster_us": 0,
+        "total_us": 3079
+      },
+      {
+        "build_us": 463,
+        "raster_us": 1,
+        "total_us": 2488
+      },
+      {
+        "build_us": 514,
+        "raster_us": 0,
+        "total_us": 2099
+      },
+      {
+        "build_us": 516,
+        "raster_us": 1,
+        "total_us": 3107
+      },
+      {
+        "build_us": 448,
+        "raster_us": 0,
+        "total_us": 2614
+      },
+      {
+        "build_us": 453,
+        "raster_us": 1,
+        "total_us": 2307
+      },
+      {
+        "build_us": 383,
+        "raster_us": 0,
+        "total_us": 1844
+      },
+      {
+        "build_us": 526,
+        "raster_us": 0,
+        "total_us": 2625
+      },
+      {
+        "build_us": 498,
+        "raster_us": 0,
+        "total_us": 2315
+      },
+      {
+        "build_us": 605,
+        "raster_us": 0,
+        "total_us": 2739
+      },
+      {
+        "build_us": 488,
+        "raster_us": 0,
+        "total_us": 2689
+      },
+      {
+        "build_us": 410,
+        "raster_us": 0,
+        "total_us": 2607
+      },
+      {
+        "build_us": 490,
+        "raster_us": 0,
+        "total_us": 2103
+      },
+      {
+        "build_us": 550,
+        "raster_us": 0,
+        "total_us": 2715
+      },
+      {
+        "build_us": 587,
+        "raster_us": 1,
+        "total_us": 2527
+      },
+      {
+        "build_us": 569,
+        "raster_us": 1,
+        "total_us": 3050
+      },
+      {
+        "build_us": 587,
+        "raster_us": 0,
+        "total_us": 2642
+      },
+      {
+        "build_us": 618,
+        "raster_us": 0,
+        "total_us": 2858
+      },
+      {
+        "build_us": 617,
+        "raster_us": 1,
+        "total_us": 2754
+      },
+      {
+        "build_us": 656,
+        "raster_us": 1,
+        "total_us": 3002
+      },
+      {
+        "build_us": 613,
+        "raster_us": 0,
+        "total_us": 2690
+      },
+      {
+        "build_us": 544,
+        "raster_us": 0,
+        "total_us": 2524
+      },
+      {
+        "build_us": 572,
+        "raster_us": 1,
+        "total_us": 2301
+      },
+      {
+        "build_us": 272,
+        "raster_us": 1,
+        "total_us": 1845
+      },
+      {
+        "build_us": 198,
+        "raster_us": 1,
+        "total_us": 2404
+      },
+      {
+        "build_us": 246,
+        "raster_us": 0,
+        "total_us": 2298
+      },
+      {
+        "build_us": 428,
+        "raster_us": 1,
+        "total_us": 2391
+      },
+      {
+        "build_us": 399,
+        "raster_us": 1,
+        "total_us": 2832
+      },
+      {
+        "build_us": 390,
+        "raster_us": 0,
+        "total_us": 2415
+      },
+      {
+        "build_us": 381,
+        "raster_us": 0,
+        "total_us": 1995
+      },
+      {
+        "build_us": 502,
+        "raster_us": 0,
+        "total_us": 2583
+      },
+      {
+        "build_us": 32004,
+        "raster_us": 0,
+        "total_us": 34041
+      },
+      {
+        "build_us": 49728,
+        "raster_us": 0,
+        "total_us": 51646
+      },
+      {
+        "build_us": 4260,
+        "raster_us": 0,
+        "total_us": 5754
+      },
+      {
+        "build_us": 4946,
+        "raster_us": 0,
+        "total_us": 6394
+      },
+      {
+        "build_us": 12105,
+        "raster_us": 0,
+        "total_us": 15338
+      },
+      {
+        "build_us": 11239,
+        "raster_us": 1,
+        "total_us": 12791
+      },
+      {
+        "build_us": 6580,
+        "raster_us": 0,
+        "total_us": 9036
+      },
+      {
+        "build_us": 3805,
+        "raster_us": 0,
+        "total_us": 6015
+      },
+      {
+        "build_us": 188,
+        "raster_us": 0,
+        "total_us": 1981
+      },
+      {
+        "build_us": 302,
+        "raster_us": 0,
+        "total_us": 1894
+      },
+      {
+        "build_us": 316,
+        "raster_us": 0,
+        "total_us": 2690
+      },
+      {
+        "build_us": 447,
+        "raster_us": 0,
+        "total_us": 3075
+      },
+      {
+        "build_us": 546,
+        "raster_us": 0,
+        "total_us": 3081
+      },
+      {
+        "build_us": 543,
+        "raster_us": 0,
+        "total_us": 3124
+      },
+      {
+        "build_us": 504,
+        "raster_us": 0,
+        "total_us": 2610
+      },
+      {
+        "build_us": 309,
+        "raster_us": 1,
+        "total_us": 1601
+      },
+      {
+        "build_us": 281,
+        "raster_us": 0,
+        "total_us": 2215
+      },
+      {
+        "build_us": 536,
+        "raster_us": 0,
+        "total_us": 2974
+      },
+      {
+        "build_us": 578,
+        "raster_us": 0,
+        "total_us": 3211
+      },
+      {
+        "build_us": 568,
+        "raster_us": 1,
+        "total_us": 2843
+      },
+      {
+        "build_us": 480,
+        "raster_us": 1,
+        "total_us": 3044
+      },
+      {
+        "build_us": 521,
+        "raster_us": 0,
+        "total_us": 2879
+      },
+      {
+        "build_us": 421,
+        "raster_us": 0,
+        "total_us": 2540
+      },
+      {
+        "build_us": 338,
+        "raster_us": 0,
+        "total_us": 2304
+      },
+      {
+        "build_us": 461,
+        "raster_us": 0,
+        "total_us": 2401
+      },
+      {
+        "build_us": 457,
+        "raster_us": 0,
+        "total_us": 2140
+      },
+      {
+        "build_us": 363,
+        "raster_us": 0,
+        "total_us": 2693
+      },
+      {
+        "build_us": 530,
+        "raster_us": 0,
+        "total_us": 2461
+      },
+      {
+        "build_us": 534,
+        "raster_us": 1,
+        "total_us": 3194
+      },
+      {
+        "build_us": 359,
+        "raster_us": 0,
+        "total_us": 2275
+      },
+      {
+        "build_us": 490,
+        "raster_us": 0,
+        "total_us": 2859
+      },
+      {
+        "build_us": 583,
+        "raster_us": 0,
+        "total_us": 2545
+      },
+      {
+        "build_us": 579,
+        "raster_us": 0,
+        "total_us": 3098
+      },
+      {
+        "build_us": 610,
+        "raster_us": 0,
+        "total_us": 2936
+      },
+      {
+        "build_us": 574,
+        "raster_us": 0,
+        "total_us": 3079
+      },
+      {
+        "build_us": 571,
+        "raster_us": 0,
+        "total_us": 2868
+      },
+      {
+        "build_us": 615,
+        "raster_us": 0,
+        "total_us": 3029
+      },
+      {
+        "build_us": 649,
+        "raster_us": 0,
+        "total_us": 3223
+      },
+      {
+        "build_us": 607,
+        "raster_us": 1,
+        "total_us": 3117
+      },
+      {
+        "build_us": 546,
+        "raster_us": 1,
+        "total_us": 2664
+      },
+      {
+        "build_us": 549,
+        "raster_us": 0,
+        "total_us": 2873
+      },
+      {
+        "build_us": 647,
+        "raster_us": 0,
+        "total_us": 2849
+      },
+      {
+        "build_us": 574,
+        "raster_us": 0,
+        "total_us": 2754
+      },
+      {
+        "build_us": 23145,
+        "raster_us": 0,
+        "total_us": 25438
+      },
+      {
+        "build_us": 2949,
+        "raster_us": 0,
+        "total_us": 4495
+      },
+      {
+        "build_us": 2300,
+        "raster_us": 0,
+        "total_us": 4223
+      },
+      {
+        "build_us": 4489,
+        "raster_us": 0,
+        "total_us": 6459
+      },
+      {
+        "build_us": 5066,
+        "raster_us": 1,
+        "total_us": 7825
+      },
+      {
+        "build_us": 4349,
+        "raster_us": 0,
+        "total_us": 6541
+      },
+      {
+        "build_us": 3123,
+        "raster_us": 1,
+        "total_us": 5359
+      },
+      {
+        "build_us": 3201,
+        "raster_us": 0,
+        "total_us": 5093
+      },
+      {
+        "build_us": 2850,
+        "raster_us": 0,
+        "total_us": 4481
+      },
+      {
+        "build_us": 3117,
+        "raster_us": 0,
+        "total_us": 5288
+      },
+      {
+        "build_us": 3070,
+        "raster_us": 0,
+        "total_us": 4943
+      },
+      {
+        "build_us": 3174,
+        "raster_us": 1,
+        "total_us": 5030
+      },
+      {
+        "build_us": 528,
+        "raster_us": 0,
+        "total_us": 3215
+      },
+      {
+        "build_us": 507,
+        "raster_us": 0,
+        "total_us": 2683
+      },
+      {
+        "build_us": 468,
+        "raster_us": 0,
+        "total_us": 2193
+      },
+      {
+        "build_us": 478,
+        "raster_us": 1,
+        "total_us": 2762
+      },
+      {
+        "build_us": 534,
+        "raster_us": 0,
+        "total_us": 2728
+      },
+      {
+        "build_us": 508,
+        "raster_us": 0,
+        "total_us": 2373
+      },
+      {
+        "build_us": 491,
+        "raster_us": 0,
+        "total_us": 2931
+      },
+      {
+        "build_us": 508,
+        "raster_us": 0,
+        "total_us": 2618
+      },
+      {
+        "build_us": 508,
+        "raster_us": 0,
+        "total_us": 2364
+      },
+      {
+        "build_us": 522,
+        "raster_us": 0,
+        "total_us": 3008
+      },
+      {
+        "build_us": 530,
+        "raster_us": 0,
+        "total_us": 1095
+      },
+      {
+        "build_us": 543,
+        "raster_us": 0,
+        "total_us": 1413
+      },
+      {
+        "build_us": 309,
+        "raster_us": 0,
+        "total_us": 1798
+      },
+      {
+        "build_us": 348,
+        "raster_us": 0,
+        "total_us": 2437
+      },
+      {
+        "build_us": 305,
+        "raster_us": 0,
+        "total_us": 2812
+      },
+      {
+        "build_us": 453,
+        "raster_us": 0,
+        "total_us": 2948
+      },
+      {
+        "build_us": 452,
+        "raster_us": 0,
+        "total_us": 2124
+      },
+      {
+        "build_us": 394,
+        "raster_us": 0,
+        "total_us": 2399
+      },
+      {
+        "build_us": 271,
+        "raster_us": 0,
+        "total_us": 2046
+      },
+      {
+        "build_us": 180,
+        "raster_us": 0,
+        "total_us": 1728
+      },
+      {
+        "build_us": 310,
+        "raster_us": 0,
+        "total_us": 2440
+      },
+      {
+        "build_us": 207,
+        "raster_us": 0,
+        "total_us": 1878
+      },
+      {
+        "build_us": 173,
+        "raster_us": 0,
+        "total_us": 1848
+      },
+      {
+        "build_us": 257,
+        "raster_us": 0,
+        "total_us": 2612
+      },
+      {
+        "build_us": 59179,
+        "raster_us": 0,
+        "total_us": 60838
+      },
+      {
+        "build_us": 43486,
+        "raster_us": 0,
+        "total_us": 44152
+      },
+      {
+        "build_us": 192,
+        "raster_us": 0,
+        "total_us": 2019
+      },
+      {
+        "build_us": 201,
+        "raster_us": 0,
+        "total_us": 1623
+      },
+      {
+        "build_us": 257,
+        "raster_us": 0,
+        "total_us": 2292
+      },
+      {
+        "build_us": 356,
+        "raster_us": 0,
+        "total_us": 1791
+      },
+      {
+        "build_us": 350,
+        "raster_us": 0,
+        "total_us": 1969
+      },
+      {
+        "build_us": 36680,
+        "raster_us": 0,
+        "total_us": 37530
+      },
+      {
+        "build_us": 2335,
+        "raster_us": 0,
+        "total_us": 2868
+      },
+      {
+        "build_us": 1127,
+        "raster_us": 1,
+        "total_us": 2158
+      },
+      {
+        "build_us": 1527,
+        "raster_us": 0,
+        "total_us": 2547
+      },
+      {
+        "build_us": 1056,
+        "raster_us": 0,
+        "total_us": 1767
+      },
+      {
+        "build_us": 1835,
+        "raster_us": 1,
+        "total_us": 2907
+      },
+      {
+        "build_us": 244,
+        "raster_us": 0,
+        "total_us": 1720
+      },
+      {
+        "build_us": 262,
+        "raster_us": 0,
+        "total_us": 2165
+      },
+      {
+        "build_us": 324,
+        "raster_us": 0,
+        "total_us": 1873
+      },
+      {
+        "build_us": 365,
+        "raster_us": 0,
+        "total_us": 2324
+      },
+      {
+        "build_us": 357,
+        "raster_us": 0,
+        "total_us": 2086
+      },
+      {
+        "build_us": 454,
+        "raster_us": 0,
+        "total_us": 3636
+      },
+      {
+        "build_us": 47594,
+        "raster_us": 0,
+        "total_us": 48565
+      },
+      {
+        "build_us": 454,
+        "raster_us": 1,
+        "total_us": 1588
+      },
+      {
+        "build_us": 384,
+        "raster_us": 0,
+        "total_us": 2363
+      },
+      {
+        "build_us": 425,
+        "raster_us": 0,
+        "total_us": 2405
+      },
+      {
+        "build_us": 492,
+        "raster_us": 0,
+        "total_us": 3656
+      },
+      {
+        "build_us": 546,
+        "raster_us": 0,
+        "total_us": 2909
+      },
+      {
+        "build_us": 435,
+        "raster_us": 0,
+        "total_us": 2670
+      },
+      {
+        "build_us": 391,
+        "raster_us": 0,
+        "total_us": 2539
+      },
+      {
+        "build_us": 525,
+        "raster_us": 0,
+        "total_us": 2489
+      },
+      {
+        "build_us": 341,
+        "raster_us": 0,
+        "total_us": 2721
+      }
+    ],
+    "limits": "Flutter build/raster durations; not decode, presentation pacing or A/V sync"
+  },
+  "steps": [
+    {
+      "index": 0,
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      },
+      "status": "ok",
+      "elapsed_ms": 1632.08
+    },
+    {
+      "index": 1,
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 1733.18
+    },
+    {
+      "index": 2,
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "status": "ok",
+      "elapsed_ms": 1834.27
+    },
+    {
+      "index": 3,
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 2065.55
+    },
+    {
+      "index": 4,
+      "op": "wait",
+      "selector": {
+        "text": "No timeline tracks"
+      },
+      "status": "ok",
+      "elapsed_ms": 8.19
+    },
+    {
+      "index": 5,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      },
+      "status": "ok",
+      "elapsed_ms": 1924.47
+    },
+    {
+      "index": 6,
+      "op": "wait",
+      "selector": {
+        "text": "video-audio.webm"
+      },
+      "status": "ok",
+      "elapsed_ms": 4.25
+    },
+    {
+      "index": 7,
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-video-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 4.91
+    },
+    {
+      "index": 8,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-video-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 1592.08
+    },
+    {
+      "index": 9,
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      },
+      "status": "ok",
+      "elapsed_ms": 1816.76
+    },
+    {
+      "index": 10,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      },
+      "status": "ok",
+      "elapsed_ms": 1631.79
+    },
+    {
+      "index": 11,
+      "op": "canonical",
+      "status": "ok",
+      "elapsed_ms": 13.81,
+      "observation": {
+        "project_id": "00c8725e-4e30-49c6-9c34-e87a98d0960b",
+        "revision": "3",
+        "dirty": true,
+        "media_count": 1,
+        "track_count": 1,
+        "clip_count": 1,
+        "starts": [
+          "0/1"
+        ],
+        "durations": [
+          "251/125"
+        ],
+        "media_ids": [
+          "ad780c54-8103-4bf3-9be9-aac73310385d"
+        ],
+        "assertions_passed": true
+      }
+    },
+    {
+      "index": 12,
+      "op": "tree",
+      "status": "ok",
+      "elapsed_ms": 26.03,
+      "semantics": "tree-video-imported-12.json"
+    },
+    {
+      "index": 13,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 842.52,
+      "screenshot": "shot-video-imported-13.png"
+    },
+    {
+      "index": 14,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 1883.45
+    },
+    {
+      "index": 15,
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      },
+      "status": "ok",
+      "elapsed_ms": 1567.01
+    },
+    {
+      "index": 16,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-insert-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 1450.06
+    },
+    {
+      "index": 17,
+      "op": "tap",
+      "selector": {
+        "text": "A1 · audio"
+      },
+      "status": "ok",
+      "elapsed_ms": 1466.98
+    },
+    {
+      "index": 18,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      },
+      "status": "ok",
+      "elapsed_ms": 1781.52
+    },
+    {
+      "index": 19,
+      "op": "canonical",
+      "status": "ok",
+      "elapsed_ms": 7.8,
+      "observation": {
+        "project_id": "00c8725e-4e30-49c6-9c34-e87a98d0960b",
+        "revision": "5",
+        "dirty": true,
+        "media_count": 1,
+        "track_count": 2,
+        "clip_count": 2,
+        "starts": [
+          "0/1",
+          "251/125"
+        ],
+        "durations": [
+          "251/125",
+          "251/125"
+        ],
+        "media_ids": [
+          "ad780c54-8103-4bf3-9be9-aac73310385d",
+          "ad780c54-8103-4bf3-9be9-aac73310385d"
+        ],
+        "assertions_passed": true
+      }
+    },
+    {
+      "index": 20,
+      "op": "tap",
+      "selector": {
+        "key": "preview-frame-rate"
+      },
+      "status": "ok",
+      "elapsed_ms": 1627.47
+    },
+    {
+      "index": 21,
+      "op": "tap",
+      "selector": {
+        "text": "24 fps"
+      },
+      "status": "ok",
+      "elapsed_ms": 1750.82
+    },
+    {
+      "index": 22,
+      "op": "wait_state",
+      "selector": {
+        "key": "preview-play"
+      },
+      "status": "ok",
+      "elapsed_ms": 2.77
+    },
+    {
+      "index": 23,
+      "op": "tap",
+      "selector": {
+        "key": "export-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 1696.28
+    },
+    {
+      "index": 24,
+      "op": "tap",
+      "selector": {
+        "text": "Continue"
+      },
+      "status": "ok",
+      "elapsed_ms": 1716.91
+    },
+    {
+      "index": 25,
+      "op": "wait",
+      "selector": {
+        "text": "Export complete"
+      },
+      "status": "ok",
+      "elapsed_ms": 0.51
+    },
+    {
+      "index": 26,
+      "op": "canonical",
+      "status": "ok",
+      "elapsed_ms": 9.72,
+      "observation": {
+        "project_id": "00c8725e-4e30-49c6-9c34-e87a98d0960b",
+        "revision": "6",
+        "dirty": true,
+        "media_count": 1,
+        "track_count": 2,
+        "clip_count": 2,
+        "starts": [
+          "0/1",
+          "251/125"
+        ],
+        "durations": [
+          "251/125",
+          "251/125"
+        ],
+        "media_ids": [
+          "ad780c54-8103-4bf3-9be9-aac73310385d",
+          "ad780c54-8103-4bf3-9be9-aac73310385d"
+        ],
+        "assertions_passed": true
+      }
+    }
+  ]
+}

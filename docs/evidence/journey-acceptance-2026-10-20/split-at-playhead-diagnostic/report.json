@@ -1,0 +1,289 @@
+{
+  "harness": "or_ui",
+  "target": "linux",
+  "result": "FAIL",
+  "reason": "the scenario runner exited 1:  | This indicates one of: |  * The content has changed on the server since you created the pubspec.lock. |  * The pubspec.lock has been corrupted. |  |  | For more information see: | https://dart.dev/go/content-hashes",
+  "log": "$REPO/apps/or_app/build/ui-harness/split-at-playhead-diagnostic/run.log",
+  "steps": [
+    {
+      "index": 0,
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      },
+      "status": "ok",
+      "elapsed_ms": 1697.78
+    },
+    {
+      "index": 1,
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 1798.93
+    },
+    {
+      "index": 2,
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "status": "ok",
+      "elapsed_ms": 1901.21
+    },
+    {
+      "index": 3,
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 1948.94
+    },
+    {
+      "index": 4,
+      "op": "wait",
+      "selector": {
+        "text": "No timeline tracks"
+      },
+      "status": "ok",
+      "elapsed_ms": 7.97
+    },
+    {
+      "index": 5,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      },
+      "status": "ok",
+      "elapsed_ms": 2112.37
+    },
+    {
+      "index": 6,
+      "op": "wait",
+      "selector": {
+        "text": "fixture.wav"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.41
+    },
+    {
+      "index": 7,
+      "op": "wait_state",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.74
+    },
+    {
+      "index": 8,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-add-audio-track"
+      },
+      "status": "ok",
+      "elapsed_ms": 1924.81
+    },
+    {
+      "index": 9,
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      },
+      "status": "ok",
+      "elapsed_ms": 1700.99
+    },
+    {
+      "index": 10,
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      },
+      "status": "ok",
+      "elapsed_ms": 1566.95
+    },
+    {
+      "index": 11,
+      "op": "canonical",
+      "status": "ok",
+      "elapsed_ms": 12.21,
+      "observation": {
+        "project_id": "30767a34-a60b-443e-8c7a-7952872071dc",
+        "revision": "3",
+        "dirty": true,
+        "media_count": 1,
+        "track_count": 1,
+        "clip_count": 1,
+        "starts": [
+          "0/1"
+        ],
+        "durations": [
+          "1/1"
+        ],
+        "media_ids": [
+          "0544750d-c646-48c4-8eb5-6a5a9a1438f7"
+        ],
+        "assertions_passed": true
+      }
+    },
+    {
+      "index": 12,
+      "op": "tree",
+      "status": "ok",
+      "elapsed_ms": 27.81,
+      "semantics": "tree-before-edit-12.json"
+    },
+    {
+      "index": 13,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 864.49,
+      "screenshot": "shot-before-edit-13.png"
+    },
+    {
+      "index": 14,
+      "op": "key",
+      "status": "ok",
+      "elapsed_ms": 846.76
+    },
+    {
+      "index": 15,
+      "op": "key",
+      "status": "ok",
+      "elapsed_ms": 864.63
+    },
+    {
+      "index": 16,
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "status": "ok",
+      "elapsed_ms": 1516.91
+    },
+    {
+      "index": 17,
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-split-[0-9a-f-]+$"
+      },
+      "status": "ok",
+      "elapsed_ms": 1450.08
+    },
+    {
+      "index": 18,
+      "op": "tree",
+      "status": "ok",
+      "elapsed_ms": 6.85,
+      "semantics": "tree-split-result-18.json"
+    },
+    {
+      "index": 19,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 759.79,
+      "screenshot": "shot-split-result-19.png"
+    },
+    {
+      "index": 20,
+      "op": "expect_absent",
+      "selector": {
+        "key": "timeline-split-time"
+      },
+      "status": "still_present",
+      "elapsed_ms": 1.46,
+      "detail": "a matching widget is still on screen"
+    }
+  ],
+  "schema": 2,
+  "recorded_at": "2026-10-20T04:10:59.193795+00:00",
+  "source": {
+    "task_sources": {
+      "scripts/media_checks.py": "30953e0c7fbe6d1b287677619e25a1cf8c411fbd6c77b78c6f19910ce56ed3f2",
+      "scripts/media_fixtures.py": "cfd6e5367289c11d8c317300c6fa0ce6140f0d96da33e73eff71092589f1cae7",
+      "scripts/test_journey_evidence.py": "bf421e452917495e04596270a792631e6a8f81dc26947e8e9346a87923d9a6fa"
+    },
+    "sha": "aae462cfba27a6611580c73ebe97cdd41339e016",
+    "dirty": true,
+    "diff_sha256": "35434b1e6966c9efb6a551b0d4abec42359dc5698e360331537fb2aa7f7f74a7"
+  },
+  "host": {
+    "os": "Linux-7.2.6+deb13-amd64-x86_64-with-glibc2.41",
+    "machine": "x86_64"
+  },
+  "build": {
+    "mode": "UNVERIFIED",
+    "entrypoint": "integration_test/or_ui_scenario_test.dart",
+    "backend": "software",
+    "acceptance": false
+  },
+  "artifact_manifest": [
+    {
+      "path": "artifacts/canonical-11.json",
+      "bytes": 279,
+      "sha256": "cfa37475b5f27a11e1a44268775c1433b217834017b4e7ff6e8eb0d18bfc5af0"
+    },
+    {
+      "path": "artifacts/index.json",
+      "bytes": 746,
+      "sha256": "808da936088e732533cd931954e4fff23c7560be949fb9180ef9d5e8046abc98"
+    },
+    {
+      "path": "artifacts/replacements/fixture.wav",
+      "bytes": 16044,
+      "sha256": "56d4af65701c26df20bd4021eda95b6e830348ce3a746086079fe89285548dc9"
+    },
+    {
+      "path": "artifacts/replacements/scenario.orproj",
+      "bytes": 314,
+      "sha256": "93d8fe209e38206792c44dca9b47b6159929dd2f038ca39befd908f8980967e6"
+    },
+    {
+      "path": "artifacts/shot-before-edit-13.png",
+      "bytes": 87316,
+      "sha256": "269bfbcf007718ddcf745d86b7e04c030ad0a1059d5fa991af404fb940ba1211"
+    },
+    {
+      "path": "artifacts/shot-split-result-19.png",
+      "bytes": 96532,
+      "sha256": "b69f379a1689bdbcdd5be5cc239edb77ebfdf685881403229aedfb0d42f8ac9f"
+    },
+    {
+      "path": "artifacts/split-at-playhead-diagnostic.json",
+      "bytes": 53411,
+      "sha256": "d67d0f1f8d361bc626d3418c2fab57030a9349cfd70a00057b8984aeba004a0b"
+    },
+    {
+      "path": "artifacts/tree-before-edit-12.json",
+      "bytes": 23164,
+      "sha256": "7af410e375bf107e07a5964a777484ed31b5ff1ccb1963634d83983098b18ebb"
+    },
+    {
+      "path": "artifacts/tree-before-edit-12.txt",
+      "bytes": 25407,
+      "sha256": "b68be16bd72d4c4ef90201c8af9451c5ce9010f8fd92f64144eb066b1da1a56e"
+    },
+    {
+      "path": "artifacts/tree-split-result-18.json",
+      "bytes": 3992,
+      "sha256": "296090594fe723fa4b7374f1c120cbee2ae13cf3f5a7222d1f70a0405331554c"
+    },
+    {
+      "path": "artifacts/tree-split-result-18.txt",
+      "bytes": 2644,
+      "sha256": "0c73c5a8f2048cb619ad4059f847124c48746926ad5f43b90333f889c8b33704"
+    },
+    {
+      "path": "run.log",
+      "bytes": 6004,
+      "sha256": "31e2ad491bee9ddc44bc3d0c53b71f6c09e43b1e5dc74e7a8737d51a74340cca"
+    },
+    {
+      "path": "scenario.json",
+      "bytes": 2561,
+      "sha256": "cddad9a195bc088d89eb1d3d2f5c3d638a6a3dd24b8e7d07149929cd32e826cd"
+    }
+  ]
+}
