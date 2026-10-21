@@ -3750,12 +3750,31 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('timeline-clip-compact-clip')));
     await tester.pumpAndSettle();
     expect(find.text('Clip'), findsOneWidget);
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog).last,
-        matching: find.text('Close'),
-      ),
+    _setViewport(tester, const Size(320, 440));
+    await tester.pumpAndSettle();
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'clip actions overflowed after resizing to 320x440',
     );
+    final rippleDelete = find.byKey(
+      const ValueKey('timeline-ripple-delete-compact-clip'),
+    );
+    await tester.ensureVisible(rippleDelete);
+    expect(tester.widget<TextButton>(rippleDelete).onPressed, isNotNull);
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'scrolling clip actions overflowed after resizing to 320x440',
+    );
+    final closeAction = find.descendant(
+      of: find.byType(AlertDialog).last,
+      matching: find.text('Close'),
+    );
+    await tester.ensureVisible(closeAction);
+    await tester.tap(closeAction);
+    await tester.pumpAndSettle();
+    _setViewport(tester, const Size(390, 844));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('mobile-editor-tool-inspector')),
