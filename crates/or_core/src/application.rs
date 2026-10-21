@@ -2223,6 +2223,8 @@ pub enum ExportProfile {
     MatroskaFfv1PcmS16le,
     /// Smaller WebM delivery output using VP9 video and Opus audio.
     WebmVp9Opus,
+    /// Broadly compatible MP4 output using H.264 video and AAC audio.
+    Mp4H264Aac,
 }
 
 #[cfg(test)]

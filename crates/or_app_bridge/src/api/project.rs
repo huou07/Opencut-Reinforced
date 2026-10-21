@@ -2904,12 +2904,13 @@ impl ProjectHostHandle {
             .and_then(|extension| match extension {
                 "mkv" => Some(or_core::ExportProfile::MatroskaFfv1PcmS16le),
                 "webm" => Some(or_core::ExportProfile::WebmVp9Opus),
+                "mp4" => Some(or_core::ExportProfile::Mp4H264Aac),
                 _ => None,
             });
         let Some(profile) = profile else {
             return export_job_view(ExportResponse::failure(
                 "INVALID_EXPORT_PROFILE",
-                "choose a destination ending in .mkv or .webm",
+                "choose a destination ending in .mp4, .mkv, or .webm",
             ));
         };
         let (project_id, project_instance_id, expected_project_revision) =

@@ -17,12 +17,19 @@ void main() {
         .setMockMethodCallHandler(macFileAccessChannel, null);
   });
 
-  test('mobile offers WebM by default while retaining lossless Matroska', () {
-    expect(ExportProfile.defaultForPlatform, ExportProfile.webmVp9Opus);
+  test('available export profiles match the platform encoder set', () {
+    expect(
+      ExportProfile.defaultForPlatform,
+      Platform.isMacOS ? ExportProfile.mp4H264Aac : ExportProfile.webmVp9Opus,
+    );
     expect(ExportProfile.available, contains(ExportProfile.webmVp9Opus));
     expect(
       ExportProfile.available,
       contains(ExportProfile.matroskaFfv1PcmS16le),
+    );
+    expect(
+      ExportProfile.available.contains(ExportProfile.mp4H264Aac),
+      Platform.isMacOS,
     );
   });
 

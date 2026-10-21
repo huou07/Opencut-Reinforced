@@ -1,4 +1,13 @@
+import 'dart:io';
+
 enum ExportProfile {
+  mp4H264Aac(
+    wireName: 'mp4_h264_aac',
+    extension: 'mp4',
+    mimeType: 'video/mp4',
+    label: 'MP4 video',
+    description: 'H.264 video and AAC audio for broad compatibility.',
+  ),
   webmVp9Opus(
     wireName: 'webm_vp9_opus',
     extension: 'webm',
@@ -30,9 +39,12 @@ enum ExportProfile {
   final String label;
   final String description;
 
-  static List<ExportProfile> get available => values;
+  static List<ExportProfile> get available => Platform.isMacOS
+      ? values
+      : values.where((profile) => profile != mp4H264Aac).toList();
 
-  static const ExportProfile defaultForPlatform = webmVp9Opus;
+  static ExportProfile get defaultForPlatform =>
+      Platform.isMacOS ? mp4H264Aac : webmVp9Opus;
 
   String suggestedName(String projectName) {
     final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();

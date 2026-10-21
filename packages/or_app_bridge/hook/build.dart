@@ -9,6 +9,19 @@ void main(List<String> args) async {
     final ffmpegInstallRoot = targetTriple == null
         ? null
         : input.userDefines.path('android_ffmpeg_install_root');
+    final macOsFfmpegInstallUri =
+        Platform.isMacOS && input.config.code.targetOS == OS.macOS
+        ? input.userDefines.path('macos_ffmpeg_install_root')
+        : null;
+    String? macOsFfmpegInstallRoot;
+    if (macOsFfmpegInstallUri != null) {
+      final ffmpegDirectory = Directory.fromUri(macOsFfmpegInstallUri);
+      if (await ffmpegDirectory.exists()) {
+        macOsFfmpegInstallRoot = await ffmpegDirectory.resolveSymbolicLinks();
+        output.dependencies.add(macOsFfmpegInstallUri);
+        output.dependencies.add(Directory(macOsFfmpegInstallRoot).uri);
+      }
+    }
     if (targetTriple != null) {
       if (ffmpegInstallRoot == null ||
           !await Directory.fromUri(ffmpegInstallRoot).exists()) {
@@ -19,7 +32,6 @@ void main(List<String> args) async {
       }
       output.dependencies.add(ffmpegInstallRoot);
     }
-
     await FlutterRustBridgeNativeAssetsBuilder(
       cratePath: '../../crates/or_app_bridge',
       // The environment alone is not enough on a host whose shared Cargo config
@@ -32,12 +44,15 @@ void main(List<String> args) async {
       // Command-line `--config` outranks the config file, so the Android pin is
       // stated there too; on CI, which has no such host config, these are the
       // same values the environment already carries.
-      extraCargoBuildArgs: _androidCargoArguments(
-        targetTriple,
-        ffmpegInstallRoot?.toFilePath(),
-      ),
+      extraCargoBuildArgs: [
+        ..._androidCargoArguments(
+          targetTriple,
+          ffmpegInstallRoot?.toFilePath(),
+        ),
+        ..._macOsCargoArguments(macOsFfmpegInstallRoot),
+      ],
       extraCargoEnvironmentVariables: {
-        ..._macOsCargoEnvironment(),
+        ..._macOsCargoEnvironment(macOsFfmpegInstallRoot),
         ..._targetCargoEnvironment(
           targetTriple,
           ffmpegInstallRoot?.toFilePath(),
@@ -173,7 +188,7 @@ List<String> _androidCargoArguments(String? targetTriple, String? installRoot) {
   ];
 }
 
-Map<String, String> _macOsCargoEnvironment() {
+Map<String, String> _macOsCargoEnvironment(String? ffmpegRoot) {
   if (!Platform.isMacOS) return const {};
 
   const tools = '/Library/Developer/CommandLineTools';
@@ -182,6 +197,7 @@ Map<String, String> _macOsCargoEnvironment() {
   if (!File(clang).existsSync() || !Directory(sdk).existsSync())
     return const {};
 
+  final pkgConfigPath = ffmpegRoot == null ? null : '$ffmpegRoot/lib/pkgconfig';
   return {
     'SDKROOT': sdk,
     'CC': clang,
@@ -189,5 +205,36 @@ Map<String, String> _macOsCargoEnvironment() {
     'RANLIB': '$tools/usr/bin/ranlib',
     'CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER': clang,
     'CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER': clang,
+    if (ffmpegRoot != null) 'FFMPEG_DIR': ffmpegRoot,
+    if (pkgConfigPath != null) 'PKG_CONFIG_PATH': pkgConfigPath,
+    if (pkgConfigPath != null) 'PKG_CONFIG_LIBDIR': pkgConfigPath,
+    if (ffmpegRoot != null)
+      'CARGO_ENCODED_RUSTFLAGS': [
+        '-C',
+        'link-arg=-Wl,-rpath,$ffmpegRoot/lib',
+      ].join('\x1f'),
   };
 }
+
+List<String> _macOsCargoArguments(String? ffmpegRoot) {
+  if (ffmpegRoot == null) return const [];
+
+  final pkgConfigPath = '$ffmpegRoot/lib/pkgconfig';
+  return [
+    '--config',
+    'env.FFMPEG_DIR.value=${_tomlString(ffmpegRoot)}',
+    '--config',
+    'env.FFMPEG_DIR.force=true',
+    '--config',
+    'env.PKG_CONFIG_PATH.value=${_tomlString(pkgConfigPath)}',
+    '--config',
+    'env.PKG_CONFIG_PATH.force=true',
+    '--config',
+    'env.PKG_CONFIG_LIBDIR.value=${_tomlString(pkgConfigPath)}',
+    '--config',
+    'env.PKG_CONFIG_LIBDIR.force=true',
+  ];
+}
+
+String _tomlString(String value) =>
+    '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';

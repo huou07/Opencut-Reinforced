@@ -19,7 +19,7 @@ use std::{
 };
 
 const AUDIO_RATE: u32 = 48_000;
-const WEBM_AUDIO_QUEUE_FRAMES: usize = 4_096;
+const COMPRESSED_AUDIO_QUEUE_FRAMES: usize = 4_096;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// Failure while preparing or writing a software export profile.
@@ -40,27 +40,32 @@ impl From<ffmpeg::Error> for ExportEncodeError {
     }
 }
 
-/// Stable software export profiles implemented by OR's linked FFmpeg runtime.
+/// Export profiles implemented by OR's linked FFmpeg runtime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SoftwareExportProfile {
+pub enum FfmpegExportProfile {
     /// Matroska with lossless FFV1 video and stereo PCM S16LE audio.
     MatroskaFfv1PcmS16le,
     /// WebM with VP9 video and stereo Opus audio.
     WebmVp9Opus,
+    /// MP4 with Apple VideoToolbox H.264 video and AAC audio.
+    Mp4H264Aac,
 }
 
-/// Bounded-memory FFmpeg writer for the supported software export profiles.
+/// Compatibility name for the previous software-only profile type.
+pub type SoftwareExportProfile = FfmpegExportProfile;
+
+/// Bounded-memory FFmpeg writer for the supported export profiles.
 ///
 /// Output is encoded in a private sibling staging directory and atomically moved
 /// into place only after both streams and the container trailer are complete.
-pub struct FfmpegSoftwareExportWriter {
+pub struct FfmpegExportWriter {
     destination: PathBuf,
     staging_directory: PathBuf,
     staging_file: PathBuf,
     output: Option<format::context::Output>,
     video_encoder: VideoEncoder,
     audio_encoder: AudioEncoder,
-    profile: SoftwareExportProfile,
+    profile: FfmpegExportProfile,
     video_scaler: Option<scaling::Context>,
     video_stream: usize,
     audio_stream: usize,
@@ -73,10 +78,11 @@ pub struct FfmpegSoftwareExportWriter {
     committed: bool,
 }
 
-/// Backwards-compatible name for callers that need the lossless profile.
-pub type MatroskaFfv1PcmS16leWriter = FfmpegSoftwareExportWriter;
+/// Compatibility names retained for existing callers.
+pub type FfmpegSoftwareExportWriter = FfmpegExportWriter;
+pub type MatroskaFfv1PcmS16leWriter = FfmpegExportWriter;
 
-impl FfmpegSoftwareExportWriter {
+impl FfmpegExportWriter {
     /// Opens a Matroska destination using FFV1 video and stereo PCM S16LE audio.
     pub fn create(
         destination: impl AsRef<Path>,
@@ -87,7 +93,7 @@ impl FfmpegSoftwareExportWriter {
     ) -> Result<Self, ExportEncodeError> {
         Self::create_with_profile(
             destination,
-            SoftwareExportProfile::MatroskaFfv1PcmS16le,
+            FfmpegExportProfile::MatroskaFfv1PcmS16le,
             width,
             height,
             frame_rate_numerator,
@@ -97,7 +103,7 @@ impl FfmpegSoftwareExportWriter {
 
     pub fn create_with_profile(
         destination: impl AsRef<Path>,
-        profile: SoftwareExportProfile,
+        profile: FfmpegExportProfile,
         width: u32,
         height: u32,
         frame_rate_numerator: u32,
@@ -109,11 +115,13 @@ impl FfmpegSoftwareExportWriter {
                 "export dimensions and frame rate must be nonzero".to_owned(),
             ));
         }
-        if profile == SoftwareExportProfile::WebmVp9Opus
-            && (!width.is_multiple_of(2) || !height.is_multiple_of(2))
+        if matches!(
+            profile,
+            FfmpegExportProfile::WebmVp9Opus | FfmpegExportProfile::Mp4H264Aac
+        ) && (!width.is_multiple_of(2) || !height.is_multiple_of(2))
         {
             return Err(ExportEncodeError(
-                "WebM export requires even video dimensions".to_owned(),
+                "WebM and MP4 export require even video dimensions".to_owned(),
             ));
         }
         let destination = destination.as_ref().to_path_buf();
@@ -126,7 +134,7 @@ impl FfmpegSoftwareExportWriter {
         let mut staging_guard = StagingDirectoryGuard::new(staging_directory.clone());
         let (container, staging_name, video_codec, audio_codec, pixel_format, video_scaler) =
             match profile {
-                SoftwareExportProfile::MatroskaFfv1PcmS16le => (
+                FfmpegExportProfile::MatroskaFfv1PcmS16le => (
                     "matroska",
                     "output.mkv",
                     codec::encoder::find(codec::Id::FFV1).ok_or_else(|| {
@@ -138,7 +146,7 @@ impl FfmpegSoftwareExportWriter {
                     format::Pixel::BGRA,
                     None,
                 ),
-                SoftwareExportProfile::WebmVp9Opus => (
+                FfmpegExportProfile::WebmVp9Opus => (
                     "webm",
                     "output.webm",
                     codec::encoder::find_by_name("libvpx-vp9").ok_or_else(|| {
@@ -146,6 +154,20 @@ impl FfmpegSoftwareExportWriter {
                     })?,
                     codec::encoder::find_by_name("libopus").ok_or_else(|| {
                         ExportEncodeError("linked FFmpeg has no libopus encoder".to_owned())
+                    })?,
+                    format::Pixel::YUV420P,
+                    Some(yuv420p_scaler(width, height)?),
+                ),
+                FfmpegExportProfile::Mp4H264Aac => (
+                    "mov",
+                    "output.mp4",
+                    codec::encoder::find_by_name("h264_videotoolbox").ok_or_else(|| {
+                        ExportEncodeError(
+                            "linked FFmpeg has no VideoToolbox H.264 encoder".to_owned(),
+                        )
+                    })?,
+                    codec::encoder::find(codec::Id::AAC).ok_or_else(|| {
+                        ExportEncodeError("linked FFmpeg has no AAC encoder".to_owned())
                     })?,
                     format::Pixel::YUV420P,
                     Some(yuv420p_scaler(width, height)?),
@@ -177,7 +199,10 @@ impl FfmpegSoftwareExportWriter {
         if global_header {
             video_context.set_flags(codec::Flags::GLOBAL_HEADER);
         }
-        let video_encoder = if profile == SoftwareExportProfile::WebmVp9Opus {
+        let video_encoder = if matches!(
+            profile,
+            FfmpegExportProfile::WebmVp9Opus | FfmpegExportProfile::Mp4H264Aac
+        ) {
             video_context.set_colorspace(ffmpeg::color::Space::BT709);
             video_context.set_color_range(ffmpeg::color::Range::MPEG);
             unsafe {
@@ -186,11 +211,17 @@ impl FfmpegSoftwareExportWriter {
                 (*context).color_trc = ffmpeg::color::TransferCharacteristic::BT709.into();
             }
             let mut options = Dictionary::new();
-            options.set("deadline", "realtime");
-            options.set("cpu-used", "8");
-            options.set("crf", "36");
-            options.set("b", "0");
-            options.set("row-mt", "1");
+            if profile == FfmpegExportProfile::WebmVp9Opus {
+                options.set("deadline", "realtime");
+                options.set("cpu-used", "8");
+                options.set("crf", "36");
+                options.set("b", "0");
+                options.set("row-mt", "1");
+            } else {
+                options.set("realtime", "true");
+                let bitrate = (u64::from(width) * u64::from(height) * 3).clamp(500_000, 12_000_000);
+                options.set("b", &bitrate.to_string());
+            }
             video_context
                 .open_as_with(video_codec, options)
                 .map_err(ExportEncodeError::from)?
@@ -205,11 +236,18 @@ impl FfmpegSoftwareExportWriter {
             .audio()
             .map_err(ExportEncodeError::from)?;
         audio_context.set_rate(AUDIO_RATE as i32);
-        audio_context.set_format(Sample::I16(Type::Packed));
+        let audio_format = if profile == FfmpegExportProfile::Mp4H264Aac {
+            Sample::F32(Type::Planar)
+        } else {
+            Sample::I16(Type::Packed)
+        };
+        audio_context.set_format(audio_format);
         audio_context.set_ch_layout(ffmpeg::ChannelLayout::STEREO);
         audio_context.set_time_base(audio_time_base);
-        if profile == SoftwareExportProfile::WebmVp9Opus {
+        if profile == FfmpegExportProfile::WebmVp9Opus {
             audio_context.set_bit_rate(128_000);
+        } else if profile == FfmpegExportProfile::Mp4H264Aac {
+            audio_context.set_bit_rate(192_000);
         }
         if global_header {
             audio_context.set_flags(codec::Flags::GLOBAL_HEADER);
@@ -219,11 +257,13 @@ impl FfmpegSoftwareExportWriter {
             .map_err(ExportEncodeError::from)?;
         let audio_frame_size = usize::try_from(audio_encoder.frame_size())
             .map_err(|_| ExportEncodeError("audio encoder frame size is invalid".to_owned()))?;
-        if profile == SoftwareExportProfile::WebmVp9Opus
-            && (audio_frame_size == 0 || audio_frame_size > AUDIO_RATE as usize)
+        if matches!(
+            profile,
+            FfmpegExportProfile::WebmVp9Opus | FfmpegExportProfile::Mp4H264Aac
+        ) && (audio_frame_size == 0 || audio_frame_size > AUDIO_RATE as usize)
         {
             return Err(ExportEncodeError(
-                "libopus frame size is outside the bounded export limit".to_owned(),
+                "compressed audio frame size is outside the bounded export limit".to_owned(),
             ));
         }
 
@@ -342,20 +382,27 @@ impl FfmpegSoftwareExportWriter {
             return Ok(());
         }
         let frame_count = samples.len() / 2;
-        if self.profile == SoftwareExportProfile::WebmVp9Opus {
+        if matches!(
+            self.profile,
+            FfmpegExportProfile::WebmVp9Opus | FfmpegExportProfile::Mp4H264Aac
+        ) {
             if sample_frame_offset != self.audio_frames_submitted {
                 return Err(ExportEncodeError(
-                    "WebM audio samples must use consecutive sample-frame offsets".to_owned(),
+                    "compressed audio samples must use consecutive sample-frame offsets".to_owned(),
                 ));
             }
             self.audio_frames_submitted = self
                 .audio_frames_submitted
                 .checked_add(frame_count as u64)
                 .ok_or_else(|| ExportEncodeError("audio sample count overflowed".to_owned()))?;
-            for bounded_chunk in samples.chunks(WEBM_AUDIO_QUEUE_FRAMES * 2) {
+            for bounded_chunk in samples.chunks(COMPRESSED_AUDIO_QUEUE_FRAMES * 2) {
                 self.pending_audio.extend(bounded_chunk.iter().copied());
                 while self.pending_audio.len() / 2 >= self.audio_frame_size {
-                    self.encode_opus_frame(self.audio_frame_size)?;
+                    if self.profile == FfmpegExportProfile::WebmVp9Opus {
+                        self.encode_opus_frame(self.audio_frame_size)?;
+                    } else {
+                        self.encode_aac_frame(self.audio_frame_size)?;
+                    }
                 }
             }
             return Ok(());
@@ -430,16 +477,77 @@ impl FfmpegSoftwareExportWriter {
         self.drain_audio_packets()
     }
 
+    fn encode_aac_frame(&mut self, frame_count: usize) -> Result<(), ExportEncodeError> {
+        if frame_count == 0 || frame_count != self.audio_frame_size {
+            return Err(ExportEncodeError(
+                "AAC input must contain one complete encoder frame".to_owned(),
+            ));
+        }
+        let plane_bytes = frame_count
+            .checked_mul(std::mem::size_of::<f32>())
+            .ok_or_else(|| ExportEncodeError("AAC audio frame size overflowed".to_owned()))?;
+        let mut encoded = frame::Audio::new(
+            Sample::F32(Type::Planar),
+            frame_count,
+            ffmpeg::ChannelLayoutMask::STEREO,
+        );
+        encoded.set_rate(AUDIO_RATE);
+        if encoded.data(0).len() < plane_bytes {
+            return Err(ExportEncodeError(
+                "FFmpeg allocated a short AAC frame".to_owned(),
+            ));
+        }
+        let mut right_plane = Vec::with_capacity(frame_count);
+        for sample in encoded.plane_mut::<f32>(0) {
+            let left_sample = self.pending_audio.pop_front().ok_or_else(|| {
+                ExportEncodeError("AAC input queue ended inside an encoder frame".to_owned())
+            })?;
+            let right_sample = self.pending_audio.pop_front().ok_or_else(|| {
+                ExportEncodeError("AAC input queue ended inside an encoder frame".to_owned())
+            })?;
+            *sample = f32::from(left_sample) / 32768.0;
+            right_plane.push(f32::from(right_sample) / 32768.0);
+        }
+        encoded.plane_mut::<f32>(1).copy_from_slice(&right_plane);
+        encoded.set_pts(Some(i64::try_from(self.audio_frames_encoded).map_err(
+            |_| ExportEncodeError("audio sample offset exceeds the output time base".to_owned()),
+        )?));
+        self.audio_frames_encoded = self
+            .audio_frames_encoded
+            .checked_add(frame_count as u64)
+            .ok_or_else(|| ExportEncodeError("encoded audio sample count overflowed".to_owned()))?;
+        self.audio_encoder
+            .send_frame(&encoded)
+            .map_err(ExportEncodeError::from)?;
+        self.drain_audio_packets()
+    }
+
     /// Flushes both codecs and atomically replaces the chosen destination.
     pub fn finish(mut self) -> Result<(), ExportEncodeError> {
-        if self.profile == SoftwareExportProfile::WebmVp9Opus && !self.pending_audio.is_empty() {
+        if self.profile == FfmpegExportProfile::WebmVp9Opus && !self.pending_audio.is_empty() {
             self.encode_opus_frame(self.pending_audio.len() / 2)?;
         }
-        if self.profile == SoftwareExportProfile::WebmVp9Opus
+        if self.profile == FfmpegExportProfile::Mp4H264Aac && !self.pending_audio.is_empty() {
+            let missing_samples = self.audio_frame_size - self.pending_audio.len() / 2;
+            for _ in 0..missing_samples * 2 {
+                self.pending_audio.push_back(0);
+            }
+            self.encode_aac_frame(self.audio_frame_size)?;
+        }
+        if self.profile == FfmpegExportProfile::WebmVp9Opus
             && self.audio_frames_encoded != self.audio_frames_submitted
         {
             return Err(ExportEncodeError(
                 "Opus encoder sample count does not match submitted audio".to_owned(),
+            ));
+        }
+        if self.profile == FfmpegExportProfile::Mp4H264Aac
+            && (self.audio_frames_encoded < self.audio_frames_submitted
+                || self.audio_frames_encoded - self.audio_frames_submitted
+                    >= self.audio_frame_size as u64)
+        {
+            return Err(ExportEncodeError(
+                "AAC encoder sample count does not cover the submitted audio".to_owned(),
             ));
         }
         self.video_encoder

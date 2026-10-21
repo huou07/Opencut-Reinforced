@@ -1,5 +1,8 @@
 use ffmpeg_the_third as ffmpeg;
-use or_media::{FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter, SoftwareExportProfile};
+use or_media::{
+    FfmpegExportProfile, FfmpegExportWriter, FfmpegSoftwareExportWriter,
+    MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
+};
 use std::{
     fs,
     path::PathBuf,
@@ -32,6 +35,10 @@ impl TestDirectory {
 
     fn webm_file(&self) -> PathBuf {
         self.0.join("profile.webm")
+    }
+
+    fn mp4_file(&self) -> PathBuf {
+        self.0.join("profile.mp4")
     }
 }
 
@@ -182,6 +189,44 @@ fn writer_publishes_webm_with_vp9_and_opus_streams() {
         Some((_, ffmpeg::color::Space::BT709, ffmpeg::color::Range::MPEG))
     ));
     assert!(fs::metadata(&path).unwrap().len() < 1_000_000);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams() {
+    ffmpeg::init().unwrap();
+    let directory = TestDirectory::new();
+    let path = directory.mp4_file();
+    let mut writer = FfmpegExportWriter::create_with_profile(
+        &path,
+        FfmpegExportProfile::Mp4H264Aac,
+        64,
+        48,
+        30,
+        1,
+    )
+    .expect("the macOS FFmpeg profile must include VideoToolbox H.264 and AAC");
+    let mut rgba = vec![0; 64 * 48 * 4];
+    for pixel in rgba.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&[80, 140, 210, 255]);
+    }
+    for frame_index in 0..10 {
+        writer
+            .write_video_frame(&rgba, 64, 48, frame_index)
+            .unwrap();
+    }
+    writer.write_audio_frames(&vec![0; 16_000 * 2], 0).unwrap();
+    writer.finish().unwrap();
+
+    let input = ffmpeg::format::input(&path).unwrap();
+    assert!(input.format().name().split(',').any(|name| name == "mp4"));
+    let codecs: Vec<_> = input
+        .streams()
+        .map(|stream| stream.parameters().id())
+        .collect();
+    assert!(codecs.contains(&ffmpeg::codec::Id::H264));
+    assert!(codecs.contains(&ffmpeg::codec::Id::AAC));
+    assert_eq!(codecs.len(), 2);
 }
 
 fn drain_video(

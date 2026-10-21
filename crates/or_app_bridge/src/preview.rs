@@ -217,6 +217,7 @@ mod desktop {
                     let (extension, format_name) = match profile {
                         ExportProfile::MatroskaFfv1PcmS16le => ("mkv", "Matroska"),
                         ExportProfile::WebmVp9Opus => ("webm", "WebM"),
+                        ExportProfile::Mp4H264Aac => ("mp4", "MP4"),
                     };
                     if !destination.is_absolute()
                         || !destination
@@ -2168,11 +2169,12 @@ mod desktop {
             .map_err(|_| "audio duration exceeds the output sample clock".to_owned())?;
         let media_profile = match profile {
             ExportProfile::MatroskaFfv1PcmS16le => {
-                or_media::SoftwareExportProfile::MatroskaFfv1PcmS16le
+                or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le
             }
-            ExportProfile::WebmVp9Opus => or_media::SoftwareExportProfile::WebmVp9Opus,
+            ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
+            ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
         };
-        let mut writer = or_media::FfmpegSoftwareExportWriter::create_with_profile(
+        let mut writer = or_media::FfmpegExportWriter::create_with_profile(
             destination,
             media_profile,
             output_size.0,
