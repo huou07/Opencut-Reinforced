@@ -17,10 +17,29 @@ other platform and hosted procedures remain in TOOLING.md for future work.
    building. Do not reuse the old Debian host facts as Mac facts.
 3. Run the affected Rust, Flutter or repository checks. Use the focused package
    or test first; run the full repository gate only for a coherent increment.
-4. From apps/or_app, use Flutter's macOS target to build or launch the app:
+4. Build a macOS app, copy it to a fresh ignored path, stage the linked FFmpeg
+   runtime, then launch the copy. Do not rebuild or stage a bundle that is
+   currently running. From the repository root:
+
+   ```sh
    flutter build macos --debug
-   flutter run -d macos
-   Use profile or release mode for performance measurements, not debug mode.
+   ffmpeg_prefix="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-mp4/ffmpeg-install"
+   app_source="apps/or_app/build/macos/Build/Products/Debug/or_app.app"
+   app_copy="$(mktemp -d apps/or_app/build/local-macos-package.XXXXXX)/or_app.app"
+   ditto "$app_source" "$app_copy"
+   # Use a separate app container for repeatable acceptance runs.
+   local_app_id="io.github.huou07.orApp.localTest$(date +%s)"
+   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $local_app_id" "$app_copy/Contents/Info.plist"
+   bash scripts/package_local_macos_app.sh "$app_copy" "$ffmpeg_prefix"
+   open -n "$app_copy"
+   ```
+
+   The helper embeds the six FFmpeg libraries and media tools, rewrites their
+   search paths to be bundle-relative, preserves the app sandbox while
+   re-signing, and checks the Rust bridge, ffprobe, and VideoToolbox H.264/AAC
+   encoders with DYLD variables unset. This is a local run bundle; release
+   packaging must add its third-party notices. Use profile or release mode for
+   performance measurements, not debug mode.
 5. Perform the affected interaction in the visible app. Verify canonical project
    state, save/reopen and output as appropriate. For exported media, inspect
    streams with ffprobe, decode the file, and open or play it.
