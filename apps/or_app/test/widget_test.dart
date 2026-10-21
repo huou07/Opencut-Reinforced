@@ -3421,6 +3421,80 @@ void main() {
     },
   );
 
+  testWidgets('timeline splits a media clip at the preview playhead', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'playhead-split-track';
+    const clipId = 'playhead-split-clip';
+    final clip = ProjectTimelineClip(
+      clipId: clipId,
+      mediaId: 'playhead-split-media',
+      timelineStart: ProjectRationalTime(BigInt.from(2), 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(6), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.from(5), 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 1920,
+        height: 1080,
+      )
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [clip],
+      };
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/playhead-split.orproj',
+    );
+    await _createProject(tester, 'Split at playhead');
+    final semanticsHandle = tester.ensureSemantics();
+    final clipFinder = find.byKey(const ValueKey('timeline-clip-$clipId'));
+    expect(
+      tester
+          .getSemantics(clipFinder)
+          .getSemanticsData()
+          .hasAction(ui.SemanticsAction.tap),
+      isTrue,
+    );
+
+    await tester.tap(clipFinder);
+    await tester.pumpAndSettle();
+    final splitAtPlayhead = find.byKey(
+      const ValueKey('timeline-split-at-playhead-$clipId'),
+    );
+    expect(tester.widget<TextButton>(splitAtPlayhead).onPressed, isNotNull);
+    await tester.tap(splitAtPlayhead);
+    await tester.pumpAndSettle();
+
+    expect(gateway.splitTimelineClipCalls, 1);
+    final splitClips = gateway.lastSession!.clips[trackId]!;
+    expect(splitClips, hasLength(2));
+    expect(splitClips.first.timelineDuration.canonical, '3/1');
+    expect(splitClips.last.timelineStart.canonical, '5/1');
+    expect(splitClips.last.sourceStart!.canonical, '3/1');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-$clipId')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextButton>(splitAtPlayhead).onPressed,
+      isNull,
+      reason: 'a playhead on the clip edge must not create an empty segment',
+    );
+    semanticsHandle.dispose();
+  });
+
   testWidgets(
     'timeline clip trim split and ripple delete use exact action dialogs',
     (tester) async {
@@ -3676,12 +3750,31 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('timeline-clip-compact-clip')));
     await tester.pumpAndSettle();
     expect(find.text('Clip'), findsOneWidget);
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog).last,
-        matching: find.text('Close'),
-      ),
+    _setViewport(tester, const Size(320, 440));
+    await tester.pumpAndSettle();
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'clip actions overflowed after resizing to 320x440',
     );
+    final rippleDelete = find.byKey(
+      const ValueKey('timeline-ripple-delete-compact-clip'),
+    );
+    await tester.ensureVisible(rippleDelete);
+    expect(tester.widget<TextButton>(rippleDelete).onPressed, isNotNull);
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'scrolling clip actions overflowed after resizing to 320x440',
+    );
+    final closeAction = find.descendant(
+      of: find.byType(AlertDialog).last,
+      matching: find.text('Close'),
+    );
+    await tester.ensureVisible(closeAction);
+    await tester.tap(closeAction);
+    await tester.pumpAndSettle();
+    _setViewport(tester, const Size(390, 844));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('mobile-editor-tool-inspector')),

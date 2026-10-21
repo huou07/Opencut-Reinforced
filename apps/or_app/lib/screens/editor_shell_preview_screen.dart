@@ -4248,6 +4248,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                               tracks: snapshot.items,
                                               track: track,
                                               clip: clip,
+                                              playhead: widget
+                                                  .previewState
+                                                  .value
+                                                  ?.position,
                                               onMove: widget.onMoveClip,
                                               onDuplicate:
                                                   widget.onDuplicateClip,
@@ -5897,8 +5901,8 @@ class _TimelineTrackLane extends StatelessWidget {
         opacity: trackEnabled ? 1 : 0.45,
         child: Semantics(
           button: true,
-          selected: clip.clipId == selectedClipId,
           onTap: () => onOpenClip(clip),
+          selected: clip.clipId == selectedClipId,
           // The exact span, not only a human duration: a screen-reader user needs
           // to know where an edit left the clip, and scripts/or_ui.py can then
           // assert a position instead of only that the app accepted a command.
@@ -6670,6 +6674,7 @@ Future<void> _showTimelineClipActions({
   required List<ProjectTimelineTrack> tracks,
   required ProjectTimelineTrack track,
   required ProjectTimelineClip clip,
+  required ProjectRationalTime? playhead,
   required Future<void> Function(
     ProjectReadModel,
     ProjectTimelineClip,
@@ -6744,6 +6749,12 @@ Future<void> _showTimelineClipActions({
       isMedia && project != null && !track.state.locked && onTrim != null;
   final canSplit =
       isMedia && project != null && !track.state.locked && onSplit != null;
+  final splitAtPlayhead = playhead;
+  final canSplitAtPlayhead =
+      canSplit &&
+      splitAtPlayhead != null &&
+      _compareProjectRational(splitAtPlayhead, clip.timelineStart) > 0 &&
+      _compareProjectRational(splitAtPlayhead, clip.timelineEnd) < 0;
   final canEditText =
       !isMedia &&
       project != null &&
@@ -6754,16 +6765,15 @@ Future<void> _showTimelineClipActions({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      // The action set grew to ten buttons (Close, Move, Duplicate, Trim, Split,
-      // Slip, Roll, Slide, Edit Text/Caption, Ripple Delete), so on a small screen
-      // the title, the content and the wrapped action rows together exceeded the
-      // dialog's available height and it overflowed by 6.0 px on the bottom. The
-      // Android SAF journey found it: `takeException` reported
-      // "A RenderFlex overflowed by 6.0 pixels on the bottom" and the rendering
-      // library named this AlertDialog. A scrollable dialog keeps every control
-      // reachable on a short screen instead of clipping one, which is the guard's
-      // point rather than a way around it.
+      // Keep the action rows compact on short screens.
       scrollable: true,
+      actionsPadding: const EdgeInsets.only(
+        left: 8,
+        top: 0,
+        right: 8,
+        bottom: 8,
+      ),
+      buttonPadding: EdgeInsets.zero,
       title: const Text('Clip'),
       content: Text(switch (clip.contentKind) {
         ProjectTimelineClipContentKind.media =>
@@ -6774,189 +6784,247 @@ Future<void> _showTimelineClipActions({
           'Clip ID: ${clip.clipId}\nCaption: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
       }),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Close'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-move-${clip.clipId}'),
-          onPressed: busy || !canMove
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showMoveTimelineClipDialog(
-                      context: context,
-                      project: project,
-                      tracks: tracks,
-                      sourceTrack: track,
-                      clip: clip,
-                      onMove: onMove,
+        SizedBox(
+          width: (MediaQuery.sizeOf(dialogContext).width - 96)
+              .clamp(0.0, 512.0)
+              .toDouble(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(dialogContext).width < 600
+                  ? (MediaQuery.sizeOf(dialogContext).height * 0.42)
+                        .clamp(144.0, 220.0)
+                        .toDouble()
+                  : MediaQuery.sizeOf(dialogContext).height,
+            ),
+            child: SingleChildScrollView(
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Close'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-move-${clip.clipId}'),
+                    onPressed: busy || !canMove
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showMoveTimelineClipDialog(
+                                context: context,
+                                project: project,
+                                tracks: tracks,
+                                sourceTrack: track,
+                                clip: clip,
+                                onMove: onMove,
+                              ),
+                            );
+                          },
+                    child: const Text('Move'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-duplicate-${clip.clipId}'),
+                    onPressed: busy || !canDuplicate
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(onDuplicate(project, track, clip));
+                          },
+                    child: const Text('Duplicate'),
+                  ),
+                  if (!isMedia)
+                    TextButton(
+                      key: ValueKey('timeline-edit-text-${clip.clipId}'),
+                      onPressed: busy || !canEditText
+                          ? null
+                          : () {
+                              Navigator.of(dialogContext).pop();
+                              unawaited(
+                                _editTimelineTextClip(
+                                  context: context,
+                                  project: project,
+                                  track: track,
+                                  clip: clip,
+                                  onUpdate: onEditTextClip,
+                                ),
+                              );
+                            },
+                      child: Text(isCaption ? 'Edit Caption' : 'Edit Title'),
                     ),
-                  );
-                },
-          child: const Text('Move'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-duplicate-${clip.clipId}'),
-          onPressed: busy || !canDuplicate
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(onDuplicate(project, track, clip));
-                },
-          child: const Text('Duplicate'),
-        ),
-        if (!isMedia)
-          TextButton(
-            key: ValueKey('timeline-edit-text-${clip.clipId}'),
-            onPressed: busy || !canEditText
-                ? null
-                : () {
-                    Navigator.of(dialogContext).pop();
-                    unawaited(
-                      _editTimelineTextClip(
-                        context: context,
-                        project: project,
-                        track: track,
-                        clip: clip,
-                        onUpdate: onEditTextClip,
+                  TextButton(
+                    key: ValueKey('timeline-trim-${clip.clipId}'),
+                    onPressed: busy || !canTrim
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showTrimTimelineClipDialog(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                onTrim: onTrim,
+                              ),
+                            );
+                          },
+                    child: const Text('Trim'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-slip-${clip.clipId}'),
+                    onPressed:
+                        busy || !isMedia || track.state.locked || onSlip == null
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showSlipTimelineClipDialog(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                onSlip: onSlip,
+                              ),
+                            );
+                          },
+                    child: const Text('Slip'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-roll-${clip.clipId}'),
+                    onPressed:
+                        busy || !isMedia || track.state.locked || onRoll == null
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showBoundaryMoveDialog(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                title: 'Roll Clip',
+                                helper:
+                                    'Move the boundary between this clip and the next one. '
+                                    'Both clips stay where they are; their shared edge moves.',
+                                confirmKey: const ValueKey(
+                                  'timeline-confirm-roll',
+                                ),
+                                fieldKey: const ValueKey('timeline-roll-delta'),
+                                onConfirm: onRoll,
+                              ),
+                            );
+                          },
+                    child: const Text('Roll'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-slide-${clip.clipId}'),
+                    onPressed:
+                        busy ||
+                            !isMedia ||
+                            track.state.locked ||
+                            onSlide == null
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showBoundaryMoveDialog(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                title: 'Slide Clip',
+                                helper:
+                                    'Move this clip in time; the clips either side give up or '
+                                    'gain the same amount, so the track stays gapless.',
+                                confirmKey: const ValueKey(
+                                  'timeline-confirm-slide',
+                                ),
+                                fieldKey: const ValueKey(
+                                  'timeline-slide-delta',
+                                ),
+                                onConfirm: onSlide,
+                              ),
+                            );
+                          },
+                    child: const Text('Slide'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-split-${clip.clipId}'),
+                    onPressed: busy || !canSplit
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _showSplitTimelineClipDialog(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                onSplit: onSplit,
+                              ),
+                            );
+                          },
+                    child: const Text('Split'),
+                  ),
+                  if (isMedia)
+                    Tooltip(
+                      message: canSplitAtPlayhead
+                          ? 'Split at ${splitAtPlayhead.canonical}'
+                          : 'Move the playhead inside this clip to split at it',
+                      child: TextButton(
+                        key: ValueKey(
+                          'timeline-split-at-playhead-${clip.clipId}',
+                        ),
+                        onPressed: busy || !canSplitAtPlayhead
+                            ? null
+                            : () {
+                                final activeProject = project;
+                                final split = onSplit;
+                                final position = splitAtPlayhead;
+                                Navigator.of(dialogContext).pop();
+                                unawaited(split(activeProject, clip, position));
+                              },
+                        child: const Text('Split at Playhead'),
                       ),
-                    );
-                  },
-            child: Text(isCaption ? 'Edit Caption' : 'Edit Title'),
+                    ),
+                  TextButton(
+                    key: ValueKey('timeline-delete-${clip.clipId}'),
+                    onPressed:
+                        busy ||
+                            track.state.locked ||
+                            project == null ||
+                            onDelete == null
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _confirmDeleteTimelineClip(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                onDelete: onDelete,
+                              ),
+                            );
+                          },
+                    child: const Text('Delete'),
+                  ),
+                  TextButton(
+                    key: ValueKey('timeline-ripple-delete-${clip.clipId}'),
+                    onPressed: busy || !canRippleDelete
+                        ? null
+                        : () {
+                            Navigator.of(dialogContext).pop();
+                            unawaited(
+                              _confirmRippleDeleteTimelineClip(
+                                context: context,
+                                project: project,
+                                clip: clip,
+                                onRippleDelete: onRippleDelete,
+                              ),
+                            );
+                          },
+                    child: const Text('Ripple Delete'),
+                  ),
+                ],
+              ),
+            ),
           ),
-        TextButton(
-          key: ValueKey('timeline-trim-${clip.clipId}'),
-          onPressed: busy || !canTrim
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showTrimTimelineClipDialog(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      onTrim: onTrim,
-                    ),
-                  );
-                },
-          child: const Text('Trim'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-slip-${clip.clipId}'),
-          onPressed: busy || !isMedia || track.state.locked || onSlip == null
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showSlipTimelineClipDialog(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      onSlip: onSlip,
-                    ),
-                  );
-                },
-          child: const Text('Slip'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-roll-${clip.clipId}'),
-          onPressed: busy || !isMedia || track.state.locked || onRoll == null
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showBoundaryMoveDialog(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      title: 'Roll Clip',
-                      helper:
-                          'Move the boundary between this clip and the next one. '
-                          'Both clips stay where they are; their shared edge moves.',
-                      confirmKey: const ValueKey('timeline-confirm-roll'),
-                      fieldKey: const ValueKey('timeline-roll-delta'),
-                      onConfirm: onRoll,
-                    ),
-                  );
-                },
-          child: const Text('Roll'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-slide-${clip.clipId}'),
-          onPressed: busy || !isMedia || track.state.locked || onSlide == null
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showBoundaryMoveDialog(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      title: 'Slide Clip',
-                      helper:
-                          'Move this clip in time; the clips either side give up or '
-                          'gain the same amount, so the track stays gapless.',
-                      confirmKey: const ValueKey('timeline-confirm-slide'),
-                      fieldKey: const ValueKey('timeline-slide-delta'),
-                      onConfirm: onSlide,
-                    ),
-                  );
-                },
-          child: const Text('Slide'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-split-${clip.clipId}'),
-          onPressed: busy || !canSplit
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _showSplitTimelineClipDialog(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      onSplit: onSplit,
-                    ),
-                  );
-                },
-          child: const Text('Split'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-delete-${clip.clipId}'),
-          onPressed:
-              busy || track.state.locked || project == null || onDelete == null
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _confirmDeleteTimelineClip(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      onDelete: onDelete,
-                    ),
-                  );
-                },
-          child: const Text('Delete'),
-        ),
-        TextButton(
-          key: ValueKey('timeline-ripple-delete-${clip.clipId}'),
-          onPressed: busy || !canRippleDelete
-              ? null
-              : () {
-                  Navigator.of(dialogContext).pop();
-                  unawaited(
-                    _confirmRippleDeleteTimelineClip(
-                      context: context,
-                      project: project,
-                      clip: clip,
-                      onRippleDelete: onRippleDelete,
-                    ),
-                  );
-                },
-          child: const Text('Ripple Delete'),
         ),
       ],
     ),
