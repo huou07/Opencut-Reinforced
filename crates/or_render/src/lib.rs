@@ -327,7 +327,8 @@ impl RenderDevice {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("or_render"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
+                required_limits: wgpu::Limits::downlevel_defaults()
+                    .using_resolution(limits.clone()),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })
@@ -1360,6 +1361,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(rendered.pixels(), &layer_pixels);
+    }
+
+    #[test]
+    fn viewer_render_accepts_2560x1440_sources_when_adapter_allows_them() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu large-source test: {error}");
+                return;
+            }
+        };
+        if renderer.limits().max_texture_dimension_2d < 2560 {
+            eprintln!("skipping wgpu large-source test: adapter limit is below 2560");
+            return;
+        }
+
+        let source_pixels = vec![0_u8; 2560 * 1440 * 4];
+        let layer = RgbaVideoLayer::new(2560, 1440, &source_pixels).unwrap();
+        let rendered = renderer
+            .render_rgba_layers(snapshot(), render_size(16, 9), &[layer])
+            .unwrap();
+
+        assert_eq!(rendered.pixels().len(), 16 * 9 * 4);
     }
 
     #[test]
