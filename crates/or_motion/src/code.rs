@@ -12,8 +12,9 @@
 //! which is why it is called a highlighter rather than an analyser.
 
 use crate::{
-    MOTION_SCENE_FORMAT, MOTION_SCENE_SCHEMA_VERSION, MotionCanvas, MotionColor, MotionNode,
-    MotionNodeKind, MotionPoint, MotionScene, MotionSize, MotionTextSpan,
+    MOTION_SCENE_FORMAT, MOTION_SCENE_SCHEMA_VERSION, MotionAnimation, MotionCanvas, MotionColor,
+    MotionEasing, MotionKeyframe, MotionNode, MotionNodeKind, MotionPoint, MotionProperty,
+    MotionScene, MotionSize, MotionTextSpan,
 };
 use or_core::RationalTime;
 
@@ -23,8 +24,13 @@ pub const MAX_CODE_SOURCE_BYTES: usize = 1024 * 1024;
 pub const MAX_CODE_LINES: usize = 400;
 /// The most columns one line may show, before it is clipped.
 pub const MAX_CODE_COLUMNS: usize = 120;
-/// The most lines one text node may hold: V1 draws one line per node.
+/// Maximum bytes for a source line before it is clipped.
 pub const MAX_CODE_LINE_BYTES: usize = 4096;
+/// Keep generated reveal scenes under the MotionScene node and animation limits.
+const MAX_CODE_REVEAL_STEPS_PER_LINE: usize = 8;
+/// A short opacity transition makes each typewriter step readable without lingering
+/// ghost copies of the previous prefix.
+const CODE_REVEAL_TRANSITION_MILLISECONDS: u32 = 1;
 
 /// The languages this highlights. Anything else is drawn as plain text, which is a
 /// supported outcome rather than a failure.
@@ -126,7 +132,7 @@ pub struct CodeSceneOptions {
     pub canvas: MotionCanvas,
     pub font_size: f64,
     pub theme: CodeTheme,
-    /// How long one line stays before the next appears, in milliseconds.
+    /// How long one line is revealed before the next begins, in milliseconds.
     pub line_milliseconds: u32,
     /// How long the finished frame holds, in milliseconds.
     pub hold_milliseconds: u32,
@@ -496,38 +502,88 @@ pub fn scene_from_source(
             spans: None,
         },
     ];
+    let mut animations = Vec::new();
 
     for (index, line) in lines.iter().enumerate() {
         let tokens = tokenize_line(line, language);
-        let spans = tokens
-            .iter()
-            .filter(|token| token.kind != CodeTokenKind::Plain)
-            .map(|token| MotionTextSpan {
-                start: token.start,
-                end: token.end,
-                color: token.kind.color(&theme),
-            })
+        let character_ends = line
+            .char_indices()
+            .map(|(start, character)| start + character.len_utf8())
             .collect::<Vec<_>>();
-        nodes.push(MotionNode {
-            node_id: format!("line-{index}"),
-            kind: MotionNodeKind::Text,
-            children: None,
-            text: Some((*line).to_owned()),
-            position: Some(MotionPoint {
-                x: margin_x,
-                y: margin_x + title_height + index as f64 * line_height,
-            }),
-            size: None,
-            end: None,
-            fill: Some(theme.foreground),
-            stroke: None,
-            stroke_width: None,
-            font_size: Some(font_size),
-            asset_id: None,
-            opacity: None,
-            rotation_degrees: None,
-            spans: if spans.is_empty() { None } else { Some(spans) },
-        });
+        let duration_slots = (options.line_milliseconds / 2).max(1) as usize;
+        let step_count = character_ends
+            .len()
+            .max(1)
+            .min(MAX_CODE_REVEAL_STEPS_PER_LINE)
+            .min(duration_slots);
+        let line_start_ms = (index as u32)
+            .saturating_mul(options.line_milliseconds)
+            .min(duration_ms);
+
+        for step_index in 0..step_count {
+            let prefix_end = if character_ends.is_empty() {
+                0
+            } else {
+                let characters_to_show = ((step_index + 1) * character_ends.len()) / step_count;
+                character_ends[characters_to_show.saturating_sub(1)]
+            };
+            let prefix = &line[..prefix_end];
+            let spans = tokens
+                .iter()
+                .filter(|token| token.kind != CodeTokenKind::Plain && token.start < prefix_end)
+                .map(|token| MotionTextSpan {
+                    start: token.start,
+                    end: token.end.min(prefix_end),
+                    color: token.kind.color(&theme),
+                })
+                .collect::<Vec<_>>();
+            let node_id = format!("line-{index}-step-{step_index}");
+            nodes.push(MotionNode {
+                node_id: node_id.clone(),
+                kind: MotionNodeKind::Text,
+                children: None,
+                text: Some(prefix.to_owned()),
+                position: Some(MotionPoint {
+                    x: margin_x,
+                    y: margin_x + title_height + index as f64 * line_height,
+                }),
+                size: None,
+                end: None,
+                fill: Some(theme.foreground),
+                stroke: None,
+                stroke_width: None,
+                font_size: Some(font_size),
+                asset_id: None,
+                opacity: None,
+                rotation_degrees: None,
+                spans: if spans.is_empty() { None } else { Some(spans) },
+            });
+
+            if character_ends.is_empty() {
+                continue;
+            }
+            let reveal_at_ms = line_reveal_time_ms(
+                index,
+                step_index,
+                step_count,
+                options.line_milliseconds,
+                duration_ms,
+            );
+            let next_reveal_at_ms = (step_index + 1 < step_count).then(|| {
+                line_reveal_time_ms(
+                    index,
+                    step_index + 1,
+                    step_count,
+                    options.line_milliseconds,
+                    duration_ms,
+                )
+            });
+            if let Some(animation) =
+                code_line_opacity_animation(node_id, line_start_ms, reveal_at_ms, next_reveal_at_ms)
+            {
+                animations.push(animation);
+            }
+        }
     }
 
     Ok(MotionScene {
@@ -540,8 +596,67 @@ pub fn scene_from_source(
         canvas: options.canvas,
         assets: Vec::new(),
         nodes,
-        animations: Vec::new(),
+        animations,
     })
+}
+
+fn line_reveal_time_ms(
+    line_index: usize,
+    step_index: usize,
+    step_count: usize,
+    line_milliseconds: u32,
+    duration_ms: u32,
+) -> u32 {
+    let line_start = (line_index as u32)
+        .saturating_mul(line_milliseconds)
+        .min(duration_ms);
+    let step_offset = (u64::from(line_milliseconds) * step_index as u64 / step_count as u64)
+        .min(u64::from(u32::MAX)) as u32;
+    line_start.saturating_add(step_offset).min(duration_ms)
+}
+
+fn code_line_opacity_animation(
+    node_id: String,
+    line_start_ms: u32,
+    reveal_at_ms: u32,
+    next_reveal_at_ms: Option<u32>,
+) -> Option<MotionAnimation> {
+    let visible_from_start = line_start_ms == 0 && reveal_at_ms == 0;
+    let mut keyframes = Vec::with_capacity(5);
+    if visible_from_start {
+        keyframes.push(opacity_keyframe(0, 1.0));
+    } else {
+        keyframes.push(opacity_keyframe(0, 0.0));
+        let hidden_until_ms = reveal_at_ms.saturating_sub(CODE_REVEAL_TRANSITION_MILLISECONDS);
+        if hidden_until_ms > 0 {
+            keyframes.push(opacity_keyframe(hidden_until_ms, 0.0));
+        }
+        keyframes.push(opacity_keyframe(reveal_at_ms, 1.0));
+    }
+
+    if let Some(next_reveal_at_ms) = next_reveal_at_ms.filter(|next| *next > reveal_at_ms) {
+        let transition_start_ms =
+            next_reveal_at_ms.saturating_sub(CODE_REVEAL_TRANSITION_MILLISECONDS);
+        if transition_start_ms > reveal_at_ms {
+            keyframes.push(opacity_keyframe(transition_start_ms, 1.0));
+        }
+        keyframes.push(opacity_keyframe(next_reveal_at_ms, 0.0));
+    }
+
+    (keyframes.len() > 1).then_some(MotionAnimation {
+        node_id,
+        property: MotionProperty::Opacity,
+        keyframes,
+        easing: MotionEasing::Linear,
+    })
+}
+
+fn opacity_keyframe(milliseconds: u32, value: f64) -> MotionKeyframe {
+    MotionKeyframe {
+        at: RationalTime::new(i64::from(milliseconds), 1000)
+            .expect("millisecond times always have a nonzero denominator"),
+        value,
+    }
 }
 
 /// Clips a line to the column limit, on a character boundary, marking the cut so a
@@ -589,7 +704,7 @@ fn scene_id_for(source: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{inspect_motion_scene, validate_scene};
+    use crate::{evaluate_scene, inspect_motion_scene, validate_scene};
 
     const SAMPLE: &str =
         "fn main() {\n    let total = 41 + 1; // answer\n    println!(\"total {}\", total);\n}\n";
@@ -603,8 +718,18 @@ mod tests {
         .unwrap()
     }
 
+    fn full_line_node(scene: &MotionScene, line_index: usize) -> &MotionNode {
+        let id_prefix = format!("line-{line_index}-step-");
+        scene
+            .nodes
+            .iter()
+            .filter(|node| node.node_id.starts_with(&id_prefix))
+            .max_by_key(|node| node.text.as_ref().map_or(0, String::len))
+            .expect("the source line has a text node")
+    }
+
     #[test]
-    fn a_sample_becomes_a_valid_scene_with_one_node_per_line() {
+    fn a_sample_becomes_a_valid_typewritten_scene() {
         let scene = scene();
         assert!(
             validate_scene(&scene).ok,
@@ -612,12 +737,72 @@ mod tests {
             validate_scene(&scene).errors
         );
         let inspection = inspect_motion_scene(&scene);
-        // Background, title, and four source lines.
-        assert_eq!(inspection.node_count, 6);
+        // Background, title, and up to eight snapshots for each of four source lines.
+        assert_eq!(inspection.node_count, 27);
         assert_eq!(inspection.canvas_width, 1920);
         assert_eq!(inspection.duration_milliseconds, 2000 + 4 * 400);
         assert_eq!(scene.nodes[1].text.as_deref(), Some("Code"));
-        assert_eq!(scene.nodes[2].text.as_deref(), Some("fn main() {"));
+        assert_eq!(
+            full_line_node(&scene, 0).text.as_deref(),
+            Some("fn main() {")
+        );
+        assert_eq!(scene.animations.len(), 25);
+    }
+
+    #[test]
+    fn code_lines_reveal_in_deterministic_steps_over_their_line_interval() {
+        let options = CodeSceneOptions {
+            hold_milliseconds: 0,
+            ..CodeSceneOptions::default()
+        };
+        let scene = scene_from_source(b"abcdefgh", CodeLanguage::PlainText, &options).unwrap();
+        let visible_prefix = |milliseconds| {
+            evaluate_scene(&scene, RationalTime::new(milliseconds, 1000).unwrap())
+                .unwrap()
+                .instructions
+                .into_iter()
+                .find(|instruction| {
+                    instruction.node_id.starts_with("line-0-step-") && instruction.opacity > 0.99
+                })
+                .and_then(|instruction| instruction.text)
+                .expect("one typewriter snapshot is fully visible")
+        };
+
+        assert_eq!(visible_prefix(0), "a");
+        assert_eq!(visible_prefix(100), "abc");
+        assert_eq!(visible_prefix(399), "abcdefgh");
+    }
+
+    #[test]
+    fn the_maximum_source_stays_within_motion_scene_node_and_animation_limits() {
+        let line = "x".repeat(MAX_CODE_COLUMNS);
+        let source = (0..MAX_CODE_LINES)
+            .map(|_| line.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let scene = scene_from_source(
+            source.as_bytes(),
+            CodeLanguage::PlainText,
+            &CodeSceneOptions::default(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            scene.nodes.len(),
+            2 + MAX_CODE_LINES * MAX_CODE_REVEAL_STEPS_PER_LINE
+        );
+        assert_eq!(
+            scene.animations.len(),
+            MAX_CODE_LINES * MAX_CODE_REVEAL_STEPS_PER_LINE
+        );
+        assert!(scene.nodes.len() <= crate::MAX_MOTION_NODES);
+        assert!(scene.animations.len() <= crate::MAX_MOTION_ANIMATIONS);
+        assert!(
+            scene
+                .animations
+                .iter()
+                .all(|animation| animation.keyframes.len() <= crate::MAX_MOTION_KEYFRAMES)
+        );
     }
 
     #[test]
@@ -642,7 +827,7 @@ mod tests {
     #[test]
     fn keywords_strings_comments_numbers_and_calls_get_their_own_spans() {
         let scene = scene();
-        let line = |index: usize| scene.nodes[index + 2].clone();
+        let line = |index: usize| full_line_node(&scene, index).clone();
         // `fn main() {`: `fn` is a keyword, `main` is a call shape.
         let first = line(0);
         let spans = first.spans.clone().unwrap();
@@ -785,13 +970,13 @@ mod tests {
         let source = b"def total(values):\n    return sum(values)  # add them\n";
         let scene = scene_from_source(source, CodeLanguage::Python, &CodeSceneOptions::default())
             .expect("python source builds a scene");
-        // The scene carries the source as text with one span per token, so the
-        // assertion reads the text the scene carries rather than a token list.
-        let text = scene
-            .nodes
-            .iter()
-            .filter_map(|node| node.text.clone())
-            .collect::<String>();
+        // Read the full source line snapshots rather than concatenating the reveal
+        // prefixes that are also stored in the scene.
+        let source_line_count = std::str::from_utf8(source).unwrap().lines().count();
+        let text = (0..source_line_count)
+            .filter_map(|index| full_line_node(&scene, index).text.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(
             text.contains("def"),
             "the source text is in the scene: {text}"
@@ -856,7 +1041,7 @@ mod tests {
             &CodeSceneOptions::default(),
         )
         .unwrap();
-        let text = scene.nodes[2].text.clone().unwrap();
+        let text = full_line_node(&scene, 0).text.clone().unwrap();
         assert!(
             text.chars().count() <= MAX_CODE_COLUMNS,
             "{}",

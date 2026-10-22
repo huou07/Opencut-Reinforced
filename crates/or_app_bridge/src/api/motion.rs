@@ -332,7 +332,10 @@ mod tests {
     #[test]
     #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
     fn materialises_a_scene_built_from_code() {
-        let source = scene_file("source.rs", "fn main() {\n    let total = 1 + 1;\n}\n");
+        let source = scene_file(
+            "motion_sample.rs",
+            "fn main() {\n    let edit = \"make the timeline feel direct\";\n    println!(\"Hello, {edit}!\");\n}\n",
+        );
         let output =
             std::env::temp_dir().join(format!("or-motion-from-code-{}.mkv", std::process::id()));
         let _ = std::fs::remove_file(&output);
@@ -341,16 +344,33 @@ mod tests {
             output.display().to_string(),
             10,
             1,
-            128,
-            96,
+            640,
+            360,
             "From code".to_owned(),
         );
         assert!(view.succeeded, "{}: {}", view.code, view.message);
         assert!(view.frame_count > 0);
-        assert_eq!(view.width, 128);
-        assert_eq!(view.height, 96);
+        assert_eq!(view.width, 640);
+        assert_eq!(view.height, 360);
         assert!(!view.scene_id.is_empty());
         assert!(view.bytes_written > 0);
+        let media_source = or_core::MediaSourceRef::from_file_path(&output).unwrap();
+        let budget_limits = or_runtime::BudgetLimits::new(8, 8 * 1024 * 1024).unwrap();
+        let budgets = or_runtime::RuntimeBudgets::new(budget_limits, budget_limits, budget_limits);
+        let decoder = or_media::SoftwareMediaDecoder::new(&media_source, budgets).unwrap();
+        let cancellation = or_runtime::CancellationToken::new();
+        let first = decoder
+            .decode_video_frame_at(or_core::RationalTime::ZERO, &cancellation)
+            .unwrap()
+            .unwrap();
+        let later = decoder
+            .decode_video_frame_at(or_core::RationalTime::new(1, 10).unwrap(), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert!(
+            first.pixels() != later.pixels(),
+            "code-to-video frames should animate"
+        );
         let _ = std::fs::remove_file(&output);
     }
 
