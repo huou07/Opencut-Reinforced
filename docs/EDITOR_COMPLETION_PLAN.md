@@ -227,3 +227,6 @@ beyond the single journey above.
   `h264_videotoolbox`. Playback was verified by frame, not measured for FPS.
 - Harness per-action timings include the runner's settle wait (~1.5 s each), so
   they are not interaction-latency evidence.
+- Compact guard re-run at 320x440 after the rail/panel and clip-visual changes:
+  the full compact journey (create, import, track, insert, keyboard duplicate,
+  undo) passes on the packaged app with no render exception or overflow.
