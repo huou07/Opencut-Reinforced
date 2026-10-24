@@ -146,10 +146,19 @@ void main() {
       await File('${directory.path}/take-01.MP4').create();
       await File('${directory.path}/notes.txt').create();
       await Directory('${directory.path}/nested').create();
+      await File('${directory.path}/nested/still-01.png').create();
+      await File('${directory.path}/nested/still-02.JPG').create();
+      await File('${directory.path}/nested/still-03.jpeg').create();
+      await File('${directory.path}/nested/still-04.webp').create();
+      await File('${directory.path}/nested/unsupported.bmp').create();
       await File('${directory.path}/nested/music.wav').create();
 
       expect(await enumerateMediaFolderSources(directory), [
         '${directory.path}/nested/music.wav',
+        '${directory.path}/nested/still-01.png',
+        '${directory.path}/nested/still-02.JPG',
+        '${directory.path}/nested/still-03.jpeg',
+        '${directory.path}/nested/still-04.webp',
         '${directory.path}/take-01.MP4',
         '${directory.path}/take-02.mkv',
       ]);

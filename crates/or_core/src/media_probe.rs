@@ -130,8 +130,8 @@ impl Error for MediaProbeError {}
 /// The call is synchronous and read-only. It does not create a `MediaId`, open
 /// a project, or mutate project revision/history. Files outside the supported
 /// import profiles (Matroska/WebM with FFV1/PCM S16LE, H.264/AAC, or VP9/Opus,
-/// audio-only PCM S16LE WAV or MP3, or MOV-family H.264/AAC) are rejected as
-/// unsupported formats.
+/// PNG/JPEG/WebP still images, audio-only PCM S16LE WAV or MP3, or MOV-family
+/// H.264/AAC) are rejected as unsupported formats.
 pub fn probe_media_file(path: &Path) -> Result<MediaMetadata, MediaProbeError> {
     let metadata = FfprobeBackend::from_environment().probe(path)?;
     enforce_import_matrix(&metadata)?;
@@ -452,7 +452,15 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
             ));
         }
     };
-    let duration = parse_optional_duration(format.and_then(|fields| fields.get("duration")))?;
+    let is_still_image = is_still_image_format(&format_names);
+    // Image demuxers report one synthetic frame as a 1/25-second stream. A
+    // still image has no finite source range; the timeline supplies its own
+    // duration when the user inserts it.
+    let duration = if is_still_image {
+        None
+    } else {
+        parse_optional_duration(format.and_then(|fields| fields.get("duration")))?
+    };
     let mut parsed_streams = Vec::with_capacity(streams.len());
 
     for stream in streams {
@@ -472,7 +480,11 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
                 let height = required_nonzero_u32(fields, "height")?;
                 let pixel_format = optional_string(fields, "pix_fmt")?;
                 let average_frame_rate = optional_rate(fields.get("avg_frame_rate"));
-                let stream_duration = parse_optional_duration(fields.get("duration"))?;
+                let stream_duration = if is_still_image {
+                    None
+                } else {
+                    parse_optional_duration(fields.get("duration"))?
+                };
                 MediaStreamMetadata::Video(VideoStreamMetadata::from_probe(
                     index,
                     codec_name,
@@ -487,7 +499,11 @@ fn parse_probe_json(bytes: &[u8], file_size_bytes: u64) -> Result<MediaMetadata,
                 let sample_rate = optional_nonzero_u32(fields.get("sample_rate"));
                 let channels = optional_nonzero_u32(fields.get("channels"));
                 let channel_layout = optional_string(fields, "channel_layout")?;
-                let stream_duration = parse_optional_duration(fields.get("duration"))?;
+                let stream_duration = if is_still_image {
+                    None
+                } else {
+                    parse_optional_duration(fields.get("duration"))?
+                };
                 MediaStreamMetadata::Audio(AudioStreamMetadata::from_probe(
                     index,
                     codec_name,
@@ -539,7 +555,10 @@ const EBML_HEADER: &[u8; 4] = b"\x1a\x45\xdf\xa3";
 const RIFF_HEADER: &[u8; 4] = b"RIFF";
 const RF64_HEADER: &[u8; 4] = b"RF64";
 const WAVE_HEADER: &[u8; 4] = b"WAVE";
+const WEBP_HEADER: &[u8; 4] = b"WEBP";
 const ID3_HEADER: &[u8; 3] = b"ID3";
+const JPEG_HEADER: &[u8; 3] = b"\xff\xd8\xff";
+const PNG_HEADER: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
 /// Video and audio codecs retained by the lossless Matroska profile.
 const MATRIX_VIDEO_CODEC: &str = "ffv1";
@@ -549,9 +568,17 @@ const WEBM_AUDIO_CODEC: &str = "opus";
 const MOV_VIDEO_CODEC: &str = "h264";
 const MOV_AUDIO_CODEC: &str = "aac";
 const MOV_FORMAT_NAMES: &[&str] = &["mov", "mp4", "m4a", "3gp", "3g2", "mj2"];
+const STILL_IMAGE_FORMAT_NAMES: &[&str] =
+    &["image2", "image2pipe", "jpeg_pipe", "png_pipe", "webp_pipe"];
 
-/// Rejects containers outside the shipped Matroska/WebM, WAV, MP3, and ISO
-/// BMFF profiles before spawning the probe backend.
+fn is_still_image_format(format_names: &[String]) -> bool {
+    format_names
+        .iter()
+        .any(|name| STILL_IMAGE_FORMAT_NAMES.contains(&name.as_str()))
+}
+
+/// Rejects containers outside the shipped Matroska/WebM, WAV, MP3, ISO BMFF,
+/// and still-image profiles before spawning the probe backend.
 fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     use std::io::Read as _;
     let mut header = [0_u8; 12];
@@ -562,12 +589,15 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     if &header[..4] == EBML_HEADER
         || &header[..3] == ID3_HEADER
         || (header[0] == 0xff && header[1] & 0xe0 == 0xe0)
+        || &header[..3] == JPEG_HEADER
     {
         Ok(())
     } else if &header[..4] == RIFF_HEADER || &header[..4] == RF64_HEADER {
         file.read_exact(&mut header[4..])
             .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
-        if &header[8..12] == WAVE_HEADER {
+        if &header[8..12] == WAVE_HEADER
+            || (&header[..4] == RIFF_HEADER && &header[8..12] == WEBP_HEADER)
+        {
             Ok(())
         } else {
             Err(MediaProbeError::new(
@@ -577,6 +607,9 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     } else {
         file.read_exact(&mut header[4..])
             .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
+        if &header[..8] == PNG_HEADER {
+            return Ok(());
+        }
         let declared_size = u32::from_be_bytes(header[..4].try_into().expect("four-byte size"));
         if &header[4..8] == b"ftyp" && declared_size >= 16 {
             return Ok(());
@@ -590,10 +623,23 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
 /// Rejects probed streams outside the shipped import profiles.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// Matroska/WebM accepts FFV1/PCM S16LE, H.264/AAC, or VP9/Opus; WAV and MP3
-/// are audio-only; MOV/MP4 accepts H.264 video and/or AAC audio.
+/// Matroska/WebM accepts FFV1/PCM S16LE, H.264/AAC, or VP9/Opus; still images
+/// accept PNG, JPEG, and WebP; WAV and MP3 are audio-only; MOV/MP4 accepts
+/// H.264 video and/or AAC audio.
 /// Unsupported streams are reported as unsupported, not corrupt.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
+    let is_still_image = is_still_image_format(metadata.format_names());
+    if is_still_image {
+        return match metadata.streams() {
+            [MediaStreamMetadata::Video(video)]
+                if still_image_codec_supported(metadata.format_names(), video.codec_name()) =>
+            {
+                Ok(())
+            }
+            _ => Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec)),
+        };
+    }
+
     let is_matroska = metadata
         .format_names()
         .iter()
@@ -649,6 +695,22 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
         return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
     Ok(())
+}
+
+fn still_image_codec_supported(format_names: &[String], codec: Option<&str>) -> bool {
+    let generic_image_demuxer = format_names
+        .iter()
+        .any(|name| matches!(name.as_str(), "image2" | "image2pipe"));
+    match codec {
+        Some("png") => generic_image_demuxer || format_names.iter().any(|name| name == "png_pipe"),
+        Some("mjpeg") => {
+            generic_image_demuxer || format_names.iter().any(|name| name == "jpeg_pipe")
+        }
+        Some("webp") => {
+            generic_image_demuxer || format_names.iter().any(|name| name == "webp_pipe")
+        }
+        _ => false,
+    }
 }
 
 fn optional_string(
@@ -956,6 +1018,20 @@ mod tests {
     }
 
     #[test]
+    fn common_still_image_signatures_pass_container_preflight() {
+        let directory = TestDirectory::new();
+        for (name, signature) in [
+            ("tiny.png", b"\x89PNG\r\n\x1a\n\0\0\0\0".as_slice()),
+            ("tiny.jpg", b"\xff\xd8\xff\xd9".as_slice()),
+            ("tiny.webp", b"RIFF\x04\0\0\0WEBP".as_slice()),
+        ] {
+            let path = directory.0.join(name);
+            fs::write(&path, signature).unwrap();
+            assert!(reject_unsupported_container(&path).is_ok(), "{name}");
+        }
+    }
+
+    #[test]
     fn import_matrix_accepts_ffv1_pcm_and_ignores_other_streams() {
         let json = br#"{
             "format": {"format_name":"matroska,webm"},
@@ -1060,6 +1136,62 @@ mod tests {
                     .code(),
                 MediaProbeErrorCode::UnsupportedCodec,
             );
+        }
+    }
+
+    #[test]
+    fn import_matrix_accepts_only_supported_still_image_codecs() {
+        for (format, codec) in [
+            ("png_pipe", "png"),
+            ("jpeg_pipe", "mjpeg"),
+            ("webp_pipe", "webp"),
+            ("image2", "png"),
+            ("image2", "mjpeg"),
+            ("image2", "webp"),
+        ] {
+            let json = format!(
+                r#"{{"format":{{"format_name":"{format}"}},"streams":[{{"index":0,"codec_type":"video","codec_name":"{codec}","width":16,"height":16}}]}}"#
+            );
+            let metadata = parse_probe_json(json.as_bytes(), 2048).unwrap();
+            enforce_import_matrix(&metadata).unwrap();
+        }
+
+        for json in [
+            br#"{"format":{"format_name":"png_pipe"},"streams":[{"index":0,"codec_type":"video","codec_name":"mjpeg","width":16,"height":16}]}"#.as_slice(),
+            br#"{"format":{"format_name":"jpeg_pipe"},"streams":[{"index":0,"codec_type":"video","codec_name":"bmp","width":16,"height":16}]}"#.as_slice(),
+            br#"{"format":{"format_name":"webp_pipe"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+        ] {
+            assert_eq!(
+                enforce_import_matrix(&parse_probe_json(json, 2048).unwrap())
+                    .unwrap_err()
+                    .code(),
+                MediaProbeErrorCode::UnsupportedCodec,
+            );
+        }
+    }
+
+    #[test]
+    fn still_image_probe_durations_do_not_limit_timeline_source_range() {
+        let json = br#"{
+            "format": {"format_name":"image2", "duration":"0.040000"},
+            "streams": [{
+                "index":0,
+                "codec_type":"video",
+                "codec_name":"png",
+                "width":16,
+                "height":16,
+                "avg_frame_rate":"25/1",
+                "duration":"0.040000"
+            }]
+        }"#;
+
+        let metadata = parse_probe_json(json, 2048).unwrap();
+        enforce_import_matrix(&metadata).unwrap();
+
+        assert!(metadata.duration().is_none());
+        match &metadata.streams()[0] {
+            MediaStreamMetadata::Video(video) => assert!(video.duration().is_none()),
+            _ => panic!("still images must probe as one video stream"),
         }
     }
 

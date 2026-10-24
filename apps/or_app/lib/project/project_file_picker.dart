@@ -32,6 +32,10 @@ abstract interface class ProjectFilePicker {
 
 const _maxMediaFolderSources = 64;
 const _folderMediaExtensions = {
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
   'mp4',
   'm4v',
   'm4a',
@@ -42,7 +46,7 @@ const _folderMediaExtensions = {
   'mp3',
 };
 
-/// Returns a stable, bounded list of supported container files under a folder.
+/// Returns a stable, bounded list of supported media files under a folder.
 Future<List<String>> enumerateMediaFolderSources(Directory directory) async {
   final sources = <String>[];
   try {

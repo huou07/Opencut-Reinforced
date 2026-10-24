@@ -74,10 +74,22 @@ impl LocalIpcServer {
 
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         let (endpoint, bound) = {
-            use std::os::unix::{fs::PermissionsExt, net::UnixListener};
+            use std::os::unix::{ffi::OsStrExt, fs::PermissionsExt, net::UnixListener};
 
             let socket_path = runtime_dir.join("s");
-            let listener = UnixListener::bind(&socket_path).map_err(IpcProtocolError::Io)?;
+            let listener = UnixListener::bind(&socket_path).map_err(|error| {
+                let tmpdir_bytes = std::env::var_os("TMPDIR")
+                    .map(|path| path.as_os_str().as_bytes().len())
+                    .unwrap_or(0);
+                let system_temp_bytes = std::env::temp_dir().as_os_str().as_bytes().len();
+                IpcProtocolError::Io(std::io::Error::new(
+                    error.kind(),
+                    format!(
+                        "binding local IPC socket ({} path bytes; TMPDIR {tmpdir_bytes}; system temp {system_temp_bytes}): {error}",
+                        socket_path.as_os_str().as_bytes().len(),
+                    ),
+                ))
+            })?;
             resources.socket_path = Some(socket_path.clone());
             fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))
                 .map_err(IpcProtocolError::Io)?;
@@ -239,7 +251,11 @@ fn create_runtime_directory() -> Result<PathBuf, IpcProtocolError> {
     #[cfg(target_os = "linux")]
     let path = PathBuf::from("/tmp").join(format!("or-ipc-{id}"));
     #[cfg(target_os = "macos")]
-    let path = std::env::temp_dir().join(format!("o{}", id.simple()));
+    let path = {
+        let temp_dir = std::env::var_os("TMPDIR").map(PathBuf::from);
+        let fallback = std::env::temp_dir();
+        macos_runtime_directory(temp_dir.as_deref(), &fallback, id)
+    };
     #[cfg(windows)]
     let path = std::env::temp_dir().join(format!("or-ipc-{id}"));
     #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
@@ -260,6 +276,24 @@ fn create_runtime_directory() -> Result<PathBuf, IpcProtocolError> {
     #[cfg(windows)]
     crate::windows::create_private_directory(&path).map_err(IpcProtocolError::Io)?;
     Ok(path)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_runtime_directory(temp_dir: Option<&Path>, fallback: &Path, id: Uuid) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
+
+    let base = temp_dir
+        .filter(|path| path.is_absolute())
+        .unwrap_or(fallback);
+    let suffix = id.simple().to_string();
+    let mut suffix_len = suffix.len();
+    loop {
+        let runtime_dir = base.join(format!("o{}", &suffix[..suffix_len]));
+        if runtime_dir.join("s").as_os_str().as_bytes().len() < 104 || suffix_len == 8 {
+            return runtime_dir;
+        }
+        suffix_len -= 1;
+    }
 }
 
 fn write_descriptor(
@@ -600,6 +634,58 @@ mod tests {
         save_project_file_atomic(&path, &ProjectDocument::new("A")).unwrap();
         let session = ProjectFileSession::open(&path).unwrap();
         (directory, session)
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_runtime_directory_uses_tmpdir_for_a_bindable_socket_path() {
+        use std::os::unix::net::UnixListener;
+
+        let temp_dir = std::env::var_os("TMPDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let fallback = temp_dir
+            .join("sandbox")
+            .join("Containers")
+            .join("io.github.huou07.orApp")
+            .join("Data")
+            .join("tmp");
+        let runtime_dir = macos_runtime_directory(Some(&temp_dir), &fallback, Uuid::new_v4());
+        assert_eq!(runtime_dir.parent(), Some(temp_dir.as_path()));
+        fs::create_dir(&runtime_dir).unwrap();
+
+        let socket_path = runtime_dir.join("s");
+        let bind_result = UnixListener::bind(&socket_path).map(drop);
+        let cleanup_result = fs::remove_dir_all(&runtime_dir);
+        bind_result.unwrap();
+        cleanup_result.unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_runtime_directory_shortens_container_tmpdir_name_to_fit_socket_limit() {
+        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::net::UnixListener;
+
+        let id = Uuid::new_v4();
+        let container_tmp = Path::new("/tmp")
+            .join(format!("or-ipc-container-{}", id.simple()))
+            .join("x".repeat(32));
+        let fallback = Path::new("/var/folders/example/T");
+        fs::create_dir_all(&container_tmp).unwrap();
+        let runtime_dir = macos_runtime_directory(Some(&container_tmp), fallback, id);
+        assert_eq!(runtime_dir.parent(), Some(container_tmp.as_path()));
+        assert!(runtime_dir.file_name().unwrap().to_str().unwrap().len() < 33);
+        assert!(runtime_dir.join("s").as_os_str().as_bytes().len() < 104);
+        fs::create_dir(&runtime_dir).unwrap();
+
+        let socket_path = runtime_dir.join("s");
+        let bind_result = UnixListener::bind(&socket_path).map(drop);
+        let cleanup_result = fs::remove_dir_all(&runtime_dir);
+        let container_cleanup_result = fs::remove_dir_all(container_tmp.parent().unwrap());
+        bind_result.unwrap();
+        cleanup_result.unwrap();
+        container_cleanup_result.unwrap();
     }
 
     fn framed_request(protocol_version: u32, auth_token: &str, request: IpcRequest) -> Vec<u8> {

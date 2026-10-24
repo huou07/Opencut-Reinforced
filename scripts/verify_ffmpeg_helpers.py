@@ -45,6 +45,7 @@ def main() -> int:
     parser.add_argument("--bin", required=True, type=Path)
     parser.add_argument("--lib", required=True, type=Path)
     parser.add_argument("--media", required=True, type=Path)
+    parser.add_argument("--image", action="append", default=[], type=Path)
     parser.add_argument("--work", required=True, type=Path)
     args = parser.parse_args()
 
@@ -81,6 +82,53 @@ def main() -> int:
             raise SystemExit(f"The packaged helper is missing the required {codec} encoder.")
 
     args.work.mkdir(parents=True, exist_ok=True)
+    image_profiles = {
+        ".png": ("png", {"image2", "png_pipe"}),
+        ".jpg": ("mjpeg", {"image2", "jpeg_pipe"}),
+        ".jpeg": ("mjpeg", {"image2", "jpeg_pipe"}),
+        ".webp": ("webp", {"image2", "webp_pipe"}),
+    }
+    for index, image in enumerate(args.image):
+        if not image.is_file():
+            raise SystemExit(f"The still-image fixture is missing: {image}")
+        expected = image_profiles.get(image.suffix.lower())
+        if expected is None:
+            raise SystemExit(f"The still-image fixture type is unsupported: {image}")
+        probe = _probe(ffprobe, image, env)
+        format_names = set(probe.get("format", {}).get("format_name", "").split(","))
+        streams = probe.get("streams", [])
+        if (
+            not format_names.intersection(expected[1])
+            or len(streams) != 1
+            or streams[0].get("codec_type") != "video"
+            or streams[0].get("codec_name") != expected[0]
+        ):
+            raise SystemExit(f"The packaged helper did not identify still image {image.name} correctly.")
+        decoded = _run(
+            f"still-image decode {image.name}",
+            [
+                str(ffmpeg),
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostdin",
+                "-i",
+                str(image),
+                "-map",
+                "0:v:0",
+                "-frames:v",
+                "1",
+                "-f",
+                "image2pipe",
+                "-vcodec",
+                "png",
+                "pipe:1",
+            ],
+            env,
+        )
+        if not decoded.startswith(PNG_SIGNATURE):
+            raise SystemExit(f"The packaged helper did not decode still image {image.name}.")
+
     thumbnail = args.work / "thumbnail.png"
     thumbnail.write_bytes(
         _run(

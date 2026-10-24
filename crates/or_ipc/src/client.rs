@@ -176,14 +176,21 @@ fn with_connection<T>(
     if descriptor.transport() != IpcTransport::UnixDomainSocket {
         return Err(IpcProtocolError::UnsupportedPlatform);
     }
-    let mut stream = UnixStream::connect(Path::new(descriptor.endpoint())).map_err(|error| {
+    let endpoint = descriptor.endpoint();
+    let mut stream = UnixStream::connect(Path::new(endpoint)).map_err(|error| {
         if matches!(
             error.kind(),
             std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
         ) {
             IpcProtocolError::EndpointUnavailable
         } else {
-            IpcProtocolError::Io(error)
+            IpcProtocolError::Io(std::io::Error::new(
+                error.kind(),
+                format!(
+                    "connecting to local IPC socket ({} path bytes): {error}",
+                    endpoint.len()
+                ),
+            ))
         }
     })?;
     operation(&mut stream)

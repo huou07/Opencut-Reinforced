@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:or_app_bridge/or_app_bridge.dart' show RustLib;
+import 'package:or_app_bridge/or_app_bridge.dart' show ExternalLibrary, RustLib;
 
 import 'core_gateway.dart';
 import 'design/or_theme.dart';
@@ -14,8 +14,20 @@ import 'shell/app_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
+  await RustLib.init(externalLibrary: _bundledMacosRustLibrary());
   runApp(const OrApp(gateway: RustCoreGateway()));
+}
+
+ExternalLibrary? _bundledMacosRustLibrary() {
+  if (!Platform.isMacOS) return null;
+  final contents = Directory(Platform.resolvedExecutable).parent.parent;
+  final path =
+      '${contents.path}${Platform.pathSeparator}'
+      'Frameworks${Platform.pathSeparator}'
+      'or_app_bridge.framework${Platform.pathSeparator}'
+      'Versions${Platform.pathSeparator}A${Platform.pathSeparator}'
+      'or_app_bridge';
+  return File(path).existsSync() ? ExternalLibrary.open(path) : null;
 }
 
 class OrApp extends StatelessWidget {

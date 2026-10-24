@@ -119,8 +119,9 @@ nonfree configuration is not redistributable. The CI probe checks the linked
 `libavutil` license string is exactly `LGPL version 2.1 or later`.
 The 7C0 probe used `--disable-everything` to keep that gate limited to API,
 ABI, and shared-link verification. The production profile now additionally
-enables FFmpeg's built-in H.264 and AAC decoders and MOV demuxer; it does not
-enable GPL/nonfree modules or link libx264. This codec-library license review
+enables FFmpeg's built-in H.264/AAC and PNG/JPEG/WebP decoders, with MOV and
+still-image demuxers; it does not enable GPL/nonfree modules or link libx264.
+This codec-library license review
 does not resolve patent or distribution obligations. FFmpeg's
 [legal guidance](https://www.ffmpeg.org/legal.html) says patent rules vary by
 jurisdiction and warns commercial redistributors to assess patent licensing.

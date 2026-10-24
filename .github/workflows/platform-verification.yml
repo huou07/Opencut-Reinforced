@@ -32,9 +32,9 @@ env:
     --disable-avdevice
     --disable-avfilter
     --enable-protocol=file
-    --enable-demuxer=matroska,mov,wav,mp3
+    --enable-demuxer=matroska,mov,wav,mp3,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe
     --enable-muxer=matroska
-    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus
+    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus,png,mjpeg,webp
     --enable-parser=h264,aac,mp3
     --enable-encoder=ffv1,pcm_s16le
   # Desktop-only additions for packaged FFmpeg helper executables. These arrive
@@ -314,6 +314,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -349,8 +352,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -646,6 +649,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -685,8 +691,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -1059,6 +1065,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -1113,8 +1122,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -1454,8 +1463,8 @@ jobs:
               cat "$codec_work/EXPORT-CODEC-SOURCES.txt"
               echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
               echo "Enabled protocols: file"
-              echo "Enabled demuxers: matroska, mov, wav, mp3"
-              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, mp3float, vp9, opus"
+              echo "Enabled demuxers: matroska, mov, wav, mp3, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, mp3float, vp9, opus, png, mjpeg, webp"
               echo "Enabled parsers: h264, aac, mp3"
               echo "Enabled encoders: ffv1, pcm_s16le, libvpx_vp9, libopus"
               echo "Enabled muxers: matroska, webm"
