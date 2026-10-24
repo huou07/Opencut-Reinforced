@@ -487,6 +487,7 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.text),
               onAddCaptionTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
+              onOpenMotion: () => unawaited(_openMotionMaterialize()),
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,

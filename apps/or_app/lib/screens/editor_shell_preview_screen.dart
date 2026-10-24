@@ -47,6 +47,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddAudioTrack,
     this.onAddTextTrack,
     this.onAddCaptionTrack,
+    this.onOpenMotion,
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
@@ -115,6 +116,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onAddAudioTrack;
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
+  final VoidCallback? onOpenMotion;
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
@@ -287,18 +289,16 @@ class _EditorTool {
   final IconData icon;
 }
 
+// Only tools with a working panel are listed. The previous rail offered
+// Templates, Shapes, Effects, Transitions, Filters, AI and More, every one of
+// which answered "Unavailable in this Developer Preview"; a dead control costs
+// more trust than a short rail. Text/Audio/Motion open real actions, and the
+// remaining editing surfaces live in the inspector and the timeline toolbar.
 const _editorTools = [
   _EditorTool('Media', Icons.perm_media_outlined),
-  _EditorTool('Templates', Icons.dashboard_outlined),
   _EditorTool('Text', Icons.text_fields_outlined),
-  _EditorTool('Captions', Icons.subtitles_outlined),
-  _EditorTool('Stickers / Shapes', Icons.category_outlined),
   _EditorTool('Audio', Icons.graphic_eq_outlined),
-  _EditorTool('Effects', Icons.auto_fix_high_outlined),
-  _EditorTool('Transitions', Icons.compare_arrows_outlined),
-  _EditorTool('Filters / Color', Icons.tune_outlined),
-  _EditorTool('AI', Icons.auto_awesome_outlined),
-  _EditorTool('More', Icons.more_horiz_outlined),
+  _EditorTool('Motion', Icons.animation_outlined),
 ];
 
 class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
@@ -525,6 +525,18 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       ? null
                       : widget.onGenerateCaptions,
                   onCleanUpAudio: widget.busy ? null : widget.onCleanUpAudio,
+                  onAddTextTrack: widget.busy ? null : widget.onAddTextTrack,
+                  onAddCaptionTrack: widget.busy
+                      ? null
+                      : widget.onAddCaptionTrack,
+                  onAddAudioTrack: widget.busy ? null : widget.onAddAudioTrack,
+                  onImportCaptions: widget.busy
+                      ? null
+                      : widget.onImportCaptions,
+                  onExportCaptions: widget.busy
+                      ? null
+                      : widget.onExportCaptions,
+                  onOpenMotion: widget.busy ? null : widget.onOpenMotion,
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -782,7 +794,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               ),
             );
           }
-          if (tool == 'Media' && widget.isProjectWorkspace) {
+          if ((tool == 'Media' ||
+                  tool == 'Text' ||
+                  tool == 'Audio' ||
+                  tool == 'Motion') &&
+              widget.isProjectWorkspace) {
             return SizedBox(
               height: height,
               child: _EditorToolPanel(
@@ -811,6 +827,19 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onAddMediaToTimeline: widget.busy
                     ? null
                     : widget.onAddMediaToTimeline,
+                onAddTextTrack: widget.busy ? null : widget.onAddTextTrack,
+                onAddCaptionTrack: widget.busy
+                    ? null
+                    : widget.onAddCaptionTrack,
+                onAddAudioTrack: widget.busy ? null : widget.onAddAudioTrack,
+                onImportCaptions: widget.busy ? null : widget.onImportCaptions,
+                onExportCaptions: widget.busy ? null : widget.onExportCaptions,
+                onOpenMotion: widget.busy
+                    ? null
+                    : () {
+                        onClose();
+                        widget.onOpenMotion?.call();
+                      },
                 onClose: onClose,
               ),
             );
@@ -1162,6 +1191,19 @@ class _EditorPreviewHeader extends StatelessWidget {
   }
 }
 
+/// Rail copy. Every listed tool opens a working panel, so the label never
+/// claims it is unavailable.
+String _toolSemanticsLabel(String label) =>
+    label == 'Media' ? 'Media library' : label;
+
+String _toolDescription(String label) => switch (label) {
+  'Media' => 'Media library',
+  'Text' => 'Titles and captions',
+  'Audio' => 'Audio tools',
+  'Motion' => 'Illustration video (MotionScene)',
+  _ => label,
+};
+
 class _EditorToolRail extends StatelessWidget {
   const _EditorToolRail({
     required this.selected,
@@ -1184,14 +1226,13 @@ class _EditorToolRail extends StatelessWidget {
             children: [
               for (final tool in _editorTools)
                 Tooltip(
-                  message: isProjectWorkspace && tool.label == 'Media'
-                      ? 'Media library'
-                      : '${tool.label} — unavailable in this Developer Preview',
+                  message: _toolDescription(tool.label),
                   child: Semantics(
                     button: true,
-                    label: isProjectWorkspace && tool.label == 'Media'
-                        ? 'Media library'
-                        : '${tool.label}, unavailable in this Developer Preview',
+                    selected: selected == tool.label,
+                    excludeSemantics: true,
+                    label: _toolSemanticsLabel(tool.label),
+                    hint: _toolDescription(tool.label),
                     child: OrFocusRing(
                       child: InkWell(
                         key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
@@ -1270,6 +1311,12 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onGenerateCaptions,
     required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
+    this.onAddTextTrack,
+    this.onAddCaptionTrack,
+    this.onAddAudioTrack,
+    this.onImportCaptions,
+    this.onExportCaptions,
+    this.onOpenMotion,
     this.onClose,
   });
 
@@ -1301,6 +1348,12 @@ class _EditorToolPanel extends StatelessWidget {
     String mode,
   )?
   onAddMediaToTimeline;
+  final VoidCallback? onAddTextTrack;
+  final VoidCallback? onAddCaptionTrack;
+  final VoidCallback? onAddAudioTrack;
+  final VoidCallback? onImportCaptions;
+  final VoidCallback? onExportCaptions;
+  final VoidCallback? onOpenMotion;
   final VoidCallback? onClose;
 
   @override
@@ -1325,6 +1378,79 @@ class _EditorToolPanel extends StatelessWidget {
         onCleanUpAudio: onCleanUpAudio,
         onAddMediaToTimeline: onAddMediaToTimeline,
         onClose: onClose,
+      );
+    }
+
+    if (selectedTool == 'Text') {
+      return _ToolActionsPanel(
+        title: 'Text',
+        subtitle:
+            'Titles and captions live on their own tracks. Select a clip to '
+            'edit its content and formatting in the inspector.',
+        actions: [
+          _ToolAction(
+            keyName: 'tool-add-text-track',
+            label: 'Add text track',
+            icon: Icons.text_fields_outlined,
+            onPressed: onAddTextTrack,
+          ),
+          _ToolAction(
+            keyName: 'tool-add-caption-track',
+            label: 'Add caption track',
+            icon: Icons.subtitles_outlined,
+            onPressed: onAddCaptionTrack,
+          ),
+          _ToolAction(
+            keyName: 'tool-import-captions',
+            label: 'Import captions…',
+            icon: Icons.file_open_outlined,
+            onPressed: onImportCaptions,
+          ),
+          _ToolAction(
+            keyName: 'tool-export-captions',
+            label: 'Export captions…',
+            icon: Icons.file_download_outlined,
+            onPressed: onExportCaptions,
+          ),
+        ],
+      );
+    }
+    if (selectedTool == 'Audio') {
+      return _ToolActionsPanel(
+        title: 'Audio',
+        subtitle:
+            'Audio clips carry gain, pan and fade times. The inspector shows '
+            'them in dB, % and seconds for the selected clip.',
+        actions: [
+          _ToolAction(
+            keyName: 'tool-add-audio-track',
+            label: 'Add audio track',
+            icon: Icons.graphic_eq_outlined,
+            onPressed: onAddAudioTrack,
+          ),
+          _ToolAction(
+            keyName: 'tool-import-audio',
+            label: 'Import audio or video…',
+            icon: Icons.add,
+            onPressed: onImportMedia,
+          ),
+        ],
+      );
+    }
+    if (selectedTool == 'Motion') {
+      return _ToolActionsPanel(
+        title: 'Motion',
+        subtitle:
+            'A code file becomes a deterministic MotionScene, rendered locally '
+            'and inserted as an ordinary clip that exports with the timeline.',
+        actions: [
+          _ToolAction(
+            keyName: 'tool-open-motion',
+            label: 'Create illustration video…',
+            icon: Icons.animation_outlined,
+            onPressed: onOpenMotion,
+          ),
+        ],
       );
     }
 
@@ -1357,6 +1483,79 @@ class _EditorToolPanel extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolAction {
+  const _ToolAction({
+    required this.keyName,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String keyName;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+}
+
+/// A short, honest tool panel: a sentence about what the tool does and the
+/// actions it really performs. No "Unavailable" placeholder.
+class _ToolActionsPanel extends StatelessWidget {
+  const _ToolActionsPanel({
+    required this.title,
+    required this.subtitle,
+    required this.actions,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<_ToolAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: OrColors.backgroundRaised,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _PanelHeader(title: title),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(OrSpacing.x3),
+              children: [
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataSize,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: OrSpacing.x4),
+                for (final action in actions) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      key: ValueKey(action.keyName),
+                      onPressed: action.onPressed,
+                      icon: Icon(action.icon, size: 16),
+                      label: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(action.label),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: OrSpacing.x2),
+                ],
+              ],
             ),
           ),
         ],

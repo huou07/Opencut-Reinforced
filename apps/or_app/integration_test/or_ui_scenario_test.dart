@@ -30,6 +30,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
@@ -1073,11 +1074,27 @@ class _StepFailure implements Exception {
 /// real import of a real file through the real Rust command path.
 class _FixturePicker extends FileSelectorProjectPicker {
   _FixturePicker(this.directory, List<String> fixtures) {
+    // `copy:<path>` fixtures come from the host so a journey can import real
+    // video without the runner generating a container it cannot encode. The
+    // file is copied into the scenario directory and treated as the picked
+    // media, which keeps the import path (picker -> Rust probe) real.
+    String? copied;
+    for (final fixture in fixtures) {
+      if (!fixture.startsWith('copy:')) continue;
+      final source = File(fixture.substring('copy:'.length));
+      if (!source.existsSync()) continue;
+      final target = '${directory.path}/${source.uri.pathSegments.last}';
+      source.copySync(target);
+      copied = target;
+      break;
+    }
     // A `noisy` fixture carries signal: the silent one cannot exercise anything
     // that measures or filters audio, because digital silence has no noise floor.
-    media = fixtures.contains('noisy')
-        ? _noisyWav('fixture.wav')
-        : _wav('fixture.wav');
+    media =
+        copied ??
+        (fixtures.contains('noisy')
+            ? _noisyWav('fixture.wav')
+            : _wav('fixture.wav'));
     if (fixtures.contains('invalid')) {
       badMedia = '${directory.path}/invalid.wav';
       File(badMedia).writeAsStringSync('synthetic invalid media');
@@ -1172,6 +1189,17 @@ class _FixturePicker extends FileSelectorProjectPicker {
 
   @override
   Future<String?> openProjectPath() async => project;
+
+  // A deterministic export destination keeps the packaged export lane real
+  // (Rust render + FFmpeg writer) without a native save panel in the runner.
+  @override
+  bool get supportsExport => true;
+
+  @override
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async => '${directory.path}/export.${profile.extension}';
 
   @override
   Future<List<String>> openMediaSources() async => [_resolved];
