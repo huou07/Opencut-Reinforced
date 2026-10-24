@@ -5319,12 +5319,12 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.split,
           enabled: canSplit,
-          child: const _ClipMenuItem('Split at playhead', '⌘B'),
+          child: _ClipMenuItem('Split at playhead', _shortcutLabel('B')),
         ),
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.duplicate,
           enabled: widget.onDuplicateClip != null && !widget.busy,
-          child: const _ClipMenuItem('Duplicate', '⌘D'),
+          child: _ClipMenuItem('Duplicate', _shortcutLabel('D')),
         ),
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.delete,
