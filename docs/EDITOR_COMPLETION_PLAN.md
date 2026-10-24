@@ -179,3 +179,40 @@ Evidence: measured timings recorded with the exact build; no unmeasured claims.
   and cached with eviction.
 - macOS menu routing needs one method channel; failure must fall back to the
   in-app controls rather than disabling the app.
+
+## Evidence log
+
+### 2026-10-25 — U1, U2 (partial), U3 (partial), U6 (flow verified)
+
+Commits: `9bdc693` (feedback/window/shell), `67668c7` (select-to-inspect,
+context menu, human units, pinned commit bar), `68bf3cc` (real tool panels,
+harness copy fixtures + deterministic export path).
+
+Local checks on the exact tree:
+
+- `flutter test`: 140 passing, including new guards for snackbar/tooltip
+  contrast, the 800 px workspace header and the human-unit inspector.
+- `cargo test -p or_core -p or_ipc` and `cargo test -p or_media` (with the
+  staged FFmpeg prefix): pass.
+- Real macOS app (`flutter build macos --debug` + `package_local_macos_app.sh`):
+  window opens at 1440x900 content (1470x923 frame) with `contentMinSize`
+  1024x680; Home/Settings/Projects/Templates/Assets titles share one top anchor
+  (measured first-text row 89-94 px at 1280x800; previously 120-302).
+- Editor at 800x600 and 1280x800: workspace actions all on screen, toolbar
+  switches to icon-only below 1150 px and needs no horizontal scroll, transport
+  reads `HH:MM:SS:FF` with `30 fps`, snackbar message is legible, inspector
+  commit bar is pinned and not clipped.
+- Video journey (harness, real Rust path): import a 1280x720 H.264/AAC MP4,
+  insert on V1, play to 00:00:03:21, export. The exported file is 6.016 s
+  H.264/AAC 1280x720 and decodes end-to-end with no errors. The MP4 profile
+  selects `h264_videotoolbox`, so this run exercised the Apple hardware
+  encoder on this machine.
+- MotionScene journey (harness): `sample.rs` -> Illustration Video -> Render
+  (640x360 FFV1/PCM, 4.0 s) -> Add to timeline; the clip, its thumbnail and the
+  scene's first frame render in the viewer.
+
+Still open (not claimed): timeline clip thumbnails/waveforms, viewer transform
+handles, transitions/effects preset panels, export sheet destination/size
+summary, native File/Edit menu wiring and Settings routing, MotionScene
+authoring/preview beyond the dialog, and measured playback/export timings
+beyond the single journey above.
