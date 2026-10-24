@@ -230,3 +230,28 @@ beyond the single journey above.
 - Compact guard re-run at 320x440 after the rail/panel and clip-visual changes:
   the full compact journey (create, import, track, insert, keyboard duplicate,
   undo) passes on the packaged app with no render exception or overflow.
+
+## Status snapshot (end of round 3)
+
+Working tree clean; every claim below is backed by the commits and evidence log
+above.
+
+Done and verified on the packaged macOS app: project create with frame rate,
+media import (video/audio, real probe + thumbnails), timeline tracks, insert,
+select-to-inspect, pointer move/trim via the surface, split/duplicate/delete/
+ripple delete (menu + dialogs + shortcuts), speed, volume/pan/fades, transform/
+crop/opacity/effects/transition values in the inspector, snapping, undo/redo,
+save/reopen, playback with SMPTE timecode, playable H.264/AAC export through
+VideoToolbox, and the MotionScene flow (source -> render -> insert -> export).
+
+Open work, in the order the next rounds will take it:
+
+1. Viewer direct manipulation (move/scale/rotate/crop handles, one command per
+   gesture on release).
+2. Transitions/effects preset panels with badges on the clip.
+3. Export sheet: destination summary before starting, duration/size estimate,
+   and a "Show in Finder" action afterwards (needs a small AppKit channel).
+4. Native File/Edit menus and Settings ⌘, routed to the existing shell actions.
+5. MotionScene authoring/preview UI beyond the current dialog.
+6. Measured playback frame pacing on this machine (export timing already
+   observed; interaction timings from the harness are not latency evidence).
