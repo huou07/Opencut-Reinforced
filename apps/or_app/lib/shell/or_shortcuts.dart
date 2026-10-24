@@ -66,10 +66,18 @@ class SeekPreviewIntent extends Intent {
 
 /// True when a text field holds focus, so command keys must go to the field
 /// rather than to an editor command.
-bool orTextFieldHasFocus(BuildContext context) {
-  final focus = Focus.of(context);
-  final widget = focus.context?.widget;
-  return widget is EditableText || widget is SelectableText;
+///
+/// EditableText's focus node is attached to a descendant Focus widget, so the
+/// primary focus context is not itself an EditableText.
+bool orTextFieldHasFocus() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  if (context == null) return false;
+
+  final widget = context.widget;
+  return widget is EditableText ||
+      widget is SelectableText ||
+      context.findAncestorWidgetOfExactType<EditableText>() != null ||
+      context.findAncestorWidgetOfExactType<SelectableText>() != null;
 }
 
 /// Timeline view and edit commands. Like the transport these are

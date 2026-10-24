@@ -357,7 +357,13 @@ class _AppShellState extends State<AppShell> {
                             : null,
                       ),
                       Expanded(
+                        // Stretch, not the Row default of center: a short page
+                        // (Settings, Templates) otherwise shrank to its content
+                        // height and floated in the middle of the workspace, so
+                        // the same page title sat at y=120 on Projects and
+                        // y=302 on Settings at 1280x800 (measured 2026-10-25).
                         child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             if (!compact && !editor) ...[
                               DesktopNavigation(
@@ -393,8 +399,7 @@ class _AppShellState extends State<AppShell> {
     debugLabel: 'editor shell preview',
   );
 
-  bool get _textInputFocused =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  bool get _textInputFocused => orTextFieldHasFocus();
 
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
@@ -832,8 +837,9 @@ class _AppShellState extends State<AppShell> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final name = await _askProjectName();
-      if (name == null || !mounted) return;
+      final request = await _askProjectName();
+      if (request == null || !mounted) return;
+      final name = request.name;
       final selectedPath = await widget.projectFilePicker.saveProjectPath(
         suggestedName: _suggestedProjectFileName(name),
       );
@@ -856,6 +862,10 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       final session = await widget.projectGateway.createProject(path, name);
+      // Set the chosen rate before the workspace loads so the first summary,
+      // timeline fetch and preview already agree on it, and creation does not
+      // trigger a second refresh cycle.
+      await _applyInitialFrameRate(session, request.frameRate);
       final syncNotice = await _syncNotice(path);
       await _startProject(
         session,
@@ -870,6 +880,30 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('The new project could not be created.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Applies the frame rate chosen in the create dialog through the same
+  /// validated setting command the Viewer uses. Without it a fresh project has
+  /// no sequence rate, so Play and frame stepping stay disabled until the user
+  /// finds that control.
+  Future<void> _applyInitialFrameRate(
+    ProjectSessionHandle session,
+    ProjectRationalRate? rate,
+  ) async {
+    if (rate == null) return;
+    try {
+      final current = await widget.projectGateway.summary(session);
+      final result = await widget.projectGateway.setTimelineSequenceFrameRate(
+        session,
+        current,
+        rate,
+      );
+      if (!result.succeeded && result.message.isNotEmpty) {
+        _showUnavailable(result.message);
+      }
+    } on ProjectGatewayException catch (error) {
+      _showProjectError(error);
     }
   }
 
@@ -925,8 +959,8 @@ class _AppShellState extends State<AppShell> {
     return false;
   }
 
-  Future<String?> _askProjectName() async {
-    return showDialog<String>(
+  Future<_NewProjectRequest?> _askProjectName() async {
+    return showDialog<_NewProjectRequest>(
       context: context,
       builder: (_) => const _ProjectNameDialog(
         title: 'New Project',
@@ -934,6 +968,7 @@ class _AppShellState extends State<AppShell> {
         fieldKey: 'new-project-name',
         confirmKey: 'confirm-new-project',
         confirmLabel: 'Continue',
+        showFrameRate: true,
       ),
     );
   }
@@ -1456,6 +1491,18 @@ class _AppShellState extends State<AppShell> {
         } else if (result.errorCode == 'PROJECT_FILE_CHANGED') {
           _reportProjectActionFailure(
             'The project file changed outside OR. The save was blocked to protect those changes.',
+            onFailure,
+          );
+        } else if (result.errorCode == 'NOTHING_TO_UNDO') {
+          // The domain error is a sentence fragment; surface it as a complete,
+          // sentence-case message rather than the lowercase engine text.
+          _reportProjectActionFailure(
+            'Nothing to undo. This project has no earlier change in this session.',
+            onFailure,
+          );
+        } else if (result.errorCode == 'NOTHING_TO_REDO') {
+          _reportProjectActionFailure(
+            'Nothing to redo. Undo a change first.',
             onFailure,
           );
         } else {
@@ -4054,7 +4101,7 @@ class _AppShellState extends State<AppShell> {
       page.projectRevision == project.revision;
 
   Future<String?> _askProjectRename(String currentName) async {
-    return showDialog<String>(
+    final request = await showDialog<_NewProjectRequest>(
       context: context,
       builder: (_) => _ProjectNameDialog(
         title: 'Rename Project',
@@ -4064,6 +4111,7 @@ class _AppShellState extends State<AppShell> {
         confirmLabel: 'Rename',
       ),
     );
+    return request?.name;
   }
 
   Future<void> _closeProject() async {
@@ -4163,7 +4211,8 @@ class _AppShellState extends State<AppShell> {
       'PROJECT_FILE_CHANGED' =>
         'The project file changed outside OR. The save was blocked.',
       'RECOVERY_REQUIRED' => 'This project needs explicit recovery handling before it can be opened.',
-      'LOCAL_IPC_ERROR' => 'The local CLI session could not be started. The project remains on disk.',
+      'LOCAL_IPC_ERROR' =>
+        'The local CLI session could not be started. The project remains on disk. ${error.message}',
       _ =>
         error.message.isEmpty ? 'The project operation failed.' : error.message,
     };
@@ -4196,6 +4245,24 @@ String _captionTimeLabel(BigInt milliseconds) {
   return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${millis.toString().padLeft(3, '0')}';
 }
 
+/// Result of the create-project dialog. A frame rate is optional so the
+/// rename flow can keep returning just a name.
+class _NewProjectRequest {
+  const _NewProjectRequest({required this.name, this.frameRate});
+
+  final String name;
+  final ProjectRationalRate? frameRate;
+}
+
+const _newProjectRateChoices = <String, ProjectRationalRate>{
+  '23.976': ProjectRationalRate(24000, 1001),
+  '24': ProjectRationalRate(24, 1),
+  '25': ProjectRationalRate(25, 1),
+  '30': ProjectRationalRate(30, 1),
+  '50': ProjectRationalRate(50, 1),
+  '60': ProjectRationalRate(60, 1),
+};
+
 class _ProjectNameDialog extends StatefulWidget {
   const _ProjectNameDialog({
     required this.title,
@@ -4203,6 +4270,7 @@ class _ProjectNameDialog extends StatefulWidget {
     required this.fieldKey,
     required this.confirmKey,
     required this.confirmLabel,
+    this.showFrameRate = false,
   });
 
   final String title;
@@ -4210,6 +4278,7 @@ class _ProjectNameDialog extends StatefulWidget {
   final String fieldKey;
   final String confirmKey;
   final String confirmLabel;
+  final bool showFrameRate;
 
   @override
   State<_ProjectNameDialog> createState() => _ProjectNameDialogState();
@@ -4219,6 +4288,7 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialName,
   );
+  String _frameRateChoice = '30';
   String? _validationMessage;
 
   @override
@@ -4228,26 +4298,65 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
   }
 
   void _submit() {
-    final value = _controller.text;
+    final value = _controller.text.trim();
     if (value.isEmpty) {
       setState(() => _validationMessage = 'Enter a project name.');
       return;
     }
-    Navigator.of(context).pop(value);
+    Navigator.of(context).pop(
+      _NewProjectRequest(
+        name: value,
+        frameRate: widget.showFrameRate
+            ? _newProjectRateChoices[_frameRateChoice]
+            : null,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text(widget.title),
-    content: TextField(
-      key: ValueKey(widget.fieldKey),
-      controller: _controller,
-      autofocus: true,
-      decoration: InputDecoration(
-        labelText: 'Project name',
-        errorText: _validationMessage,
+    content: SizedBox(
+      width: 380,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: ValueKey(widget.fieldKey),
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Project name',
+              errorText: _validationMessage,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          if (widget.showFrameRate) ...[
+            const SizedBox(height: OrSpacing.x3),
+            DropdownButtonFormField<String>(
+              key: const ValueKey('new-project-frame-rate'),
+              initialValue: _frameRateChoice,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Frame rate',
+                helperText: 'Used for playback timecode and export.',
+                helperMaxLines: 2,
+              ),
+              items: [
+                for (final entry in _newProjectRateChoices.entries)
+                  DropdownMenuItem(
+                    value: entry.key,
+                    child: Text('${entry.key} fps'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _frameRateChoice = value);
+              },
+            ),
+          ],
+        ],
       ),
-      onSubmitted: (_) => _submit(),
     ),
     actions: [
       TextButton(

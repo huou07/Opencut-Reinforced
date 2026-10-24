@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../widgets/or_widgets.dart';
 
 enum AppDestination {
   home,
@@ -178,38 +179,47 @@ class _DesktopDestination extends StatelessWidget {
       child: Semantics(
         selected: selected,
         button: true,
-        child: InkWell(
-          key: ValueKey('nav-${destination.name}'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(7),
-          child: Container(
-            constraints: const BoxConstraints(minHeight: OrControlSizes.button),
-            padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-            decoration: BoxDecoration(
-              color: selected ? OrColors.surfaceSelected : Colors.transparent,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  destination.icon,
-                  size: 19,
-                  color: selected ? OrColors.text : OrColors.textSecondary,
-                ),
-                const SizedBox(width: OrSpacing.x3),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected ? OrColors.text : OrColors.textSecondary,
-                      fontSize: OrType.metadataSize,
-                      fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+        child: OrFocusRing(
+          radius: 7,
+          child: InkWell(
+            key: ValueKey('nav-${destination.name}'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(7),
+            child: Container(
+              constraints: const BoxConstraints(
+                minHeight: OrControlSizes.button,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
+              decoration: BoxDecoration(
+                color: selected ? OrColors.surfaceSelected : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    destination.icon,
+                    size: 19,
+                    color: selected ? OrColors.text : OrColors.textSecondary,
+                  ),
+                  const SizedBox(width: OrSpacing.x3),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected
+                            ? OrColors.text
+                            : OrColors.textSecondary,
+                        fontSize: OrType.metadataSize,
+                        fontWeight: selected
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

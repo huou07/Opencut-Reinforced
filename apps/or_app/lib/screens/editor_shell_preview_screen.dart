@@ -917,14 +917,17 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // A 320 px compact header cannot hold the project name, the revision
-          // text, the state badge and the action row: measured 2026-10-18 with
-          // scripts/or_ui.py at 320x440, the fixed metadata overflowed it by
-          // 44 px and the clipped action row swallowed taps. The narrow
-          // presentation keeps the name and the actions and drops the duplicated
-          // metadata rather than clipping it; Save and the shell's own indicator
-          // still carry the dirty state.
-          final roomForMetadata = constraints.maxWidth >= 560;
+          final width = constraints.maxWidth;
+          // The action cluster used to be the second of two equal Expanded
+          // halves, so it floated in the middle of wide windows and clipped at
+          // 1024/800 with no way to reach Close (measured 2026-10-25). The name
+          // now owns the flexible space and the actions sit at the trailing
+          // edge; below 720 px the row keeps the three frequent actions and
+          // folds Rename/Close into one menu instead of hiding them behind a
+          // horizontal scroll.
+          final roomForBadge = width >= 560;
+          final roomForRevision = width >= 1180;
+          final roomForLabels = width >= 720;
           return Row(
             children: [
               const Icon(
@@ -934,75 +937,130 @@ class _ProjectWorkspaceHeader extends StatelessWidget {
               ),
               const SizedBox(width: OrSpacing.x2),
               Expanded(
-                child: Text(
-                  current?.name ?? 'Opening project…',
-                  key: const ValueKey('workspace-project-name'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: OrType.metadataCompactSize,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (current != null && roomForMetadata) ...[
-                Text(
-                  'Revision ${current.revision}',
-                  key: const ValueKey('workspace-project-revision'),
-                  style: const TextStyle(
-                    fontSize: OrType.tinySize,
-                    color: OrColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: OrSpacing.x2),
-                OrBadge(current.dirty ? 'Unsaved changes' : 'Saved'),
-              ],
-              const SizedBox(width: OrSpacing.x2),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _WorkspaceAction(
-                        'Rename',
-                        Icons.edit_outlined,
-                        onRename,
-                        busy,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        current?.name ?? 'Opening project…',
+                        key: const ValueKey('workspace-project-name'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: OrType.metadataCompactSize,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      _WorkspaceAction(
-                        'Save',
-                        Icons.save_outlined,
-                        onSave,
-                        busy || current?.dirty != true,
-                      ),
-                      _WorkspaceAction(
-                        'Undo',
-                        Icons.undo_outlined,
-                        onUndo,
-                        busy,
-                      ),
-                      _WorkspaceAction(
-                        'Redo',
-                        Icons.redo_outlined,
-                        onRedo,
-                        busy,
-                      ),
-                      _WorkspaceAction(
-                        'Close',
-                        Icons.close_outlined,
-                        onClose,
-                        busy,
+                    ),
+                    if (current != null && roomForBadge) ...[
+                      const SizedBox(width: OrSpacing.x2),
+                      OrBadge(
+                        current.dirty ? 'Unsaved changes' : 'Saved',
+                        color: current.dirty
+                            ? OrColors.warning
+                            : OrColors.textSecondary,
                       ),
                     ],
-                  ),
+                    if (current != null && roomForRevision) ...[
+                      const SizedBox(width: OrSpacing.x2),
+                      Text(
+                        'Revision ${current.revision}',
+                        key: const ValueKey('workspace-project-revision'),
+                        style: const TextStyle(
+                          fontSize: OrType.tinySize,
+                          color: OrColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              const SizedBox(width: OrSpacing.x2),
+              if (roomForLabels) ...[
+                _WorkspaceAction('Rename', Icons.edit_outlined, onRename, busy),
+                _WorkspaceAction(
+                  'Save',
+                  Icons.save_outlined,
+                  onSave,
+                  busy || current?.dirty != true,
+                ),
+                _WorkspaceAction('Undo', Icons.undo_outlined, onUndo, busy),
+                _WorkspaceAction('Redo', Icons.redo_outlined, onRedo, busy),
+                _WorkspaceAction('Close', Icons.close_outlined, onClose, busy),
+              ] else ...[
+                _WorkspaceIconAction(
+                  'Save',
+                  Icons.save_outlined,
+                  onSave,
+                  busy || current?.dirty != true,
+                ),
+                _WorkspaceIconAction('Undo', Icons.undo_outlined, onUndo, busy),
+                _WorkspaceIconAction('Redo', Icons.redo_outlined, onRedo, busy),
+                _WorkspaceMoreMenu(
+                  busy: busy,
+                  onRename: onRename,
+                  onClose: onClose,
+                ),
+              ],
             ],
           );
         },
       ),
     );
   }
+}
+
+/// Icon-only workspace action for the narrow header. Keeps the same
+/// `workspace-<label>` key as the labelled button so journeys do not depend on
+/// which presentation the viewport picked.
+class _WorkspaceIconAction extends StatelessWidget {
+  const _WorkspaceIconAction(
+    this.label,
+    this.icon,
+    this.onPressed,
+    this.disabled,
+  );
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool disabled;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: ValueKey('workspace-${label.toLowerCase()}'),
+    onPressed: disabled ? null : onPressed,
+    tooltip: label,
+    visualDensity: VisualDensity.compact,
+    icon: Icon(icon, size: 18),
+  );
+}
+
+class _WorkspaceMoreMenu extends StatelessWidget {
+  const _WorkspaceMoreMenu({
+    required this.busy,
+    required this.onRename,
+    required this.onClose,
+  });
+
+  final bool busy;
+  final VoidCallback? onRename;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    key: const ValueKey('workspace-more'),
+    tooltip: 'More project actions',
+    enabled: !busy,
+    onSelected: (value) {
+      if (value == 'rename') onRename?.call();
+      if (value == 'close') onClose?.call();
+    },
+    itemBuilder: (context) => const [
+      PopupMenuItem(value: 'rename', child: Text('Rename project…')),
+      PopupMenuItem(value: 'close', child: Text('Close project')),
+    ],
+    icon: const Icon(Icons.more_horiz, size: 18),
+  );
 }
 
 class _WorkspaceAction extends StatelessWidget {
@@ -2490,27 +2548,36 @@ class _ViewerPanelState extends State<_ViewerPanel>
                           icon: const Icon(Icons.skip_next_outlined, size: 18),
                         ),
                         Expanded(
-                          child: Text(
-                            shownPosition == null
-                                ? '0/1'
-                                : _timeFeedback(
-                                    shownPosition,
-                                    preview?.presentedTime,
-                                  ),
-                            key: const ValueKey('preview-time-readout'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: OrColors.textSecondary,
-                              fontFamily: 'monospace',
-                              fontSize: OrType.tinySize,
+                          child: Tooltip(
+                            message: shownPosition == null
+                                ? 'Playhead position'
+                                : 'Exact ${shownPosition.canonical}'
+                                      '${preview?.presentedTime == null ? '' : ' · presented ${preview!.presentedTime!.canonical}'}',
+                            child: Text(
+                              shownPosition == null
+                                  ? '00:00:00:00'
+                                  : _timeFeedback(
+                                      shownPosition,
+                                      preview?.presentedTime,
+                                      frameRate,
+                                    ),
+                              key: const ValueKey('preview-time-readout'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: OrColors.textSecondary,
+                                fontFamily: 'monospace',
+                                fontSize: OrType.tinySize,
+                              ),
                             ),
                           ),
                         ),
                         PopupMenuButton<_FrameRateChoice>(
                           key: const ValueKey('preview-frame-rate'),
-                          tooltip: 'Set sequence frame rate',
+                          tooltip: frameRate == null
+                              ? 'Choose a sequence frame rate to enable playback'
+                              : 'Sequence frame rate (playback and export)',
                           enabled:
                               _connected && widget.project != null && !_busy,
                           onSelected: (choice) =>
@@ -2526,12 +2593,17 @@ class _ViewerPanelState extends State<_ViewerPanel>
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             child: Text(
                               frameRate == null
-                                  ? 'Set rate'
-                                  : '${frameRate.canonical} fps',
+                                  ? 'Set frame rate'
+                                  : _frameRateLabel(frameRate),
                               key: const ValueKey('preview-rate-label'),
-                              style: const TextStyle(
-                                color: OrColors.textSecondary,
+                              style: TextStyle(
+                                color: frameRate == null
+                                    ? OrColors.selection
+                                    : OrColors.textSecondary,
                                 fontSize: OrType.tinySize,
+                                fontWeight: frameRate == null
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                               ),
                             ),
                           ),
@@ -2566,7 +2638,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
 
 class _FrameRateChoice {
   const _FrameRateChoice({required this.rate, required this.label});
-  const _FrameRateChoice.unset() : rate = null, label = 'Clear rate';
+  const _FrameRateChoice.unset() : rate = null, label = 'Remove frame rate';
 
   final ProjectRationalRate? rate;
   final String label;
@@ -2601,14 +2673,48 @@ String _clockLabel(double seconds) {
   return '${minutes.toString().padLeft(2, '0')}:${wholeSeconds.toString().padLeft(2, '0')}.${fraction.toString().padLeft(3, '0')}';
 }
 
+/// Platform-correct shortcut label for tooltips and menus. macOS uses the
+/// command glyph; every other target keeps the explicit Ctrl prefix.
+String _shortcutLabel(String key) =>
+    defaultTargetPlatform == TargetPlatform.macOS ? '⌘$key' : 'Ctrl+$key';
+
+double _rationalSeconds(ProjectRationalTime time) =>
+    time.numerator.toInt() / time.denominator;
+
+/// Transport readout. A configured sequence rate renders SMPTE-style
+/// `HH:MM:SS:FF`; without one it falls back to the clock so the exact rational
+/// pair (`0/1 · 0/1`) never leaks into the primary label.
 String _timeFeedback(
   ProjectRationalTime position,
   ProjectRationalTime? presentedTime,
+  ProjectRationalRate? rate,
 ) {
   final time = position.secondsForDisplay;
-  final display = _clockLabel(time);
-  final frame = presentedTime == null ? '' : ' · ${presentedTime.canonical}';
-  return '$display · ${position.canonical}$frame';
+  if (rate != null && rate.numerator > 0 && rate.denominator > 0) {
+    return _timecodeLabel(time, rate.numerator / rate.denominator);
+  }
+  return _clockLabel(time);
+}
+
+/// Human frame-rate label: `30 fps`, `23.976 fps`, never `30/1 fps`.
+String _frameRateLabel(ProjectRationalRate rate) {
+  final value = rate.numerator / rate.denominator;
+  final text = value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(3);
+  return '$text fps';
+}
+
+String _timecodeLabel(double seconds, double fps) {
+  final rate = fps.round().clamp(1, 1000);
+  final frames = (seconds * fps + 1e-6).floor();
+  final totalSeconds = frames ~/ rate;
+  final ff = frames % rate;
+  final hh = totalSeconds ~/ 3600;
+  final mm = totalSeconds ~/ 60 % 60;
+  final ss = totalSeconds % 60;
+  String two(int value) => value.toString().padLeft(2, '0');
+  return '${two(hh)}:${two(mm)}:${two(ss)}:${two(ff)}';
 }
 
 class _InspectorPanel extends StatefulWidget {
@@ -3699,7 +3805,11 @@ class _TimelineToolbar extends StatelessWidget {
     // "Add Caption" was off-screen. Below a genuinely wide window the toolbar
     // uses the shorter names the compact dock already uses, so every action is
     // visible without horizontal scrolling.
-    final roomForFullLabels = MediaQuery.sizeOf(context).width >= 1440;
+    // Full action names are measured against the space the row actually has.
+    // 1440 px was still not enough for every full label (2026-10-25, "Add
+    // Caption" was cut), so only a genuinely wide window pays for them.
+    final width = MediaQuery.sizeOf(context).width;
+    final showActionLabels = width >= 1150;
     return Container(
       key: const ValueKey('timeline-toolbar'),
       width: double.infinity,
@@ -3716,45 +3826,42 @@ class _TimelineToolbar extends StatelessWidget {
       child: _ToolbarScroll(
         child: Row(
           children: [
-            Text(
-              isProjectWorkspace
-                  ? 'Timeline'
-                  : compact
-                  ? 'Timeline preview'
-                  : 'Timeline tools unavailable',
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: OrType.metadataCompactSize,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: OrSpacing.x2),
             if (isProjectWorkspace) ...[
-              TextButton.icon(
-                key: const ValueKey('timeline-add-video-track'),
-                onPressed: busy ? null : onAddVideoTrack,
-                icon: const Icon(Icons.movie_outlined, size: 16),
-                label: Text(
-                  roomForFullLabels ? 'Add Video Track' : 'Add Video',
-                ),
+              // Below this width the labels alone would consume the row and
+              // push the last actions behind a horizontal scroll (measured at
+              // 800 and 1024 on 2026-10-25). The icon presentation keeps every
+              // action visible and hit-testable with the same keys and
+              // tooltips; wider windows keep the labels.
+              _TimelineAction(
+                actionKey: 'timeline-add-video-track',
+                icon: Icons.movie_outlined,
+                label: 'Add video track',
+                shortLabel: 'Add Video',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddVideoTrack,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-audio-track'),
-                onPressed: busy ? null : onAddAudioTrack,
-                icon: const Icon(Icons.graphic_eq_outlined, size: 16),
-                label: Text(
-                  roomForFullLabels ? 'Add Audio Track' : 'Add Audio',
-                ),
+              _TimelineAction(
+                actionKey: 'timeline-add-audio-track',
+                icon: Icons.graphic_eq_outlined,
+                label: 'Add audio track',
+                shortLabel: 'Add Audio',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddAudioTrack,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-marker'),
-                onPressed: busy ? null : onAddMarker,
-                icon: const Icon(Icons.bookmark_add_outlined, size: 16),
-                label: Text(roomForFullLabels ? 'Add Marker' : 'Marker'),
+              _TimelineAction(
+                actionKey: 'timeline-add-marker',
+                icon: Icons.bookmark_add_outlined,
+                label: 'Add marker',
+                shortLabel: 'Marker',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddMarker,
               ),
               IconButton(
                 key: const ValueKey('timeline-undo'),
-                tooltip: 'Undo',
+                tooltip: 'Undo (${_shortcutLabel('Z')})',
                 onPressed: busy ? null : onUndo,
                 icon: const Icon(Icons.undo_outlined, size: 17),
                 visualDensity: VisualDensity.compact,
@@ -3786,61 +3893,120 @@ class _TimelineToolbar extends StatelessWidget {
                   ),
                 ),
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-text-track'),
-                onPressed: busy ? null : onAddTextTrack,
-                icon: const Icon(Icons.text_fields_outlined, size: 16),
-                label: Text(roomForFullLabels ? 'Add Text Track' : 'Add Text'),
+              _TimelineAction(
+                actionKey: 'timeline-add-text-track',
+                icon: Icons.text_fields_outlined,
+                label: 'Add text track',
+                shortLabel: 'Add Text',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddTextTrack,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-caption-track'),
-                onPressed: busy ? null : onAddCaptionTrack,
-                icon: const Icon(Icons.subtitles_outlined, size: 16),
-                label: Text(
-                  roomForFullLabels ? 'Add Caption Track' : 'Add Captions',
-                ),
+              _TimelineAction(
+                actionKey: 'timeline-add-caption-track',
+                icon: Icons.subtitles_outlined,
+                label: 'Add caption track',
+                shortLabel: 'Add Captions',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddCaptionTrack,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-import-captions'),
-                onPressed: busy ? null : onImportCaptions,
-                icon: const Icon(Icons.file_open_outlined, size: 16),
-                label: Text(
-                  roomForFullLabels ? 'Import Captions' : 'Import SRT',
-                ),
+              _TimelineAction(
+                actionKey: 'timeline-add-title',
+                icon: Icons.title,
+                label: 'Add title at playhead',
+                shortLabel: 'Title',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddTitle,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-export-captions'),
-                onPressed: busy ? null : onExportCaptions,
-                icon: const Icon(Icons.file_download_outlined, size: 16),
-                label: Text(
-                  roomForFullLabels ? 'Export Captions' : 'Export SRT',
-                ),
+              _TimelineAction(
+                actionKey: 'timeline-add-manual-caption',
+                icon: Icons.closed_caption_outlined,
+                label: 'Add caption at playhead',
+                shortLabel: 'Caption',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onAddCaption,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-title'),
-                onPressed: busy ? null : onAddTitle,
-                icon: const Icon(Icons.title, size: 16),
-                label: Text(roomForFullLabels ? 'Add Title' : 'Title'),
+              _TimelineAction(
+                actionKey: 'timeline-import-captions',
+                icon: Icons.file_open_outlined,
+                label: 'Import captions (SRT, WebVTT)',
+                shortLabel: 'Import SRT',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onImportCaptions,
               ),
-              TextButton.icon(
-                key: const ValueKey('timeline-add-manual-caption'),
-                onPressed: busy ? null : onAddCaption,
-                icon: const Icon(Icons.subtitles_outlined, size: 16),
-                label: Text(roomForFullLabels ? 'Add Caption' : 'Caption'),
+              _TimelineAction(
+                actionKey: 'timeline-export-captions',
+                icon: Icons.file_download_outlined,
+                label: 'Export captions (SRT, WebVTT)',
+                shortLabel: 'Export SRT',
+                showLabel: showActionLabels,
+                enabled: !busy,
+                onPressed: onExportCaptions,
               ),
             ] else ...[
+              Text(
+                compact ? 'Timeline preview' : 'Timeline tools unavailable',
+                style: const TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataCompactSize,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x2),
               _UnavailableTimelineAction(
                 tooltip: 'Undo is unavailable in this Developer Preview',
                 icon: Icons.undo_outlined,
               ),
             ],
-            _UnavailableTimelineAction(
-              tooltip: 'Timeline zoom is unavailable in this Developer Preview',
-              icon: Icons.zoom_in_outlined,
-            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One timeline-toolbar action in either its labelled or icon-only form. Both
+/// forms keep the same ValueKey so journeys and shortcuts do not depend on the
+/// viewport width.
+class _TimelineAction extends StatelessWidget {
+  const _TimelineAction({
+    required this.actionKey,
+    required this.icon,
+    required this.label,
+    required this.shortLabel,
+    required this.showLabel,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String actionKey;
+  final IconData icon;
+  final String label;
+  final String shortLabel;
+  final bool showLabel;
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showLabel) {
+      return IconButton(
+        key: ValueKey(actionKey),
+        tooltip: label,
+        onPressed: enabled ? onPressed : null,
+        visualDensity: VisualDensity.compact,
+        icon: Icon(icon, size: 17),
+      );
+    }
+    return TextButton.icon(
+      key: ValueKey(actionKey),
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 16),
+      label: Text(shortLabel),
     );
   }
 }
@@ -4543,6 +4709,28 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         !widget.busy &&
         widget.project != null &&
         widget.onDuplicateClip != null;
+    // Split is the most frequent trim operation; it used to live only inside
+    // the clip dialog and the ⌘B shortcut. Offer it on the selection strip and
+    // disable it honestly when the playhead is outside the selected clip.
+    final previewPosition = widget.previewState.value?.position;
+    final canSplit =
+        selectedClip != null &&
+        selectedTrack != null &&
+        previewPosition != null &&
+        !selectedTrack.state.locked &&
+        !widget.busy &&
+        widget.project != null &&
+        widget.onSplitClip != null &&
+        _compareProjectRational(previewPosition, selectedClip.timelineStart) >
+            0 &&
+        _compareProjectRational(previewPosition, selectedClip.timelineEnd) < 0;
+    final canDelete =
+        selectedClip != null &&
+        selectedTrack != null &&
+        !selectedTrack.state.locked &&
+        !widget.busy &&
+        widget.project != null &&
+        widget.onDeleteClip != null;
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x1),
@@ -4556,19 +4744,55 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selectedClip != null) ...[
-              Text(
-                'Selected clip ${selectedClip.clipId.substring(0, math.min(8, selectedClip.clipId.length))}',
-                style: const TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.tinySize,
+              Padding(
+                padding: const EdgeInsets.only(left: OrSpacing.x1),
+                child: Text(
+                  _selectedClipStripLabel(selectedClip),
+                  key: const ValueKey('timeline-selection-label'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: OrColors.text,
+                    fontSize: OrType.tinySize,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x2),
+              Tooltip(
+                message: 'Split at playhead (${_shortcutLabel('B')})',
+                child: TextButton.icon(
+                  key: const ValueKey('timeline-selection-split'),
+                  onPressed: canSplit
+                      ? () => unawaited(
+                          widget.onSplitClip!(
+                            widget.project!,
+                            selectedClip,
+                            previewPosition,
+                          ),
+                        )
+                      : null,
+                  icon: const Icon(Icons.content_cut, size: 15),
+                  label: const Text('Split at playhead'),
                 ),
               ),
               IconButton(
                 key: const ValueKey('timeline-selection-duplicate'),
-                tooltip: 'Duplicate clip (Ctrl+D)',
+                tooltip: 'Duplicate clip (${_shortcutLabel('D')})',
                 visualDensity: VisualDensity.compact,
                 onPressed: canDuplicate ? _duplicateSelectedClip : null,
                 icon: const Icon(Icons.content_copy_outlined, size: 15),
+              ),
+              IconButton(
+                key: const ValueKey('timeline-selection-delete'),
+                tooltip: 'Delete clip (⌫)',
+                visualDensity: VisualDensity.compact,
+                onPressed: canDelete
+                    ? () => unawaited(
+                        widget.onDeleteClip!(widget.project!, selectedClip),
+                      )
+                    : null,
+                icon: const Icon(Icons.delete_outline, size: 16),
               ),
               IconButton(
                 key: const ValueKey('timeline-selection-clear'),
@@ -4730,6 +4954,33 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       }
     }
     return null;
+  }
+
+  String _selectedClipStripLabel(ProjectTimelineClip clip) {
+    final text = clip.text?.trim() ?? '';
+    var name = '';
+    if (text.isNotEmpty) {
+      name = text.length > 40 ? '${text.substring(0, 40)}…' : text;
+    }
+    if (name.isEmpty) {
+      name = switch (clip.contentKind) {
+        ProjectTimelineClipContentKind.text => 'Text clip',
+        ProjectTimelineClipContentKind.caption => 'Caption clip',
+        ProjectTimelineClipContentKind.media => 'Clip',
+      };
+      final mediaId = clip.mediaId;
+      if (mediaId != null) {
+        for (final item in widget.mediaItems) {
+          if (item.mediaId == mediaId) {
+            name = _mediaDisplayName(item.sourceUri);
+            break;
+          }
+        }
+      }
+    }
+    final start = _clockLabel(_rationalSeconds(clip.timelineStart));
+    final end = _clockLabel(_rationalSeconds(clip.timelineEnd));
+    return '$name · $start – $end';
   }
 
   void _duplicateSelectedClip() {
@@ -6493,13 +6744,27 @@ Future<void> _showInsertTimelineDialog({
 ProjectRationalTime? _defaultTimelineDuration(
   ProjectMediaItem media,
   ProjectTimelineTrackKind kind,
-) => switch (kind) {
-  ProjectTimelineTrackKind.video =>
-    media.firstVideoDuration ?? media.containerDuration,
-  ProjectTimelineTrackKind.audio =>
-    media.firstAudioDuration ?? media.containerDuration,
-  ProjectTimelineTrackKind.text || ProjectTimelineTrackKind.caption => null,
-};
+) {
+  final isStillImage = media.formatNames.any(
+    (format) => const {
+      'image2',
+      'image2pipe',
+      'jpeg_pipe',
+      'png_pipe',
+      'webp_pipe',
+    }.contains(format),
+  );
+  if (kind == ProjectTimelineTrackKind.video && isStillImage) {
+    return ProjectRationalTime(BigInt.from(5), 1);
+  }
+  return switch (kind) {
+    ProjectTimelineTrackKind.video =>
+      media.firstVideoDuration ?? media.containerDuration,
+    ProjectTimelineTrackKind.audio =>
+      media.firstAudioDuration ?? media.containerDuration,
+    ProjectTimelineTrackKind.text || ProjectTimelineTrackKind.caption => null,
+  };
+}
 
 class _ExactRationalField extends StatelessWidget {
   const _ExactRationalField({

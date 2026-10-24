@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -267,38 +269,54 @@ class OrEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: OrSpacing.x4,
-        vertical: OrSpacing.x12,
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: OrColors.textMuted, size: 24),
-          const SizedBox(height: OrSpacing.x3),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: OrType.controlSize,
-              fontWeight: FontWeight.w600,
+    // The same empty state lives in full pages and in short side panels (the
+    // Inspector at 800x600 measured a 134 px box against 96 px of fixed vertical
+    // padding and overflowed by 49 px on 2026-10-25). Scale the padding to the
+    // space it actually has and keep the content scrollable so a short panel
+    // never clips it.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxHeight;
+        final vertical = available.isFinite
+            ? math.min(OrSpacing.x12, math.max(OrSpacing.x2, available * 0.08))
+            : OrSpacing.x12;
+        return SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: OrSpacing.x4,
+              vertical: vertical,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: OrColors.textMuted, size: 24),
+                const SizedBox(height: OrSpacing.x3),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: OrType.controlSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: OrType.metadataSize,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: OrSpacing.x2),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: OrType.metadataSize,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

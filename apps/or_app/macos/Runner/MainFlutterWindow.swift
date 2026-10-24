@@ -9,6 +9,21 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
+    // The editor needs room for the media panel, the viewer and the inspector
+    // side by side. Below this size the desktop layout previously clipped the
+    // workspace actions and the timeline toolbar instead of laying them out
+    // (measured 2026-10-25 at 1024x700 and 800x600). Keep the window resizable
+    // but never smaller than the layout is allowed to be.
+    self.contentMinSize = NSSize(width: 1024, height: 680)
+    self.setFrameAutosaveName("ORMainWindow")
+    // The xib still carries the template's 800x600 content rect. Enlarge only
+    // that untouched first-run frame; a remembered user size is left alone
+    // (and still bounded by contentMinSize).
+    if abs(self.frame.width - 800) < 1, abs(self.frame.height - 600) < 1 {
+      self.setContentSize(NSSize(width: 1440, height: 900))
+      self.center()
+    }
+
     RegisterGeneratedPlugins(registry: flutterViewController)
     MacOSScopedFileAccessPlugin.register(
       with: flutterViewController.registrar(forPlugin: "MacOSScopedFileAccessPlugin"))

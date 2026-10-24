@@ -23,9 +23,30 @@ import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 import 'package:or_app/shell/app_top_bar.dart';
+import 'package:or_app/shell/or_shortcuts.dart';
 import 'package:or_app/widgets/or_widgets.dart';
 
 void main() {
+  testWidgets('text fields are recognized as focused for shell shortcuts', (
+    tester,
+  ) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TextField(focusNode: focusNode)),
+      ),
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isTrue);
+
+    focusNode.unfocus();
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isFalse);
+  });
+
   testWidgets('wide shell shows OR navigation and project destinations', (
     tester,
   ) async {
@@ -246,7 +267,7 @@ void main() {
     expect(picker.saveCalls, 1);
     expect(picker.lastSuggestedProjectName, 'Demo_ Project.orproj');
     expect(gateway.lastCreatePath, '/tmp/or-widget-demo.orproj');
-    expect(gateway.lastCreateName, 'Demo: Project ');
+    expect(gateway.lastCreateName, 'Demo: Project');
     expect(gateway.inspectCalls, 1);
     expect(gateway.createCalls, 1);
     expect(
@@ -4413,6 +4434,13 @@ void main() {
     expect(gateway.previewStateCalls, greaterThan(0));
     expect(gateway.preview.contentEnd?.secondsForDisplay, 4);
     expect(find.byKey(const ValueKey('preview-scrub-ruler')), findsOneWidget);
+    // The create dialog applies the chosen rate, so a new project is
+    // immediately playable. Remove the rate to reach the "no sequence rate"
+    // guard state, then set 24 to prove both directions.
+    await tester.tap(find.byKey(const ValueKey('preview-frame-rate')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove frame rate'));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
@@ -4973,6 +5001,74 @@ void main() {
     expect(snackBar.showCloseIcon, isTrue);
     expect(snackBar.duration, OrSnackBar.displayDuration);
     expect(find.text('Saved project'), findsOneWidget);
+  });
+
+  testWidgets('the shared snackbar message is legible on its surface', (
+    tester,
+  ) async {
+    // Regression guard for the 2026-10-25 finding: Material 3 resolves snackbar
+    // content from onInverseSurface while OR overrides the fill with
+    // OrColors.surface, which painted text at 1:1 contrast and hid every
+    // confirmation and failure.
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => OrSnackBar.show(context, 'Saved project'),
+              child: const Text('save'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pump();
+
+    final style = DefaultTextStyle.of(
+      tester.element(find.text('Saved project')),
+    ).style;
+    final background = tester
+        .widget<SnackBar>(find.byType(SnackBar))
+        .backgroundColor;
+    expect(background, isNotNull);
+    expect(style.color, isNotNull);
+    expect(
+      _contrastRatio(style.color!, background!),
+      greaterThanOrEqualTo(4.5),
+    );
+
+    final closeIcon = OrTheme.dark.snackBarTheme.closeIconColor;
+    expect(closeIcon, isNotNull);
+    expect(_contrastRatio(closeIcon!, background), greaterThanOrEqualTo(3));
+  });
+
+  testWidgets('workspace actions stay inside an 800 px editor window', (
+    tester,
+  ) async {
+    // The action cluster was the second of two equal Expanded halves, so at
+    // 800 px Redo and Close were painted off-screen with no way to reach them.
+    _setViewport(tester, const Size(800, 600));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/narrow-header.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Narrow header');
+    await tester.pumpAndSettle();
+
+    for (final key in const [
+      'workspace-rename',
+      'workspace-save',
+      'workspace-undo',
+      'workspace-redo',
+      'workspace-close',
+    ]) {
+      final finder = find.byKey(ValueKey(key));
+      expect(finder, findsOneWidget, reason: '$key must stay present');
+      final rect = tester.getRect(finder);
+      expect(rect.left, greaterThanOrEqualTo(0), reason: '$key clipped left');
+      expect(rect.right, lessThanOrEqualTo(800), reason: '$key clipped right');
+    }
   });
 
   testWidgets('a focused control paints a visible focus ring', (tester) async {

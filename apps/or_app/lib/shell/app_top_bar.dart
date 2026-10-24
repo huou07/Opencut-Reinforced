@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../widgets/or_widgets.dart';
 
 class AppTopBar extends StatelessWidget {
   const AppTopBar({
@@ -68,23 +69,26 @@ class AppTopBar extends StatelessWidget {
                 ),
                 const SizedBox(width: OrSpacing.x2),
               ],
-              InkWell(
-                key: const ValueKey('or-brand-home'),
-                onTap: onHome,
-                borderRadius: BorderRadius.circular(OrRadii.small),
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: OrColors.borderStrong),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: const Text(
-                    'OR',
-                    style: TextStyle(
-                      fontSize: OrType.metadataCompactSize,
-                      fontWeight: FontWeight.w700,
+              OrFocusRing(
+                radius: 8,
+                child: InkWell(
+                  key: const ValueKey('or-brand-home'),
+                  onTap: onHome,
+                  borderRadius: BorderRadius.circular(OrRadii.small),
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: OrColors.borderStrong),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: const Text(
+                      'OR',
+                      style: TextStyle(
+                        fontSize: OrType.metadataCompactSize,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
