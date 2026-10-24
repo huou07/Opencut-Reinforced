@@ -397,6 +397,12 @@ Typical mobile editor order:
 
 Desktop inspectors typically become mobile sheets/panels.
 
+The compact editor is one stacked column, so it does not repeat the desktop
+panel headers: the preview and the timeline are visible in place and keep their
+names for assistive technology. Height that a header would cost goes to the
+preview and the timeline lanes. Controls in the compact presentation use the
+44 px touch target; the pointer-driven desktop keeps its denser controls.
+
 ## Motion
 
 Motion is functional and restrained.

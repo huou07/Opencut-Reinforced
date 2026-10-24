@@ -2133,6 +2133,22 @@ class _ViewerPanelState extends State<_ViewerPanel>
     );
   }
 
+  /// Contact area for one transport control.
+  ///
+  /// Compact is the touch presentation, where DESIGN.md and AGENTS.md require
+  /// a 44 px target; a pointer-driven desktop keeps the denser 40 px control.
+  double get _transportControlSize =>
+      widget.compact ? OrTouchTargets.comfortable : 40.0;
+
+  /// The button box *is* the contact area, so the size is pinned on the style
+  /// rather than left to the theme's density.
+  ButtonStyle get _transportButtonStyle => IconButton.styleFrom(
+    minimumSize: Size.square(_transportControlSize),
+    fixedSize: Size.square(_transportControlSize),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   Widget _buildViewerSurface() {
     final textureId = _textureId;
     final preview = _preview;
@@ -2168,6 +2184,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
             fittedWidth = fittedHeight * aspectRatio;
           }
           return SizedBox(
+            key: const ValueKey('editor-viewer-preview'),
             width: fittedWidth,
             height: fittedHeight,
             child: Container(
@@ -2254,6 +2271,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
         .toDouble();
 
     return ColoredBox(
+      key: const ValueKey('editor-viewer-panel'),
       color: OrColors.background,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -2266,22 +2284,32 @@ class _ViewerPanelState extends State<_ViewerPanel>
           // which the live position readout and the timeline's own ruler still
           // convey. It never clips and never squeezes away a control.
           final shortPanel = constraints.maxHeight < 200;
-          return Column(
+          // The compact presentation stacks the preview directly above the
+          // timeline on one screen, so a desktop section header is chrome that
+          // competes with the frame it frames: measured 2026-10-24, the header
+          // and badge cost 34 px of the 135 px viewer at 320x480, and the
+          // preview surface fell to 27.7 px. The name stays for a screen reader
+          // through the section container below.
+          final content = Column(
             children: [
-              _PanelHeader(
-                title: 'Viewer',
-                // The short panel keeps two pixels for the surface's remainder: with
-                // the strip at its minimum the sum came to one pixel more than the
-                // panel, and a one-pixel overflow is still a clipped control.
-                height: shortPanel ? 32 : (widget.compact ? 34 : 38),
-                trailing: OrBadge(
-                  preview == null || preview.width == 0
-                      ? 'Preview'
-                      : '${preview.width} × ${preview.height}',
+              if (!widget.compact)
+                _PanelHeader(
+                  key: const ValueKey('editor-viewer-header'),
+                  title: 'Viewer',
+                  // The short panel keeps two pixels for the surface's
+                  // remainder: with the strip at its minimum the sum came to one
+                  // pixel more than the panel, and a one-pixel overflow is still
+                  // a clipped control.
+                  height: shortPanel ? 32 : 38,
+                  trailing: OrBadge(
+                    preview == null || preview.width == 0
+                        ? 'Preview'
+                        : '${preview.width} × ${preview.height}',
+                  ),
                 ),
-              ),
               Expanded(child: _buildViewerSurface()),
               Container(
+                key: const ValueKey('editor-viewer-transport'),
                 decoration: const BoxDecoration(
                   color: OrColors.backgroundRaised,
                   border: Border(top: BorderSide(color: OrColors.border)),
@@ -2369,7 +2397,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-previous-frame'),
                           tooltip: 'Previous frame',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: canStep
                               ? () => unawaited(
                                   _run(
@@ -2388,7 +2416,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-play'),
                           tooltip: preview?.playing == true ? 'Pause' : 'Play',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: preview?.playing == true
                               ? () => unawaited(
                                   _run((gateway, session) {
@@ -2412,7 +2440,7 @@ class _ViewerPanelState extends State<_ViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-next-frame'),
                           tooltip: 'Next frame',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: canStep
                               ? () => unawaited(
                                   _run(
@@ -2458,16 +2486,24 @@ class _ViewerPanelState extends State<_ViewerPanel>
                                 child: Text(choice.label),
                               ),
                           ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text(
-                              frameRate == null
-                                  ? 'Set rate'
-                                  : '${frameRate.canonical} fps',
-                              key: const ValueKey('preview-rate-label'),
-                              style: const TextStyle(
-                                color: OrColors.textSecondary,
-                                fontSize: OrType.tinySize,
+                          child: SizedBox(
+                            height: _transportControlSize,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Center(
+                                widthFactor: 1,
+                                child: Text(
+                                  frameRate == null
+                                      ? 'Set rate'
+                                      : '${frameRate.canonical} fps',
+                                  key: const ValueKey('preview-rate-label'),
+                                  style: const TextStyle(
+                                    color: OrColors.textSecondary,
+                                    fontSize: OrType.tinySize,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -2494,6 +2530,9 @@ class _ViewerPanelState extends State<_ViewerPanel>
               ),
             ],
           );
+          return widget.compact
+              ? Semantics(container: true, label: 'Viewer', child: content)
+              : content;
         },
       ),
     );
@@ -3504,10 +3543,27 @@ class _TimelineToolbar extends StatelessWidget {
     // uses the shorter names the compact dock already uses, so every action is
     // visible without horizontal scrolling.
     final roomForFullLabels = MediaQuery.sizeOf(context).width >= 1440;
+    // The compact presentation is the touch one, so its actions carry the 44 px
+    // contact area AGENTS.md requires; a desktop bar keeps 40 px, which is above
+    // its 24 px pointer minimum. A TextButton's own box is the hit target, so
+    // the styles pin the size rather than relying on the bar's height.
+    final target = compact ? OrTouchTargets.comfortable : 40.0;
+    final textStyle = TextButton.styleFrom(
+      minimumSize: Size(0, target),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final iconStyle = IconButton.styleFrom(
+      minimumSize: Size(target, target),
+      fixedSize: Size(target, target),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     return Container(
       key: const ValueKey('timeline-toolbar'),
       width: double.infinity,
-      height: 40,
+      // The horizontal borders deflate the child area by 2 px, so the bar is
+      // one border taller than the target its actions must meet.
+      height: target + 2,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? OrSpacing.x2 : OrSpacing.x3,
       ),
@@ -3536,6 +3592,7 @@ class _TimelineToolbar extends StatelessWidget {
             if (isProjectWorkspace) ...[
               TextButton.icon(
                 key: const ValueKey('timeline-add-video-track'),
+                style: textStyle,
                 onPressed: busy ? null : onAddVideoTrack,
                 icon: const Icon(Icons.movie_outlined, size: 16),
                 label: Text(
@@ -3544,6 +3601,7 @@ class _TimelineToolbar extends StatelessWidget {
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-audio-track'),
+                style: textStyle,
                 onPressed: busy ? null : onAddAudioTrack,
                 icon: const Icon(Icons.graphic_eq_outlined, size: 16),
                 label: Text(
@@ -3552,6 +3610,7 @@ class _TimelineToolbar extends StatelessWidget {
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-marker'),
+                style: textStyle,
                 onPressed: busy ? null : onAddMarker,
                 icon: const Icon(Icons.bookmark_add_outlined, size: 16),
                 label: Text(roomForFullLabels ? 'Add Marker' : 'Marker'),
@@ -3560,44 +3619,59 @@ class _TimelineToolbar extends StatelessWidget {
                 key: const ValueKey('timeline-undo'),
                 tooltip: 'Undo',
                 onPressed: busy ? null : onUndo,
+                style: iconStyle,
                 icon: const Icon(Icons.undo_outlined, size: 17),
-                visualDensity: VisualDensity.compact,
               ),
               Semantics(
                 label: 'Snap to clip boundaries',
                 toggled: snapEnabled,
-                child: FilterChip(
-                  key: const ValueKey('timeline-snap-toggle'),
-                  label: const Text('Snap'),
-                  selected: snapEnabled,
-                  onSelected: busy || onSnapChanged == null
-                      ? null
-                      : onSnapChanged,
-                  showCheckmark: false,
-                  visualDensity: VisualDensity.compact,
-                  selectedColor: OrColors.selection,
-                  labelStyle: TextStyle(
-                    color: snapEnabled
-                        ? OrColors.primaryText
-                        : OrColors.textSecondary,
-                    fontSize: OrType.tinySize,
-                    fontWeight: FontWeight.w600,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: compact ? OrTouchTargets.comfortable : 0,
                   ),
-                  side: BorderSide(
-                    color: snapEnabled
-                        ? OrColors.selection
-                        : OrColors.borderStrong,
+                  child: FilterChip(
+                    key: const ValueKey('timeline-snap-toggle'),
+                    label: const Text('Snap'),
+                    // A chip sizes to its label, so the compact contact area is
+                    // imposed by the constraint rather than by its ink padding.
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: OrSpacing.x2,
+                    ),
+                    selected: snapEnabled,
+                    onSelected: busy || onSnapChanged == null
+                        ? null
+                        : onSnapChanged,
+                    showCheckmark: false,
+                    visualDensity: compact
+                        ? VisualDensity.standard
+                        : VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    selectedColor: OrColors.selection,
+                    labelStyle: TextStyle(
+                      color: snapEnabled
+                          ? OrColors.primaryText
+                          : OrColors.textSecondary,
+                      fontSize: OrType.tinySize,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    side: BorderSide(
+                      color: snapEnabled
+                          ? OrColors.selection
+                          : OrColors.borderStrong,
+                    ),
                   ),
                 ),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-text-track'),
+                style: textStyle,
                 onPressed: busy ? null : onAddTextTrack,
                 icon: const Icon(Icons.text_fields_outlined, size: 16),
                 label: Text(roomForFullLabels ? 'Add Text Track' : 'Add Text'),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-caption-track'),
+                style: textStyle,
                 onPressed: busy ? null : onAddCaptionTrack,
                 icon: const Icon(Icons.subtitles_outlined, size: 16),
                 label: Text(
@@ -3606,6 +3680,7 @@ class _TimelineToolbar extends StatelessWidget {
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-import-captions'),
+                style: textStyle,
                 onPressed: busy ? null : onImportCaptions,
                 icon: const Icon(Icons.file_open_outlined, size: 16),
                 label: Text(
@@ -3614,6 +3689,7 @@ class _TimelineToolbar extends StatelessWidget {
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-export-captions'),
+                style: textStyle,
                 onPressed: busy ? null : onExportCaptions,
                 icon: const Icon(Icons.file_download_outlined, size: 16),
                 label: Text(
@@ -3622,12 +3698,14 @@ class _TimelineToolbar extends StatelessWidget {
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-title'),
+                style: textStyle,
                 onPressed: busy ? null : onAddTitle,
                 icon: const Icon(Icons.title, size: 16),
                 label: Text(roomForFullLabels ? 'Add Title' : 'Title'),
               ),
               TextButton.icon(
                 key: const ValueKey('timeline-add-manual-caption'),
+                style: textStyle,
                 onPressed: busy ? null : onAddCaption,
                 icon: const Icon(Icons.subtitles_outlined, size: 16),
                 label: Text(roomForFullLabels ? 'Add Caption' : 'Caption'),
@@ -3636,11 +3714,13 @@ class _TimelineToolbar extends StatelessWidget {
               _UnavailableTimelineAction(
                 tooltip: 'Undo is unavailable in this Developer Preview',
                 icon: Icons.undo_outlined,
+                size: target,
               ),
             ],
             _UnavailableTimelineAction(
               tooltip: 'Timeline zoom is unavailable in this Developer Preview',
               icon: Icons.zoom_in_outlined,
+              size: target,
             ),
           ],
         ),
@@ -3650,10 +3730,15 @@ class _TimelineToolbar extends StatelessWidget {
 }
 
 class _UnavailableTimelineAction extends StatelessWidget {
-  const _UnavailableTimelineAction({required this.tooltip, required this.icon});
+  const _UnavailableTimelineAction({
+    required this.tooltip,
+    required this.icon,
+    required this.size,
+  });
 
   final String tooltip;
   final IconData icon;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -3661,8 +3746,13 @@ class _UnavailableTimelineAction extends StatelessWidget {
       message: tooltip,
       child: IconButton(
         onPressed: null,
+        style: IconButton.styleFrom(
+          minimumSize: Size(size, size),
+          fixedSize: Size(size, size),
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
         icon: Icon(icon, size: 17),
-        visualDensity: VisualDensity.compact,
       ),
     );
   }
@@ -3897,6 +3987,55 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   }
 
   Widget _buildTimeline(BuildContext context, ProjectPreviewState? preview) {
+    // The compact presentation gives the timeline a fixed share of one screen,
+    // so the desktop section header and badge are chrome that competes with the
+    // lanes: measured 2026-10-24 at 320x640, the header consumed 34 of the
+    // panel's 122 px and left a 16 px lane strip. The name stays for a screen
+    // reader through the section container below.
+    final content = Column(
+      children: [
+        if (!widget.compact)
+          _PanelHeader(
+            key: const ValueKey('editor-timeline-header'),
+            title: 'Timeline',
+            height: 38,
+            trailing: widget.isProjectWorkspace
+                ? const OrBadge('Project timeline')
+                : const OrBadge('Developer Preview'),
+          ),
+        if (!widget.isProjectWorkspace)
+          Expanded(
+            child: Column(
+              children: [
+                _TimelineRuler(compact: widget.compact),
+                const Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(child: _EmptyTimelineLane()),
+                      Divider(height: 1),
+                      Expanded(child: _EmptyTimelineLane()),
+                      Divider(height: 1),
+                      Expanded(child: _EmptyTimelineLane()),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
+                  child: Text(
+                    'Timeline engine not implemented',
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: OrType.tinySize,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Expanded(child: _buildProjectTimeline(context, preview)),
+      ],
+    );
     return Container(
       key: const ValueKey('editor-timeline-region'),
       width: double.infinity,
@@ -3904,48 +4043,9 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         color: OrColors.backgroundRaised,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
-      child: Column(
-        children: [
-          _PanelHeader(
-            title: 'Timeline',
-            height: widget.compact ? 34 : 38,
-            trailing: widget.isProjectWorkspace
-                ? const OrBadge('Project timeline')
-                : const OrBadge('Developer Preview'),
-          ),
-          if (!widget.isProjectWorkspace)
-            Expanded(
-              child: Column(
-                children: [
-                  _TimelineRuler(compact: widget.compact),
-                  const Expanded(
-                    child: Column(
-                      children: [
-                        Expanded(child: _EmptyTimelineLane()),
-                        Divider(height: 1),
-                        Expanded(child: _EmptyTimelineLane()),
-                        Divider(height: 1),
-                        Expanded(child: _EmptyTimelineLane()),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: OrSpacing.x2),
-                    child: Text(
-                      'Timeline engine not implemented',
-                      style: TextStyle(
-                        color: OrColors.textMuted,
-                        fontSize: OrType.tinySize,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Expanded(child: _buildProjectTimeline(context, preview)),
-        ],
-      ),
+      child: widget.compact
+          ? Semantics(container: true, label: 'Timeline', child: content)
+          : content,
     );
   }
 
@@ -4136,11 +4236,29 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             }
           }
 
+          // The view controls, the ruler and a lane sliver need this much
+          // room. Showing the controls in a shorter region squeezed the ruler
+          // (and therefore the lanes) out of view, so a short region keeps the
+          // timeline itself. Measured 2026-10-24: 320x480 gives this region
+          // 69 px and 320x640 gives it 122 px.
+          final viewControlHeight =
+              _viewControlSize + 1; // the row's bottom border
+          final showViewControls =
+              constraints.maxHeight >=
+              viewControlHeight + _timelineRulerHeight + 24;
+          final laneRegion =
+              constraints.maxHeight -
+              (showViewControls ? viewControlHeight : 0.0);
+          // The ruler keeps markers and the time scale, so it is dropped only
+          // when keeping it would leave less than the 24 px a lane needs to
+          // show a clip edge. Measured 2026-10-24: 320x480 leaves 68.3 px (the
+          // ruler fits) and 320x440 leaves 55 px (it does not).
+          final showRuler =
+              showViewControls || laneRegion >= _timelineRulerHeight + 24;
+
           return Column(
             children: [
-              // The fixed-height view controls cannot fit a region this
-              // short; drop them rather than overflow an unusable strip.
-              if (constraints.maxHeight >= 60) _timelineViewControls(),
+              if (showViewControls) _timelineViewControls(),
               Expanded(
                 child: Scrollbar(
                   child: SingleChildScrollView(
@@ -4151,7 +4269,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                           width: trackHeaderWidth,
                           child: Column(
                             children: [
-                              const SizedBox(height: _timelineRulerHeight),
+                              if (showRuler)
+                                const SizedBox(height: _timelineRulerHeight),
                               ...trackRows,
                             ],
                           ),
@@ -4166,46 +4285,48 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                 width: canvasWidth,
                                 child: Column(
                                   children: [
-                                    SizedBox(
-                                      height: _timelineRulerHeight,
-                                      child: _TimelineMarkerRuler(
-                                        markers:
-                                            widget.markerPage?.items ??
-                                            const [],
-                                        playhead: preview?.position,
-                                        pixelsPerSecond: scale,
-                                        tickSeconds: tickSeconds,
-                                        width: canvasWidth,
-                                        loadingMore: widget.loadingMoreMarkers,
-                                        onLoadMore:
-                                            widget.markerPage?.nextOffset ==
-                                                null
-                                            ? null
-                                            : widget.onLoadMoreMarkers,
-                                        busy: widget.busy,
-                                        snapGuide: _snapGuide,
-                                        onOpenMarker: (marker) => unawaited(
-                                          _showTimelineMarkerActions(
-                                            context: context,
-                                            project: widget.project,
-                                            marker: marker,
-                                            onMove: widget.onMoveMarker,
-                                            onRename: widget.onRenameMarker,
-                                            onDelete: widget.onDeleteMarker,
-                                            busy: widget.busy,
+                                    if (showRuler)
+                                      SizedBox(
+                                        height: _timelineRulerHeight,
+                                        child: _TimelineMarkerRuler(
+                                          markers:
+                                              widget.markerPage?.items ??
+                                              const [],
+                                          playhead: preview?.position,
+                                          pixelsPerSecond: scale,
+                                          tickSeconds: tickSeconds,
+                                          width: canvasWidth,
+                                          loadingMore:
+                                              widget.loadingMoreMarkers,
+                                          onLoadMore:
+                                              widget.markerPage?.nextOffset ==
+                                                  null
+                                              ? null
+                                              : widget.onLoadMoreMarkers,
+                                          busy: widget.busy,
+                                          snapGuide: _snapGuide,
+                                          onOpenMarker: (marker) => unawaited(
+                                            _showTimelineMarkerActions(
+                                              context: context,
+                                              project: widget.project,
+                                              marker: marker,
+                                              onMove: widget.onMoveMarker,
+                                              onRename: widget.onRenameMarker,
+                                              onDelete: widget.onDeleteMarker,
+                                              busy: widget.busy,
+                                            ),
                                           ),
+                                          onMoveMarker:
+                                              widget.onMoveMarker == null
+                                              ? null
+                                              : (marker, timelineTime) =>
+                                                    widget.onMoveMarker!(
+                                                      widget.project!,
+                                                      marker,
+                                                      timelineTime,
+                                                    ),
                                         ),
-                                        onMoveMarker:
-                                            widget.onMoveMarker == null
-                                            ? null
-                                            : (marker, timelineTime) =>
-                                                  widget.onMoveMarker!(
-                                                    widget.project!,
-                                                    marker,
-                                                    timelineTime,
-                                                  ),
                                       ),
-                                    ),
                                     for (final track in snapshot.items) ...[
                                       _TimelineTrackLane(
                                         laneKey: _laneKeys.putIfAbsent(
@@ -4337,7 +4458,21 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     );
   }
 
+  /// Contact area for one timeline view control.
+  ///
+  /// The row was 34 px while its icon buttons paint 40, so every platform
+  /// squeezed them to 33 px. Compact is the touch presentation and needs 44.
+  double get _viewControlSize =>
+      widget.compact ? OrTouchTargets.comfortable : 40.0;
+
   Widget _timelineViewControls() {
+    final control = _viewControlSize;
+    final iconStyle = IconButton.styleFrom(
+      minimumSize: Size(control, control),
+      fixedSize: Size(control, control),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     final selectedClip = _selectedClip;
     final selectedTrack = _selectedTrack;
     final canDuplicate =
@@ -4348,7 +4483,8 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         widget.project != null &&
         widget.onDuplicateClip != null;
     return Container(
-      height: 34,
+      // The bottom border deflates the child area by 1 px.
+      height: control + 1,
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x1),
       decoration: const BoxDecoration(
         color: OrColors.backgroundRaised,
@@ -4370,14 +4506,14 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               IconButton(
                 key: const ValueKey('timeline-selection-duplicate'),
                 tooltip: 'Duplicate clip (Ctrl+D)',
-                visualDensity: VisualDensity.compact,
+                style: iconStyle,
                 onPressed: canDuplicate ? _duplicateSelectedClip : null,
                 icon: const Icon(Icons.content_copy_outlined, size: 15),
               ),
               IconButton(
                 key: const ValueKey('timeline-selection-clear'),
                 tooltip: 'Clear selection',
-                visualDensity: VisualDensity.compact,
+                style: iconStyle,
                 onPressed: _clearSelection,
                 icon: const Icon(Icons.close, size: 15),
               ),
@@ -4386,7 +4522,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             IconButton(
               key: const ValueKey('timeline-zoom-out'),
               tooltip: 'Zoom out',
-              visualDensity: VisualDensity.compact,
+              style: iconStyle,
               onPressed: _fitTimelineToView || _timelineZoom <= 0.125
                   ? null
                   : () => _changeTimelineZoom(_timelineZoom / 1.25),
@@ -4409,7 +4545,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             IconButton(
               key: const ValueKey('timeline-zoom-in'),
               tooltip: 'Zoom in',
-              visualDensity: VisualDensity.compact,
+              style: iconStyle,
               onPressed: !_fitTimelineToView && _timelineZoom >= 8
                   ? null
                   : () => _changeTimelineZoom(
@@ -4419,6 +4555,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             ),
             TextButton(
               key: const ValueKey('timeline-fit-zoom'),
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, control),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               onPressed: _fitTimelineToView
                   ? null
                   : () {
@@ -8135,7 +8275,12 @@ class _UnavailableToolSheet extends StatelessWidget {
 }
 
 class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({required this.title, this.height = 38, this.trailing});
+  const _PanelHeader({
+    super.key,
+    required this.title,
+    this.height = 38,
+    this.trailing,
+  });
 
   final String title;
   final double height;
