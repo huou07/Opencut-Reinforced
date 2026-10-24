@@ -1,0 +1,31 @@
+{
+  "requirement": "C-compact-presentation-and-desktop-parity",
+  "claim": "The compact editor spends its height on the preview and the timeline lanes instead of repeating both desktop section headers, its transport, timeline toolbar and timeline view controls carry a 44 px contact area, and macOS, Windows and Linux render one identical measured layout at the same window size.",
+  "implementation_sha": "cddfc80930e673d41d97314563ee96b86b223286",
+  "verification": {
+    "workflow": "Platform verification",
+    "run_id": "40080952117",
+    "jobs": [
+      "rust",
+      "flutter-static",
+      "macos",
+      "linux",
+      "windows",
+      "android",
+      "granted-descriptor-capability",
+      "release-gate"
+    ],
+    "detail": "Run 40080952117 completed with conclusion success at cddfc80930e673d41d97314563ee96b86b223286, the merge commit this record binds: all seven required platform jobs and the aggregate release-gate succeeded. The 'Flutter static and widget checks' job runs the full flutter test suite, which at this commit contains the 'compact editor spends its height on the preview and the lanes' regression at 390x844, 320x480 and 320x440, the 'compact controls meet the 44 px contact floor' regression, and the 'the desktop platforms present one identical layout' regression that mounts the editor at 1440x900 under TargetPlatform.macOS, windows and linux and compares every measured rect. Separate Linux UI preflight run 40077816760 passed on the pull-request head d9b29372bb825f3d245117fda3bd78ce0d986313, running the real Linux editor journey at 1280x800 and the compact journey at 320x440 against this UI change.",
+    "url": "https://github.com/huou07/Opencut-Reinforced/actions/runs/40080952117"
+  },
+  "verified_at_utc": "2026-10-24T09:59:53Z",
+  "evidence_class": "hosted",
+  "limitations": [
+    "This is hosted source and widget verification plus one real Linux UI journey; it is not packaged-app visual acceptance.",
+    "The desktop parity guard measures the Flutter layout under each TargetPlatform in one widget-test process; it does not run the packaged macOS or Windows applications.",
+    "Android evidence in the run is emulator-based and does not establish physical-device rendering or performance.",
+    "The 320x440 preview surface remains a strip (measured 25 px) because shell navigation, the project header, the tool dock and the transport consume most of that height; the record does not claim it is a usable preview.",
+    "This documentation commit follows the verified implementation commit and is not covered by run 40080952117."
+  ],
+  "source": "docs/PRODUCT_ROADMAP.md, Compact presentation chrome and desktop parity; apps/or_app/test/widget_test.dart; docs/UX_ACCEPTANCE.md, 2026-10-24 section"
+}
