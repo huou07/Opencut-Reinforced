@@ -216,3 +216,14 @@ handles, transitions/effects preset panels, export sheet destination/size
 summary, native File/Edit menu wiring and Settings routing, MotionScene
 authoring/preview beyond the dialog, and measured playback/export timings
 beyond the single journey above.
+
+### 2026-10-25 (round 2) — clip visuals, timing observation
+
+- Timeline clips paint their media artifact (frames tiled for video, waveform
+  for audio) with a readable scrim; verified in the video journey screenshot.
+- Export timing observation: the 6 s 1280x720 H.264 export reported complete
+  inside a 486 ms wait window (status poll interval is 400 ms), i.e. the encode
+  finished in well under a second on this machine through
+  `h264_videotoolbox`. Playback was verified by frame, not measured for FPS.
+- Harness per-action timings include the runner's settle wait (~1.5 s each), so
+  they are not interaction-latency evidence.
