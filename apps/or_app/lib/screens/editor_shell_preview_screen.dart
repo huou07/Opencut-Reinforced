@@ -2681,6 +2681,73 @@ String _shortcutLabel(String key) =>
 double _rationalSeconds(ProjectRationalTime time) =>
     time.numerator.toInt() / time.denominator;
 
+/// Human-facing unit conversion for the inspector. Canonical state stays in the
+/// engine's milli / basis-point integers; these helpers are the only place the
+/// UI translates between the two, so a field never exposes `1/4` or `(bp)`.
+String _plainNumber(double value, {int decimals = 3}) {
+  if (!value.isFinite) return '0';
+  var fixed = value.toStringAsFixed(decimals);
+  if (fixed.contains('.')) {
+    fixed = fixed.replaceFirst(RegExp(r'0+$'), '');
+    fixed = fixed.replaceFirst(RegExp(r'\.$'), '');
+  }
+  return fixed.isEmpty ? '0' : fixed;
+}
+
+String _percentLabel(int milli) => _plainNumber(milli / 10);
+String _basisPercentLabel(int basisPoints) => _plainNumber(basisPoints / 100);
+String _degreesLabel(int milliDegrees) => _plainNumber(milliDegrees / 1000);
+String _pixelsLabel(int milliPixels) => _plainNumber(milliPixels / 1000);
+String _secondsLabel(ProjectRationalTime time) =>
+    _plainNumber(time.numerator.toDouble() / time.denominator);
+
+double? _finiteNumber(String text) {
+  final value = double.tryParse(text.trim());
+  return value != null && value.isFinite ? value : null;
+}
+
+int? _percentToMilli(
+  String text, {
+  int minimum = -100000,
+  int maximum = 100000,
+}) {
+  final value = _finiteNumber(text);
+  if (value == null) return null;
+  final milli = (value * 10).round();
+  return milli >= minimum && milli <= maximum ? milli : null;
+}
+
+int? _basisPercentToBasisPoints(String text) {
+  final value = _finiteNumber(text);
+  if (value == null) return null;
+  final points = (value * 100).round();
+  return points >= 0 && points <= 10000 ? points : null;
+}
+
+int? _degreesToMilliDegrees(String text) {
+  final value = _finiteNumber(text);
+  if (value == null) return null;
+  final milli = (value * 1000).round();
+  return milli >= -360000 && milli <= 360000 ? milli : null;
+}
+
+int? _pixelsToMilliPixels(String text) {
+  final value = _finiteNumber(text);
+  if (value == null || value < 0) return null;
+  final milli = (value * 1000).round();
+  return milli <= 128000 ? milli : null;
+}
+
+ProjectRationalTime? _parseSecondsOrRational(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return null;
+  final direct = ProjectRationalTime.tryParse(trimmed);
+  if (direct != null) return direct;
+  final seconds = _finiteNumber(trimmed);
+  if (seconds == null || seconds < 0) return null;
+  return _timeFromSeconds(seconds);
+}
+
 /// Transport readout. A configured sequence rate renders SMPTE-style
 /// `HH:MM:SS:FF`; without one it falls back to the clock so the exact rational
 /// pair (`0/1 · 0/1`) never leaks into the primary label.
@@ -2881,28 +2948,38 @@ class _InspectorPanelState extends State<_InspectorPanel> {
   }
 
   void _writeSettings(ProjectTimelineVisualSettings settings) {
-    _fields['x']!.text = '${settings.xMilliCanvas}';
-    _fields['y']!.text = '${settings.yMilliCanvas}';
-    _fields['scale_x']!.text = '${settings.scaleXMilli}';
-    _fields['scale_y']!.text = '${settings.scaleYMilli}';
-    _fields['rotation']!.text = '${settings.rotationMilliDegrees}';
-    _fields['anchor_x']!.text = '${settings.anchorXBasisPoints}';
-    _fields['anchor_y']!.text = '${settings.anchorYBasisPoints}';
-    _fields['crop_left']!.text = '${settings.cropLeftBasisPoints}';
-    _fields['crop_top']!.text = '${settings.cropTopBasisPoints}';
-    _fields['crop_right']!.text = '${settings.cropRightBasisPoints}';
-    _fields['crop_bottom']!.text = '${settings.cropBottomBasisPoints}';
-    _fields['opacity']!.text = '${settings.opacityBasisPoints}';
-    _fields['brightness']!.text = '${settings.brightnessAmountMilli}';
-    _fields['contrast']!.text = '${settings.contrastAmountMilli}';
-    _fields['saturation']!.text = '${settings.saturationAmountMilli}';
-    _fields['blur']!.text = '${settings.gaussianBlurRadiusMilli}';
+    _fields['x']!.text = _percentLabel(settings.xMilliCanvas);
+    _fields['y']!.text = _percentLabel(settings.yMilliCanvas);
+    _fields['scale_x']!.text = _percentLabel(settings.scaleXMilli);
+    _fields['scale_y']!.text = _percentLabel(settings.scaleYMilli);
+    _fields['rotation']!.text = _degreesLabel(settings.rotationMilliDegrees);
+    _fields['anchor_x']!.text = _basisPercentLabel(settings.anchorXBasisPoints);
+    _fields['anchor_y']!.text = _basisPercentLabel(settings.anchorYBasisPoints);
+    _fields['crop_left']!.text = _basisPercentLabel(
+      settings.cropLeftBasisPoints,
+    );
+    _fields['crop_top']!.text = _basisPercentLabel(settings.cropTopBasisPoints);
+    _fields['crop_right']!.text = _basisPercentLabel(
+      settings.cropRightBasisPoints,
+    );
+    _fields['crop_bottom']!.text = _basisPercentLabel(
+      settings.cropBottomBasisPoints,
+    );
+    _fields['opacity']!.text = _basisPercentLabel(settings.opacityBasisPoints);
+    _fields['brightness']!.text = _percentLabel(settings.brightnessAmountMilli);
+    _fields['contrast']!.text = _percentLabel(settings.contrastAmountMilli);
+    _fields['saturation']!.text = _percentLabel(settings.saturationAmountMilli);
+    _fields['blur']!.text = _pixelsLabel(settings.gaussianBlurRadiusMilli);
     _fields['transition_in_kind']!.text = '${settings.transitionIn.index}';
     _fields['transition_in_duration']!.text =
-        settings.transitionInDuration?.canonical ?? '0/1';
+        settings.transitionInDuration == null
+        ? '0'
+        : _secondsLabel(settings.transitionInDuration!);
     _fields['transition_out_kind']!.text = '${settings.transitionOut.index}';
     _fields['transition_out_duration']!.text =
-        settings.transitionOutDuration?.canonical ?? '0/1';
+        settings.transitionOutDuration == null
+        ? '0'
+        : _secondsLabel(settings.transitionOutDuration!);
     _modifiedEffects.clear();
     _updateTransitionIn = false;
     _updateTransitionOut = false;
@@ -2913,86 +2990,107 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         .toStringAsFixed(3);
     _audioFields['pan_percent']!.text = (settings.panBasisPoints / 100)
         .toStringAsFixed(2);
-    _audioFields['fade_in']!.text = settings.fadeIn.canonical;
-    _audioFields['fade_out']!.text = settings.fadeOut.canonical;
+    _audioFields['fade_in']!.text = _secondsLabel(settings.fadeIn);
+    _audioFields['fade_out']!.text = _secondsLabel(settings.fadeOut);
   }
 
   ProjectTimelineVisualSettings? _readSettings() {
-    final values = <String, int>{};
-    for (final key in _visualFieldKeys) {
-      final value = int.tryParse(_fields[key]!.text);
-      if (value == null) return null;
-      values[key] = value;
-    }
-    if (values['x']! < -100000 ||
-        values['x']! > 100000 ||
-        values['y']! < -100000 ||
-        values['y']! > 100000 ||
-        values['scale_x']! < 1 ||
-        values['scale_x']! > 100000 ||
-        values['scale_y']! < 1 ||
-        values['scale_y']! > 100000 ||
-        values['rotation']! < -360000 ||
-        values['rotation']! > 360000 ||
-        values['anchor_x']! > 10000 ||
-        values['anchor_y']! > 10000 ||
-        values['crop_left']! > 10000 ||
-        values['crop_top']! > 10000 ||
-        values['crop_right']! > 10000 ||
-        values['crop_bottom']! > 10000 ||
-        values['opacity']! > 10000 ||
-        values['crop_left']! + values['crop_right']! >= 10000 ||
-        values['crop_top']! + values['crop_bottom']! >= 10000 ||
-        values['brightness']! < -1000 ||
-        values['brightness']! > 1000 ||
-        values['contrast']! < 0 ||
-        values['contrast']! > 4000 ||
-        values['saturation']! < 0 ||
-        values['saturation']! > 4000 ||
-        values['blur']! < 0 ||
-        values['blur']! > 128000 ||
-        values['transition_in_kind']! < 0 ||
-        values['transition_in_kind']! > 3 ||
-        values['transition_out_kind']! < 0 ||
-        values['transition_out_kind']! > 3) {
-      return null;
-    }
-    final transitionInDuration = ProjectRationalTime.tryParse(
+    final x = _percentToMilli(_fields['x']!.text);
+    final y = _percentToMilli(_fields['y']!.text);
+    final scaleX = _percentToMilli(
+      _fields['scale_x']!.text,
+      minimum: 1,
+      maximum: 100000,
+    );
+    final scaleY = _percentToMilli(
+      _fields['scale_y']!.text,
+      minimum: 1,
+      maximum: 100000,
+    );
+    final rotation = _degreesToMilliDegrees(_fields['rotation']!.text);
+    final anchorX = _basisPercentToBasisPoints(_fields['anchor_x']!.text);
+    final anchorY = _basisPercentToBasisPoints(_fields['anchor_y']!.text);
+    final cropLeft = _basisPercentToBasisPoints(_fields['crop_left']!.text);
+    final cropTop = _basisPercentToBasisPoints(_fields['crop_top']!.text);
+    final cropRight = _basisPercentToBasisPoints(_fields['crop_right']!.text);
+    final cropBottom = _basisPercentToBasisPoints(_fields['crop_bottom']!.text);
+    final opacity = _basisPercentToBasisPoints(_fields['opacity']!.text);
+    final brightness = _percentToMilli(
+      _fields['brightness']!.text,
+      minimum: -1000,
+      maximum: 1000,
+    );
+    final contrast = _percentToMilli(
+      _fields['contrast']!.text,
+      minimum: 0,
+      maximum: 4000,
+    );
+    final saturation = _percentToMilli(
+      _fields['saturation']!.text,
+      minimum: 0,
+      maximum: 4000,
+    );
+    final blur = _pixelsToMilliPixels(_fields['blur']!.text);
+    final transitionInKind = int.tryParse(_fields['transition_in_kind']!.text);
+    final transitionOutKind = int.tryParse(
+      _fields['transition_out_kind']!.text,
+    );
+    final transitionInDuration = _parseSecondsOrRational(
       _fields['transition_in_duration']!.text,
     );
-    final transitionOutDuration = ProjectRationalTime.tryParse(
+    final transitionOutDuration = _parseSecondsOrRational(
       _fields['transition_out_duration']!.text,
     );
-    if (transitionInDuration == null ||
+    if (x == null ||
+        y == null ||
+        scaleX == null ||
+        scaleY == null ||
+        rotation == null ||
+        anchorX == null ||
+        anchorY == null ||
+        cropLeft == null ||
+        cropTop == null ||
+        cropRight == null ||
+        cropBottom == null ||
+        opacity == null ||
+        brightness == null ||
+        contrast == null ||
+        saturation == null ||
+        blur == null ||
+        transitionInKind == null ||
+        transitionInKind < 0 ||
+        transitionInKind > 3 ||
+        transitionOutKind == null ||
+        transitionOutKind < 0 ||
+        transitionOutKind > 3 ||
+        transitionInDuration == null ||
         transitionOutDuration == null ||
-        (values['transition_in_kind'] != 0 &&
-            !transitionInDuration.isPositive) ||
-        (values['transition_out_kind'] != 0 &&
-            !transitionOutDuration.isPositive)) {
+        cropLeft + cropRight >= 10000 ||
+        cropTop + cropBottom >= 10000 ||
+        (transitionInKind != 0 && !transitionInDuration.isPositive) ||
+        (transitionOutKind != 0 && !transitionOutDuration.isPositive)) {
       return null;
     }
     return ProjectTimelineVisualSettings(
-      xMilliCanvas: values['x']!,
-      yMilliCanvas: values['y']!,
-      scaleXMilli: values['scale_x']!,
-      scaleYMilli: values['scale_y']!,
-      rotationMilliDegrees: values['rotation']!,
-      anchorXBasisPoints: values['anchor_x']!,
-      anchorYBasisPoints: values['anchor_y']!,
-      cropLeftBasisPoints: values['crop_left']!,
-      cropTopBasisPoints: values['crop_top']!,
-      cropRightBasisPoints: values['crop_right']!,
-      cropBottomBasisPoints: values['crop_bottom']!,
-      opacityBasisPoints: values['opacity']!,
-      brightnessAmountMilli: values['brightness']!,
-      contrastAmountMilli: values['contrast']!,
-      saturationAmountMilli: values['saturation']!,
-      gaussianBlurRadiusMilli: values['blur']!,
-      transitionIn:
-          ProjectTimelineTransition.values[values['transition_in_kind']!],
+      xMilliCanvas: x,
+      yMilliCanvas: y,
+      scaleXMilli: scaleX,
+      scaleYMilli: scaleY,
+      rotationMilliDegrees: rotation,
+      anchorXBasisPoints: anchorX,
+      anchorYBasisPoints: anchorY,
+      cropLeftBasisPoints: cropLeft,
+      cropTopBasisPoints: cropTop,
+      cropRightBasisPoints: cropRight,
+      cropBottomBasisPoints: cropBottom,
+      opacityBasisPoints: opacity,
+      brightnessAmountMilli: brightness,
+      contrastAmountMilli: contrast,
+      saturationAmountMilli: saturation,
+      gaussianBlurRadiusMilli: blur,
+      transitionIn: ProjectTimelineTransition.values[transitionInKind],
       transitionInDuration: transitionInDuration,
-      transitionOut:
-          ProjectTimelineTransition.values[values['transition_out_kind']!],
+      transitionOut: ProjectTimelineTransition.values[transitionOutKind],
       transitionOutDuration: transitionOutDuration,
       modifiedEffects: Set.unmodifiable(_modifiedEffects),
       updateTransitionIn: _updateTransitionIn,
@@ -3003,10 +3101,8 @@ class _InspectorPanelState extends State<_InspectorPanel> {
   ProjectTimelineAudioSettings? _readAudioSettings() {
     final gain = double.tryParse(_audioFields['gain_db']!.text);
     final pan = double.tryParse(_audioFields['pan_percent']!.text);
-    final fadeIn = ProjectRationalTime.tryParse(_audioFields['fade_in']!.text);
-    final fadeOut = ProjectRationalTime.tryParse(
-      _audioFields['fade_out']!.text,
-    );
+    final fadeIn = _parseSecondsOrRational(_audioFields['fade_in']!.text);
+    final fadeOut = _parseSecondsOrRational(_audioFields['fade_out']!.text);
     if (gain == null ||
         !gain.isFinite ||
         gain < -96 ||
@@ -3194,7 +3290,9 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       };
 
   Widget _numberField(String key, String label, {required bool signed}) {
-    final expression = RegExp(signed ? r'^-?\d{0,7}$' : r'^\d{0,7}$');
+    final expression = RegExp(
+      signed ? r'^-?\d{0,7}(?:\.\d{0,3})?$' : r'^\d{0,7}(?:\.\d{0,3})?$',
+    );
     final limit = switch (key) {
       'x' || 'y' => 100000,
       'rotation' => 360000,
@@ -3218,18 +3316,26 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         };
         if (effect != null) _modifiedEffects.add(effect);
       },
-      keyboardType: TextInputType.numberWithOptions(signed: signed),
+      keyboardType: TextInputType.numberWithOptions(
+        signed: signed,
+        decimal: true,
+      ),
       inputFormatters: [
         TextInputFormatter.withFunction((oldValue, newValue) {
           if (!expression.hasMatch(newValue.text)) return oldValue;
-          if (newValue.text.isEmpty || newValue.text == '-') return newValue;
-          final value = int.tryParse(newValue.text);
-          if (value == null) return newValue;
+          if (newValue.text.isEmpty ||
+              newValue.text == '-' ||
+              newValue.text == '.' ||
+              newValue.text == '-.') {
+            return newValue;
+          }
+          final value = double.tryParse(newValue.text);
+          if (value == null || !value.isFinite) return oldValue;
           final minimum = switch (key) {
-            'x' || 'y' || 'rotation' => -limit,
-            'brightness' => -limit,
-            'scale_x' || 'scale_y' => 1,
-            _ => 0,
+            'x' || 'y' || 'rotation' => -limit.toDouble(),
+            'brightness' => -limit.toDouble(),
+            'scale_x' || 'scale_y' => 0.1,
+            _ => 0.0,
           };
           return value >= minimum && value <= limit ? newValue : oldValue;
         }),
@@ -3262,7 +3368,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       labelText: label,
       isDense: true,
       counterText: '',
-      helperText: 'Seconds, e.g. 1/2',
+      helperText: 'Seconds, e.g. 0.5',
       helperMaxLines: 1,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: OrSpacing.x2,
@@ -3349,7 +3455,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       labelText: label,
       isDense: true,
       counterText: '',
-      helperText: 'Seconds, e.g. 1/2',
+      helperText: 'Seconds, e.g. 0.5',
       helperMaxLines: 1,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: OrSpacing.x2,
@@ -3389,9 +3495,9 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         maximum: 100,
       ),
       const SizedBox(height: OrSpacing.x1),
-      _audioTimeField('fade_in', 'Fade in'),
+      _audioTimeField('fade_in', 'Fade in (s)'),
       const SizedBox(height: OrSpacing.x1),
-      _audioTimeField('fade_out', 'Fade out'),
+      _audioTimeField('fade_out', 'Fade out (s)'),
       if (_error != null) ...[
         const SizedBox(height: OrSpacing.x2),
         Text(
@@ -3402,35 +3508,6 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           ),
         ),
       ],
-      const SizedBox(height: OrSpacing.x2),
-      Row(
-        children: [
-          OutlinedButton(
-            key: const ValueKey('inspector-audio-reset'),
-            onPressed: widget.busy || _saving || widget.trackLocked
-                ? null
-                : () => _applyAudio(ProjectTimelineAudioSettings.identity),
-            child: const Text('Reset'),
-          ),
-          const Spacer(),
-          FilledButton(
-            key: const ValueKey('inspector-audio-apply'),
-            onPressed: widget.busy || _saving || widget.trackLocked || _loading
-                ? null
-                : () {
-                    final settings = _readAudioSettings();
-                    if (settings == null) {
-                      setState(
-                        () => _error = 'Enter valid gain, pan, and nonnegative rational fade times.',
-                      );
-                      return;
-                    }
-                    _applyAudio(settings);
-                  },
-            child: const Text('Apply'),
-          ),
-        ],
-      ),
     ],
   );
 
@@ -3450,6 +3527,71 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           child: _numberField(rightKey, rightLabel, signed: rightSigned),
         ),
       ],
+    );
+  }
+
+  /// The commit bar is pinned to the panel instead of the end of a 20-field
+  /// scroll: at 800x600 Apply sat below the fold and could not be reached
+  /// without discovering that the inspector scrolls.
+  Widget _inspectorFooter() {
+    final audio = widget.isAudioTrack;
+    final disabled = widget.busy || _saving || widget.trackLocked || _loading;
+    return Container(
+      key: const ValueKey('inspector-commit-bar'),
+      padding: const EdgeInsets.all(OrSpacing.x2),
+      decoration: const BoxDecoration(
+        color: OrColors.backgroundRaised,
+        border: Border(top: BorderSide(color: OrColors.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              key: ValueKey(
+                audio ? 'inspector-audio-reset' : 'inspector-visual-reset',
+              ),
+              onPressed: disabled
+                  ? null
+                  : () => audio
+                        ? _applyAudio(ProjectTimelineAudioSettings.identity)
+                        : _apply(ProjectTimelineVisualSettings.identity),
+              child: const Text('Reset'),
+            ),
+          ),
+          const SizedBox(width: OrSpacing.x2),
+          Expanded(
+            child: FilledButton(
+              key: ValueKey(
+                audio ? 'inspector-audio-apply' : 'inspector-visual-apply',
+              ),
+              onPressed: disabled
+                  ? null
+                  : () {
+                      if (audio) {
+                        final settings = _readAudioSettings();
+                        if (settings == null) {
+                          setState(
+                            () => _error = 'Enter a gain between -96 and 24 dB, a pan between -100 and 100%, and fade times in seconds.',
+                          );
+                          return;
+                        }
+                        _applyAudio(settings);
+                        return;
+                      }
+                      final settings = _readSettings();
+                      if (settings == null) {
+                        setState(
+                          () => _error = 'Enter values within the supported ranges. Percentages may use decimals.',
+                        );
+                        return;
+                      }
+                      _apply(settings);
+                    },
+              child: const Text('Apply'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3514,36 +3656,25 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     ),
                   ),
                   const SizedBox(height: OrSpacing.x1),
-                  _pair(
-                    'x',
-                    'X (milli-canvas)',
-                    true,
-                    'y',
-                    'Y (milli-canvas)',
-                    true,
-                  ),
+                  _pair('x', 'X (%)', true, 'y', 'Y (%)', true),
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
                     'scale_x',
-                    'Scale X (milli)',
+                    'Width (%)',
                     false,
                     'scale_y',
-                    'Scale Y (milli)',
+                    'Height (%)',
                     false,
                   ),
                   const SizedBox(height: OrSpacing.x1),
-                  _numberField(
-                    'rotation',
-                    'Rotation (milli-deg)',
-                    signed: true,
-                  ),
+                  _numberField('rotation', 'Rotation (°)', signed: true),
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
                     'anchor_x',
-                    'Anchor X (bp)',
+                    'Anchor X (%)',
                     false,
                     'anchor_y',
-                    'Anchor Y (bp)',
+                    'Anchor Y (%)',
                     false,
                   ),
                   const SizedBox(height: OrSpacing.x3),
@@ -3558,19 +3689,19 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
                     'crop_left',
-                    'Left (bp)',
+                    'Left crop (%)',
                     false,
                     'crop_right',
-                    'Right (bp)',
+                    'Right crop (%)',
                     false,
                   ),
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
                     'crop_top',
-                    'Top (bp)',
+                    'Top crop (%)',
                     false,
                     'crop_bottom',
-                    'Bottom (bp)',
+                    'Bottom crop (%)',
                     false,
                   ),
                   const SizedBox(height: OrSpacing.x3),
@@ -3583,11 +3714,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     ),
                   ),
                   const SizedBox(height: OrSpacing.x1),
-                  _numberField(
-                    'opacity',
-                    'Opacity (basis points)',
-                    signed: false,
-                  ),
+                  _numberField('opacity', 'Opacity (%)', signed: false),
                   const SizedBox(height: OrSpacing.x3),
                   Text(
                     'EFFECTS',
@@ -3598,26 +3725,18 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     ),
                   ),
                   const SizedBox(height: OrSpacing.x1),
-                  _numberField(
-                    'brightness',
-                    'Brightness (milli)',
-                    signed: true,
-                  ),
+                  _numberField('brightness', 'Brightness (%)', signed: true),
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
                     'contrast',
-                    'Contrast (milli)',
+                    'Contrast (%)',
                     false,
                     'saturation',
-                    'Saturation (milli)',
+                    'Saturation (%)',
                     false,
                   ),
                   const SizedBox(height: OrSpacing.x1),
-                  _numberField(
-                    'blur',
-                    'Blur radius (milli-pixels)',
-                    signed: false,
-                  ),
+                  _numberField('blur', 'Blur (px)', signed: false),
                   const SizedBox(height: OrSpacing.x3),
                   Text(
                     'TRANSITIONS',
@@ -3630,16 +3749,13 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                   const SizedBox(height: OrSpacing.x1),
                   _transitionField('transition_in_kind', 'Transition in'),
                   const SizedBox(height: OrSpacing.x1),
-                  _visualTimeField(
-                    'transition_in_duration',
-                    'Transition in duration',
-                  ),
+                  _visualTimeField('transition_in_duration', 'Duration in (s)'),
                   const SizedBox(height: OrSpacing.x1),
                   _transitionField('transition_out_kind', 'Transition out'),
                   const SizedBox(height: OrSpacing.x1),
                   _visualTimeField(
                     'transition_out_duration',
-                    'Transition out duration',
+                    'Duration out (s)',
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: OrSpacing.x2),
@@ -3651,44 +3767,10 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: OrSpacing.x2),
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        key: const ValueKey('inspector-visual-reset'),
-                        onPressed: widget.busy || _saving || widget.trackLocked
-                            ? null
-                            : () => _apply(
-                                ProjectTimelineVisualSettings.identity,
-                              ),
-                        child: const Text('Reset'),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        key: const ValueKey('inspector-visual-apply'),
-                        onPressed:
-                            widget.busy ||
-                                _saving ||
-                                widget.trackLocked ||
-                                _loading
-                            ? null
-                            : () {
-                                final settings = _readSettings();
-                                if (settings == null) {
-                                  setState(
-                                    () => _error = 'Enter valid whole numbers within the supported ranges.',
-                                  );
-                                  return;
-                                }
-                                _apply(settings);
-                              },
-                        child: const Text('Apply'),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
+          if (canEdit && !_loading) _inspectorFooter(),
         ],
       ),
     );
@@ -4601,39 +4683,16 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                                     position,
                                                     scale,
                                                   ),
-                                        onOpenClip: (clip) {
-                                          _selectClip(track, clip);
-                                          unawaited(() async {
-                                            await _showTimelineClipActions(
-                                              context: context,
-                                              project: widget.project,
-                                              tracks: snapshot.items,
-                                              track: track,
-                                              clip: clip,
-                                              playhead: widget
-                                                  .previewState
-                                                  .value
-                                                  ?.position,
-                                              onMove: widget.onMoveClip,
-                                              onDuplicate:
-                                                  widget.onDuplicateClip,
-                                              onDelete: widget.onDeleteClip,
-                                              onTrim: widget.onTrimClip,
-                                              onSplit: widget.onSplitClip,
-                                              onSlip: widget.onSlipClip,
-                                              onRoll: widget.onRollClip,
-                                              onSlide: widget.onSlideClip,
-                                              onRippleDelete:
-                                                  widget.onRippleDeleteClip,
-                                              onEditTextClip:
-                                                  widget.onUpdateTextClip,
-                                              busy: widget.busy,
-                                            );
-                                            if (mounted) {
-                                              _timelineFocusNode.requestFocus();
-                                            }
-                                          }());
-                                        },
+                                        onOpenClip: (clip) =>
+                                            _selectClip(track, clip),
+                                        onOpenClipMenu: (clip, position) =>
+                                            unawaited(
+                                              _showClipMenu(
+                                                track,
+                                                clip,
+                                                position,
+                                              ),
+                                            ),
                                         onMoveStart: track.state.locked
                                             ? null
                                             : (clip, details) =>
@@ -4793,6 +4852,30 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                       )
                     : null,
                 icon: const Icon(Icons.delete_outline, size: 16),
+              ),
+              Builder(
+                builder: (buttonContext) => IconButton(
+                  key: const ValueKey('timeline-selection-actions'),
+                  tooltip: 'Clip actions',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: selectedTrack == null
+                      ? null
+                      : () {
+                          final box =
+                              buttonContext.findRenderObject() as RenderBox?;
+                          final position = box == null
+                              ? Offset.zero
+                              : box.localToGlobal(box.size.center(Offset.zero));
+                          unawaited(
+                            _showClipMenu(
+                              selectedTrack,
+                              selectedClip,
+                              position,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.more_horiz, size: 16),
+                ),
               ),
               IconButton(
                 key: const ValueKey('timeline-selection-clear'),
@@ -4954,6 +5037,132 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       }
     }
     return null;
+  }
+
+  /// The full clip dialog, kept for the operations that need exact numbers.
+  /// Reached from the context menu's "Advanced clip actions…" item.
+  Future<void> _openClipDialog(
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  ) async {
+    final tracks = widget.tracks?.items ?? const <ProjectTimelineTrack>[];
+    await _showTimelineClipActions(
+      context: context,
+      project: widget.project,
+      tracks: tracks,
+      track: track,
+      clip: clip,
+      playhead: widget.previewState.value?.position,
+      onMove: widget.onMoveClip,
+      onDuplicate: widget.onDuplicateClip,
+      onDelete: widget.onDeleteClip,
+      onTrim: widget.onTrimClip,
+      onSplit: widget.onSplitClip,
+      onSlip: widget.onSlipClip,
+      onRoll: widget.onRollClip,
+      onSlide: widget.onSlideClip,
+      onRippleDelete: widget.onRippleDeleteClip,
+      onEditTextClip: widget.onUpdateTextClip,
+      busy: widget.busy,
+    );
+    if (mounted) _timelineFocusNode.requestFocus();
+  }
+
+  /// Context menu for the frequent clip operations. Right-clicking a clip or
+  /// the selection strip's "…" button opens it; the old modal-on-tap is gone.
+  Future<void> _showClipMenu(
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+    Offset globalPosition,
+  ) async {
+    final project = widget.project;
+    if (project == null) return;
+    if (track.state.locked) {
+      _showLockedTrackNotice();
+      return;
+    }
+    final playhead = widget.previewState.value?.position;
+    final canSplit =
+        playhead != null &&
+        _compareProjectRational(playhead, clip.timelineStart) > 0 &&
+        _compareProjectRational(playhead, clip.timelineEnd) < 0 &&
+        widget.onSplitClip != null &&
+        !widget.busy;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final choice = await showMenu<_ClipMenuChoice>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(globalPosition, globalPosition),
+        Offset.zero & overlay.size,
+      ),
+      color: OrColors.backgroundRaised,
+      items: [
+        PopupMenuItem<_ClipMenuChoice>(
+          enabled: false,
+          height: 34,
+          child: Text(
+            _selectedClipStripLabel(clip),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.split,
+          enabled: canSplit,
+          child: const _ClipMenuItem('Split at playhead', '⌘B'),
+        ),
+        PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.duplicate,
+          enabled: widget.onDuplicateClip != null && !widget.busy,
+          child: const _ClipMenuItem('Duplicate', '⌘D'),
+        ),
+        PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.delete,
+          enabled: widget.onDeleteClip != null && !widget.busy,
+          child: const _ClipMenuItem('Delete', '⌫', destructive: true),
+        ),
+        PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.rippleDelete,
+          enabled: widget.onRippleDeleteClip != null && !widget.busy,
+          child: const _ClipMenuItem('Ripple delete', '⇧⌫', destructive: true),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.advanced,
+          child: const _ClipMenuItem('Advanced clip actions…', ''),
+        ),
+      ],
+    );
+    switch (choice) {
+      case null:
+        return;
+      case _ClipMenuChoice.split:
+        if (playhead != null) {
+          await widget.onSplitClip!(project, clip, playhead);
+        }
+      case _ClipMenuChoice.duplicate:
+        await widget.onDuplicateClip!(project, track, clip);
+      case _ClipMenuChoice.delete:
+        await widget.onDeleteClip!(project, clip);
+      case _ClipMenuChoice.rippleDelete:
+        await widget.onRippleDeleteClip!(project, clip);
+      case _ClipMenuChoice.advanced:
+        await _openClipDialog(track, clip);
+    }
+  }
+
+  void _showLockedTrackNotice() {
+    OrSnackBar.show(
+      context,
+      'This track is locked. Unlock it to edit its clips.',
+      bottomInset: 0,
+    );
   }
 
   String _selectedClipStripLabel(ProjectTimelineClip clip) {
@@ -6055,6 +6264,43 @@ class _TimelineLoadMoreLane extends StatelessWidget {
   );
 }
 
+enum _ClipMenuChoice { split, duplicate, delete, rippleDelete, advanced }
+
+/// One context-menu row: label on the left, shortcut on the right.
+class _ClipMenuItem extends StatelessWidget {
+  const _ClipMenuItem(this.label, this.shortcut, {this.destructive = false});
+
+  final String label;
+  final String shortcut;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? OrColors.danger : OrColors.text;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: OrType.metadataCompactSize,
+            ),
+          ),
+        ),
+        if (shortcut.isNotEmpty)
+          Text(
+            shortcut,
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _TimelinePointerSurface extends StatefulWidget {
   const _TimelinePointerSurface({
     super.key,
@@ -6152,6 +6398,7 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.selectedClipId,
     required this.onDropMedia,
     required this.onOpenClip,
+    required this.onOpenClipMenu,
     required this.onMoveStart,
     required this.onMoveUpdate,
     required this.onMoveEnd,
@@ -6176,6 +6423,7 @@ class _TimelineTrackLane extends StatelessWidget {
   final String? selectedClipId;
   final void Function(ProjectMediaItem, Offset)? onDropMedia;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
+  final void Function(ProjectTimelineClip, Offset) onOpenClipMenu;
   final void Function(ProjectTimelineClip, DragStartDetails)? onMoveStart;
   final void Function(ProjectTimelineClip, DragUpdateDetails)? onMoveUpdate;
   final void Function(ProjectTimelineClip, DragEndDetails)? onMoveEnd;
@@ -6196,46 +6444,70 @@ class _TimelineTrackLane extends StatelessWidget {
         color: OrColors.background,
         border: Border(bottom: BorderSide(color: OrColors.border)),
       ),
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _TimelineGridPainter(
-                pixelsPerSecond: pixelsPerSecond,
-                tickSeconds: tickSeconds,
+      child: Listener(
+        // Right-click is the desktop NLE way to reach clip operations without
+        // hijacking a plain click (which now only selects). The lane resolves
+        // the clip under the pointer from its time range.
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (event) {
+          if (event.buttons & kSecondaryMouseButton == 0) return;
+          if (track.state.locked) {
+            onOpenClipMenu(clips.first, event.position);
+            return;
+          }
+          final box = laneKey.currentContext?.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          final local = box.globalToLocal(event.position);
+          final seconds = local.dx / pixelsPerSecond;
+          for (final clip in clips) {
+            if (seconds >= clip.timelineStart.secondsForDisplay &&
+                seconds < clip.timelineEnd.secondsForDisplay) {
+              onOpenClipMenu(clip, event.position);
+              return;
+            }
+          }
+        },
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _TimelineGridPainter(
+                  pixelsPerSecond: pixelsPerSecond,
+                  tickSeconds: tickSeconds,
+                ),
               ),
             ),
-          ),
-          if (snapGuide?.trackId == track.trackId)
-            Positioned(
-              key: ValueKey('timeline-snap-guide-${track.trackId}'),
-              left: snapGuide!.time.secondsForDisplay * pixelsPerSecond,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              child: Container(color: OrColors.selection),
-            ),
-          for (final clip in clips)
-            if (gesture?.clip.clipId != clip.clipId)
-              _positionedClip(context, clip),
-          if (gesture != null && gesture!.targetTrackId == track.trackId)
-            _positionedGhost(gesture!),
-          if (playhead != null &&
-              playhead!.secondsForDisplay.isFinite &&
-              playhead!.secondsForDisplay >= 0 &&
-              playhead!.secondsForDisplay * pixelsPerSecond <= width)
-            Positioned(
-              key: ValueKey('timeline-playhead-${track.trackId}'),
-              left: playhead!.secondsForDisplay * pixelsPerSecond,
-              top: 0,
-              bottom: 0,
-              width: 2,
-              child: const IgnorePointer(
-                child: ColoredBox(color: OrColors.selection),
+            if (snapGuide?.trackId == track.trackId)
+              Positioned(
+                key: ValueKey('timeline-snap-guide-${track.trackId}'),
+                left: snapGuide!.time.secondsForDisplay * pixelsPerSecond,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: Container(color: OrColors.selection),
               ),
-            ),
-        ],
+            for (final clip in clips)
+              if (gesture?.clip.clipId != clip.clipId)
+                _positionedClip(context, clip),
+            if (gesture != null && gesture!.targetTrackId == track.trackId)
+              _positionedGhost(gesture!),
+            if (playhead != null &&
+                playhead!.secondsForDisplay.isFinite &&
+                playhead!.secondsForDisplay >= 0 &&
+                playhead!.secondsForDisplay * pixelsPerSecond <= width)
+              Positioned(
+                key: ValueKey('timeline-playhead-${track.trackId}'),
+                left: playhead!.secondsForDisplay * pixelsPerSecond,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: const IgnorePointer(
+                  child: ColoredBox(color: OrColors.selection),
+                ),
+              ),
+          ],
+        ),
       ),
     );
     final dropHandler = onDropMedia;
@@ -6357,7 +6629,7 @@ class _TimelineTrackLane extends StatelessWidget {
               '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel, '
               'spans ${clip.timelineStart.canonical} to ${clip.timelineEnd.canonical}'
               '${clip.sourceStart == null ? '' : ', source ${clip.sourceStart!.canonical}'}',
-          hint: 'Drag to move. Activate for clip actions.',
+          hint: 'Drag to move. Right-click or use Clip actions for more.',
           child: Tooltip(
             key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
             message:

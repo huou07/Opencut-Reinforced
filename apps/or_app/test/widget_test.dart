@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
@@ -1623,8 +1624,10 @@ void main() {
     expect(title.formatting?.color.alpha, 255);
     expect(gateway.insertTimelineTextClipCalls, 1);
 
-    await tester.tap(find.byKey(ValueKey('timeline-clip-${title.clipId}')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(ValueKey('timeline-clip-${title.clipId}')),
+    );
     await tester.tap(
       find.byKey(ValueKey('timeline-edit-text-${title.clipId}')),
     );
@@ -1858,8 +1861,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Activation selects the clip; the selection strip is the executable
+    // surface that carries duplicate/delete/split and the actions menu.
     expect(
-      find.byKey(const ValueKey('timeline-duplicate-semantic-clip')),
+      find.byKey(const ValueKey('timeline-selection-duplicate')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline-selection-actions')),
       findsOneWidget,
     );
     handle.dispose();
@@ -1892,10 +1901,10 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Duplicate clip');
 
-    await tester.tap(
+    await _openAdvancedClipActions(
+      tester,
       find.byKey(const ValueKey('timeline-clip-duplicate-clip')),
     );
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('timeline-duplicate-duplicate-clip')),
     );
@@ -1968,8 +1977,6 @@ void main() {
         find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Close').last);
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('timeline-selection-duplicate')),
         findsOneWidget,
@@ -2005,7 +2012,7 @@ void main() {
       expect(find.text('Ctrl+K'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-x')),
-        '250',
+        '25',
       );
       // Full-height fields push the effects section below the fold; a lazy
       // ListView does not build a field that was never scrolled into view.
@@ -2016,7 +2023,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-brightness')),
-        '250',
+        '25',
       );
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-contrast')),
@@ -2025,7 +2032,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-contrast')),
-        '1250',
+        '125',
       );
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-transition_in_kind')),
@@ -2041,11 +2048,6 @@ void main() {
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-transition_in_duration')),
         '1/2',
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('inspector-visual-apply')),
-        200,
-        scrollable: inspectorScrollable,
       );
       await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
       await tester.pumpAndSettle();
@@ -2095,8 +2097,6 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Close').last);
       await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pumpAndSettle();
@@ -2740,8 +2740,6 @@ void main() {
       find.byKey(const ValueKey('timeline-clip-audio-inspector-clip')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Close').last);
-    await tester.pumpAndSettle();
     expect(find.text('AUDIO'), findsOneWidget);
     expect(gateway.getAudioSettingsCalls, 1);
     final playbackRate = find.byKey(const ValueKey('inspector-playback-rate'));
@@ -2761,6 +2759,17 @@ void main() {
       find.byKey(const ValueKey('inspector-audio-pan_percent')),
       '-37.5',
     );
+    final audioScroll = find
+        .descendant(
+          of: find.byKey(const ValueKey('inspector-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('inspector-audio-fade_in')),
+      80,
+      scrollable: audioScroll,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-fade_in')),
       '1/2',
@@ -2768,16 +2777,6 @@ void main() {
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-fade_out')),
       '1/3',
-    );
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('inspector-audio-apply')),
-      120,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const ValueKey('inspector-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
     );
     await tester.tap(find.byKey(const ValueKey('inspector-audio-apply')));
     await tester.pumpAndSettle();
@@ -3499,8 +3498,10 @@ void main() {
         isNull,
       );
 
-      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(ValueKey('timeline-clip-${clip.clipId}')),
+      );
       expect(find.textContaining('Timeline start: 0/1'), findsOneWidget);
       await tester.tap(find.byKey(ValueKey('timeline-move-${clip.clipId}')));
       await tester.pumpAndSettle();
@@ -3520,8 +3521,10 @@ void main() {
         '3/1',
       );
 
-      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(ValueKey('timeline-clip-${clip.clipId}')),
+      );
       await tester.tap(find.byKey(ValueKey('timeline-delete-${clip.clipId}')));
       await tester.pumpAndSettle();
       expect(find.text('Delete clip?'), findsOneWidget);
@@ -3585,8 +3588,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(clipFinder);
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(tester, clipFinder);
     final splitAtPlayhead = find.byKey(
       const ValueKey('timeline-split-at-playhead-$clipId'),
     );
@@ -3601,8 +3603,10 @@ void main() {
     expect(splitClips.last.timelineStart.canonical, '5/1');
     expect(splitClips.last.sourceStart!.canonical, '3/1');
 
-    await tester.tap(find.byKey(const ValueKey('timeline-clip-$clipId')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(ValueKey('timeline-clip-$clipId')),
+    );
     expect(
       tester.widget<TextButton>(splitAtPlayhead).onPressed,
       isNull,
@@ -3658,8 +3662,10 @@ void main() {
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Advanced timeline dialogs');
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       expect(find.text('Move'), findsOneWidget);
       expect(find.text('Trim'), findsOneWidget);
       expect(find.text('Split'), findsOneWidget);
@@ -3734,8 +3740,10 @@ void main() {
         '5/1',
       );
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       await tester.tap(find.byKey(const ValueKey('timeline-split-edit-clip')));
       await tester.pumpAndSettle();
       expect(find.text('Split at:'), findsOneWidget);
@@ -3781,8 +3789,10 @@ void main() {
         '5/1',
       );
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       await tester.tap(
         find.byKey(const ValueKey('timeline-ripple-delete-edit-clip')),
       );
@@ -3863,8 +3873,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Close tool panel'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('timeline-clip-compact-clip')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(const ValueKey('timeline-clip-compact-clip')),
+    );
     expect(find.text('Clip'), findsOneWidget);
     _setViewport(tester, const Size(320, 440));
     await tester.pumpAndSettle();
@@ -5463,6 +5475,16 @@ class _FakeProjectPicker implements ProjectFilePicker {
     if (failure != null) throw ProjectSafStorageException(failure);
     return null;
   }
+}
+
+/// Opens the clip context menu with a secondary click and then the advanced
+/// dialog that owns the exact-value operations. A plain click now only selects
+/// (the old modal-on-tap blocked the inspector and the timeline).
+Future<void> _openAdvancedClipActions(WidgetTester tester, Finder clip) async {
+  await tester.tap(clip, buttons: kSecondaryMouseButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Advanced clip actions…'));
+  await tester.pumpAndSettle();
 }
 
 class _FakeProjectGateway implements ProjectGateway {

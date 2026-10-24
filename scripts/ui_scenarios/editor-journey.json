@@ -35,6 +35,10 @@
     {"op": "shot", "name": "timeline"},
 
     {"op": "tap", "selector": {"key_regex": "^timeline-clip-[0-9a-f-]+$"}},
+    {"op": "shot", "name": "clip-selected"},
+    {"op": "tap", "selector": {"key": "timeline-selection-actions"}},
+    {"op": "shot", "name": "clip-menu"},
+    {"op": "tap", "selector": {"label": "Advanced clip actions…"}},
     {"op": "shot", "name": "clip-dialog"},
     {"op": "tap", "selector": {"label": "Close", "within": {"type": "AlertDialog"}}},
 
