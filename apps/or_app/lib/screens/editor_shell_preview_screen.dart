@@ -648,6 +648,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             snapEnabled: _snapEnabled,
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
+            mediaPreviews: widget.mediaPreviews,
             onAddMediaToTimeline: widget.onAddMediaToTimeline,
             onClipSelectionChanged: _onTimelineClipSelectionChanged,
           ),
@@ -740,6 +741,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             snapEnabled: _snapEnabled,
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
+            mediaPreviews: widget.mediaPreviews,
             onAddMediaToTimeline: widget.onAddMediaToTimeline,
             onClipSelectionChanged: _onTimelineClipSelectionChanged,
           ),
@@ -4355,6 +4357,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.snapEnabled,
     required this.onTimelineEditError,
     required this.mediaItems,
+    required this.mediaPreviews,
     required this.onAddMediaToTimeline,
     this.onClipSelectionChanged,
   });
@@ -4470,6 +4473,7 @@ class _TimelinePanel extends StatefulWidget {
   final bool snapEnabled;
   final ValueChanged<String>? onTimelineEditError;
   final List<ProjectMediaItem> mediaItems;
+  final Map<String, ProjectMediaPreview> mediaPreviews;
   final Future<void> Function(
     ProjectReadModel,
     ProjectMediaItem,
@@ -4862,6 +4866,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                                 ?.items ??
                                             const [],
                                         mediaItems: widget.mediaItems,
+                                        mediaPreviews: widget.mediaPreviews,
                                         width: canvasWidth,
                                         pixelsPerSecond: scale,
                                         tickSeconds: tickSeconds,
@@ -6588,6 +6593,7 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.track,
     required this.clips,
     required this.mediaItems,
+    required this.mediaPreviews,
     required this.width,
     required this.pixelsPerSecond,
     required this.tickSeconds,
@@ -6613,6 +6619,7 @@ class _TimelineTrackLane extends StatelessWidget {
   final ProjectTimelineTrack track;
   final List<ProjectTimelineClip> clips;
   final List<ProjectMediaItem> mediaItems;
+  final Map<String, ProjectMediaPreview> mediaPreviews;
   final double width;
   final double pixelsPerSecond;
   final double tickSeconds;
@@ -6780,9 +6787,35 @@ class _TimelineTrackLane extends StatelessWidget {
       onPanCancel: onMoveCancel == null ? null : () => onMoveCancel!(clip),
       child: const SizedBox.expand(),
     );
+    // A clip shows what it contains, like every desktop NLE: frames for visual
+    // media, a waveform for audio. The artifact is the one the media library
+    // already requested, tiled along the clip instead of decoded again.
+    final previewKind = media == null
+        ? null
+        : media.videoDetails != null
+        ? ProjectMediaArtifactKind.thumbnail
+        : media.audioDetails != null
+        ? ProjectMediaArtifactKind.waveform
+        : null;
+    final previewBytes =
+        previewKind != null &&
+            mediaPreviews[media!.mediaId]?.kind == previewKind
+        ? mediaPreviews[media.mediaId]?.bytes
+        : null;
     final visual = Container(
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
       decoration: BoxDecoration(
+        color: background,
+        image: previewBytes == null
+            ? null
+            : DecorationImage(
+                image: MemoryImage(previewBytes),
+                fit: BoxFit.fitHeight,
+                repeat: ImageRepeat.repeatX,
+                alignment: Alignment.centerLeft,
+                opacity: 0.55,
+                filterQuality: FilterQuality.low,
+              ),
         border: Border.all(
           color: clip.clipId == selectedClipId
               ? OrColors.selection
@@ -6792,14 +6825,25 @@ class _TimelineTrackLane extends StatelessWidget {
         borderRadius: BorderRadius.circular(OrRadii.small),
       ),
       alignment: Alignment.centerLeft,
-      child: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: OrColors.text,
-          fontSize: OrType.tinySize,
-          fontWeight: FontWeight.w500,
+      child: Container(
+        padding: previewBytes == null
+            ? EdgeInsets.zero
+            : const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: previewBytes == null
+            ? null
+            : BoxDecoration(
+                color: OrColors.background.withValues(alpha: 0.62),
+                borderRadius: BorderRadius.circular(3),
+              ),
+        child: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: OrColors.text,
+            fontSize: OrType.tinySize,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
