@@ -5,6 +5,10 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+
+import '../design/or_colors.dart';
+import '../design/or_typography.dart';
+
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
@@ -2536,8 +2540,8 @@ class _AppShellState extends State<AppShell> {
                   'Next you choose where to save the file.',
                   key: const ValueKey('export-destination-hint'),
                   style: const TextStyle(
-                    color: Color(0xFF9A9AA2),
-                    fontSize: 12,
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataSize,
                   ),
                 ),
               ],
