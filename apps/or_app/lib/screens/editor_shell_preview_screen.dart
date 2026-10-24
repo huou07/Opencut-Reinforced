@@ -2964,6 +2964,13 @@ String _timeFeedback(
   return _clockLabel(time);
 }
 
+/// The Delete key hint follows the host keyboard, like every other shortcut.
+String _deleteShortcutLabel({bool shift = false}) {
+  final mac = defaultTargetPlatform == TargetPlatform.macOS;
+  final key = mac ? '⌫' : 'Del';
+  return shift ? '⇧$key' : key;
+}
+
 /// Human frame-rate label: `30 fps`, `23.976 fps`, never `30/1 fps`.
 String _frameRateLabel(ProjectRationalRate rate) {
   final value = rate.numerator / rate.denominator;
@@ -5329,7 +5336,11 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.delete,
           enabled: widget.onDeleteClip != null && !widget.busy,
-          child: const _ClipMenuItem('Delete', '⌫', destructive: true),
+          child: _ClipMenuItem(
+            'Delete',
+            _deleteShortcutLabel(),
+            destructive: true,
+          ),
         ),
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.rippleDelete,
