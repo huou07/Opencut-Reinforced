@@ -2531,6 +2531,15 @@ class _AppShellState extends State<AppShell> {
                         ? const Icon(Icons.check)
                         : null,
                   ),
+                const SizedBox(height: 4),
+                Text(
+                  'Next you choose where to save the file.',
+                  key: const ValueKey('export-destination-hint'),
+                  style: const TextStyle(
+                    color: Color(0xFF9A9AA2),
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
             actions: [
