@@ -4629,6 +4629,167 @@ void main() {
     );
   });
 
+  testWidgets('compact editor spends its height on the preview and the lanes', (
+    tester,
+  ) async {
+    // Measured 2026-10-24 before this change: 320x480 gave the preview a
+    // 27.7 px surface and 320x440 collapsed it to 1 px, because both panels
+    // carried a desktop section header and the timeline carried its view
+    // controls. The compact presentation now drops those headers and shows
+    // the timeline controls only when the region can also hold a lane.
+    for (final (size, minimumSurface, minimumTimeline) in const [
+      (Size(390, 844), 200.0, 150.0),
+      (Size(320, 480), 48.0, 60.0),
+      (Size(320, 440), 22.0, 50.0),
+    ]) {
+      await _mountClipWorkspace(
+        tester,
+        size: size,
+        name: 'Compact budget ${size.height.round()}',
+      );
+      final where = '${size.width.round()}x${size.height.round()}';
+      expect(
+        find.byKey(const ValueKey('editor-viewer-header')),
+        findsNothing,
+        reason: 'the compact viewer has no desktop section header at $where',
+      );
+      expect(
+        find.byKey(const ValueKey('editor-timeline-header')),
+        findsNothing,
+        reason: 'the compact timeline has no desktop section header at $where',
+      );
+      final surface = tester.getSize(
+        find.byKey(const ValueKey('editor-viewer-surface')),
+      );
+      final preview = tester.getSize(
+        find.byKey(const ValueKey('editor-viewer-preview')),
+      );
+      final timeline = tester.getSize(
+        find.byKey(const ValueKey('editor-timeline-region')),
+      );
+      expect(
+        surface.height,
+        greaterThanOrEqualTo(minimumSurface),
+        reason: 'the preview surface at $where',
+      );
+      expect(
+        preview.height,
+        greaterThan(minimumSurface - 6),
+        reason: 'the letterboxed preview at $where',
+      );
+      expect(
+        timeline.height,
+        greaterThanOrEqualTo(minimumTimeline),
+        reason: 'the timeline region at $where',
+      );
+      expect(tester.takeException(), isNull, reason: 'no overflow at $where');
+    }
+  });
+
+  testWidgets('compact controls meet the 44 px contact floor', (tester) async {
+    // The compact presentation is the touch one. These controls were 40x40
+    // (transport), 38 px (toolbar actions) and 33 px (timeline view controls),
+    // all below the 44 px floor AGENTS.md and DESIGN.md state for compact.
+    await _mountClipWorkspace(
+      tester,
+      size: const Size(390, 844),
+      name: 'Compact contact',
+    );
+    for (final key in const [
+      'preview-previous-frame',
+      'preview-play',
+      'preview-next-frame',
+      'preview-frame-rate',
+      'timeline-add-video-track',
+      'timeline-undo',
+      'timeline-snap-toggle',
+      'timeline-zoom-in',
+      'timeline-fit-zoom',
+      'mobile-editor-tool-media',
+    ]) {
+      final size = tester.getSize(find.byKey(ValueKey(key)));
+      expect(
+        size.height,
+        greaterThanOrEqualTo(OrTouchTargets.comfortable),
+        reason: '$key must offer a 44 px contact height',
+      );
+      expect(
+        size.width,
+        greaterThanOrEqualTo(OrTouchTargets.comfortable),
+        reason: '$key must offer a 44 px contact width',
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the desktop platforms present one identical layout', (
+    tester,
+  ) async {
+    // macOS, Windows and Linux are one product: same layout, same control
+    // sizes, same interaction surface. The only intended difference is the
+    // spelling of the command modifier in the top bar.
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    const measured = [
+      'app-top-bar',
+      'editor-viewer-panel',
+      'editor-viewer-header',
+      'editor-viewer-transport',
+      'editor-timeline-region',
+      'editor-timeline-header',
+      'timeline-toolbar',
+      'preview-play',
+      'timeline-add-video-track',
+      'timeline-zoom-in',
+    ];
+    const platforms = [
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+      TargetPlatform.linux,
+    ];
+    final layouts = <TargetPlatform, Map<String, Rect>>{};
+    for (final platform in platforms) {
+      debugDefaultTargetPlatformOverride = platform;
+      await _mountClipWorkspace(
+        tester,
+        size: const Size(1440, 900),
+        name: 'Parity ${platform.name}',
+      );
+      layouts[platform] = {
+        for (final key in measured)
+          key: tester.getRect(find.byKey(ValueKey(key))),
+      };
+      expect(
+        find.byKey(const ValueKey('editor-viewer-header')),
+        findsOneWidget,
+        reason: '${platform.name} keeps the desktop viewer section header',
+      );
+      expect(
+        find.byKey(const ValueKey('editor-timeline-header')),
+        findsOneWidget,
+        reason: '${platform.name} keeps the desktop timeline section header',
+      );
+      final expectedShortcut = platform == TargetPlatform.macOS
+          ? '\u2318 K'
+          : 'Ctrl+K';
+      expect(
+        find.text(expectedShortcut),
+        findsOneWidget,
+        reason: '${platform.name} names its own command key',
+      );
+    }
+    // The binding checks foundation debug variables before it runs tear-downs,
+    // so the override must be cleared inside the test body.
+    debugDefaultTargetPlatformOverride = null;
+    expect(layouts[TargetPlatform.windows], layouts[TargetPlatform.macOS]);
+    expect(layouts[TargetPlatform.linux], layouts[TargetPlatform.macOS]);
+    // Desktop stays denser than the touch presentation but above its 24 px
+    // pointer minimum, and the timeline view controls are no longer squeezed
+    // into the 34 px row that clipped them to 33 px.
+    expect(layouts[TargetPlatform.macOS]!['preview-play']!.height, 40);
+    expect(layouts[TargetPlatform.macOS]!['timeline-zoom-in']!.height, 40);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a bounded track count stays readable inside the fixed lane', (
     tester,
   ) async {
@@ -5073,6 +5234,53 @@ ProjectRecoveryInspection _inspection(ProjectRecoveryKind kind) =>
       conflictReason: 'project_id_mismatch',
       message: 'internal fixture details are not shown',
     );
+
+/// A project workspace with one video clip and a preview range.
+///
+/// The range makes the viewer render its scrub strip, and the clip gives the
+/// timeline a lane, so a layout measurement sees the loaded shapes rather than
+/// the empty states.
+Future<void> _mountClipWorkspace(
+  WidgetTester tester, {
+  required Size size,
+  required String name,
+}) async {
+  await tester.pumpWidget(const SizedBox.shrink());
+  _setViewport(tester, size);
+  final gateway = _FakeProjectGateway()
+    ..initialTimelineTracks = const [
+      ProjectTimelineTrack(
+        trackId: 'layout-track',
+        kind: ProjectTimelineTrackKind.video,
+        clipCount: 1,
+      ),
+    ]
+    ..initialTimelineClips = {
+      'layout-track': [
+        ProjectTimelineClip(
+          clipId: 'layout-clip',
+          mediaId: 'missing-media',
+          timelineStart: ProjectRationalTime(BigInt.zero, 1),
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+        ),
+      ],
+    }
+    ..preview = ProjectPreviewState(
+      position: ProjectRationalTime(BigInt.zero, 1),
+      contentEnd: ProjectRationalTime(BigInt.from(4), 1),
+      sequenceFrameRate: const ProjectRationalRate(24, 1),
+      playing: false,
+      generation: BigInt.zero,
+      frameSequence: BigInt.zero,
+      width: 0,
+      height: 0,
+    );
+  final picker = _FakeProjectPicker()
+    ..savePath = '/tmp/${name.replaceAll(' ', '-').toLowerCase()}.orproj';
+  await _mount(tester, gateway: gateway, picker: picker);
+  await _createProject(tester, name);
+}
 
 Future<void> _mount(
   WidgetTester tester, {
