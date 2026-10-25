@@ -268,6 +268,49 @@ Evidence class: local only. `flutter test` → `+149: All tests passed!`, includ
 and carries File/Edit/View/OR). Not yet exercised through the real macOS menu bar
 by a pointer: the widget suite proves the structure, not that AppKit rendered it.
 
+## 14. P6b delivery record — export receipt (local, 2026-10-25)
+
+A finished export now names the file it produced. On success the shell raises the
+shared `OrSnackBar` with `Exported <name> · <size>` and a `Copy path` action
+(`apps/or_app/lib/widgets/or_widgets.dart` gained optional `actionLabel`,
+`onAction` and `duration`, so the shared surface stays the only snackbar in the
+app — the design rule is enforced by the "one shared snackbar surface" test).
+
+Why not a full sheet: the destination is already chosen by the native save panel
+before the job starts, and the receipt is about the finished file. The size comes
+from the published file itself, so a failed publish cannot print a number for a
+file that does not exist. `Show in Finder` needs an AppKit channel that the app
+does not have yet; `Copy path` covers the same need with no native code.
+
+Evidence class: local only. `flutter test` → `+149: All tests passed!`. The
+receipt path has not been driven through a real export in this round.
+
+## 15. Status at the end of this session (2026-10-25, local only)
+
+Delivered and committed: framework migration to a local dsh skill plugin
+(`2bf6c28`), single-bar workspace IA (`ba7e5fa`), viewer direct manipulation
+(`db4153b`), library search + blade tool + speed badges (`989ebbc`), inspector
+effect/transition presets (`8125a01`), native macOS menu bar (`581ec15`), and the
+export receipt.
+
+Open, in the order I would take them:
+
+1. **MotionScene workspace** — the flow (source → render → insert → export) works
+   through `shell/motion_materialize_dialog.dart`, but there is no authored scene
+   surface: no scene list, no re-render, no preview scrub. This is the largest
+   remaining gap against CapCut-class authoring.
+2. **P8 frame pacing** — export throughput has been observed (6.016 s of
+   1280x720 H.264/AAC inside a 486 ms wait window, `h264_videotoolbox`), but
+   playback pacing needs a profile-mode run; debug-mode harness timings are not
+   latency evidence.
+3. **Multi-select, marquee and clipboard** — single-clip editing is complete;
+   multi-clip operations are not.
+4. **Reverse and freeze frame** — both need model work (`ClipSettings` has no
+   reverse flag and no still-frame content), so they are not basic editing
+   features in this codebase yet.
+5. **`Show in Finder`** — needs the AppKit channel; `Copy path` is the current
+   substitute.
+
 ## 11. P3 delivery record (local, 2026-10-25)
 
 Shipped:

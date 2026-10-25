@@ -2036,6 +2036,30 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// A finished export is a file, not a message: name it, size it, and let the
+  /// owner take the path without hunting through Finder.
+  void _showExportReceipt(String destination) {
+    final name = destination.split(Platform.pathSeparator).last;
+    var size = '';
+    try {
+      final bytes = File(destination).lengthSync();
+      size = bytes >= 1024 * 1024
+          ? ' · ${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+          : ' · ${(bytes / 1024).toStringAsFixed(0)} KB';
+    } on FileSystemException {
+      size = '';
+    }
+    OrSnackBar.show(
+      context,
+      'Exported $name$size',
+      duration: const Duration(seconds: 8),
+      actionLabel: 'Copy path',
+      onAction: () => unawaited(
+        Clipboard.setData(ClipboardData(text: destination)),
+      ),
+    );
+  }
+
   Future<void> _pollExport() async {
     final session = _activeSession;
     final project = _activeProject;
@@ -2067,6 +2091,9 @@ class _AppShellState extends State<AppShell> {
             await widget.projectFilePicker.publishExportPath(destination);
             if (!mounted || !identical(session, _activeSession)) return;
             setState(() => _exportStatus = 'Export complete');
+            // The status line is two words; the file itself is what the owner
+            // needs, so the receipt carries its name, size and a copy action.
+            _showExportReceipt(destination);
           } on ProjectSafStorageException catch (error) {
             if (!mounted || !identical(session, _activeSession)) return;
             setState(() {

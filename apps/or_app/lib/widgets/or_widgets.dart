@@ -30,6 +30,9 @@ class OrSnackBar {
     BuildContext context,
     String message, {
     double bottomInset = 0,
+    String? actionLabel,
+    VoidCallback? onAction,
+    Duration duration = displayDuration,
   }) {
     final margin = bottomInset <= 0
         ? null
@@ -53,7 +56,10 @@ class OrSnackBar {
           margin: margin,
           backgroundColor: OrColors.surface,
           showCloseIcon: true,
-          duration: displayDuration,
+          duration: duration,
+          action: actionLabel == null || onAction == null
+              ? null
+              : SnackBarAction(label: actionLabel, onPressed: onAction),
         ),
       );
   }
