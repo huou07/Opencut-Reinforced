@@ -382,6 +382,8 @@ machine. Evidence class is stated per row; none of it is a release claim.
 | MotionScene panel: render facts, insert, render again | `illustration-video.json` PASS (40 frames at 320x180, `On timeline`) |
 | Native macOS menus over the same verbs | widget test (structure only, not AppKit rendering) |
 | Export receipt naming the file, with Show in Finder | build + widget suite; reveal not driven end-to-end |
+| Reverse a clip (inspector, context menu, palette, Edit menu) | `clip-reverse.json` PASS + widget test on `inspector-clip-reversed` |
+| Freeze a clip to a held frame (same four routes) | `clip-freeze.json` PASS + widget tests on `inspector-clip-frozen` and the clip menu |
 | Playback pacing measured from engine timings | `playback-pacing.json`: 29.9 fps, build p95 0.76 ms, gap p95 33.33 ms (debug lane) |
 
 Known gaps that stay out of "done": release-mode pacing (the semantic harness
