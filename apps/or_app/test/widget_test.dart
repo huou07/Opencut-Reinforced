@@ -28,6 +28,17 @@ import 'package:or_app/shell/or_shortcuts.dart';
 import 'package:or_app/widgets/or_widgets.dart';
 
 void main() {
+  testWidgets('a bridge that cannot start explains itself instead of going blank',
+      (tester) async {
+    await tester.pumpWidget(const OrStartupFailure(message: 'Bad state: hash'));
+    expect(find.byKey(const ValueKey('startup-failure-title')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('startup-failure-message')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Bad state: hash'), findsOneWidget);
+  });
+
   testWidgets('text fields are recognized as focused for shell shortcuts', (
     tester,
   ) async {

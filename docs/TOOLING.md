@@ -503,6 +503,49 @@ Right-click the clip by its own label, not by key regex with `allow_multiple`: t
 first clip in the lane is rarely the one under test, and the dialog would edit the
 wrong clip while the scenario still looked green.
 
+## After flutter_rust_bridge_codegen, clear the hook cache
+
+The bridge is built by a native-assets hook (`packages/or_app_bridge/hook/build.dart`)
+that keeps **its own** cargo target directory under
+`apps/or_app/.dart_tool/hooks_runner/shared/or_app_bridge/build/<hash>/target/`.
+That cache is not the crate's `target/`, so `cargo clean -p or_app_bridge` does not
+touch it, and a release build can then link an older `libor_app_bridge.dylib`.
+
+Symptom, measured 2026-10-25: the **release** app opened a window that stayed black
+while the process was alive and debug builds were fine. Running the binary from a
+terminal showed the cause:
+
+```
+Unhandled Exception: Bad state: Content hash on Dart side (-1104663897) is
+different from Rust side (1279668420), indicating out-of-sync code.
+```
+
+`RustLib.init()` threw before `runApp`, so nothing was ever painted. The fix is to
+drop the hook cache (and the stale flutter_build record) and rebuild:
+
+```sh
+rm -rf apps/or_app/.dart_tool/hooks_runner/shared/or_app_bridge/build
+rm -rf apps/or_app/.dart_tool/flutter_build
+cd apps/or_app && flutter --no-version-check build macos --release
+```
+
+`main.dart` now paints an `OrStartupFailure` screen with the reason, so a bridge that
+cannot start is visible instead of blank.
+
+## Verifying a packaged build without capturing the desktop
+
+Drive the packaged app and capture **only its window**:
+
+```sh
+pid=$(pgrep -f "or_app.app/Contents/MacOS/or_app" | head -1)
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to set frontmost to true"
+rect=$(osascript -e "tell application \"System Events\" to tell (first process whose unix id is $pid) to get {{position, size}} of window 1" | tr -d '{},' | awk '{print $1","$2","$3","$4}')
+screencapture -x -R "$rect" /tmp/packaged-window.png
+```
+
+A full-screen capture is never acceptable here: it records whatever else the owner
+has open.
+
 ## Bundled FFmpeg is a media-interchange build
 
 `~/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-*/ffmpeg-install` ships six
