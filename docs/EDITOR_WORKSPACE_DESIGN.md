@@ -537,6 +537,34 @@ Skia paints.
   H.264/AAC export completed inside a 486 ms wait window, and the MP4 profile
   selects `h264_videotoolbox`, so the Apple hardware encoder is exercised.
 
+### 30.1 Preview decode stays on the CPU, and why that is the correct call
+
+The vendored FFmpeg in
+`~/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install`
+advertises `Hardware acceleration methods: videotoolbox`, but it contains **no
+`h264_videotoolbox` decoder**: `ffmpeg -decoders` lists only the software `h264`
+decoder, and `-hwaccel videotoolbox` is silently ignored on that build. Attaching
+`AVCodecContext.hw_device_ctx` therefore changes nothing - measured, with a
+counter around `av_hwframe_transfer_data`: 0 hardware frames over 90 decoded
+frames.
+
+Measured on this MacBook Air M5 instead
+(`cargo test -p or_media --test decode_throughput -- --ignored --nocapture`,
+90 sequential 1920x1080 requests against
+`crates/or_media/tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4`):
+
+    OR_DECODE_THROUGHPUT frames=90 elapsed_ms=495 fps=181.7
+
+That is roughly six times real time for one decode thread, which is why a
+single preview session per project is enough and preview decode is not on the
+critical path. Encode - the expensive direction - does use VideoToolbox.
+
+Consequence, so nobody re-opens this blindly: hardware *decode* would require
+rebuilding the vendored FFmpeg with the VideoToolbox H.264 decoder enabled.
+Until that build exists, a prewarm path that opens `h264_videotoolbox` would be
+dead code on every shipped build, so the experiment is parked in a local stash
+(`wip vt decode (dead path: ...)`) rather than merged.
+
 ### Hardware path reality
 
 - Encode: `crates/or_media/src/encoder.rs:164` resolves `h264_videotoolbox` —

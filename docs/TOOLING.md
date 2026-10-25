@@ -554,6 +554,18 @@ raw-PCM muxer, and it has `afftdn` but not `astats`/`ametadata`. Audio analysis 
 `or_core` therefore decodes to a temporary WAV and measures in Rust; anything that
 relies on a filter that prints statistics will fail on every build the app ships.
 
+## Measuring decode throughput
+
+`crates/or_media/tests/decode_throughput.rs` holds one ignored test that decodes
+90 sequential 1080p frames and prints frames, elapsed milliseconds and fps. It is
+a measurement, not a correctness gate, so it does not run in the default sweep:
+
+    DYLD_FALLBACK_LIBRARY_PATH="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install/lib" \
+      cargo test -p or_media --test decode_throughput -- --ignored --nocapture
+
+Use it before and after a decode change, and quote the printed numbers rather
+than an impression.
+
 ## Running the bridge tests needs the FFmpeg libraries on the loader path
 
 `cargo test -p or_app_bridge` aborts before any test with
