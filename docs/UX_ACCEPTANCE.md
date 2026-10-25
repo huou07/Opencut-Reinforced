@@ -362,6 +362,32 @@ authoritative hosted gate for the exact source.
   [QUALITY.md](QUALITY.md#measured-interaction-latency-software-path), and they are
   developer evidence, never a device or GPU claim.
 
+## PRODUCTION IMPLEMENTED — workspace rebuild (local, 2026-10-25)
+
+Delivered against docs/EDITOR_WORKSPACE_DESIGN.md §9–19 on the owner's macOS
+machine. Evidence class is stated per row; none of it is a release claim.
+
+| Surface | Evidence |
+| --- | --- |
+| One bar per zone: project name, save dot, undo/redo, project menu, export, palette | widget suite + `workspace-chrome.json` PASS at 1440x900 |
+| Tabbed library (Media/Text/Audio/Motion) instead of an icon rail | `workspace-layout.json` PASS at 1440x900, 1280x800, 1024x768 |
+| One timeline control row (zoom, Fit, Snap, `+` create menu) | widget suite + `blade-cut.json` |
+| Contextual inspector: project facts when nothing is selected | `workspace-chrome.json`, inspector keys `inspector-project` |
+| Viewer direct manipulation, one command per gesture | `viewer-transform.json` PASS (X 12.2 %, scale 124.4 %, rotate 4.622°, Alt+arrow nudge) |
+| Library search without touching the project | widget test + `media-search`/`media-count` keys |
+| Blade tool (C/V) cutting at the pointer | `blade-cut.json` PASS (0/1→1/4, 1/4→1/2 halves at 2x) |
+| Clip speed badge | `blade-cut.json`, inspector `Playback speed 2×` |
+| Copy/paste clip via keys, Edit menu and palette | widget test + `clipboard.json` PASS (0/1 then 1/2) |
+| Effect/transition presets filling fields before Apply | widget test, `+event-preset-*` chips |
+| MotionScene panel: render facts, insert, render again | `illustration-video.json` PASS (40 frames at 320x180, `On timeline`) |
+| Native macOS menus over the same verbs | widget test (structure only, not AppKit rendering) |
+| Export receipt naming the file, with Show in Finder | build + widget suite; reveal not driven end-to-end |
+| Playback pacing measured from engine timings | `playback-pacing.json`: 29.9 fps, build p95 0.76 ms, gap p95 33.33 ms (debug lane) |
+
+Known gaps that stay out of "done": release-mode pacing (the semantic harness
+cannot run a profile build), VideoToolbox preview decode, reverse/freeze frame,
+multi-select marquee.
+
 ## PRODUCTION REQUIRED FUTURE
 
 These items are required by the execution plan but are not production claims
