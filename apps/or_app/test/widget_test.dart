@@ -5161,6 +5161,97 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // CapCut-style scrubbing: pressing or dragging the timeline ruler moves the
+  // playhead. The gesture is presentation only, so it must reach the preview
+  // transport and leave the project revision and history untouched.
+  testWidgets('timeline ruler press and drag scrub the playhead', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1600, 900));
+    const trackId = 'scrub-video';
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      )
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'scrub-clip',
+            mediaId: 'scrub-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/ruler-scrub.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Ruler scrub');
+    await tester.pumpAndSettle();
+
+    final ruler = find.byKey(const ValueKey('timeline-ruler-scrub'));
+    expect(ruler, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('timeline-playhead-handle')),
+      findsOneWidget,
+    );
+    final revisionBefore = gateway.lastSession!.view.revision;
+    final seekCallsBefore = gateway.previewSeekCalls;
+    final rulerRect = tester.getRect(ruler);
+
+    // The ruler maps pointer pixels through the same 64 px/s scale the grid is
+    // drawn with, so pressing 64 px in lands exactly one second in.
+    await tester.tapAt(rulerRect.topLeft + const Offset(64, 10));
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(seekCallsBefore));
+    expect(gateway.lastPreviewSeek!.canonical, '1/1');
+    expect(
+      tester
+              .getTopLeft(find.byKey(const ValueKey('timeline-playhead-ruler')))
+              .dx -
+          rulerRect.left,
+      closeTo(64, 0.6),
+    );
+
+    // A drag keeps seeking while the pointer moves, past the clip's end.
+    final dragCalls = gateway.previewSeekCalls;
+    await tester.dragFrom(
+      rulerRect.topLeft + const Offset(64, 10),
+      const Offset(128, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(dragCalls));
+    expect(gateway.lastPreviewSeek!.secondsForDisplay, greaterThan(1));
+
+    // Pressing past the sequence end clamps instead of seeking off the end.
+    // The point stays clear of the scrollbar thumb the drag just revealed.
+    await tester.tapAt(rulerRect.topLeft + const Offset(900, 10));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSeek!.canonical, '10/1');
+
+    // Scrubbing is presentation only: no revision, no undo entry, no clip
+    // command.
+    expect(gateway.lastSession!.view.revision, revisionBefore);
+    expect(gateway.lastSession!.undo, isEmpty);
+    expect(gateway.moveTimelineClipCalls, 0);
+    expect(gateway.trimTimelineClipCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('empty preview keeps play and frame step unavailable', (
     tester,
   ) async {

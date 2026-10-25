@@ -598,6 +598,10 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void seekBy(double seconds) => _viewerKey.currentState?.seekBy(seconds);
 
+  /// The timeline hands every scrub frame to the viewer transport.
+  void scrubPreviewTo(ProjectRationalTime position) =>
+      _viewerKey.currentState?.scrubTo(position);
+
   void zoomTimelineBy(double factor) => _timelineKey.currentState?.changeZoom(
     (_timelineKey.currentState?.timelineZoom ?? 1) * factor,
   );
@@ -837,6 +841,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             key: _timelineKey,
             compact: false,
             previewState: _previewState,
+            onScrubTo: widget.projectSession == null ? null : scrubPreviewTo,
             isProjectWorkspace: widget.isProjectWorkspace,
             onCopyClip: widget.onCopyClip,
             onPasteClip: widget.onPasteClip,
@@ -927,6 +932,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             key: _timelineKey,
             compact: true,
             previewState: _previewState,
+            onScrubTo: widget.projectSession == null ? null : scrubPreviewTo,
             isProjectWorkspace: widget.isProjectWorkspace,
             onCopyClip: widget.onCopyClip,
             onPasteClip: widget.onPasteClip,
@@ -2490,20 +2496,26 @@ mixin _ViewerCommands {
   void stepFrame(bool backwards);
 
   void seekBy(double seconds);
+
+  /// Moves the playhead to an exact time chosen by a timeline scrub gesture.
+  ///
+  /// Distinct from [seekBy] because a drag emits dozens of targets per second:
+  /// the viewer coalesces them instead of queueing one preview render each.
+  void scrubTo(ProjectRationalTime position);
 }
 
 /// Frame rates the sequence can carry. One list, because the viewer transport
 /// and the inspector both offer the same choice and a second copy would drift.
 const _sequenceRateChoices = [
-    _FrameRateChoice(
-      rate: ProjectRationalRate(24000, 1001),
-      label: '23.976 (24000/1001) fps',
-    ),
-    _FrameRateChoice(rate: ProjectRationalRate(24, 1), label: '24 fps'),
-    _FrameRateChoice(rate: ProjectRationalRate(25, 1), label: '25 fps'),
-    _FrameRateChoice(rate: ProjectRationalRate(30, 1), label: '30 fps'),
-    _FrameRateChoice(rate: ProjectRationalRate(50, 1), label: '50 fps'),
-    _FrameRateChoice(rate: ProjectRationalRate(60, 1), label: '60 fps'),
+  _FrameRateChoice(
+    rate: ProjectRationalRate(24000, 1001),
+    label: '23.976 (24000/1001) fps',
+  ),
+  _FrameRateChoice(rate: ProjectRationalRate(24, 1), label: '24 fps'),
+  _FrameRateChoice(rate: ProjectRationalRate(25, 1), label: '25 fps'),
+  _FrameRateChoice(rate: ProjectRationalRate(30, 1), label: '30 fps'),
+  _FrameRateChoice(rate: ProjectRationalRate(50, 1), label: '50 fps'),
+  _FrameRateChoice(rate: ProjectRationalRate(60, 1), label: '60 fps'),
   _FrameRateChoice.unset(),
 ];
 
@@ -2513,6 +2525,10 @@ class _ViewerPanelState extends State<_ViewerPanel>
 
   ProjectPreviewState? _preview;
   ProjectRationalTime? _scrubPosition;
+
+  /// Newest scrub target that has not been sent to the preview yet.
+  ProjectRationalTime? _pendingScrubTarget;
+  bool _scrubSeekInFlight = false;
   String? _error;
   Timer? _timer;
   int? _textureId;
@@ -2743,6 +2759,42 @@ class _ViewerPanelState extends State<_ViewerPanel>
         ),
       ),
     );
+  }
+
+  /// Seek to an exact scrubbed time. Presentation only, like [seekBy].
+  ///
+  /// A pointer drag outruns the decoder, so the newest target replaces any
+  /// target still waiting instead of queueing: the renderer always works on the
+  /// frame the pointer is at now, and a released drag ends on the final frame.
+  @override
+  void scrubTo(ProjectRationalTime position) {
+    if (widget.gateway == null || widget.session == null) return;
+    _pendingScrubTarget = position.numerator < BigInt.zero
+        ? ProjectRationalTime(BigInt.zero, 1)
+        : position;
+    if (_scrubSeekInFlight) return;
+    unawaited(_drainScrubSeeks());
+  }
+
+  Future<void> _drainScrubSeeks() async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    if (gateway == null || session == null) return;
+    _scrubSeekInFlight = true;
+    final epoch = _epoch;
+    try {
+      while (_pendingScrubTarget != null) {
+        final target = _pendingScrubTarget!;
+        _pendingScrubTarget = null;
+        final state = await gateway.previewSeek(session, target);
+        if (!_isCurrent(epoch)) return;
+        _acceptState(state, epoch);
+      }
+    } catch (error) {
+      if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
+    } finally {
+      _scrubSeekInFlight = false;
+    }
   }
 
   Future<void> _pauseWhileInactive() async {
@@ -4843,13 +4895,12 @@ class _ToolbarScrollState extends State<_ToolbarScroll> {
   );
 }
 
-
-
 class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     super.key,
     required this.compact,
     required this.previewState,
+    this.onScrubTo,
     required this.isProjectWorkspace,
     required this.project,
     required this.tracks,
@@ -4910,6 +4961,14 @@ class _TimelinePanel extends StatefulWidget {
   final bool compact;
 
   final ValueListenable<ProjectPreviewState?> previewState;
+
+  /// Moves the playhead from a ruler scrub gesture.
+  ///
+  /// Null when no project session owns a preview, which is how the ruler knows
+  /// to leave the pointer alone instead of showing a drag affordance that
+  /// cannot move anything. A scrub is presentation only: it never opens a
+  /// project command, never changes the revision and never enters undo.
+  final void Function(ProjectRationalTime position)? onScrubTo;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
   final ProjectTimelineTracks? tracks;
@@ -5114,15 +5173,48 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   bool _fitTimelineToView = false;
   int _gestureToken = 0;
 
+  /// The time the pointer is scrubbing to, while it is dragging.
+  ///
+  /// The preview round-tripped every earlier target, so the playhead follows
+  /// the pointer directly and only falls back to the committed preview position
+  /// once that position has caught up (see [_onPreviewStateChanged]).
+  ProjectRationalTime? _scrubPosition;
+  bool _scrubbing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.previewState.addListener(_onPreviewStateChanged);
+  }
+
+  void _onPreviewStateChanged() {
+    final scrub = _scrubPosition;
+    if (scrub == null || _scrubbing) return;
+    final state = widget.previewState.value;
+    final position = state?.position;
+    // Playback moving on is a newer intent than the finished scrub, so the
+    // preview wins just as soon as it is at the scrubbed time.
+    if (state?.playing == true ||
+        (position != null && _compareProjectRational(position, scrub) == 0)) {
+      if (mounted) setState(() => _scrubPosition = null);
+    }
+  }
+
   @override
   void didUpdateWidget(covariant _TimelinePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.previewState != widget.previewState) {
+      oldWidget.previewState.removeListener(_onPreviewStateChanged);
+      widget.previewState.addListener(_onPreviewStateChanged);
+    }
     final previousProject = oldWidget.project;
     final nextProject = widget.project;
     if (previousProject?.projectId != nextProject?.projectId ||
         previousProject?.projectInstanceId != nextProject?.projectInstanceId ||
         previousProject?.revision != nextProject?.revision) {
       _cancelGesture();
+      _scrubPosition = null;
+      _scrubbing = false;
     }
     if (previousProject?.projectId != nextProject?.projectId ||
         previousProject?.projectInstanceId != nextProject?.projectInstanceId) {
@@ -5135,6 +5227,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
   @override
   void dispose() {
+    widget.previewState.removeListener(_onPreviewStateChanged);
     _gestureToken++;
     _timelineFocusNode.dispose();
     _horizontalController.dispose();
@@ -5201,6 +5294,33 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         ],
       ),
     );
+  }
+
+  /// Moves the playhead to [position] from a ruler gesture.
+  ///
+  /// The pointer emits far more targets than a frame can be rendered for, so a
+  /// move smaller than half a pixel changes nothing the user can see and is
+  /// dropped before it reaches the preview.
+  void _scrubAt(ProjectRationalTime position) {
+    final onScrubTo = widget.onScrubTo;
+    if (onScrubTo == null) return;
+    final previous = _scrubPosition;
+    if (_scrubbing &&
+        previous != null &&
+        (position.secondsForDisplay - previous.secondsForDisplay).abs() <
+            0.5 / math.max(1.0, _pixelsPerSecond)) {
+      return;
+    }
+    setState(() {
+      _scrubbing = true;
+      _scrubPosition = position;
+    });
+    onScrubTo(position);
+  }
+
+  void _endScrub() {
+    if (!_scrubbing) return;
+    setState(() => _scrubbing = false);
   }
 
   Widget _buildProjectTimeline(
@@ -5369,6 +5489,9 @@ class _TimelinePanelState extends State<_TimelinePanel> {
             displayDuration,
             canvasWidth,
           );
+          // A scrub owns the playhead until the preview reaches that time; the
+          // committed position is the fallback for every other frame.
+          final playhead = _scrubPosition ?? preview?.position;
           final trackRows = <Widget>[];
           for (var walk = 0; walk < snapshot.items.length; walk += 1) {
             final track = snapshot.items[walk];
@@ -5440,10 +5563,15 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         markers:
                                             widget.markerPage?.items ??
                                             const [],
-                                        playhead: preview?.position,
+                                        playhead: playhead,
+                                        contentEnd: preview?.contentEnd,
                                         pixelsPerSecond: scale,
                                         tickSeconds: tickSeconds,
                                         width: canvasWidth,
+                                        onScrubTo: widget.onScrubTo == null
+                                            ? null
+                                            : _scrubAt,
+                                        onScrubEnd: _endScrub,
                                         loadingMore: widget.loadingMoreMarkers,
                                         onLoadMore:
                                             widget.markerPage?.nextOffset ==
@@ -5491,7 +5619,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         width: canvasWidth,
                                         pixelsPerSecond: scale,
                                         tickSeconds: tickSeconds,
-                                        playhead: preview?.position,
+                                        playhead: playhead,
                                         gesture: _gesture,
                                         snapGuide: _snapGuide,
                                         selectedClipId: _selectedClipId,
@@ -6924,10 +7052,15 @@ class _TimelineRulerPainter extends CustomPainter {
   const _TimelineRulerPainter({
     required this.pixelsPerSecond,
     required this.tickSeconds,
+    this.playheadX,
   });
 
   final double pixelsPerSecond;
   final double tickSeconds;
+
+  /// Where the playhead sits, so a tick label that would sit under its cap
+  /// yields instead of showing a half covered word.
+  final double? playheadX;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -6950,7 +7083,13 @@ class _TimelineRulerPainter extends CustomPainter {
         text: TextSpan(text: label, style: textStyle),
         textDirection: TextDirection.ltr,
       )..layout();
-      painter.paint(canvas, Offset(x + 4, 2));
+      final labelLeft = x + 4;
+      final playhead = playheadX;
+      final hidden =
+          playhead != null &&
+          labelLeft + painter.width > playhead - 7 &&
+          labelLeft < playhead + 7;
+      if (!hidden) painter.paint(canvas, Offset(labelLeft, 2));
     }
     canvas.drawLine(
       Offset(0, size.height - 0.5),
@@ -6962,7 +7101,35 @@ class _TimelineRulerPainter extends CustomPainter {
   @override
   bool shouldRepaint(_TimelineRulerPainter oldDelegate) =>
       oldDelegate.pixelsPerSecond != pixelsPerSecond ||
-      oldDelegate.tickSeconds != tickSeconds;
+      oldDelegate.tickSeconds != tickSeconds ||
+      oldDelegate.playheadX != playheadX;
+}
+
+/// The grab notch over the ruler's playhead.
+///
+/// A two pixel line states a position; the notch states that the line has a
+/// draggable end, which is what the pointer cursor alone cannot say.
+class _PlayheadHandlePainter extends CustomPainter {
+  const _PlayheadHandlePainter({required this.color, required this.apex});
+
+  final Color color;
+
+  /// Horizontal position of the cap's point in painter coordinates.
+  final double apex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(apex, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_PlayheadHandlePainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.apex != apex;
 }
 
 class _TimelineMarkerRuler extends StatefulWidget {
@@ -6978,10 +7145,16 @@ class _TimelineMarkerRuler extends StatefulWidget {
     required this.snapGuide,
     required this.onOpenMarker,
     required this.onMoveMarker,
+    this.contentEnd,
+    this.onScrubTo,
+    this.onScrubEnd,
   });
 
   final List<ProjectTimelineMarker> markers;
   final ProjectRationalTime? playhead;
+
+  /// The last scrubbable time. The ruler stops there, like the viewer slider.
+  final ProjectRationalTime? contentEnd;
   final double pixelsPerSecond;
   final double tickSeconds;
   final double width;
@@ -6993,6 +7166,11 @@ class _TimelineMarkerRuler extends StatefulWidget {
   final Future<void> Function(ProjectTimelineMarker, ProjectRationalTime)?
   onMoveMarker;
 
+  /// Presses and drags anywhere on the ruler move the playhead, the gesture
+  /// CapCut uses. Null when no preview can seek, so the ruler stays inert.
+  final ValueChanged<ProjectRationalTime>? onScrubTo;
+  final VoidCallback? onScrubEnd;
+
   @override
   State<_TimelineMarkerRuler> createState() => _TimelineMarkerRulerState();
 }
@@ -7001,6 +7179,7 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
   ProjectTimelineMarker? _draggingMarker;
   Offset? _dragStart;
   double _dragDeltaPixels = 0;
+  bool _scrubbing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -7010,9 +7189,37 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
           painter: _TimelineRulerPainter(
             pixelsPerSecond: widget.pixelsPerSecond,
             tickSeconds: widget.tickSeconds,
+            playheadX: widget.playhead == null ? null : _xFor(widget.playhead!),
           ),
         ),
       ),
+      // Pressing or dragging the ruler moves the playhead, the gesture CapCut
+      // uses. The layer sits under the markers and the "Markers" button so a
+      // marker keeps its own press; the timeline body still scrolls from the
+      // wheel and the scrollbar.
+      if (widget.onScrubTo != null)
+        Positioned.fill(
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeLeftRight,
+            child: Semantics(
+              label: 'Timeline ruler',
+              hint: 'Press or drag to move the playhead',
+              child: GestureDetector(
+                key: const ValueKey('timeline-ruler-scrub'),
+                behavior: HitTestBehavior.translucent,
+                onTapDown: (details) => _scrubTo(details.localPosition.dx),
+                onTapUp: (_) => _endScrub(),
+                onTapCancel: _endScrub,
+                onHorizontalDragStart: (details) =>
+                    _scrubTo(details.localPosition.dx),
+                onHorizontalDragUpdate: (details) =>
+                    _scrubTo(details.localPosition.dx),
+                onHorizontalDragEnd: (_) => _endScrub(),
+                onHorizontalDragCancel: _endScrub,
+              ),
+            ),
+          ),
+        ),
       if (widget.playhead != null)
         Positioned(
           key: const ValueKey('timeline-playhead-ruler'),
@@ -7024,6 +7231,11 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
             child: ColoredBox(color: OrColors.selection),
           ),
         ),
+      if (widget.playhead != null)
+        // The notch stays inside the canvas at either end and keeps its point
+        // on the playhead line, so time zero reads as a full cap instead of a
+        // half clipped one.
+        _playheadHandle(_xFor(widget.playhead!)),
       for (final marker in widget.markers) ..._markerWidgets(marker),
       if (widget.snapGuide?.targetKind == ProjectTimelineSnapTargetKind.marker)
         Positioned(
@@ -7199,6 +7411,57 @@ class _TimelineMarkerRulerState extends State<_TimelineMarkerRuler> {
       (time.secondsForDisplay * widget.pixelsPerSecond)
           .clamp(0.0, math.max(0.0, widget.width - 1))
           .toDouble();
+
+  /// The ruler's playhead cap.
+  ///
+  /// The cap is held inside the canvas and its point follows the playhead
+  /// line, so time zero and the far end show a whole cap instead of a clipped
+  /// half.
+  Widget _playheadHandle(double x) {
+    const capWidth = 12.0;
+    final left = (x - capWidth / 2)
+        .clamp(0.0, math.max(0.0, widget.width - capWidth))
+        .toDouble();
+    return Positioned(
+      key: const ValueKey('timeline-playhead-handle'),
+      left: left,
+      top: 1,
+      width: capWidth,
+      height: 9,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _PlayheadHandlePainter(
+            color: OrColors.selection,
+            apex: (x - left).clamp(0.0, capWidth).toDouble(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Turns a ruler-local pointer position into a playhead time.
+  ///
+  /// Pressing past the end of the sequence lands on the end rather than on a
+  /// time the preview has no frame for, which keeps the drag reversible: the
+  /// playhead stays where the last rendered frame is.
+  void _scrubTo(double dx) {
+    final onScrubTo = widget.onScrubTo;
+    if (onScrubTo == null) return;
+    final pixels = dx.clamp(0.0, math.max(0.0, widget.width)).toDouble();
+    var time = _timeFromSeconds(pixels / widget.pixelsPerSecond);
+    final end = widget.contentEnd;
+    if (end != null && _compareProjectRational(time, end) > 0) {
+      time = end;
+    }
+    _scrubbing = true;
+    onScrubTo(time);
+  }
+
+  void _endScrub() {
+    if (!_scrubbing) return;
+    setState(() => _scrubbing = false);
+    widget.onScrubEnd?.call();
+  }
 
   ProjectRationalTime _dragTargetTime(ProjectTimelineMarker marker) {
     final milliseconds = (_dragDeltaPixels / widget.pixelsPerSecond * 1000)

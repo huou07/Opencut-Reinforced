@@ -99,6 +99,7 @@ Pointer:
 
 | Gesture | Target | Result |
 |---|---|---|
+| Press or drag | timeline ruler | move the playhead; a preview seek, never a project command |
 | Click | timeline lane | set playhead |
 | Click | clip | select |
 | Drag body | clip | move, snapped to neighbours, playhead, seconds |
