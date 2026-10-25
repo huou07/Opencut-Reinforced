@@ -904,3 +904,30 @@ so a large library cannot start unbounded processes; every cache has a byte ceil
    requests no hardware acceleration, so 1080p playback decodes on the CPU with FFmpeg.
    On this M5 that is comfortable at 30 fps (see pacing above), but it is the next real
    hardware win and it is deliberately not claimed as done.
+
+## 31. Verification sweep (local, 2026-10-25)
+
+One pass over every lane, run back to back on this machine after the auto-track and
+MotionScene-source changes, so the whole surface is known to hold at the same commit.
+
+| Lane | Command | Result |
+| --- | --- | --- |
+| Rust core | `cargo test -p or_core --lib` | **364 passed** |
+| Rust bridge | `DYLD_FALLBACK_LIBRARY_PATH=…ffmpeg-8.1.3-macos-image-support/ffmpeg-install/lib cargo test -p or_app_bridge --lib` | **32 passed**, 3 ignored |
+| Dart analysis | `flutter --no-version-check analyze --no-pub` | No issues found |
+| Widget suite | `flutter --no-version-check test --no-pub` | **163 passed** |
+| Real-app journeys | `scripts/or_ui.py run scripts/ui_scenarios/<name>.json` | **18 / 18 PASS** |
+
+The 18 journeys, in the order the sweep runs them: `workspace-chrome`,
+`workspace-layout`, `editor-journey`, `compact-editor-journey`, `clipboard`,
+`blade-cut`, `clip-reverse`, `clip-freeze`, `viewer-transform`, `audio-cleanup`,
+`ripple-trim`, `slip-roll-slide`, `track-reorder`, `overwrite-insert`, `auto-track`,
+`illustration-video`, `interaction-latency`, `playback-pacing`.
+
+Between them they drive, through real semantics on the real app: project create, media
+import and library search, track creation (empty-state and automatic), insert, select,
+copy/paste, split by blade and by playhead, trim, ripple trim, slip, roll, slide,
+overwrite, track reorder, speed, volume, fades, transform by pointer and by keyboard,
+reverse, freeze, audio cleanup, markers, undo/redo, save/reopen, playback pacing, and
+the whole MotionScene render → insert → export journey. The packaged release was proven
+separately (§26, §29) with window-only captures and `ffprobe` on the exported files.
