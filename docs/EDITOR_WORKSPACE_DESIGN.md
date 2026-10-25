@@ -861,3 +861,46 @@ Evidence class: INTEGRATION_VERIFIED on the packaged release this machine builds
 driven by clicks; the project name in these runs reads `asd` because synthetic typing
 into a release text field garbles characters (docs/TOOLING.md), which is a driver
 limit, not an app defect.
+
+## 30. Hardware and concurrency budget (local, 2026-10-25)
+
+The objective asks for the M5 to be used properly rather than incidentally. These are
+the bounds the code actually enforces, with the place that enforces each one, so a
+later change cannot quietly widen them.
+
+| Subsystem | Bound | Enforced at |
+| --- | --- | --- |
+| H.264 encode | Apple VideoToolbox (`h264_videotoolbox`), no CPU x264 fallback for the MP4 profile | `crates/or_media/src/encoder.rs:164` |
+| Thumbnail / waveform / proxy jobs | **2 workers**, queue 32, 128 tracked records | `crates/or_app_bridge/src/api/project.rs:685` |
+| Artifact cache | 8 MiB per entry, 256 MiB total | `crates/or_app_bridge/src/api/project.rs:686` |
+| Preview decode | one worker thread per preview session, serialized through its decode queue | `crates/or_app_bridge/src/preview.rs:2392` |
+| Export | one job at a time | `crates/or_app_bridge/src/preview.rs:178` |
+| Transcription | one job at a time | `crates/or_app_bridge/src/transcription.rs:98` |
+| Worker pool honesty | the pool never runs more jobs than configured | test `worker_pool_never_runs_more_than_the_configured_workers`, `crates/or_core/src/jobs/manager.rs:574` |
+
+Measured, then, with the lane that produced each number:
+
+- **Playback pacing (debug lane, semantic harness, 30 fps sequence):** `frames 148`,
+  `fps 29.9`, `build_p50 0.49 ms`, `build_p95 0.66 ms`, `span_p95 0.93 ms`,
+  `gap_p95 33.33 ms`, `gap_max 50.0 ms`. `raster_p95` is 0 because the preview is an
+  external texture composited by the platform layer, so the Flutter raster phase has
+  nothing to do per frame.
+- **Export throughput:** a 6.016 s 720p H.264/AAC export completed inside a 486 ms
+  observation window with `h264_videotoolbox` selected; a 4.0 s 640x360 MotionScene
+  timeline exported to a playable MP4 (138 820 B) from the packaged release.
+
+**PROVEN**: the hardware encoder is the path for MP4 export and it is fast enough that
+the export finished inside the poll window; jobs that shell out to FFmpeg are bounded,
+so a large library cannot start unbounded processes; every cache has a byte ceiling.
+
+**NOT PROVEN, stated so nobody reads more into the table than it says:**
+
+1. **Release-mode pacing.** `flutter test` has no `--profile`, and a profile bundle
+   cannot run the integration entry point because it lacks the bundled FFmpeg dylibs
+   (`Library not loaded: @rpath/libavutil.60.dylib`), so the numbers above come from a
+   debug build and are a floor on headroom, not a release claim. Measuring release
+   pacing needs a small in-app frame-timing recorder driven by the packaged app.
+2. **VideoToolbox *decode*.** Only the encoder is hardware. `crates/or_media/src/decoder.rs`
+   requests no hardware acceleration, so 1080p playback decodes on the CPU with FFmpeg.
+   On this M5 that is comfortable at 30 fps (see pacing above), but it is the next real
+   hardware win and it is deliberately not claimed as done.
