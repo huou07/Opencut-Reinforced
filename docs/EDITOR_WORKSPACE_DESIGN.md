@@ -579,11 +579,9 @@ viewer transport instead of two copies drifting apart.
 
 ## 21. Next units, in order (for the next session)
 
-1. **Reverse clip** — core: add `reversed: bool` to the media clip content with
-   `PROJECT_FORMAT` bump and validation; renderer/decoder map `source_time =
-   source_end - (t - start)`; inspector toggle next to Playback speed; test in
-   `or_core` + one widget test. Freeze frame falls out of the same plumbing
-   (a reversed clip paused), so do not build two mechanisms.
+1. ~~**Reverse clip**~~ — done in `ead40c1` (see §22). No schema bump was needed:
+   the field is defaulted and skipped when false, so old projects keep their bytes.
+   Freeze frame did NOT fall out of it — a still needs its own content kind.
 2. **Multi-select** — selection becomes a set in `_TimelinePanelState`; marquee
    on the lane background; delete/ripple/copy act on the set; paste stays
    single-target. Keep drag-move single-clip until the set case has a test.
