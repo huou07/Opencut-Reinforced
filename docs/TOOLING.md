@@ -30,22 +30,32 @@ their execution in this mission.
 
 ## The agent-facing UI harness
 
-The commands below are a Linux/Android reference for future platform work.
-
 `python3 scripts/or_ui.py` is the instrument behind OR's interface claims. It
 drives the real application by widget key, semantics label (exact or regex),
 visible text, role or dialog-scoped control — never by screen coordinate — and
 writes a step-by-step transcript with the action, selector, result, elapsed
 milliseconds, screenshot path and semantics-snapshot path.
 
+On this Mac the default target is `macos`: the lane builds and launches the real
+desktop app through `flutter test -d macos integration_test/or_ui_scenario_test.dart`
+and reads artifacts straight from the host filesystem. Prefer this over AppKit
+coordinate clicking and over screenshots: it names what it acted on, and a whole
+window at 1440x900 launches in about twenty seconds. Reach for a screenshot,
+MCP or vision only when semantics cannot express the question (pure visual
+hierarchy, colour, or a rendering artefact).
+
+`python3 scripts/or_tree_outline.py <tree-*.json>` prints one line per node with
+the global rect and its actions, which is the fast way to read a screen.
+
 ```sh
-python3 scripts/or_ui.py screens                       # inventory the running app's screens
+python3 scripts/or_ui.py screens                       # inventory the app's screens (macos by default here)
 python3 scripts/or_ui.py tree --name editor           # semantics tree as JSON plus the dump
 python3 scripts/or_ui.py shot --name editor           # screenshot at the scenario viewport
 python3 scripts/or_ui.py act --label "Import Media" --role button
 python3 scripts/or_ui.py run scripts/ui_scenarios/editor-journey.json
 python3 scripts/or_ui.py --viewport 390x844 run scripts/ui_scenarios/compact-editor-journey.json
 python3 scripts/or_ui.py --target android run scripts/ui_scenarios/editor-journey.json
+python3 scripts/or_ui.py --target linux run scripts/ui_scenarios/editor-journey.json
 ```
 
 On Linux it runs through `scripts/run_linux_ui_preflight.py --exec`, so it reuses

@@ -2,8 +2,9 @@
 """The OR agent-facing UI harness: observe and drive the real app by semantics.
 
 One instrument for the interface dimension of OR's acceptance bar. It runs the
-real application -- the real Rust host, the real command path -- on Linux (under
-Xvfb) or on the Android emulator, and answers five questions:
+real application -- the real Rust host, the real command path -- on this macOS
+host, on Linux (under Xvfb) or on the Android emulator, and answers five
+questions:
 
   screens   which screens does the running app expose, and what does each one say?
   tree      what is the semantics tree right now (JSON plus the framework dump)?
@@ -58,6 +59,9 @@ GUEST_SCENARIO = "files/or-ui-scenario.json"
 GUEST_ARTIFACTS = "files/or-ui-artifacts"
 DEFAULT_VIEWPORT = (1280, 800)
 LINUX_BUDGET_SECONDS = 900
+# A macOS desktop test builds the app bundle through Xcode on first use, so the
+# budget covers a cold build plus the journey itself.
+MACOS_BUDGET_SECONDS = 1800
 ANDROID_BUDGET_SECONDS = 1800
 
 
@@ -131,6 +135,31 @@ def require_guest() -> None:
             f"the dedicated guest {ANDROID_SERIAL} is not running "
             f"(adb get-state said {completed.stdout.strip() or completed.stderr.strip()!r})",
             "bash scripts/start-android-emulator.sh  # then rerun this harness",
+        )
+
+
+def require_macos_tools() -> None:
+    """The macOS lane drives the real desktop app through `flutter test -d macos`.
+
+    It needs the same toolchain the app itself is built with; a missing tool is
+    BLOCKED with the command that would settle it, never a scenario failure.
+    """
+    if sys.platform != "darwin":
+        raise Blocked(
+            "the macos target only runs on a macOS host",
+            "run this harness on the owner-authorized Mac, or use --target linux",
+        )
+    missing = [tool for tool in ("flutter", "xcodebuild") if not shutil.which(tool)]
+    if missing:
+        raise Blocked(
+            "missing required tool(s) on PATH: " + ", ".join(missing),
+            "install Xcode command line tools and Flutter; this harness does not "
+            "change host privileges",
+        )
+    if not (APP / ".dart_tool/package_config.json").is_file():
+        raise Blocked(
+            "apps/or_app has no resolved package config",
+            "cd apps/or_app && flutter pub get  # then rerun this harness",
         )
 
 
@@ -213,6 +242,48 @@ def run_linux(payload: dict, report_dir: Path) -> int:
         print(payload_out["reason"])
         return 1
     return finish(report_dir, artifacts, payload, "linux")
+
+
+def run_macos(payload: dict, report_dir: Path) -> int:
+    """Drive the real macOS app: one integration_test run builds and launches it."""
+    require_macos_tools()
+    report_dir.mkdir(parents=True, exist_ok=True)
+    scenario_path = report_dir / "scenario.json"
+    scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    artifacts = report_dir / "artifacts"
+    if artifacts.exists():
+        shutil.rmtree(artifacts)
+    artifacts.mkdir(parents=True)
+
+    environment = dict(
+        os.environ,
+        OR_UI_SCENARIO_FILE=str(scenario_path),
+        OR_UI_ARTIFACT_DIR=str(artifacts),
+        GITHUB_WORKSPACE=str(ROOT),
+    )
+    command = ["flutter", "--no-version-check", "test", "--no-pub", "-d", "macos",
+               SCENARIO_RUNNER]
+    completed = subprocess.run(command, cwd=str(APP), env=environment,
+                               capture_output=True, text=True,
+                               timeout=MACOS_BUDGET_SECONDS)
+    (report_dir / "run.log").write_text(
+        f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n",
+        encoding="utf-8")
+    if completed.returncode != 0:
+        reason = [line for line in (completed.stdout + completed.stderr).splitlines()
+                  if line.strip()][-8:]
+        payload_out = {
+            "harness": "or_ui", "target": "macos", "result": "FAIL",
+            "reason": "the scenario runner exited "
+                      f"{completed.returncode}: " + " | ".join(reason),
+            "log": str(report_dir / "run.log"),
+            "steps": read_transcript(artifacts, payload["name"]).get("steps", []),
+        }
+        (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
+        print(f"RESULT: OR_UI=FAIL ({payload['name']})")
+        print(payload_out["reason"])
+        return 1
+    return finish(report_dir, artifacts, payload, "macos")
 
 
 def read_transcript(artifacts: Path, name: str) -> dict:
@@ -321,10 +392,17 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
             "semantics": "VERIFIED_SEMANTIC",
             "behaviour": "VERIFIED_BEHAVIORAL",
             "visual": "VERIFIED_VISUAL",
-            "native": "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
+            "native": "NOT ESTABLISHED — a debug app built for this run is not "
+                      "an installed or packaged build"
+                      if target == "macos" else
+                      "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
                       "is not an installed package or a physical device",
         },
         "limits": [
+            "The macOS lane runs the real desktop app through the Flutter test "
+            "binding on this Mac; a screenshot here is not a claim about an "
+            "installed or release build. Timing is debug-mode evidence."
+            if target == "macos" else
             "Linux runs under Xvfb with LIBGL_ALWAYS_SOFTWARE; Android runs on a "
             "SwiftShader x86_64 emulator. Timing here is software-path evidence "
             "on this host, never a GPU or physical-device performance claim.",
@@ -373,8 +451,10 @@ def load_json(path: Path) -> dict | None:
 def command_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--target", choices=("linux", "android"), default="linux",
-                        help="which target to drive (default: linux)")
+    parser.add_argument("--target", choices=("macos", "linux", "android"),
+                        default=None,
+                        help="which target to drive (default: the host's own "
+                             "desktop target — macos on a Mac, else linux)")
     parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR),
                         help="where the transcript, artifacts and report go")
     parser.add_argument("--viewport", default=f"{DEFAULT_VIEWPORT[0]}x{DEFAULT_VIEWPORT[1]}",
@@ -437,6 +517,11 @@ def build_command_scenario(args: argparse.Namespace) -> dict:
     raise ScenarioError("no scenario was named")
 
 
+def default_target() -> str:
+    """Drive the host's own desktop app unless the caller names another target."""
+    return "macos" if sys.platform == "darwin" else "linux"
+
+
 def parse_viewport(value: str) -> tuple[int, int]:
     try:
         width, height = (int(part) for part in value.lower().split("x", 1))
@@ -450,6 +535,8 @@ def parse_viewport(value: str) -> tuple[int, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = command_parser()
     args = parser.parse_args(argv)
+    if args.target is None:
+        args.target = default_target()
     report_dir = Path(args.report_dir)
     if not report_dir.is_absolute():
         report_dir = ROOT / report_dir
@@ -466,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
+        if args.target == "macos":
+            return run_macos(payload, report_dir)
         if args.target == "linux":
             return run_linux(payload, report_dir)
         return run_android(payload, report_dir)

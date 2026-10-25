@@ -960,8 +960,12 @@ class _Runner {
     final root = _semanticsRoot();
     if (root == null) throw _StepFailure('no_semantics', 'no semantics root');
     final nodes = <Map<String, Object?>>[];
-    void visit(SemanticsNode node) {
+    // `node.rect` is local to the node; a layout review needs the global rect the
+    // user actually sees, so accumulate the transform chain from the root.
+    void visit(SemanticsNode node, Matrix4 parentTransform) {
       final data = node.getSemanticsData();
+      final transform = parentTransform.multiplied(node.transform ?? Matrix4.identity());
+      final rect = MatrixUtils.transformRect(transform, node.rect);
       nodes.add({
         'id': node.id,
         'role': _roleOf(node),
@@ -973,20 +977,20 @@ class _Runner {
             if (data.hasAction(action)) action.name,
         ]..sort(),
         'rect': {
-          'left': node.rect.left,
-          'top': node.rect.top,
-          'width': node.rect.width,
-          'height': node.rect.height,
+          'left': rect.left,
+          'top': rect.top,
+          'width': rect.width,
+          'height': rect.height,
         },
         'children': node.childrenCount,
       });
       node.visitChildren((child) {
-        visit(child);
+        visit(child, transform);
         return true;
       });
     }
 
-    visit(root);
+    visit(root, Matrix4.identity());
     artifacts.writeText('tree-$name.txt', root.toStringDeep());
     artifacts.writeJson('tree-$name.json', {'nodes': nodes});
     return 'tree-$name.json';
