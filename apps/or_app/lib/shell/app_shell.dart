@@ -989,6 +989,11 @@ class _AppShellState extends State<AppShell> {
                 _editorKey.currentState?.confirmDeleteSelectedClip(),
           ),
           CommandPaletteAction(
+            label: 'Reverse Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.toggleSelectedClipReverse(),
+          ),
+          CommandPaletteAction(
             label: 'Toggle Snapping',
             onSelected: () => _editorKey.currentState?.toggleSnapping(),
           ),

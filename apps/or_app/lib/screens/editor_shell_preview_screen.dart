@@ -608,6 +608,26 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void toggleBladeMode() => setBladeMode(!_bladeMode);
 
+  /// Reverse the selected media clip, wherever the owner invoked it from.
+  ///
+  /// The clip object lives in the timeline page, not in this state, so the lookup
+  /// is the same one the panels use; a missing clip is a no-op rather than an
+  /// error, because the palette can outlive a selection change by one frame.
+  void toggleSelectedClipReverse() {
+    final clipId = _selectedClipId;
+    final onSet = widget.onSetTimelineClipReversed;
+    final project = widget.project;
+    if (clipId == null || onSet == null || project == null) return;
+    for (final entry in widget.timelineClipPages.entries) {
+      for (final clip in entry.value.items) {
+        if (clip.clipId != clipId) continue;
+        if (clip.contentKind != ProjectTimelineClipContentKind.media) return;
+        unawaited(onSet(project, entry.key, clip.clipId, !clip.reversed));
+        return;
+      }
+    }
+  }
+
   void selectTool(String tool) {
     if (_selectedTool == tool) return;
     setState(() => _selectedTool = tool);
