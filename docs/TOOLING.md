@@ -479,3 +479,10 @@ captures all logcat buffers. Diagnostic collection success is not product
 acceptance. Hosted verification for the final implementation SHA remains the
 supervisor's gate; local native execution outside the two owner-granted lanes is
 disallowed, and optional hardware media remains `ANDROID_HARDWARE_MEDIA=UNVERIFIED`.
+
+### Packaged app driving: keep the capture inside the app
+
+Driving the packaged bundle through System Events needs its window frontmost, and
+a full-screen `screencapture` then grabs whatever else the owner has open. Prefer
+`screencapture -l <window-id>` (or the window rect) so evidence never contains
+unrelated desktop content, and close the app when the run ends.
