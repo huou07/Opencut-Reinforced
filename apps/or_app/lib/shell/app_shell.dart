@@ -919,6 +919,7 @@ class _AppShellState extends State<AppShell> {
               onUpdateTimelineClipAudioSettings:
                   _updateTimelineClipAudioSettings,
               onUpdateTimelineClipPlaybackRate: _updateTimelineClipPlaybackRate,
+              onSetTimelineClipReversed: _setTimelineClipReversed,
               onMoveTimelineClip: _moveTimelineClip,
               onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
@@ -3314,6 +3315,22 @@ class _AppShellState extends State<AppShell> {
       trackId: trackId,
       clipId: clipId,
       rate: rate,
+    ),
+  );
+
+  Future<ProjectReadModel?> _setTimelineClipReversed(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool reversed,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.setTimelineClipReversed(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      reversed: reversed,
     ),
   );
 

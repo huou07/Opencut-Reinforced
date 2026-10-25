@@ -637,3 +637,21 @@ harness drives in debug, so the packaged build is not limited to launching.
 
 Not yet driven in the packaged bundle: media import, timeline edits, export and
 the MotionScene dialog. Those still rest on debug-lane evidence.
+
+## 22. Reverse playback for media clips (local, 2026-10-25)
+
+`ClipContent::Media` gained `reversed: bool` (serde default + skipped when false, so
+an untouched project keeps its bytes). The bridge adds `set_timeline_clip_reversed`,
+which flips only that flag and reuses `update_timeline_clip`, so undo, revision
+checks and the read model behave like any other edit. Preview maps timeline time to
+source time through `clip_source_time`, which mirrors the offset inside the clip's
+own source span when the flag is set — the clip keeps its span, so this is not a
+speed change. The inspector offers the switch under Playback speed.
+
+Evidence: `cargo test -p or_core` 362 + the new round-trip test (a forward clip does
+not grow the field), widget suite 155 (new: the switch calls the gateway), and
+`scripts/ui_scenarios/clip-reverse.json` PASS in the real app (toggle reachable from
+the inspector after selecting an imported clip).
+
+Freeze frame remains open: it is a still derived from one source time, which the
+model cannot express yet without a new content kind, so it stays out of this change.

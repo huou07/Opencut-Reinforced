@@ -2881,6 +2881,42 @@ void main() {
     expect(find.byType(PlatformMenuBar), findsOneWidget);
   });
 
+  testWidgets('the inspector offers reversing a media clip', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'reverse-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'reverse-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'reverse-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/reverse.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Reverse review');
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-reverse-clip')));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const ValueKey('inspector-clip-reversed'));
+    expect(toggle, findsOneWidget);
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reversedCalls, 1);
+    expect(gateway.lastReversed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('effect and transition presets fill the inspector before applying', (
     tester,
   ) async {
@@ -5760,6 +5796,9 @@ Future<void> _openAdvancedClipActions(WidgetTester tester, Finder clip) async {
 }
 
 class _FakeProjectGateway implements ProjectGateway {
+  /// Reverse flips the surface asked for, in order.
+  int reversedCalls = 0;
+  bool? lastReversed;
   /// The illustration requests the surface sent, in order.
   final List<MotionMaterializeRequest> illustrationRequests = [];
   MotionMaterializationOutcome? illustrationOutcome;
@@ -6438,6 +6477,19 @@ class _FakeProjectGateway implements ProjectGateway {
     );
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) async {
+    reversedCalls += 1;
+    lastReversed = reversed;
+    return ProjectActionResult(succeeded: true, view: current);
   }
 
   @override

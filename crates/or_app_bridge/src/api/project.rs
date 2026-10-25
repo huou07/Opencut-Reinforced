@@ -406,6 +406,8 @@ pub struct ProjectTimelineClipView {
     pub clip_id: String,
     pub content_kind: TimelineClipContentKindView,
     pub playback_rate: RationalRateView,
+    /// True when the clip walks its source backwards.
+    pub reversed: bool,
     pub media_id: Option<String>,
     pub text: Option<String>,
     pub formatting: Option<ProjectTextFormattingView>,
@@ -1539,6 +1541,60 @@ impl ProjectHostHandle {
             revision,
             clip.clip_id,
             timeline_duration,
+            content,
+            clip.settings,
+        ))
+    }
+
+    /// Flip the direction a media clip plays without touching its duration.
+    ///
+    /// Reverse is not a rate: the clip still covers the same source span and the same
+    /// timeline span, so only the direction changes and the caller keeps every other
+    /// property of the clip.
+    pub fn set_timeline_clip_reversed(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        reversed: bool,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision, track_kind, clip) = match self
+            .find_timeline_clip_state(
+                &project_id,
+                &project_instance_id,
+                expected_revision,
+                &track_id,
+                &clip_id,
+            ) {
+            Ok(result) => result,
+            Err(error) => return action_error(error),
+        };
+        if !matches!(track_kind, TrackKind::Video | TrackKind::Audio) {
+            return action_error(ProjectBridgeError {
+                code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                message: "Reverse is available for video and audio media clips.".to_owned(),
+            });
+        }
+        let mut content = clip.content;
+        match &mut content {
+            ClipContent::Media {
+                reversed: current, ..
+            } => *current = reversed,
+            ClipContent::Text { .. } | ClipContent::Caption { .. } => {
+                return action_error(ProjectBridgeError {
+                    code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                    message: "Reverse is available for video and audio media clips.".to_owned(),
+                });
+            }
+        }
+        self.dispatch_command(CommandEnvelope::update_timeline_clip(
+            project_id,
+            project_instance_id,
+            revision,
+            clip.clip_id,
+            clip.timeline_duration,
             content,
             clip.settings,
         ))
@@ -3746,6 +3802,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
             media_id,
             source_range,
             playback_rate: _,
+                reversed: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -3772,6 +3829,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
         clip_id: clip.clip_id.to_string(),
         content_kind,
         playback_rate: rational_rate_view(clip.content.playback_rate()),
+        reversed: clip.content.reversed(),
         media_id,
         text,
         formatting,
@@ -4592,6 +4650,7 @@ mod tests {
                     timeline_duration: RationalTime::new(5, 2).unwrap(),
                     content: ClipContent::Media {
                         playback_rate: or_core::RationalRate::ONE,
+                        reversed: false,
                         media_id,
                         source_range: TimeRange::new(
                             RationalTime::new(1, 2).unwrap(),

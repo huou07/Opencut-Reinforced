@@ -4859,6 +4859,7 @@ impl TimelineClipInsertArguments {
                 media_id: self.media_id,
                 source_range,
                 playback_rate: RationalRate::ONE,
+                reversed: false,
             },
             settings: ClipSettings::default_for(track_kind),
         })
@@ -6204,6 +6205,7 @@ fn validate_clip_state(
                 media_id,
                 source_range,
                 playback_rate,
+                reversed: _,
             },
             TrackKind::Video | TrackKind::Audio,
         ) => {
@@ -6294,6 +6296,7 @@ fn trim_content_start(
             media_id,
             source_range,
             playback_rate,
+            reversed,
         } => {
             let source_start = source_range
                 .start()
@@ -6305,6 +6308,7 @@ fn trim_content_start(
                 media_id: *media_id,
                 source_range,
                 playback_rate: *playback_rate,
+                reversed: false,
             })
         }
         _ => Ok(content.clone()),
@@ -6320,6 +6324,7 @@ fn trim_content_end(
             media_id,
             source_range,
             playback_rate,
+            reversed,
         } => {
             let source_range = TimeRange::new(source_range.start(), duration)
                 .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -6327,6 +6332,7 @@ fn trim_content_end(
                 media_id: *media_id,
                 source_range,
                 playback_rate: *playback_rate,
+                reversed: false,
             })
         }
         _ => Ok(content.clone()),
@@ -6343,6 +6349,7 @@ fn split_content(
             media_id,
             source_range,
             playback_rate,
+            reversed,
         } => {
             let right_start = source_range
                 .start()
@@ -6354,12 +6361,14 @@ fn split_content(
                     source_range: TimeRange::new(source_range.start(), left_duration)
                         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
                     playback_rate: *playback_rate,
+                    reversed: *reversed,
                 },
                 ClipContent::Media {
                     media_id: *media_id,
                     source_range: TimeRange::new(right_start, right_duration)
                         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?,
                     playback_rate: *playback_rate,
+                    reversed: *reversed,
                 },
             ))
         }
@@ -7904,6 +7913,7 @@ mod tests {
                     )
                     .unwrap(),
                     playback_rate: RationalRate::new(2, 1).unwrap(),
+                    reversed: false,
                 },
                 ClipSettings::default_for(TrackKind::Video),
             ))
@@ -10235,6 +10245,7 @@ mod tests {
             )
             .unwrap(),
             playback_rate: RationalRate::ONE,
+            reversed: false,
         };
         let duration = RationalTime::new(2, 1).unwrap();
         session

@@ -86,6 +86,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onUpdateTimelineClipVisualSettings,
     this.onUpdateTimelineClipAudioSettings,
     this.onUpdateTimelineClipPlaybackRate,
+    this.onSetTimelineClipReversed,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -296,6 +297,13 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalRate rate,
   )?
   onUpdateTimelineClipPlaybackRate;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool reversed,
+  )?
+  onSetTimelineClipReversed;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -750,6 +758,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onUpdate: widget.onUpdateTimelineClipVisualSettings,
                   onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                   onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
+                  onSetReversed: widget.onSetTimelineClipReversed,
                 ),
               ),
             ],
@@ -3362,6 +3371,7 @@ class _InspectorPanel extends StatefulWidget {
     required this.onUpdate,
     required this.onUpdateAudio,
     this.onUpdatePlaybackRate,
+    this.onSetReversed,
     this.onClose,
   });
 
@@ -3405,6 +3415,13 @@ class _InspectorPanel extends StatefulWidget {
     ProjectRationalRate,
   )?
   onUpdatePlaybackRate;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool reversed,
+  )?
+  onSetReversed;
   final VoidCallback? onClose;
 
   @override
@@ -3828,6 +3845,50 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     }
   }
 
+  Future<void> _applyReversed(bool reversed) async {
+    final project = widget.project;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    final onSet = widget.onSetReversed;
+    if (project == null || trackId == null || clipId == null || onSet == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await onSet(project, trackId, clipId, reversed);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _reverseRow(bool enabled) {
+    final clip = widget.clip;
+    if (clip == null || widget.onSetReversed == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: OrSpacing.x1),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Play backwards',
+              style: TextStyle(color: OrColors.textSecondary, fontSize: OrType.tinySize),
+            ),
+          ),
+          Switch(
+            key: const ValueKey('inspector-clip-reversed'),
+            value: clip.reversed,
+            onChanged: enabled ? _applyReversed : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _playbackRateEditor() {
     final clip = widget.clip;
     if (clip == null ||
@@ -3908,6 +3969,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
             ),
           ),
         ),
+        _reverseRow(enabled),
         const SizedBox(height: OrSpacing.x3),
       ],
     );

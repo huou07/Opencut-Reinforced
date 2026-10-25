@@ -491,6 +491,7 @@ class ProjectTimelineClip {
     required this.clipId,
     this.contentKind = ProjectTimelineClipContentKind.media,
     this.playbackRate = const ProjectRationalRate(1, 1),
+    this.reversed = false,
     this.mediaId,
     this.text,
     this.formatting,
@@ -502,6 +503,9 @@ class ProjectTimelineClip {
   final String clipId;
   final ProjectTimelineClipContentKind contentKind;
   final ProjectRationalRate playbackRate;
+
+  /// Whether the clip walks its source backwards.
+  final bool reversed;
   final String? mediaId;
   final String? text;
   final ProjectTextFormatting? formatting;
@@ -956,6 +960,15 @@ abstract interface class ProjectGateway {
     required String trackId,
     required String clipId,
     required ProjectRationalRate rate,
+  });
+  /// Flip the direction a media clip plays. The clip keeps its span, so this is not
+  /// a speed change and every other clip property survives.
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
   });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {

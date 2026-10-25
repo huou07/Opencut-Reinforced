@@ -1771,6 +1771,7 @@ mod tests {
                         media_id,
                         source_range,
                         playback_rate: RationalRate::new(3, 2).unwrap(),
+                        reversed: false,
                     },
                     ClipSettings::Visual(VisualSettings::default()),
                 )],

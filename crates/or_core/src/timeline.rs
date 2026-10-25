@@ -193,6 +193,13 @@ pub enum ClipContent {
             skip_serializing_if = "is_identity_rate"
         )]
         playback_rate: RationalRate,
+        /// Whether the clip plays its source backwards.
+        ///
+        /// A project written before this field existed has no value; the default is
+        /// forward playback, which is what every earlier version meant. The flag is
+        /// omitted from JSON when false, so an untouched project keeps its bytes.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reversed: bool,
     },
     Text {
         #[serde(deserialize_with = "crate::project_document::deserialize_text_content")]
@@ -237,6 +244,18 @@ impl ClipContent {
         match self {
             Self::Media { playback_rate, .. } => *playback_rate,
             Self::Text { .. } | Self::Caption { .. } => RationalRate::ONE,
+        }
+    }
+
+    /// Whether the clip walks its source from the end towards the start.
+    ///
+    /// Non-media content has no direction and answers false, for the same reason
+    /// `playback_rate` answers identity: a caller mapping a time should not have
+    /// to branch on content kind.
+    pub const fn reversed(&self) -> bool {
+        match self {
+            Self::Media { reversed, .. } => *reversed,
+            Self::Text { .. } | Self::Caption { .. } => false,
         }
     }
 
@@ -628,6 +647,7 @@ impl TimelineClip {
                 media_id,
                 source_range,
                 playback_rate: RationalRate::ONE,
+                reversed: false,
             },
             ClipSettings::default_for(track_kind),
         )
@@ -1183,6 +1203,7 @@ fn validate_clip_content(
                 media_id,
                 source_range,
                 playback_rate,
+                reversed: _,
             },
             TrackKind::Video | TrackKind::Audio,
         ) => {
@@ -1290,6 +1311,47 @@ impl Error for TimelineValidationError {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_reversed_media_clip_round_trips_and_stays_forward_by_default() {
+        // The flag is skipped when false, so an untouched project keeps the bytes it
+        // had before the field existed; a reversed clip has to survive a round trip or
+        // the direction silently resets on reopen.
+        let forward = ClipContent::Media {
+            media_id: MediaId::generate(),
+            source_range: TimeRange::new(
+                RationalTime::ZERO,
+                RationalTime::new(2, 1).unwrap(),
+            )
+            .unwrap(),
+            playback_rate: RationalRate::ONE,
+            reversed: false,
+        };
+        let encoded = serde_json::to_string(&forward).unwrap();
+        assert!(
+            !encoded.contains("reversed"),
+            "a forward clip must not grow a field: {encoded}"
+        );
+
+        let reversed = ClipContent::Media {
+            media_id: MediaId::generate(),
+            source_range: TimeRange::new(
+                RationalTime::ZERO,
+                RationalTime::new(2, 1).unwrap(),
+            )
+            .unwrap(),
+            playback_rate: RationalRate::ONE,
+            reversed: true,
+        };
+        let encoded = serde_json::to_string(&reversed).unwrap();
+        assert_eq!(
+            serde_json::from_str::<ClipContent>(&encoded).unwrap(),
+            reversed
+        );
+        assert!(reversed.reversed());
+        assert!(!forward.reversed());
+    }
+
+
     use super::{
         ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
         MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,

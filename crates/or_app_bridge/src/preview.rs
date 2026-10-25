@@ -1148,15 +1148,9 @@ mod desktop {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
                 })?;
                 // Timeline time maps to source time through the clip's rate: a clip at
-                // 2x consumes two units of source per unit of timeline.
-                let scaled = clip
-                    .playback_rate
-                    .apply(offset)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-                let source_time = clip
-                    .source_start
-                    .checked_add(scaled)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+                // 2x consumes two units of source per unit of timeline, and a reversed
+                // clip walks that same span backwards.
+                let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
                 match self.decode_video_frame(
                     program.key,
@@ -1218,10 +1212,7 @@ mod desktop {
                 let offset = time.checked_sub(clip.timeline_start).map_err(|error| {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
                 })?;
-                let source_time = clip
-                    .source_start
-                    .checked_add(offset)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+                let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
                 match self.decode_video_frame(
                     program.key,
@@ -1528,7 +1519,35 @@ mod desktop {
         audio_clips: Vec<AudioClip>,
     }
 
-    fn direct_video_clip_at(
+    /// Source time for a timeline offset inside one clip.
+///
+/// A forward clip walks its source from `source_start`; a reversed clip walks the
+/// same span from its end, so the offset mirrors inside the span the clip covers
+/// rather than inside the source file.
+fn clip_source_time(
+    clip: &VideoClip,
+    offset: RationalTime,
+) -> Result<RationalTime, PreviewError> {
+    let scaled = clip
+        .playback_rate
+        .apply(offset)
+        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+    let span = clip
+        .playback_rate
+        .apply(clip.duration)
+        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+    let walked = if clip.reversed {
+        span.checked_sub(scaled)
+            .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?
+    } else {
+        scaled
+    };
+    clip.source_start
+        .checked_add(walked)
+        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))
+}
+
+fn direct_video_clip_at(
         program: &PreviewProgram,
         time: RationalTime,
         output_size: (u32, u32),
@@ -1588,6 +1607,7 @@ mod desktop {
                 content_end: Some(RationalTime::new(10, 1).unwrap()),
                 video_clips: vec![VideoClip {
                     playback_rate: RationalRate::ONE,
+                    reversed: false,
                     source: MediaSourceRef::local_file(local_media_uri("identity.mp4")).unwrap(),
                     source_dimensions: Some((1920, 1080)),
                     timeline_start: RationalTime::ZERO,
@@ -1628,6 +1648,7 @@ mod desktop {
 
             program.video_clips.push(VideoClip {
                 playback_rate: RationalRate::ONE,
+                reversed: false,
                 source: MediaSourceRef::local_file(local_media_uri("second.mp4")).unwrap(),
                 source_dimensions: Some((1920, 1080)),
                 timeline_start: RationalTime::ZERO,
@@ -1727,6 +1748,9 @@ mod desktop {
         source_start: RationalTime,
         duration: RationalTime,
         playback_rate: RationalRate,
+        /// Set when the clip walks its source backwards; the source-time mapping
+        /// mirrors inside the clip's own source range.
+        reversed: bool,
         transform: Transform,
         crop: Crop,
         opacity: Opacity,
@@ -1953,6 +1977,7 @@ mod desktop {
                     media_id,
                     source_range,
                     playback_rate,
+                    reversed,
                 },
                 ClipSettings::Visual(settings),
             ) => {
@@ -1966,6 +1991,7 @@ mod desktop {
                     source_start: source_range.start(),
                     duration: clip.timeline_duration,
                     playback_rate,
+                    reversed,
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
@@ -2003,6 +2029,7 @@ mod desktop {
                     media_id,
                     source_range,
                     playback_rate,
+                    reversed,
                 },
                 ClipSettings::Audio(settings),
             ) => {

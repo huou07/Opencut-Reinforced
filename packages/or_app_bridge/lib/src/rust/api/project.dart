@@ -349,6 +349,20 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectActionResult> save();
 
+  /// Flip the direction a media clip plays without touching its duration.
+  ///
+  /// Reverse is not a rate: the clip still covers the same source span and the same
+  /// timeline span, so only the direction changes and the caller keeps every other
+  /// property of the clip.
+  Future<ProjectActionResult> setTimelineClipReversed({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  });
+
   Future<ProjectActionResult> setTimelineSequenceFrameRate({
     required String projectId,
     required String projectInstanceId,
@@ -1216,6 +1230,9 @@ class ProjectTimelineClipView {
   final String clipId;
   final TimelineClipContentKindView contentKind;
   final RationalRateView playbackRate;
+
+  /// True when the clip walks its source backwards.
+  final bool reversed;
   final String? mediaId;
   final String? text;
   final ProjectTextFormattingView? formatting;
@@ -1227,6 +1244,7 @@ class ProjectTimelineClipView {
     required this.clipId,
     required this.contentKind,
     required this.playbackRate,
+    required this.reversed,
     this.mediaId,
     this.text,
     this.formatting,
@@ -1240,6 +1258,7 @@ class ProjectTimelineClipView {
       clipId.hashCode ^
       contentKind.hashCode ^
       playbackRate.hashCode ^
+      reversed.hashCode ^
       mediaId.hashCode ^
       text.hashCode ^
       formatting.hashCode ^
@@ -1255,6 +1274,7 @@ class ProjectTimelineClipView {
           clipId == other.clipId &&
           contentKind == other.contentKind &&
           playbackRate == other.playbackRate &&
+          reversed == other.reversed &&
           mediaId == other.mediaId &&
           text == other.text &&
           formatting == other.formatting &&

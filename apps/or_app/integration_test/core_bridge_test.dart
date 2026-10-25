@@ -1738,6 +1738,8 @@ Uint8List _silentWave({required int sampleRate, required int frames}) {
 }
 
 class _ObservedRustProjectGateway implements ProjectGateway {
+  int reversedCalls = 0;
+  bool? lastReversed;
   ProjectSessionHandle? activeSession;
   Object? lastError;
   final Completer<void> _projectCreationCompletion = Completer<void>();
@@ -1918,6 +1920,19 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     clipId: clipId,
     rate: rate,
   );
+
+  @override
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) async {
+    reversedCalls += 1;
+    lastReversed = reversed;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
 
   @override
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
