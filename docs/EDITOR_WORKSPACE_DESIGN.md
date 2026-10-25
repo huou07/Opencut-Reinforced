@@ -790,11 +790,7 @@ a second dialog; it is queued in §27 with multi-select leftovers.
 Ordered by what a CapCut user would notice first, each with the reason it is not
 already done:
 
-1. **Insert creates its own track.** Adding media to a timeline with no compatible
-   track currently asks the owner to add one. The fix belongs in the shell as one
-   command sequence (insert track → insert clip) so the dialog never shows a dead
-   end; it was queued instead of rushed because the insert dialog owns start,
-   duration and mode and must keep them.
+1. ~~**Insert creates its own track.**~~ Done in §28.
 2. **Multi-select drag.** A set of clips still moves one clip at a time. Moving a
    set needs its own snapping and conflict rules (does a set move ripple? does a
    locked track in the set block the whole gesture?), so the single-clip path stays
@@ -809,3 +805,29 @@ already done:
 5. **Packaged MotionScene dialog drive.** The packaged journey proves create,
    import, insert, preview and export. The MotionScene path was proven in the
    harness only, because its native panels cannot be typed into (see docs/TOOLING.md).
+
+## 28. Insert creates the track it needs (local, 2026-10-25)
+
+Driving the packaged app surfaced a dead end: adding media to a timeline with no
+compatible track answered "Add a compatible Video or Audio track first.", so the
+owner had to leave the flow, create a track, and come back. CapCut never asks.
+
+What shipped:
+- `_showInsertTimelineDialog` takes an optional `onEnsureTrack(kind)` hook. When no
+  compatible unlocked track exists it calls the hook once, receives the refreshed
+  project and track page, and re-opens itself — the dialog now always has a target
+  track to offer.
+- `AppShellState._ensureTimelineTrack(kind)` is that hook: one `addTimelineTrack`
+  command through the gateway, then `listTimelineTracks`, then `setState` with the
+  new revision and tracks. Failure reports `The track could not be added.` and
+  leaves the dialog's honest message for the locked-track case.
+- Media with unknown streams still gets a track; what the dialog cannot guess is
+  the duration, which stays blank until the owner states it (unchanged).
+
+Evidence: widget suite **162 passed** (new test `adding media to an empty timeline
+creates the track it needs`, plus the rewritten `insert dialog creates the track
+and leaves an unknown duration blank`); harness `scripts/ui_scenarios/auto-track.json`
+PASS at 1280x800 with the tree reading `Timeline 1 track · 1 clip` and the clip
+`starts 0/1, duration 1/2`; and the packaged release drove the same path end to
+end — import, one click on the media row, `Insert Clip` with `V1 · video`, insert,
+export → `ffprobe` `h264 32×24 + aac, duration=0.512000, 2 635 bytes`.

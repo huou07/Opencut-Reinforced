@@ -67,6 +67,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onLoadMoreTimelineMarkers,
     this.onRefreshTimeline,
     this.onAddMediaToTimeline,
+    this.onEnsureTrack,
     this.onInsertTimelineTextClip,
     this.onUpdateTimelineTextClip,
     this.onMoveTimelineClip,
@@ -175,6 +176,10 @@ class EditorShellPreviewScreen extends StatefulWidget {
     String mode,
   )?
   onAddMediaToTimeline;
+  final Future<(ProjectReadModel, ProjectTimelineTracks)?> Function(
+    ProjectTimelineTrackKind kind,
+  )?
+  onEnsureTrack;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -723,6 +728,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onAddMediaToTimeline:
                       widget.isProjectWorkspace && !widget.busy
                       ? widget.onAddMediaToTimeline
+                      : null,
+                  onEnsureTrack: widget.isProjectWorkspace && !widget.busy
+                      ? widget.onEnsureTrack
                       : null,
                   onImportMedia: widget.busy ? null : widget.onImportMedia,
                   onImportMediaFolder: widget.busy
@@ -1350,6 +1358,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onGenerateCaptions,
     required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
+    this.onEnsureTrack,
     this.onAddTextTrack,
     this.onAddCaptionTrack,
     this.onAddAudioTrack,
@@ -1392,6 +1401,10 @@ class _EditorToolPanel extends StatelessWidget {
     String mode,
   )?
   onAddMediaToTimeline;
+  final Future<(ProjectReadModel, ProjectTimelineTracks)?> Function(
+    ProjectTimelineTrackKind kind,
+  )?
+  onEnsureTrack;
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
   final VoidCallback? onAddAudioTrack;
@@ -1442,6 +1455,7 @@ class _EditorToolPanel extends StatelessWidget {
         onGenerateCaptions: onGenerateCaptions,
         onCleanUpAudio: onCleanUpAudio,
         onAddMediaToTimeline: onAddMediaToTimeline,
+        onEnsureTrack: onEnsureTrack,
         onClose: onClose,
       );
     }
@@ -1808,6 +1822,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onGenerateCaptions,
     required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
+    this.onEnsureTrack,
     this.onClose,
     this.showTitle = true,
     this.searchController,
@@ -1839,6 +1854,10 @@ class _MediaLibraryPanel extends StatelessWidget {
     String mode,
   )?
   onAddMediaToTimeline;
+  final Future<(ProjectReadModel, ProjectTimelineTracks)?> Function(
+    ProjectTimelineTrackKind kind,
+  )?
+  onEnsureTrack;
   final VoidCallback? onClose;
 
   /// Hidden when the tab strip already names the category.
@@ -2096,6 +2115,7 @@ class _MediaLibraryPanel extends StatelessWidget {
                                       currentPreviewState.contentEnd ??
                                       ProjectRationalTime(BigInt.zero, 1),
                                   onInsert: onAddMediaToTimeline!,
+                                  onEnsureTrack: onEnsureTrack,
                                 ),
                               ),
                         onRemove: onRemove == null
@@ -8013,6 +8033,10 @@ Future<void> _showInsertTimelineDialog({
     String,
   )
   onInsert,
+  Future<(ProjectReadModel, ProjectTimelineTracks)?> Function(
+    ProjectTimelineTrackKind kind,
+  )?
+  onEnsureTrack,
 }) async {
   if (project.projectId != tracks.projectId ||
       project.projectInstanceId != tracks.projectInstanceId ||
@@ -8032,6 +8056,29 @@ Future<void> _showInsertTimelineDialog({
     final hasLockedCompatibleTrack = tracks.items.any(
       (track) => compatibleKinds.contains(track.kind) && track.state.locked,
     );
+    // CapCut-class behaviour: adding media creates the track it needs. One command
+    // sequence in the shell answers the requirement, so the owner never reads a
+    // dead end like "Add a compatible Video or Audio track first."
+    if (!hasLockedCompatibleTrack && onEnsureTrack != null) {
+      final created = await onEnsureTrack(
+        media.videoDetails != null
+            ? ProjectTimelineTrackKind.video
+            : ProjectTimelineTrackKind.audio,
+      );
+      if (created != null && context.mounted) {
+        final (refreshedProject, refreshedTracks) = created;
+        return _showInsertTimelineDialog(
+          context: context,
+          project: refreshedProject,
+          media: media,
+          tracks: refreshedTracks,
+          suggestedStart: suggestedStart,
+          onInsert: onInsert,
+          onEnsureTrack: onEnsureTrack,
+        );
+      }
+    }
+    if (!context.mounted) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(

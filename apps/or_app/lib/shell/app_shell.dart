@@ -983,6 +983,7 @@ class _AppShellState extends State<AppShell> {
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
+              onEnsureTrack: _ensureTimelineTrack,
               onInsertTimelineTextClip: _insertTimelineTextClip,
               onUpdateTimelineTextClip: _updateTimelineTextClip,
               onUpdateTimelineClipVisualSettings:
@@ -2592,6 +2593,44 @@ class _AppShellState extends State<AppShell> {
       (session, current) =>
           widget.projectGateway.addTimelineTrack(session, current, kind),
     );
+  }
+
+  /// Adds the track a media insert needs and hands back the refreshed pair.
+  ///
+  /// Adding media to a timeline with no compatible track used to answer "Add a
+  /// compatible Video or Audio track first." -- a dead end the owner has to walk
+  /// out of by hand. The insert dialog now calls this once, so the track exists
+  /// before the dialog asks where the clip goes.
+  Future<(ProjectReadModel, ProjectTimelineTracks)?> _ensureTimelineTrack(
+    ProjectTimelineTrackKind kind,
+  ) async {
+    final session = _activeSession;
+    final current = _activeProject;
+    if (session == null || current == null || _busy) return null;
+    try {
+      final result = await widget.projectGateway.addTimelineTrack(
+        session,
+        current,
+        kind,
+      );
+      final view = result.view;
+      if (!result.succeeded || view == null) {
+        if (mounted) {
+          _showUnavailable('The track could not be added.');
+        }
+        return null;
+      }
+      final tracks = await widget.projectGateway.listTimelineTracks(session);
+      if (!mounted) return null;
+      setState(() {
+        _activeProject = view;
+        _timelineTracks = tracks;
+      });
+      return (view, tracks);
+    } on ProjectSafStorageException catch (error) {
+      if (mounted) _showUnavailable(error.message);
+      return null;
+    }
   }
 
   Future<void> _importTimelineCaptions() async {

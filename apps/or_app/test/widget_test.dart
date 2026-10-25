@@ -3737,7 +3737,7 @@ void main() {
   );
 
   testWidgets(
-    'insert dialog explains missing compatible tracks and unknown duration stays blank',
+    'insert dialog creates the track and leaves an unknown duration blank',
     (tester) async {
       _setViewport(tester, const Size(1280, 800));
       final gateway = _FakeProjectGateway()
@@ -3750,19 +3750,14 @@ void main() {
         find.byKey(const ValueKey('media-add-timeline-media-unknown')),
       );
       await tester.pumpAndSettle();
+      // Media with unknown streams still gets a track created for it; what the
+      // dialog cannot guess is the duration, which stays blank until the owner
+      // states it.
+      expect(gateway.addTimelineTrackCalls, 1);
       expect(
         find.text('Add a compatible Video or Audio track first.'),
-        findsOneWidget,
+        findsNothing,
       );
-      await tester.tap(find.text('Close').last);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('timeline-empty-add-video')));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('media-add-timeline-media-unknown')),
-      );
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('timeline-insert-duration')),
         findsOneWidget,
@@ -3881,6 +3876,50 @@ void main() {
     expect(gateway.insertTimelineClipCalls, 1);
     expect(gateway.lastInsertTimelineStart?.canonical, '4/1');
     expect(gateway.lastSession!.clips['append-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('adding media to an empty timeline creates the track it needs', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-first',
+          sourceUri: Uri.file('/tmp/first.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '2 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: 'AAC',
+          containerDuration: ProjectRationalTime(BigInt.from(2), 1),
+        ),
+      ]
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.zero, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/auto-track.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Auto track');
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-add-timeline-media-first')),
+    );
+    await tester.pumpAndSettle();
+
+    // The track is created as part of the insert, so the dialog can ask where the
+    // clip goes instead of answering "Add a compatible Video or Audio track first."
+    expect(gateway.addTimelineTrackCalls, 1);
+    expect(find.text('Insert Clip'), findsOneWidget);
+    expect(find.text('Add a compatible Video or Audio track first.'), findsNothing);
+    expect(find.textContaining('video'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 

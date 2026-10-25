@@ -1,0 +1,31 @@
+{
+  "name": "auto-track",
+  "harness": "or_ui",
+  "description": "Adding media to a timeline with no compatible track creates that track as part of the insert instead of answering 'Add a compatible Video or Audio track first.' The scenario imports a real clip, taps the media row's add action on an empty timeline, and confirms the track exists before the dialog asks where the clip goes.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "steps": [
+    { "op": "shot", "name": "home" },
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    { "op": "enter_text", "selector": { "key": "new-project-name" }, "value": "Auto track review" },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait_label", "label": "No timeline tracks" },
+    { "op": "tap", "selector": { "key": "media-import" } },
+    { "op": "picker", "next": "media" },
+    { "op": "wait_label", "label": "tiny_h264_aac.mp4" },
+    { "op": "tap", "selector": { "key_regex": "^media-add-timeline-.*$" } },
+    { "op": "wait_label", "label": "Insert Clip" },
+    { "op": "tree", "name": "auto-track-dialog" },
+    { "op": "shot", "name": "auto-track-dialog" },
+    { "op": "tap", "selector": { "key": "timeline-confirm-insert" } },
+    { "op": "wait_label", "label": "1 track" },
+    { "op": "tree", "name": "auto-track-inserted" },
+    { "op": "shot", "name": "auto-track-inserted" }
+  ]
+}
