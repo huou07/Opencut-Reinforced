@@ -1033,6 +1033,46 @@ void main() {
     expect(find.text('second.mkv'), findsOneWidget);
   });
 
+  testWidgets('media search filters the library without touching the project', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-search.orproj'
+      ..mediaPaths = ['/tmp/interview.mp4', '/tmp/broll.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Media search');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 items'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('media-search')),
+      'broll',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('broll.mkv'), findsOneWidget);
+    expect(find.text('interview.mp4'), findsNothing);
+    expect(find.text('1 of 2 items'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('media-search')),
+      'nothing here',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No media matches this search.'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('media-search')), '');
+    await tester.pumpAndSettle();
+    expect(find.text('2 items'), findsOneWidget);
+
+    // Filtering is a view concern: it must never reach the command log.
+    expect(gateway.importMediaCalls, 2);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Import Folder adds its discovered media through the gateway', (
     tester,
   ) async {
@@ -1069,8 +1109,10 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Paginated Media');
 
+    // The library owns the list scrollable; the search field above it has its
+    // own, so the finder must name the list instead of taking the first one.
     final panelScroll = find.descendant(
-      of: find.byKey(const ValueKey('project-media-panel')),
+      of: find.byKey(const ValueKey('media-list')),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
@@ -1078,6 +1120,8 @@ void main() {
       160,
       scrollable: panelScroll.first,
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-load-more')));
     await tester.pumpAndSettle();
 
@@ -1123,8 +1167,10 @@ void main() {
       findsOneWidget,
     );
 
+    // The library owns the list scrollable; the search field above it has its
+    // own, so the finder must name the list instead of taking the first one.
     final panelScroll = find.descendant(
-      of: find.byKey(const ValueKey('project-media-panel')),
+      of: find.byKey(const ValueKey('media-list')),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
@@ -1132,6 +1178,8 @@ void main() {
       160,
       scrollable: panelScroll.first,
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-load-more')));
     await tester.pumpAndSettle();
     expect(gateway.mediaListOffsets, [0, 50]);
@@ -2753,7 +2801,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.updatePlaybackRateCalls, 1);
     expect(gateway.lastPlaybackRate?.canonical, '2/1');
-    expect(find.text('2×'), findsOneWidget);
+    // The clip now carries its own speed badge, so the inspector dropdown is
+    // no longer the only place that says 2×.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('inspector-playback-rate')),
+        matching: find.text('2×'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline-clip-speed-audio-inspector-clip')),
+      findsOneWidget,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-gain_db')),
       '-6.25',

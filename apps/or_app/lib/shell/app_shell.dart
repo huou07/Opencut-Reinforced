@@ -226,6 +226,11 @@ class _AppShellState extends State<AppShell> {
             // CapCut-style single key and the broadcast-editor shortcut agree.
             SingleActivator(LogicalKeyboardKey.keyS): SplitClipIntent(),
             OrCommandActivator(LogicalKeyboardKey.keyB): SplitClipIntent(),
+            // Blade mode is a mode, not a one-shot command: `C` arms the
+            // pointer and `V` puts it back. Both are plain letters, so they
+            // stop at a focused text field like the rest of the editing verbs.
+            SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
+            SingleActivator(LogicalKeyboardKey.keyV): SetBladeModeIntent(false),
             SingleActivator(LogicalKeyboardKey.delete, shift: true):
                 RippleDeleteClipIntent(),
             SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
@@ -360,6 +365,14 @@ class _AppShellState extends State<AppShell> {
                 onInvoke: (_) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.splitSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.setBladeMode(intent.enabled);
                   }
                   return null;
                 },

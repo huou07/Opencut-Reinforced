@@ -203,7 +203,7 @@ local commit. A phase is not done because it compiles.
 | P0 | framework: dsh plugin skills, macOS semantic harness | commit 2bf6c28, c8beb13 |
 | P1 | workspace IA: top bar, tabbed left panel, contextual inspector, single timeline toolbar, palette in editor | **DONE locally** — `scripts/ui_scenarios/workspace-chrome.json` and `workspace-layout.json` pass at 1440x900, 1280x800 and 1024x768; `flutter test` 140 passing; screenshots in `/tmp/or-chrome4` and `/tmp/or-layout3` |
 | P2 | viewer direct manipulation: move, scale, rotate, crop, snapping | **DONE locally (move, scale, rotate, nudge)** — `scripts/ui_scenarios/viewer-transform.json` passes; drags commit once and the inspector agrees (X 12.2 %, Width 124.4 %, Rotation 4.62°); crop stays an inspector field |
-| P3 | timeline power: blade tool, badges, multi-select, copy/paste, track state UI, markers, library search | scenario drives blade + multi-select + paste; badges reflect model state |
+| P3 | timeline power: blade tool, badges, multi-select, copy/paste, track state UI, markers, library search | **DONE locally (search, blade, speed badge, markers)** — `scripts/ui_scenarios/blade-cut.json` cuts a clip into two at the pointer with `C` and the toggle, and the speed badge appears after the inspector sets 2×; multi-select and copy/paste remain open |
 | P4 | effects and transitions panels with apply/remove | apply then export changes pixels; badges update; undo restores |
 | P5 | speed extras: reverse, freeze frame | exported clip duration and direction verified with ffprobe |
 | P6 | export sheet, native menus, settings | file written to chosen destination with the chosen format; menu items invoke the same commands |
@@ -219,6 +219,36 @@ superseded for planning by this file; its evidence log stays valid.
 `docs/skills.md` routes the work: `or-ui-ux` for the surfaces, `or-edit-feature`
 for commands, `or-media-render` for pipeline work, `or-motionscene` for P7, and
 `or-dev-loop` for every verification.
+
+## 11. P3 delivery record (local, 2026-10-25)
+
+Shipped:
+
+- **Library search** — `media-search` field above the list; the panel filters on the
+  derived display name, the count reads `N of M items`, and a filter with no hits
+  says so instead of looking like an empty library. Filtering never touches the
+  project: `media search filters the library without touching the project` asserts
+  the command log stays at the two imports that created it.
+- **Blade tool** — `C` arms it, `V` returns to selection, the scissors toggle in the
+  timeline control row is the mouse path, and the command palette carries both. A
+  click on a clip splits at the pointer through the existing
+  `splitTimelineClip(timelineTime:)` command, so no new state or command kind was
+  invented. `scripts/ui_scenarios/blade-cut.json` proves it end to end: one 1/2 s
+  clip becomes `0/1–1/4` and `1/4–1/2`.
+- **Speed badge** — a clip that does not play at 1× carries its rate on the clip
+  (`timeline-clip-speed-<id>`), so the timeline answers for speed without a
+  selection. The inspector dropdown was the only place that said `2×` before.
+- **Markers** — the marker ruler, `M`, the `+` menu and the palette entry are all in
+  place from P1; this round only verified they survive the new toolbar.
+
+Still open in P3: multi-clip selection with marquee, clipboard copy/paste between
+tracks, and a clip badge for effects/transitions (which needs per-clip settings the
+timeline does not load for unselected clips; the inspector remains the authority
+until a batched read exists).
+
+Evidence class: local only. `flutter test` 147 passing, the three P1/P2 scenarios
+still pass, and `blade-cut.json` passes on the macOS debug app driven by the
+semantic harness. No packaged-build claim.
 
 ## 9. P1 delivery record (local, 2026-10-25)
 

@@ -360,6 +360,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   @override
   void dispose() {
+    _mediaSearchController.dispose();
     _previewState.dispose();
     _mobileSheetRevision.dispose();
     super.dispose();
@@ -394,6 +395,14 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   /// Transform of the selected visual clip, kept in step with the selection so
   /// the viewer can draw handles without asking the inspector.
+  /// Blade mode keeps the pointer a cutting tool until the owner leaves it,
+  /// which is how every desktop editor lets you make ten cuts without
+  /// re-arming a command for each one.
+  bool _bladeMode = false;
+
+  /// Owns the media search field's text so a keystroke re-filters the library
+  /// without rebuilding the editor.
+  final TextEditingController _mediaSearchController = TextEditingController();
   ProjectTimelineVisualSettings? _selectedVisualSettings;
   int _visualSettingsGeneration = 0;
   /// Serializes viewer gestures and nudges; see [_queueSelectedTransform].
@@ -551,6 +560,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   /// The left panel's category, so number keys reach the same state the tab
   /// strip owns.
+  void setBladeMode(bool enabled) {
+    if (_bladeMode == enabled) return;
+    setState(() => _bladeMode = enabled);
+  }
+
+  void toggleBladeMode() => setBladeMode(!_bladeMode);
+
   void selectTool(String tool) {
     if (_selectedTool == tool) return;
     setState(() => _selectedTool = tool);
@@ -606,6 +622,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   selectedTool: _selectedTool,
                   onSelectedTool: (picked) =>
                       setState(() => _selectedTool = picked),
+                  mediaSearchController: _mediaSearchController,
                   isProjectWorkspace: widget.isProjectWorkspace,
                   project: widget.project,
                   previewState: _previewState.value,
@@ -731,6 +748,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onDeleteClip: widget.onDeleteTimelineClip,
             onTrimClip: widget.onTrimTimelineClip,
             onSplitClip: widget.onSplitTimelineClip,
+            bladeMode: _bladeMode,
+            onToggleBladeMode: () => setBladeMode(!_bladeMode),
             onSlipClip: widget.onSlipTimelineClip,
             onRollClip: widget.onRollTimelineClip,
             onSlideClip: widget.onSlideTimelineClip,
@@ -909,6 +928,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 selectedTool: tool,
                 onSelectedTool: (picked) =>
                     setState(() => _selectedTool = picked),
+                mediaSearchController: _mediaSearchController,
                 isProjectWorkspace: true,
                 project: widget.project,
                 previewState: _previewState.value,
@@ -1202,6 +1222,7 @@ class _EditorToolPanel extends StatelessWidget {
   const _EditorToolPanel({
     required this.selectedTool,
     required this.onSelectedTool,
+    this.mediaSearchController,
     required this.isProjectWorkspace,
     required this.project,
     required this.previewState,
@@ -1231,6 +1252,7 @@ class _EditorToolPanel extends StatelessWidget {
 
   final String selectedTool;
   final ValueChanged<String> onSelectedTool;
+  final TextEditingController? mediaSearchController;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
   final ProjectPreviewState? previewState;
@@ -1287,6 +1309,7 @@ class _EditorToolPanel extends StatelessWidget {
     if (selectedTool == 'Media' && isProjectWorkspace) {
       return _MediaLibraryPanel(
         showTitle: false,
+        searchController: mediaSearchController,
         page: mediaPage,
         project: project,
         previewState: previewState,
@@ -1522,6 +1545,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onAddMediaToTimeline,
     this.onClose,
     this.showTitle = true,
+    this.searchController,
   });
 
   final ProjectMediaPage? page;
@@ -1555,9 +1579,34 @@ class _MediaLibraryPanel extends StatelessWidget {
   /// Hidden when the tab strip already names the category.
   final bool showTitle;
 
+  /// A library of a hundred clips is unusable without a filter. The field owns
+  /// a controller so a keystroke re-filters without rebuilding the editor.
+  final TextEditingController? searchController;
+
   @override
   Widget build(BuildContext context) {
-    final items = page?.items ?? const <ProjectMediaItem>[];
+    final controller = searchController;
+    if (controller == null) return _panel(context, '');
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => _panel(context, value.text),
+    );
+  }
+
+  Widget _panel(BuildContext context, String searchQuery) {
+    final library = page?.items ?? const <ProjectMediaItem>[];
+    final needle = searchQuery.trim().toLowerCase();
+    final items = needle.isEmpty
+        ? library
+        : library
+              .where(
+                (item) =>
+                    _mediaDisplayName(item.sourceUri).toLowerCase().contains(
+                      needle,
+                    ),
+              )
+              .toList(growable: false);
+    final filtering = needle.isNotEmpty;
     final currentPreviewState = previewState;
     final timelineSnapshotMatches =
         page != null &&
@@ -1624,6 +1673,57 @@ class _MediaLibraryPanel extends StatelessWidget {
               ],
             ),
           ),
+          if (page != null && library.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                OrSpacing.x2,
+                OrSpacing.x2,
+                OrSpacing.x2,
+                0,
+              ),
+              child: TextField(
+                key: const ValueKey('media-search'),
+                controller: searchController,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(
+                  color: OrColors.text,
+                  fontSize: OrType.metadataCompactSize,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Search media',
+                  hintStyle: const TextStyle(
+                    color: OrColors.textMuted,
+                    fontSize: OrType.metadataCompactSize,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 16,
+                    color: OrColors.textMuted,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 30,
+                    minHeight: 30,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: OrSpacing.x2,
+                    vertical: OrSpacing.x1,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OrRadii.small),
+                    borderSide: const BorderSide(color: OrColors.border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OrRadii.small),
+                    borderSide: const BorderSide(color: OrColors.border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(OrRadii.small),
+                    borderSide: const BorderSide(color: OrColors.selection),
+                  ),
+                ),
+              ),
+            ),
           if (page != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(
@@ -1633,7 +1733,10 @@ class _MediaLibraryPanel extends StatelessWidget {
                 0,
               ),
               child: Text(
-                '${page!.totalCount} ${page!.totalCount == 1 ? 'item' : 'items'}',
+                filtering
+                    ? '${items.length} of ${library.length} items'
+                    : '${library.length} ${library.length == 1 ? 'item' : 'items'}',
+                key: const ValueKey('media-count'),
                 style: const TextStyle(
                   color: OrColors.textMuted,
                   fontSize: OrType.tinySize,
@@ -1643,6 +1746,28 @@ class _MediaLibraryPanel extends StatelessWidget {
           if (loading && items.isEmpty)
             const Expanded(
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (items.isEmpty && error == null && filtering)
+            const Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    OrSpacing.x3,
+                    OrSpacing.x4,
+                    OrSpacing.x3,
+                    0,
+                  ),
+                  child: Text(
+                    'No media matches this search.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: OrType.metadataCompactSize,
+                    ),
+                  ),
+                ),
+              ),
             )
           else if (items.isEmpty && error == null)
             // A centred sentence in the middle of a tall panel reads as a
@@ -1682,6 +1807,7 @@ class _MediaLibraryPanel extends StatelessWidget {
           else
             Expanded(
               child: ListView(
+                key: const ValueKey('media-list'),
                 padding: const EdgeInsets.all(OrSpacing.x2),
                 children: [
                   for (final item in items)
@@ -2870,6 +2996,16 @@ ProjectRationalTime _timeFromSeconds(double seconds) => ProjectRationalTime(
   BigInt.from((seconds.clamp(0, double.maxFinite) * 1000000).round()),
   1000000,
 );
+
+/// `0.5×`, `1.5×`, `2×`: a speed badge reads better as a decimal than as the
+/// canonical `3/2` the model stores.
+String _rateLabel(ProjectRationalRate rate) {
+  final value = rate.numerator / rate.denominator;
+  final text = value == value.roundToDouble()
+      ? value.round().toString()
+      : value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  return text;
+}
 
 String _clockLabel(double seconds) {
   final milliseconds = (seconds * 1000).round();
@@ -4193,6 +4329,8 @@ class _TimelinePanel extends StatefulWidget {
     required this.onDeleteClip,
     required this.onTrimClip,
     required this.onSplitClip,
+    this.bladeMode = false,
+    this.onToggleBladeMode,
     required this.onSlipClip,
     required this.onRollClip,
     required this.onSlideClip,
@@ -4284,6 +4422,10 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onSplitClip;
+
+  /// Blade mode turns a click on a clip into a split at the pointer.
+  final bool bladeMode;
+  final VoidCallback? onToggleBladeMode;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineClip,
@@ -4753,6 +4895,18 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         gesture: _gesture,
                                         snapGuide: _snapGuide,
                                         selectedClipId: _selectedClipId,
+                                        bladeMode: widget.bladeMode,
+                                        onBladeSplit:
+                                            widget.project == null ||
+                                                widget.onSplitClip == null
+                                            ? null
+                                            : (clip, time) => unawaited(
+                                                widget.onSplitClip!(
+                                                  widget.project!,
+                                                  clip,
+                                                  time,
+                                                ),
+                                              ),
                                         onDropMedia:
                                             widget.onAddMediaToTimeline ==
                                                     null ||
@@ -4969,6 +5123,30 @@ class _TimelinePanelState extends State<_TimelinePanel> {
               ),
             ],
             const SizedBox(width: OrSpacing.x2),
+            if (widget.isProjectWorkspace)
+              Padding(
+                padding: const EdgeInsets.only(right: OrSpacing.x1),
+                child: Tooltip(
+                  message: widget.bladeMode
+                      ? 'Blade tool on · click a clip to cut it (V selects)'
+                      : 'Blade tool (C) · click a clip to cut it',
+                  child: IconButton(
+                    key: const ValueKey('timeline-blade-toggle'),
+                    isSelected: widget.bladeMode,
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      backgroundColor: widget.bladeMode
+                          ? OrColors.surfaceSelected
+                          : null,
+                      foregroundColor: widget.bladeMode
+                          ? OrColors.selection
+                          : OrColors.textSecondary,
+                    ),
+                    onPressed: widget.onToggleBladeMode,
+                    icon: const Icon(Icons.content_cut, size: 16),
+                  ),
+                ),
+              ),
             IconButton(
               key: const ValueKey('timeline-zoom-out'),
               tooltip: 'Zoom out',
@@ -6548,6 +6726,7 @@ class _TimelinePointerSurface extends StatefulWidget {
     required this.child,
     required this.behavior,
     this.onTap,
+    this.onTapPosition,
     this.onPanStart,
     this.onPanUpdate,
     this.onPanEnd,
@@ -6557,6 +6736,10 @@ class _TimelinePointerSurface extends StatefulWidget {
   final Widget child;
   final HitTestBehavior behavior;
   final VoidCallback? onTap;
+
+  /// Blade mode splits where the pointer landed, so the tap has to carry its
+  /// position instead of only "something was tapped".
+  final ValueChanged<Offset>? onTapPosition;
   final ValueChanged<DragStartDetails>? onPanStart;
   final ValueChanged<DragUpdateDetails>? onPanUpdate;
   final ValueChanged<DragEndDetails>? onPanEnd;
@@ -6596,6 +6779,7 @@ class _TimelinePointerSurfaceState extends State<_TimelinePointerSurface> {
     if (_dragging) {
       widget.onPanEnd?.call(DragEndDetails(primaryVelocity: 0));
     } else {
+      widget.onTapPosition?.call(event.localPosition);
       widget.onTap?.call();
     }
     _reset();
@@ -6638,6 +6822,8 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.gesture,
     required this.snapGuide,
     required this.selectedClipId,
+    required this.bladeMode,
+    required this.onBladeSplit,
     required this.onDropMedia,
     required this.onOpenClip,
     required this.onOpenClipMenu,
@@ -6664,6 +6850,9 @@ class _TimelineTrackLane extends StatelessWidget {
   final _TimelinePointerGesture? gesture;
   final _TimelineSnapGuide? snapGuide;
   final String? selectedClipId;
+  final bool bladeMode;
+  final void Function(ProjectTimelineClip clip, ProjectRationalTime time)?
+  onBladeSplit;
   final void Function(ProjectMediaItem, Offset)? onDropMedia;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
   final void Function(ProjectTimelineClip, Offset) onOpenClipMenu;
@@ -6809,9 +6998,17 @@ class _TimelineTrackLane extends StatelessWidget {
     final background = visualTrack
         ? OrColors.surface
         : OrColors.backgroundRaised;
+    final bladeSplit = onBladeSplit;
     final body = _TimelinePointerSurface(
       behavior: HitTestBehavior.opaque,
-      onTap: () => onOpenClip(clip),
+      onTap: bladeMode ? null : () => onOpenClip(clip),
+      onTapPosition: bladeMode && bladeSplit != null
+          ? (local) {
+              final seconds = start + (local.dx + math.min(6.0, clipWidth / 2)) /
+                  pixelsPerSecond;
+              bladeSplit(clip, _timeFromSeconds(seconds));
+            }
+          : null,
       onPanStart: onMoveStart == null
           ? null
           : (details) => onMoveStart!(clip, details),
@@ -6839,6 +7036,12 @@ class _TimelineTrackLane extends StatelessWidget {
             mediaPreviews[media!.mediaId]?.kind == previewKind
         ? mediaPreviews[media.mediaId]?.bytes
         : null;
+    // A clip that plays at another speed says so on the clip itself; the
+    // inspector only answers for the selection.
+    final rate = clip.playbackRate;
+    final speedLabel = rate.numerator == rate.denominator
+        ? null
+        : '${_rateLabel(rate)}×';
     final visual = Container(
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
       decoration: BoxDecoration(
@@ -6931,6 +7134,32 @@ class _TimelineTrackLane extends StatelessWidget {
                       child: body,
                     ),
                   ),
+                  if (speedLabel != null)
+                    Positioned(
+                      right: 3,
+                      top: 3,
+                      child: IgnorePointer(
+                        child: Container(
+                          key: ValueKey('timeline-clip-speed-${clip.clipId}'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: OrColors.background.withValues(alpha: 0.74),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: Text(
+                            speedLabel,
+                            style: const TextStyle(
+                              color: OrColors.selection,
+                              fontSize: OrType.tinySize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (clip.contentKind ==
                       ProjectTimelineClipContentKind.media) ...[
                     _trimHandle(

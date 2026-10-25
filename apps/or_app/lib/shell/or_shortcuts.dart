@@ -137,3 +137,11 @@ class NudgeSelectedClipIntent extends Intent {
   final double dxMilliCanvas;
   final double dyMilliCanvas;
 }
+
+/// Blade mode is a mode, not a command: `C` keeps the pointer cutting until
+/// `V` returns it to selection.
+class SetBladeModeIntent extends Intent {
+  const SetBladeModeIntent(this.enabled);
+
+  final bool enabled;
+}
