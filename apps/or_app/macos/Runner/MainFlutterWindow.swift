@@ -74,6 +74,28 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
         bookmarkParentDirectory: false,
         result: result
       )
+    case "revealExport":
+      _ = call.arguments as? [String: Any]
+      guard let arguments = call.arguments as? [String: Any],
+            let path = arguments["path"] as? String else {
+        result(FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Revealing a file needs a path.",
+          details: nil
+        ))
+        return
+      }
+      let url = URL(fileURLWithPath: path)
+      guard FileManager.default.fileExists(atPath: path) else {
+        result(FlutterError(
+          code: "MISSING_FILE",
+          message: "That file is no longer on disk.",
+          details: path
+        ))
+        return
+      }
+      NSWorkspace.shared.activateFileViewerSelecting([url])
+      result(true)
     case "saveProject":
       guard let arguments = call.arguments as? [String: Any],
             let suggestedName = arguments["suggestedName"] as? String else {

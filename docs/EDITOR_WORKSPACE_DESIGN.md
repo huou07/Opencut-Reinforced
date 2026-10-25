@@ -547,3 +547,23 @@ Skia paints.
   hardware decode is the next real hardware win, not a present defect. It is
   deliberately not attempted here: a hwaccel change alters the frame-transfer
   contract with `or_viewer_texture` and needs its own measurement round.
+
+## 19. Show in Finder (local, 2026-10-25)
+
+The export receipt now offers the action the desktop actually has.
+
+- `MacOSScopedFileAccessPlugin` (apps/or_app/macos/Runner/MainFlutterWindow.swift)
+  gained `revealExport`: it validates the argument, refuses a path that is no
+  longer on disk with `MISSING_FILE`, and calls
+  `NSWorkspace.shared.activateFileViewerSelecting([url])`.
+- `AppShellState._revealInFinder` invokes it over the existing
+  `or_macos_file_access` channel and maps a missing plugin to a spoken message
+  instead of a silent no-op.
+- The receipt keeps one action, because a snackbar with two competing actions is
+  a menu: on macOS it reads "Show in Finder", elsewhere "Copy path".
+
+Evidence: `flutter --no-version-check build macos --debug` links the new Swift
+case, `flutter --no-version-check analyze --no-pub` is clean and the widget suite
+is `+153`. NOT driven end-to-end: opening Finder needs a real export through the
+native save panel, which the semantic harness cannot click; the reveal call is
+therefore compiled-and-routed but not observed.

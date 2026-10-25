@@ -2179,6 +2179,21 @@ class _AppShellState extends State<AppShell> {
 
   /// A finished export is a file, not a message: name it, size it, and let the
   /// owner take the path without hunting through Finder.
+  /// Ask the host to reveal a published file. Desktop-only by construction:
+  /// the channel is registered by the macOS runner, and other hosts fall back
+  /// to the copy-path action the receipt already offers.
+  static const MethodChannel _revealChannel = MethodChannel('or_macos_file_access');
+
+  Future<void> _revealInFinder(String path) async {
+    try {
+      await _revealChannel.invokeMethod<bool>('revealExport', {'path': path});
+    } on PlatformException catch (error) {
+      _showUnavailable(error.message ?? 'The file could not be revealed.');
+    } on MissingPluginException {
+      _showUnavailable('This build cannot open a Finder window.');
+    }
+  }
+
   void _showExportReceipt(String destination) {
     final name = destination.split(Platform.pathSeparator).last;
     var size = '';
@@ -2194,9 +2209,13 @@ class _AppShellState extends State<AppShell> {
       context,
       'Exported $name$size',
       duration: const Duration(seconds: 8),
-      actionLabel: 'Copy path',
+      // One action, the one this host can actually do: macOS can reveal the
+      // file, other hosts can only hand the path to the clipboard.
+      actionLabel: Platform.isMacOS ? 'Show in Finder' : 'Copy path',
       onAction: () => unawaited(
-        Clipboard.setData(ClipboardData(text: destination)),
+        Platform.isMacOS
+            ? _revealInFinder(destination)
+            : Clipboard.setData(ClipboardData(text: destination)),
       ),
     );
   }
