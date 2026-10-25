@@ -609,3 +609,28 @@ The change was reverted rather than kept: it cost semantics work at startup and
 bought nothing provable. If packaged UI driving becomes a requirement, the honest
 routes are a test-only entry point or a VoiceOver-style client, not synthetic
 keystrokes.
+
+## Driving the packaged app with CoreGraphics events
+
+`scripts/packaged_drive.py` posts real mouse and keyboard events, which is what
+makes the packaged journey drivable at all. Two facts learned the hard way:
+
+- `System Events ... click at {x, y}` does NOT work here: it hit-tests through
+  macOS accessibility, and a Flutter window publishes no accessibility elements,
+  so the click lands on nothing. Control-click and typing have the same problem;
+  a sheet cannot even be typed into with `System Events keystroke`.
+- CoreGraphics `CGEvent` mouse events DO reach the Flutter view, but only when the
+  target app is frontmost (raise it first) and only when the button state is clean
+  — an interrupted run can leave the button logically held, turning the next click
+  into a window drag. The driver therefore posts a `leftMouseUp` before every
+  click.
+
+Capture points, not pixels: `screencapture -R x,y,w,h` on a Retina display can
+return a 2x image, so a coordinate read off the PNG is not a point to click. The
+driver's `scale` command computes points-per-pixel from the live window width; use
+it instead of assuming 1x or 2x.
+
+Native panels: click rows in the file list and the confirm button instead of
+typing. Synthetic keystrokes reach Flutter text fields (unreliably: characters
+arrive dropped or reordered) but not the AppKit panels, so a path typed into a
+`⌘⇧G` sheet comes out mangled and Return refuses it.

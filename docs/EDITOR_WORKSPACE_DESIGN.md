@@ -758,3 +758,29 @@ source of truth rather than a claim:
 Not done, and stated as such: preview *decode* still runs through the linked FFmpeg
 software path (`crates/or_media/src/decoder.rs` has no `videotoolbox` request), and
 release-mode pacing has no measurement lane on this host (see §21.4 and §26).
+
+## 26. Packaged end-to-end journey, proven (local, 2026-10-25)
+
+The stop condition asks for the journey in the *packaged* app, not only in the debug
+harness. It now runs there, driven by `scripts/packaged_drive.py` (CoreGraphics
+clicks and keystrokes, window-only captures) against
+`apps/or_app/build/macos/Build/Products/Release/or_app.app`:
+
+| Step | Observed |
+| --- | --- |
+| Create project | `⌘N` → name `aa`, frame rate 30 fps → folder chosen → `/tmp/or-j18/aa.orproj` (291 bytes) |
+| Import media | Import Media → `clip.mp4` listed with the real probe line `mov, mp4, m4a, 3gp, 3g2, mj2 · 64/125 s · 32×24 h264 · Audio …` and a thumbnail |
+| Track + insert | `Add video track` → V1; media `+` → Insert Clip (V1 · video, insert, 0/1 → 0/1, 1/2) → timeline `1 track · 1 clip`, inspector `Duration 0.50 s` |
+| Preview | viewer paints the decoded frame (32×24 source shown at 485×360), transport `00:00:00:00`, scrubber end `00:00.500` |
+| Export | Export → MP4 → Export Here → receipt `Exported aa.mp4 · 3 KB` with `Show in Finder`; top bar `Export complete` |
+| Playable output | `ffprobe /tmp/or-j18/aa.mp4` → `h264 32×24` + `aac`, `duration=0.512000`, 2 635 bytes |
+
+What this settles: the release bundle decodes real media, composites the preview
+texture, runs the Rust command path, encodes through VideoToolbox and writes a
+playable file. Evidence class: INTEGRATION_VERIFIED on the local packaged build.
+
+UX gap found by driving it (recorded, not yet built): adding media to a timeline
+with no compatible track still answers "Add a compatible Video or Audio track
+first." CapCut-class behaviour is to create the track as part of the insert. The
+honest fix is one command sequence in the shell (ensure track → insert clip), not
+a second dialog; it is queued in §27 with multi-select leftovers.
