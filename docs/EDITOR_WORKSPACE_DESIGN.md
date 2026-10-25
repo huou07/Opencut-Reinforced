@@ -576,3 +576,19 @@ removed elsewhere. The row is now a menu (23.976/24/25/30/50/60) that runs the
 existing `setTimelineSequenceFrameRate` command, so undo, revision checks and
 the read-model refresh come for free. One list of rates is shared with the
 viewer transport instead of two copies drifting apart.
+
+## 21. Next units, in order (for the next session)
+
+1. **Reverse clip** — core: add `reversed: bool` to the media clip content with
+   `PROJECT_FORMAT` bump and validation; renderer/decoder map `source_time =
+   source_end - (t - start)`; inspector toggle next to Playback speed; test in
+   `or_core` + one widget test. Freeze frame falls out of the same plumbing
+   (a reversed clip paused), so do not build two mechanisms.
+2. **Multi-select** — selection becomes a set in `_TimelinePanelState`; marquee
+   on the lane background; delete/ripple/copy act on the set; paste stays
+   single-target. Keep drag-move single-clip until the set case has a test.
+3. **Release-mode pacing** — either add a packaged-build driver (open the app,
+   drive by AppKit + read a stderr telemetry line) or state the debug number as
+   the only claim. Do not pretend the test lane can measure release.
+4. **VideoToolbox preview decode** — only after 3 gives a release baseline, so
+   the change can be judged against a number that matters.
