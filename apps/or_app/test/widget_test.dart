@@ -275,10 +275,23 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Revision 0'), findsOneWidget);
-    expect(find.text('Saved'), findsOneWidget);
+    // Revision counters are developer detail. The workspace states the one
+    // thing an editor needs: whether the project on disk matches the edits.
+    expect(
+      find.byKey(const ValueKey('project-save-dot')),
+      findsOneWidget,
+    );
+    // The bar states 'Saved'; the inspector states 'Saved to disk'. One
+    // statement per surface, so each assertion names its surface by key.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-top-bar')),
+        matching: find.text('Saved'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('No timeline tracks'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -351,7 +364,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('workspace-project-revision')),
+      find.byKey(const ValueKey('project-save-dot')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -908,7 +921,7 @@ void main() {
       find.byKey(const ValueKey('media-preview-image-media-video')),
       findsNothing,
     );
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
     expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
@@ -971,8 +984,8 @@ void main() {
     expect(gateway.lastImportSource, '/tmp/imported.mov');
     expect(gateway.mediaListCalls, greaterThan(queriesBeforeImport));
     expect(find.text('imported.mov'), findsOneWidget);
-    expect(find.text('Unsaved changes'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
   });
 
   testWidgets('compact empty timeline imports through the project picker', (
@@ -1298,8 +1311,11 @@ void main() {
     expect(gateway.removeMediaCalls, 1);
     expect(gateway.lastRemovedMediaId, 'media-remove');
     expect(find.text('remove me.wav'), findsNothing);
-    expect(find.text('No media imported'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Import a video, image or audio file to start.'),
+      findsOneWidget,
+    );
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
   });
 
   testWidgets(
@@ -1423,7 +1439,7 @@ void main() {
     );
     await _createProject(tester, 'Marker actions');
 
-    await tester.tap(find.byKey(const ValueKey('timeline-add-marker')));
+    await _tapTimelineCreate(tester, 'Add marker at playhead');
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('timeline-marker-label')), findsOneWidget);
     await tester.enterText(
@@ -1588,15 +1604,9 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Text and captions');
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-text-track')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-text-track')));
+    await _tapTimelineCreate(tester, 'Add text track');
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-title')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-title')));
+    await _tapTimelineCreate(tester, 'Add title');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('timeline-text-content')),
@@ -1649,19 +1659,13 @@ void main() {
     expect(updatedTitle.text, 'Updated title');
     expect(updatedTitle.timelineDuration.canonical, '9/2');
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-caption-track')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-caption-track')));
+    await _tapTimelineCreate(tester, 'Add caption track');
     await tester.pumpAndSettle();
     expect(gateway.lastSession!.tracks.map((track) => track.kind), [
       ProjectTimelineTrackKind.text,
       ProjectTimelineTrackKind.caption,
     ]);
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-manual-caption')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-manual-caption')));
+    await _tapTimelineCreate(tester, 'Add caption');
     await tester.pumpAndSettle();
     expect(find.text('Add Manual Caption'), findsOneWidget);
     await tester.enterText(
@@ -1721,10 +1725,7 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Caption import');
 
-    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
 
     expect(find.text('Review WebVTT captions'), findsOneWidget);
     expect(
@@ -1740,9 +1741,7 @@ void main() {
     expect(gateway.captionImportCalls, 0);
     expect(picker.captionCleanupCalls, 1);
 
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
     final captionField = find.byKey(const ValueKey('caption-import-text-0'));
     await tester.enterText(captionField, '🌻' * 1025);
     await tester.pump();
@@ -1787,10 +1786,7 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact caption review');
 
-    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
 
     expect(find.text('Review SubRip captions'), findsOneWidget);
     expect(
@@ -1994,21 +1990,16 @@ void main() {
         tester.getSize(find.byKey(const ValueKey('inspector-visual-x'))).height,
         greaterThanOrEqualTo(40),
       );
-      // At 1280 px the full toolbar names overflowed the window. The short
-      // names keep every action on screen; the full name is not rendered.
-      final toolbar = find.byKey(const ValueKey('timeline-toolbar'));
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Add Video')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Export SRT')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Export Captions')),
-        findsNothing,
-      );
+      // The zone has one control row. Creation, caption import and caption
+      // export live in its `+` menu, so the row never grows past the window.
+      final createMenu = find.byKey(const ValueKey('timeline-create-menu'));
+      expect(createMenu, findsOneWidget);
+      await tester.tap(createMenu);
+      await tester.pumpAndSettle();
+      expect(find.text('Add video track'), findsOneWidget);
+      expect(find.text('Export captions (SRT)…'), findsOneWidget);
+      await tester.tap(find.text('Add video track'));
+      await tester.pumpAndSettle();
       expect(find.text('Ctrl+K'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-x')),
@@ -2225,7 +2216,10 @@ void main() {
       gateway.externalAddTimelineTrack(ProjectTimelineTrackKind.video);
       await tester.pumpAndSettle();
       expect(find.text('V1'), findsOneWidget);
-      expect(find.text('Revision 1'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('project-save-dot')),
+        findsOneWidget,
+      );
 
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-event-media')),
@@ -2242,7 +2236,10 @@ void main() {
         find.textContaining('this action was not retried'),
         findsOneWidget,
       );
-      expect(find.text('Revision 2'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('project-save-dot')),
+        findsOneWidget,
+      );
     },
   );
 
@@ -2266,7 +2263,7 @@ void main() {
         ..savePath = '/tmp/failure-timeline.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Failed timeline insert');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
       gateway.nextTimelineFailure = 'TIMELINE_OVERLAP';
 
@@ -2304,8 +2301,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Unsaved changes'), findsOneWidget);
-    expect(find.text('Revision 1'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
     final revisionBeforeSave = gateway.lastSession!.view.revision;
 
     await tester.tap(find.byKey(const ValueKey('workspace-save')));
@@ -2313,7 +2309,15 @@ void main() {
     expect(gateway.saveCalls, 1);
     expect(gateway.lastSession!.view.dirty, isFalse);
     expect(gateway.lastSession!.view.revision, revisionBeforeSave);
-    expect(find.text('Saved'), findsOneWidget);
+    // The bar states 'Saved'; the inspector states 'Saved to disk'. One
+    // statement per surface, so each assertion names its surface by key.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-top-bar')),
+        matching: find.text('Saved'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('dirty projects periodically autosave to recovery', (
@@ -2460,7 +2464,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.lastSession!.view.dirty, isTrue);
     expect(gateway.closeCalls, 0);
-    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
@@ -2682,8 +2686,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Revision 1'), findsOneWidget);
-    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
   });
 
   test('timeline rational input remains exact and rejects inexact forms', () {
@@ -2799,11 +2802,11 @@ void main() {
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Timeline tracks');
 
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
 
       expect(find.text('V1'), findsOneWidget);
@@ -2836,7 +2839,7 @@ void main() {
       ..savePath = '/tmp/timeline-first-project.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'First timeline project');
-    await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+    await _tapTimelineCreate(tester, 'Add video track');
     await tester.pumpAndSettle();
     expect(find.text('V1'), findsOneWidget);
 
@@ -3208,7 +3211,7 @@ void main() {
         ..savePath = '/tmp/timeline-clip.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Timeline clip');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -3415,9 +3418,9 @@ void main() {
         ..savePath = '/tmp/multistream-timeline.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Multistream timeline');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-media-multistream')),
@@ -3471,11 +3474,11 @@ void main() {
         ..savePath = '/tmp/timeline-move.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Move timeline');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-media-move')),
@@ -4028,16 +4031,11 @@ void main() {
       ..savePath = '/tmp/compact-tracks.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact tracks');
-    Future<void> tapTimelineControl(String key) async {
-      final finder = find.byKey(ValueKey(key));
-      await tester.ensureVisible(finder);
-      await tester.pumpAndSettle();
-      await tester.tap(finder);
-      await tester.pumpAndSettle();
-    }
+    Future<void> tapTimelineControl(String label) =>
+        _tapTimelineCreate(tester, label);
 
-    await tapTimelineControl('timeline-add-video-track');
-    await tapTimelineControl('timeline-add-audio-track');
+    await tapTimelineControl('Add video track');
+    await tapTimelineControl('Add audio track');
     expect(gateway.lastSession!.tracks.map((track) => track.kind).toList(), [
       ProjectTimelineTrackKind.video,
       ProjectTimelineTrackKind.audio,
@@ -4407,7 +4405,7 @@ void main() {
     expect(find.text('Viewer'), findsOneWidget);
     expect(find.text('Timeline'), findsOneWidget);
     expect(find.text('Inspector'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
     expect(find.text('No selection'), findsOneWidget);
     expect(find.text('Timeline engine not implemented'), findsOneWidget);
     expect(find.textContaining('.mp4'), findsNothing);
@@ -4528,7 +4526,7 @@ void main() {
     ]) {
       expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
     }
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -5301,6 +5299,20 @@ Future<void> _createProject(WidgetTester tester, String name) async {
   await tester.pumpAndSettle();
   await tester.enterText(find.byKey(const ValueKey('new-project-name')), name);
   await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+  await tester.pumpAndSettle();
+}
+
+/// Adds a track (or a marker) through the timeline zone's single create menu.
+///
+/// The workspace has one timeline control row; creation lives behind `+`, so a
+/// test opens that menu instead of assuming a row of dedicated buttons.
+Future<void> _tapTimelineCreate(WidgetTester tester, String label) async {
+  final menu = find.byKey(const ValueKey('timeline-create-menu'));
+  await tester.ensureVisible(menu);
+  await tester.pumpAndSettle();
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
   await tester.pumpAndSettle();
 }
 

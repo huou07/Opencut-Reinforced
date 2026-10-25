@@ -97,7 +97,13 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-add-audio-track"
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add audio track"
       }
     },
     {
@@ -170,7 +176,7 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-undo"
+        "key": "project-undo"
       }
     },
     {

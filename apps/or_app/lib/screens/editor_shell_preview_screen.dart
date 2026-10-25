@@ -441,6 +441,21 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void clearSelection() => _timelineKey.currentState?.clearSelection();
 
+  void splitSelectedClip() =>
+      _timelineKey.currentState?.splitSelectedClipAtPlayhead();
+
+  void rippleDeleteSelectedClip() =>
+      _timelineKey.currentState?.rippleDeleteSelectedClip();
+
+  /// The left panel's category, so number keys reach the same state the tab
+  /// strip owns.
+  void selectTool(String tool) {
+    if (_selectedTool == tool) return;
+    setState(() => _selectedTool = tool);
+  }
+
+  void addMarkerAtPlayhead() => _showAddTimelineMarker();
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -451,18 +466,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           color: OrColors.background,
           child: Column(
             children: [
-              if (widget.isProjectWorkspace)
-                _ProjectWorkspaceHeader(
-                  project: widget.project,
-                  busy: widget.busy,
-                  onSave: widget.onSave,
-                  onRename: widget.onRename,
-                  onUndo: widget.onUndo,
-                  onRedo: widget.onRedo,
-                  onClose: widget.onClose,
-                )
-              else
-                const _EditorPreviewHeader(),
+              // The project's name, save state, history controls and project
+              // menu live in the application bar; a second workspace title row
+              // repeated the same facts and cost 52 px of editing space
+              // (docs/EDITOR_WORKSPACE_DESIGN.md §3).
+              if (!widget.isProjectWorkspace) const _EditorPreviewHeader(),
               if (widget.notice != null)
                 _ProjectNotice(
                   message: widget.notice!,
@@ -490,16 +498,12 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _EditorToolRail(
-                selected: _selectedTool,
-                isProjectWorkspace: widget.isProjectWorkspace,
-                onSelected: (tool) => setState(() => _selectedTool = tool),
-              ),
-              const VerticalDivider(width: 1),
               SizedBox(
-                width: wide ? 224 : 172,
+                width: wide ? 320 : 264,
                 child: _EditorToolPanel(
                   selectedTool: _selectedTool,
+                  onSelectedTool: (picked) =>
+                      setState(() => _selectedTool = picked),
                   isProjectWorkspace: widget.isProjectWorkspace,
                   project: widget.project,
                   previewState: _previewState.value,
@@ -550,11 +554,14 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   previewSeekPosition: widget.previewSeekPosition,
                   onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
                   onStateChanged: _onPreviewStateChanged,
+                  hasTimelineContent: widget.timelineClipPages.values.any(
+                    (page) => page.totalCount > 0,
+                  ),
                 ),
               ),
               const VerticalDivider(width: 1),
               SizedBox(
-                width: wide ? 236 : 188,
+                width: wide ? 300 : 264,
                 child: _InspectorPanel(
                   isProjectWorkspace: widget.isProjectWorkspace,
                   project: widget.project,
@@ -571,6 +578,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       _selectedTrackKind == ProjectTimelineTrackKind.audio,
                   trackLocked: _selectedInspectorTrack?.state.locked ?? true,
                   busy: widget.busy,
+                  sequenceFrameRate: _previewState.value?.sequenceFrameRate,
+                  contentEnd: _previewState.value?.contentEnd,
+                  trackCount: widget.timelineTracks?.items.length ?? 0,
+                  clipCount: widget.timelineClipPages.values.fold<int>(
+                    0,
+                    (total, page) => total + page.totalCount,
+                  ),
                   onUpdate: widget.onUpdateTimelineClipVisualSettings,
                   onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                   onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
@@ -580,29 +594,6 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
           ),
         ),
         const _ResizeDivider(horizontal: true),
-        _TimelineToolbar(
-          compact: false,
-          isProjectWorkspace: widget.isProjectWorkspace,
-          busy: widget.busy,
-          onUndo: widget.onUndo,
-          onAddVideoTrack: widget.onAddVideoTrack,
-          onAddAudioTrack: widget.onAddAudioTrack,
-          onAddTextTrack: widget.onAddTextTrack,
-          onAddCaptionTrack: widget.onAddCaptionTrack,
-          onImportCaptions: widget.onImportCaptions,
-          onExportCaptions: widget.onExportCaptions,
-          onAddTitle: () =>
-              _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
-          onAddCaption: () =>
-              _showAddTimelineTextClip(ProjectTimelineClipContentKind.caption),
-          onAddMarker: widget.isProjectWorkspace
-              ? _showAddTimelineMarker
-              : null,
-          snapEnabled: _snapEnabled,
-          onSnapChanged: widget.isProjectWorkspace
-              ? (value) => setState(() => _snapEnabled = value)
-              : null,
-        ),
         Expanded(
           flex: 2,
           child: _TimelinePanel(
@@ -646,6 +637,19 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRenameMarker: widget.onRenameTimelineMarker,
             onDeleteMarker: widget.onDeleteTimelineMarker,
             snapEnabled: _snapEnabled,
+            onSnapChanged: widget.isProjectWorkspace
+                ? (value) => setState(() => _snapEnabled = value)
+                : null,
+            onImportCaptions: widget.onImportCaptions,
+            onExportCaptions: widget.onExportCaptions,
+            onAddTitle: () =>
+                _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
+            onAddCaption: () => _showAddTimelineTextClip(
+              ProjectTimelineClipContentKind.caption,
+            ),
+            onRequestMarker: widget.isProjectWorkspace
+                ? _showAddTimelineMarker
+                : null,
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
             mediaPreviews: widget.mediaPreviews,
@@ -672,29 +676,6 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
             onStateChanged: _onPreviewStateChanged,
           ),
-        ),
-        _TimelineToolbar(
-          compact: true,
-          isProjectWorkspace: widget.isProjectWorkspace,
-          busy: widget.busy,
-          onUndo: widget.onUndo,
-          onAddVideoTrack: widget.onAddVideoTrack,
-          onAddAudioTrack: widget.onAddAudioTrack,
-          onAddTextTrack: widget.onAddTextTrack,
-          onAddCaptionTrack: widget.onAddCaptionTrack,
-          onImportCaptions: widget.onImportCaptions,
-          onExportCaptions: widget.onExportCaptions,
-          onAddTitle: () =>
-              _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
-          onAddCaption: () =>
-              _showAddTimelineTextClip(ProjectTimelineClipContentKind.caption),
-          onAddMarker: widget.isProjectWorkspace
-              ? _showAddTimelineMarker
-              : null,
-          snapEnabled: _snapEnabled,
-          onSnapChanged: widget.isProjectWorkspace
-              ? (value) => setState(() => _snapEnabled = value)
-              : null,
         ),
         Expanded(
           flex: 2,
@@ -739,6 +720,16 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRenameMarker: widget.onRenameTimelineMarker,
             onDeleteMarker: widget.onDeleteTimelineMarker,
             snapEnabled: _snapEnabled,
+            onSnapChanged: widget.isProjectWorkspace
+                ? (value) => setState(() => _snapEnabled = value)
+                : null,
+            onImportCaptions: widget.onImportCaptions,
+            onExportCaptions: widget.onExportCaptions,
+            onAddTitle: () =>
+                _showAddTimelineTextClip(ProjectTimelineClipContentKind.text),
+            onAddCaption: () => _showAddTimelineTextClip(
+              ProjectTimelineClipContentKind.caption,
+            ),
             onTimelineEditError: _showTimelineEditError,
             mediaItems: widget.mediaPage?.items ?? const [],
             mediaPreviews: widget.mediaPreviews,
@@ -789,6 +780,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                     _selectedTrackKind == ProjectTimelineTrackKind.audio,
                 trackLocked: selectedTrack?.state.locked ?? true,
                 busy: widget.busy,
+                sequenceFrameRate: _previewState.value?.sequenceFrameRate,
+                contentEnd: _previewState.value?.contentEnd,
+                trackCount: widget.timelineTracks?.items.length ?? 0,
+                clipCount: widget.timelineClipPages.values.fold<int>(
+                  0,
+                  (total, page) => total + page.totalCount,
+                ),
                 onUpdate: widget.onUpdateTimelineClipVisualSettings,
                 onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                 onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
@@ -805,6 +803,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               height: height,
               child: _EditorToolPanel(
                 selectedTool: tool,
+                onSelectedTool: (picked) =>
+                    setState(() => _selectedTool = picked),
                 isProjectWorkspace: true,
                 project: widget.project,
                 previewState: _previewState.value,
@@ -916,201 +916,6 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 }
 
-class _ProjectWorkspaceHeader extends StatelessWidget {
-  const _ProjectWorkspaceHeader({
-    required this.project,
-    required this.busy,
-    required this.onSave,
-    required this.onRename,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onClose,
-  });
-
-  final ProjectReadModel? project;
-  final bool busy;
-  final VoidCallback? onSave;
-  final VoidCallback? onRename;
-  final VoidCallback? onUndo;
-  final VoidCallback? onRedo;
-  final VoidCallback? onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    final current = project;
-    return Container(
-      width: double.infinity,
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-      decoration: const BoxDecoration(
-        color: OrColors.backgroundRaised,
-        border: Border(bottom: BorderSide(color: OrColors.border)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          // The action cluster used to be the second of two equal Expanded
-          // halves, so it floated in the middle of wide windows and clipped at
-          // 1024/800 with no way to reach Close (measured 2026-10-25). The name
-          // now owns the flexible space and the actions sit at the trailing
-          // edge; below 720 px the row keeps the three frequent actions and
-          // folds Rename/Close into one menu instead of hiding them behind a
-          // horizontal scroll.
-          final roomForBadge = width >= 560;
-          final roomForRevision = width >= 1180;
-          final roomForLabels = width >= 720;
-          return Row(
-            children: [
-              const Icon(
-                Icons.folder_open_outlined,
-                size: 17,
-                color: OrColors.textSecondary,
-              ),
-              const SizedBox(width: OrSpacing.x2),
-              Expanded(
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        current?.name ?? 'Opening project…',
-                        key: const ValueKey('workspace-project-name'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: OrType.metadataCompactSize,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (current != null && roomForBadge) ...[
-                      const SizedBox(width: OrSpacing.x2),
-                      OrBadge(
-                        current.dirty ? 'Unsaved changes' : 'Saved',
-                        color: current.dirty
-                            ? OrColors.warning
-                            : OrColors.textSecondary,
-                      ),
-                    ],
-                    if (current != null && roomForRevision) ...[
-                      const SizedBox(width: OrSpacing.x2),
-                      Text(
-                        'Revision ${current.revision}',
-                        key: const ValueKey('workspace-project-revision'),
-                        style: const TextStyle(
-                          fontSize: OrType.tinySize,
-                          color: OrColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: OrSpacing.x2),
-              if (roomForLabels) ...[
-                _WorkspaceAction('Rename', Icons.edit_outlined, onRename, busy),
-                _WorkspaceAction(
-                  'Save',
-                  Icons.save_outlined,
-                  onSave,
-                  busy || current?.dirty != true,
-                ),
-                _WorkspaceAction('Undo', Icons.undo_outlined, onUndo, busy),
-                _WorkspaceAction('Redo', Icons.redo_outlined, onRedo, busy),
-                _WorkspaceAction('Close', Icons.close_outlined, onClose, busy),
-              ] else ...[
-                _WorkspaceIconAction(
-                  'Save',
-                  Icons.save_outlined,
-                  onSave,
-                  busy || current?.dirty != true,
-                ),
-                _WorkspaceIconAction('Undo', Icons.undo_outlined, onUndo, busy),
-                _WorkspaceIconAction('Redo', Icons.redo_outlined, onRedo, busy),
-                _WorkspaceMoreMenu(
-                  busy: busy,
-                  onRename: onRename,
-                  onClose: onClose,
-                ),
-              ],
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Icon-only workspace action for the narrow header. Keeps the same
-/// `workspace-<label>` key as the labelled button so journeys do not depend on
-/// which presentation the viewport picked.
-class _WorkspaceIconAction extends StatelessWidget {
-  const _WorkspaceIconAction(
-    this.label,
-    this.icon,
-    this.onPressed,
-    this.disabled,
-  );
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool disabled;
-
-  @override
-  Widget build(BuildContext context) => IconButton(
-    key: ValueKey('workspace-${label.toLowerCase()}'),
-    onPressed: disabled ? null : onPressed,
-    tooltip: label,
-    visualDensity: VisualDensity.compact,
-    icon: Icon(icon, size: 18),
-  );
-}
-
-class _WorkspaceMoreMenu extends StatelessWidget {
-  const _WorkspaceMoreMenu({
-    required this.busy,
-    required this.onRename,
-    required this.onClose,
-  });
-
-  final bool busy;
-  final VoidCallback? onRename;
-  final VoidCallback? onClose;
-
-  @override
-  Widget build(BuildContext context) => PopupMenuButton<String>(
-    key: const ValueKey('workspace-more'),
-    tooltip: 'More project actions',
-    enabled: !busy,
-    onSelected: (value) {
-      if (value == 'rename') onRename?.call();
-      if (value == 'close') onClose?.call();
-    },
-    itemBuilder: (context) => const [
-      PopupMenuItem(value: 'rename', child: Text('Rename project…')),
-      PopupMenuItem(value: 'close', child: Text('Close project')),
-    ],
-    icon: const Icon(Icons.more_horiz, size: 18),
-  );
-}
-
-class _WorkspaceAction extends StatelessWidget {
-  const _WorkspaceAction(this.label, this.icon, this.onPressed, this.disabled);
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool disabled;
-
-  @override
-  Widget build(BuildContext context) => TextButton.icon(
-    key: ValueKey('workspace-$label'.toLowerCase()),
-    onPressed: disabled ? null : onPressed,
-    icon: Icon(icon, size: 16),
-    label: Text(label),
-  );
-}
-
 class _ProjectNotice extends StatelessWidget {
   const _ProjectNotice({required this.message, this.onDiscardRecovery});
 
@@ -1206,87 +1011,84 @@ String _toolDescription(String label) => switch (label) {
   _ => label,
 };
 
-class _EditorToolRail extends StatelessWidget {
-  const _EditorToolRail({
+/// The editing tool categories, as one segmented strip at the top of the tool
+/// panel. A separate icon rail repeated the same four choices in a second
+/// column and cost 68 px of viewer width (docs/EDITOR_WORKSPACE_DESIGN.md §3).
+class _ToolTabs extends StatelessWidget {
+  const _ToolTabs({
     required this.selected,
-    required this.isProjectWorkspace,
     required this.onSelected,
+    required this.compact,
   });
 
   final String selected;
-  final bool isProjectWorkspace;
   final ValueChanged<String> onSelected;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 68,
-      child: ColoredBox(
+    return Container(
+      key: const ValueKey('editor-tool-tabs'),
+      height: compact ? 38 : 42,
+      padding: const EdgeInsets.all(OrSpacing.x2),
+      decoration: const BoxDecoration(
         color: OrColors.backgroundRaised,
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              for (final tool in _editorTools)
-                Tooltip(
+        border: Border(bottom: BorderSide(color: OrColors.border)),
+      ),
+      child: Row(
+        children: [
+          for (final tool in _editorTools)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: selected == tool.label,
+                label: _toolSemanticsLabel(tool.label),
+                child: Tooltip(
                   message: _toolDescription(tool.label),
-                  child: Semantics(
-                    button: true,
-                    selected: selected == tool.label,
-                    excludeSemantics: true,
-                    label: _toolSemanticsLabel(tool.label),
-                    hint: _toolDescription(tool.label),
-                    child: OrFocusRing(
-                      child: InkWell(
-                        key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
-                        onTap: () => onSelected(tool.label),
-                        child: Container(
-                          width: 64,
-                          height: 48,
-                          margin: const EdgeInsets.symmetric(vertical: 1),
-                          decoration: BoxDecoration(
+                  waitDuration: const Duration(milliseconds: 600),
+                  child: OrFocusRing(
+                    radius: OrRadii.small,
+                    child: InkWell(
+                      key: ValueKey('editor-tool-${_toolKey(tool.label)}'),
+                      onTap: () => onSelected(tool.label),
+                      borderRadius: BorderRadius.circular(OrRadii.small),
+                      child: Container(
+                        height: double.infinity,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: selected == tool.label
+                              ? OrColors.surface
+                              : Colors.transparent,
+                          border: Border.all(
                             color: selected == tool.label
-                                ? OrColors.surface
+                                ? OrColors.selection
                                 : Colors.transparent,
-                            // Selection also carries a border, so the rail and
-                            // the mobile dock both express it without relying
-                            // on colour alone.
-                            border: Border.all(
-                              color: selected == tool.label
-                                  ? OrColors.selection
-                                  : Colors.transparent,
-                              width: 1.5,
-                            ),
-                            borderRadius: BorderRadius.circular(OrRadii.small),
                           ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                tool.icon,
-                                size: 17,
-                                color: OrColors.textMuted,
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _shortToolLabel(tool.label),
-                                maxLines: 1,
-                                textAlign: TextAlign.center,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: OrColors.textMuted,
-                                  fontSize: OrType.tinySize,
-                                ),
-                              ),
-                            ],
+                          borderRadius: BorderRadius.circular(OrRadii.small),
+                        ),
+                        child: Text(
+                          _shortToolLabel(tool.label),
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: selected == tool.label
+                                ? OrColors.text
+                                : OrColors.textMuted,
+                            fontSize: OrType.metadataCompactSize,
+                            fontWeight: selected == tool.label
+                                ? FontWeight.w600
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-            ],
-          ),
-        ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1295,6 +1097,7 @@ class _EditorToolRail extends StatelessWidget {
 class _EditorToolPanel extends StatelessWidget {
   const _EditorToolPanel({
     required this.selectedTool,
+    required this.onSelectedTool,
     required this.isProjectWorkspace,
     required this.project,
     required this.previewState,
@@ -1323,6 +1126,7 @@ class _EditorToolPanel extends StatelessWidget {
   });
 
   final String selectedTool;
+  final ValueChanged<String> onSelectedTool;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
   final ProjectPreviewState? previewState;
@@ -1360,8 +1164,25 @@ class _EditorToolPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final body = _toolBody(context);
+    if (!isProjectWorkspace) return body;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ToolTabs(
+          selected: selectedTool,
+          onSelected: onSelectedTool,
+          compact: false,
+        ),
+        Expanded(child: body),
+      ],
+    );
+  }
+
+  Widget _toolBody(BuildContext context) {
     if (selectedTool == 'Media' && isProjectWorkspace) {
       return _MediaLibraryPanel(
+        showTitle: false,
         page: mediaPage,
         project: project,
         previewState: previewState,
@@ -1386,6 +1207,7 @@ class _EditorToolPanel extends StatelessWidget {
     if (selectedTool == 'Text') {
       return _ToolActionsPanel(
         title: 'Text',
+        showTitle: false,
         subtitle:
             'Titles and captions live on their own tracks. Select a clip to '
             'edit its content and formatting in the inspector.',
@@ -1420,6 +1242,7 @@ class _EditorToolPanel extends StatelessWidget {
     if (selectedTool == 'Audio') {
       return _ToolActionsPanel(
         title: 'Audio',
+        showTitle: false,
         subtitle:
             'Audio clips carry gain, pan and fade times. The inspector shows '
             'them in dB, % and seconds for the selected clip.',
@@ -1442,6 +1265,7 @@ class _EditorToolPanel extends StatelessWidget {
     if (selectedTool == 'Motion') {
       return _ToolActionsPanel(
         title: 'Motion',
+        showTitle: false,
         subtitle:
             'A code file becomes a deterministic MotionScene, rendered locally '
             'and inserted as an ordinary clip that exports with the timeline.',
@@ -1514,11 +1338,16 @@ class _ToolActionsPanel extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.actions,
+    this.showTitle = true,
   });
 
   final String title;
   final String subtitle;
   final List<_ToolAction> actions;
+
+  /// The tab strip above already names the category, so the panel must not
+  /// repeat it as a second title row.
+  final bool showTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -1527,8 +1356,10 @@ class _ToolActionsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelHeader(title: title),
-          const Divider(height: 1),
+          if (showTitle) ...[
+            _PanelHeader(title: title),
+            const Divider(height: 1),
+          ],
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(OrSpacing.x3),
@@ -1586,6 +1417,7 @@ class _MediaLibraryPanel extends StatelessWidget {
     required this.onCleanUpAudio,
     required this.onAddMediaToTimeline,
     this.onClose,
+    this.showTitle = true,
   });
 
   final ProjectMediaPage? page;
@@ -1616,6 +1448,9 @@ class _MediaLibraryPanel extends StatelessWidget {
   onAddMediaToTimeline;
   final VoidCallback? onClose;
 
+  /// Hidden when the tab strip already names the category.
+  final bool showTitle;
+
   @override
   Widget build(BuildContext context) {
     final items = page?.items ?? const <ProjectMediaItem>[];
@@ -1636,18 +1471,29 @@ class _MediaLibraryPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelHeader(
-            title: 'Media',
-            trailing: onClose == null
-                ? null
-                : IconButton(
-                    key: const ValueKey('mobile-tool-sheet-close'),
-                    tooltip: 'Close tool panel',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close_outlined),
-                  ),
-          ),
-          const Divider(height: 1),
+          if (showTitle) ...[
+            _PanelHeader(
+              title: 'Media',
+              trailing: onClose == null
+                  ? null
+                  : IconButton(
+                      key: const ValueKey('mobile-tool-sheet-close'),
+                      tooltip: 'Close tool panel',
+                      onPressed: onClose,
+                      icon: const Icon(Icons.close_outlined),
+                    ),
+            ),
+            const Divider(height: 1),
+          ] else if (onClose != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                key: const ValueKey('mobile-tool-sheet-close'),
+                tooltip: 'Close tool panel',
+                onPressed: onClose,
+                icon: const Icon(Icons.close_outlined),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(
               OrSpacing.x2,
@@ -1695,17 +1541,36 @@ class _MediaLibraryPanel extends StatelessWidget {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else if (items.isEmpty && error == null)
+            // A centred sentence in the middle of a tall panel reads as a
+            // broken panel. The hint sits under the actions that resolve it.
             const Expanded(
-              child: Center(
+              child: Align(
+                alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: EdgeInsets.all(OrSpacing.x3),
-                  child: Text(
-                    'No media imported',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: OrColors.textSecondary,
-                      fontSize: OrType.metadataCompactSize,
-                    ),
+                  padding: EdgeInsets.fromLTRB(
+                    OrSpacing.x3,
+                    OrSpacing.x4,
+                    OrSpacing.x3,
+                    0,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.video_library_outlined,
+                        size: 22,
+                        color: OrColors.textMuted,
+                      ),
+                      SizedBox(height: OrSpacing.x2),
+                      Text(
+                        'Import a video, image or audio file to start.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: OrType.metadataCompactSize,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2062,12 +1927,17 @@ class _ViewerPanel extends StatefulWidget {
     required this.previewSeekPosition,
     required this.onPreviewSeekConsumed,
     required this.onStateChanged,
+    this.hasTimelineContent = false,
   });
 
   final bool compact;
   final ProjectGateway? gateway;
   final ProjectSessionHandle? session;
   final ProjectReadModel? project;
+
+  /// Whether any clip exists. An empty viewer placeholder says what to do
+  /// instead of naming an internal state.
+  final bool hasTimelineContent;
   final ProjectRationalTime? previewSeekPosition;
   final VoidCallback? onPreviewSeekConsumed;
   final ValueChanged<ProjectPreviewState> onStateChanged;
@@ -2476,8 +2346,11 @@ class _ViewerPanelState extends State<_ViewerPanel>
           // as soon as the scrub strip appeared, and the same shape overflows at
           // any short viewport. Fitting explicitly letterboxes the preview
           // instead, which is what a viewer should do.
-          final limitWidth = widget.compact ? 520.0 : 660.0;
-          final limitHeight = widget.compact ? 360.0 : 420.0;
+          // A desktop viewer uses the space it is given. The old 660x420 cap
+          // left a 1440-wide window previewing at less than a third of its
+          // panel, which reads as a thumbnail rather than as the edit surface.
+          final limitWidth = widget.compact ? 520.0 : constraints.maxWidth;
+          final limitHeight = widget.compact ? 360.0 : constraints.maxHeight;
           final availableWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : limitWidth;
@@ -2506,7 +2379,9 @@ class _ViewerPanelState extends State<_ViewerPanel>
                   if (preview?.contentEnd == null)
                     _viewerPlaceholder(
                       icon: Icons.movie_outlined,
-                      message: 'No media loaded',
+                      message: widget.hasTimelineContent
+                          ? 'No clip at the playhead'
+                          : 'Drag a clip to the timeline to preview it',
                     )
                   else if (textureId != null)
                     Texture(
@@ -2774,37 +2649,44 @@ class _ViewerPanelState extends State<_ViewerPanel>
                             ),
                           ),
                         ),
-                        PopupMenuButton<_FrameRateChoice>(
-                          key: const ValueKey('preview-frame-rate'),
-                          tooltip: frameRate == null
-                              ? 'Choose a sequence frame rate to enable playback'
-                              : 'Sequence frame rate (playback and export)',
-                          enabled:
-                              _connected && widget.project != null && !_busy,
-                          onSelected: (choice) =>
-                              unawaited(_setFrameRate(choice.rate)),
-                          itemBuilder: (context) => [
-                            for (final choice in _rateChoices)
-                              PopupMenuItem(
-                                value: choice,
-                                child: Text(choice.label),
+                        // A 246 px viewer cannot hold three transport buttons
+                        // plus a rate label. Flexible keeps the row on the
+                        // panel instead of painting the label off its edge.
+                        Flexible(
+                          child: PopupMenuButton<_FrameRateChoice>(
+                            key: const ValueKey('preview-frame-rate'),
+                            tooltip: frameRate == null
+                                ? 'Choose a sequence frame rate to enable playback'
+                                : 'Sequence frame rate (playback and export)',
+                            enabled:
+                                _connected && widget.project != null && !_busy,
+                            onSelected: (choice) =>
+                                unawaited(_setFrameRate(choice.rate)),
+                            itemBuilder: (context) => [
+                              for (final choice in _rateChoices)
+                                PopupMenuItem(
+                                  value: choice,
+                                  child: Text(choice.label),
+                                ),
+                            ],
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
                               ),
-                          ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text(
-                              frameRate == null
-                                  ? 'Set frame rate'
-                                  : _frameRateLabel(frameRate),
-                              key: const ValueKey('preview-rate-label'),
-                              style: TextStyle(
-                                color: frameRate == null
-                                    ? OrColors.selection
-                                    : OrColors.textSecondary,
-                                fontSize: OrType.tinySize,
-                                fontWeight: frameRate == null
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
+                              child: Text(
+                                frameRate == null
+                                    ? 'Set frame rate'
+                                    : _frameRateLabel(frameRate),
+                                key: const ValueKey('preview-rate-label'),
+                                style: TextStyle(
+                                  color: frameRate == null
+                                      ? OrColors.selection
+                                      : OrColors.textSecondary,
+                                  fontSize: OrType.tinySize,
+                                  fontWeight: frameRate == null
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
                               ),
                             ),
                           ),
@@ -3005,6 +2887,10 @@ class _InspectorPanel extends StatefulWidget {
     required this.isAudioTrack,
     required this.trackLocked,
     required this.busy,
+    this.sequenceFrameRate,
+    this.contentEnd,
+    this.trackCount = 0,
+    this.clipCount = 0,
     required this.onUpdate,
     required this.onUpdateAudio,
     this.onUpdatePlaybackRate,
@@ -3022,6 +2908,13 @@ class _InspectorPanel extends StatefulWidget {
   final bool isAudioTrack;
   final bool trackLocked;
   final bool busy;
+
+  /// Sequence facts the inspector states when no clip is selected, so the
+  /// right panel always answers a question instead of going blank.
+  final ProjectRationalRate? sequenceFrameRate;
+  final ProjectRationalTime? contentEnd;
+  final int trackCount;
+  final int clipCount;
   final Future<ProjectReadModel?> Function(
     ProjectReadModel,
     String,
@@ -3673,6 +3566,98 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     style: const TextStyle(fontSize: OrType.tinySize),
   );
 
+  /// What the inspector shows when no clip is selected: the sequence the
+  /// edits belong to, plus the facts that explain an empty viewer.
+  Widget _projectInspector() {
+    final project = widget.project;
+    final rate = widget.sequenceFrameRate;
+    final duration = widget.contentEnd;
+    return ListView(
+      key: const ValueKey('inspector-project'),
+      padding: const EdgeInsets.all(OrSpacing.x3),
+      children: [
+        _inspectorSectionLabel('SEQUENCE'),
+        _inspectorFactRow(
+          'Frame rate',
+          rate == null ? 'Not set yet' : _frameRateLabel(rate),
+        ),
+        _inspectorFactRow(
+          'Duration',
+          duration == null
+              ? 'Empty'
+              : '${duration.secondsForDisplay.toStringAsFixed(2)} s',
+        ),
+        _inspectorFactRow(
+          'Timeline',
+          '${widget.trackCount} track${widget.trackCount == 1 ? '' : 's'} · '
+              '${widget.clipCount} clip${widget.clipCount == 1 ? '' : 's'}',
+        ),
+        const SizedBox(height: OrSpacing.x4),
+        _inspectorSectionLabel('PROJECT'),
+        _inspectorFactRow('Name', project?.name ?? 'No project open'),
+        _inspectorFactRow(
+          'Save state',
+          project == null
+              ? '—'
+              : (project.dirty ? 'Unsaved edits' : 'Saved to disk'),
+        ),
+        const SizedBox(height: OrSpacing.x4),
+        Text(
+          widget.clipCount == 0
+              ? "Import media, then drag it onto the timeline. Selecting a clip "
+                    "replaces these sequence facts with that clip's controls."
+              : 'Select a clip on the timeline to edit its settings. These '
+                    'sequence facts stay visible until you do.',
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+            height: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _inspectorSectionLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: OrSpacing.x2),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: OrColors.textMuted,
+        fontSize: OrType.tinySize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.6,
+      ),
+    ),
+  );
+
+  Widget _inspectorFactRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: OrSpacing.x2),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 88,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: OrColors.text, fontSize: OrType.tinySize),
+          ),
+        ),
+      ],
+    ),
+  );
+
   Widget _audioEditor() => ListView(
     key: const ValueKey('inspector-scroll'),
     padding: const EdgeInsets.all(OrSpacing.x2),
@@ -3828,17 +3813,17 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                   ),
           ),
           const Divider(height: 1),
-          if (!canEdit)
+          if (!canEdit && widget.isProjectWorkspace && !hasSelection)
+            Expanded(child: _projectInspector())
+          else if (!canEdit)
             Expanded(
               child: OrEmptyState(
                 title: hasSelection ? 'Clip settings' : 'No selection',
                 message: !widget.isProjectWorkspace
                     ? 'Inspector controls are unavailable in this preview.'
-                    : !hasSelection
-                    ? 'Select a video or audio clip to edit its settings.'
                     : widget.trackLocked
                     ? 'Unlock the selected track to edit clip settings.'
-                    : 'Select a video or audio clip to edit its settings.',
+                    : 'Select a clip on the timeline to edit its settings.',
                 icon: Icons.tune_outlined,
               ),
             )
@@ -4053,273 +4038,6 @@ class _ToolbarScrollState extends State<_ToolbarScroll> {
   );
 }
 
-class _TimelineToolbar extends StatelessWidget {
-  const _TimelineToolbar({
-    required this.compact,
-    required this.isProjectWorkspace,
-    required this.busy,
-    required this.onUndo,
-    required this.onAddVideoTrack,
-    required this.onAddAudioTrack,
-    required this.onAddTextTrack,
-    required this.onAddCaptionTrack,
-    required this.onImportCaptions,
-    required this.onExportCaptions,
-    required this.onAddTitle,
-    required this.onAddCaption,
-    required this.onAddMarker,
-    required this.snapEnabled,
-    required this.onSnapChanged,
-  });
-
-  final bool compact;
-  final bool isProjectWorkspace;
-  final bool busy;
-  final VoidCallback? onUndo;
-  final VoidCallback? onAddVideoTrack;
-  final VoidCallback? onAddAudioTrack;
-  final VoidCallback? onAddTextTrack;
-  final VoidCallback? onAddCaptionTrack;
-  final VoidCallback? onImportCaptions;
-  final VoidCallback? onExportCaptions;
-  final VoidCallback? onAddTitle;
-  final VoidCallback? onAddCaption;
-  final VoidCallback? onAddMarker;
-  final bool snapEnabled;
-  final ValueChanged<bool>? onSnapChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    // Full action names overflowed a 1280 px window: measured 2026-10-20 with
-    // scripts/or_ui.py at 1280x800, "Export Captions" was clipped and
-    // "Add Caption" was off-screen. Below a genuinely wide window the toolbar
-    // uses the shorter names the compact dock already uses, so every action is
-    // visible without horizontal scrolling.
-    // Full action names are measured against the space the row actually has.
-    // 1440 px was still not enough for every full label (2026-10-25, "Add
-    // Caption" was cut), so only a genuinely wide window pays for them.
-    final width = MediaQuery.sizeOf(context).width;
-    final showActionLabels = width >= 1150;
-    return Container(
-      key: const ValueKey('timeline-toolbar'),
-      width: double.infinity,
-      height: 40,
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? OrSpacing.x2 : OrSpacing.x3,
-      ),
-      decoration: const BoxDecoration(
-        color: OrColors.backgroundRaised,
-        border: Border.symmetric(
-          horizontal: BorderSide(color: OrColors.border),
-        ),
-      ),
-      child: _ToolbarScroll(
-        child: Row(
-          children: [
-            if (isProjectWorkspace) ...[
-              // Below this width the labels alone would consume the row and
-              // push the last actions behind a horizontal scroll (measured at
-              // 800 and 1024 on 2026-10-25). The icon presentation keeps every
-              // action visible and hit-testable with the same keys and
-              // tooltips; wider windows keep the labels.
-              _TimelineAction(
-                actionKey: 'timeline-add-video-track',
-                icon: Icons.movie_outlined,
-                label: 'Add video track',
-                shortLabel: 'Add Video',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddVideoTrack,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-audio-track',
-                icon: Icons.graphic_eq_outlined,
-                label: 'Add audio track',
-                shortLabel: 'Add Audio',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddAudioTrack,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-marker',
-                icon: Icons.bookmark_add_outlined,
-                label: 'Add marker',
-                shortLabel: 'Marker',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddMarker,
-              ),
-              IconButton(
-                key: const ValueKey('timeline-undo'),
-                tooltip: 'Undo (${_shortcutLabel('Z')})',
-                onPressed: busy ? null : onUndo,
-                icon: const Icon(Icons.undo_outlined, size: 17),
-                visualDensity: VisualDensity.compact,
-              ),
-              Semantics(
-                label: 'Snap to clip boundaries',
-                toggled: snapEnabled,
-                child: FilterChip(
-                  key: const ValueKey('timeline-snap-toggle'),
-                  label: const Text('Snap'),
-                  selected: snapEnabled,
-                  onSelected: busy || onSnapChanged == null
-                      ? null
-                      : onSnapChanged,
-                  showCheckmark: false,
-                  visualDensity: VisualDensity.compact,
-                  selectedColor: OrColors.selection,
-                  labelStyle: TextStyle(
-                    color: snapEnabled
-                        ? OrColors.primaryText
-                        : OrColors.textSecondary,
-                    fontSize: OrType.tinySize,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  side: BorderSide(
-                    color: snapEnabled
-                        ? OrColors.selection
-                        : OrColors.borderStrong,
-                  ),
-                ),
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-text-track',
-                icon: Icons.text_fields_outlined,
-                label: 'Add text track',
-                shortLabel: 'Add Text',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddTextTrack,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-caption-track',
-                icon: Icons.subtitles_outlined,
-                label: 'Add caption track',
-                shortLabel: 'Add Captions',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddCaptionTrack,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-title',
-                icon: Icons.title,
-                label: 'Add title at playhead',
-                shortLabel: 'Title',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddTitle,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-add-manual-caption',
-                icon: Icons.closed_caption_outlined,
-                label: 'Add caption at playhead',
-                shortLabel: 'Caption',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onAddCaption,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-import-captions',
-                icon: Icons.file_open_outlined,
-                label: 'Import captions (SRT, WebVTT)',
-                shortLabel: 'Import SRT',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onImportCaptions,
-              ),
-              _TimelineAction(
-                actionKey: 'timeline-export-captions',
-                icon: Icons.file_download_outlined,
-                label: 'Export captions (SRT, WebVTT)',
-                shortLabel: 'Export SRT',
-                showLabel: showActionLabels,
-                enabled: !busy,
-                onPressed: onExportCaptions,
-              ),
-            ] else ...[
-              Text(
-                compact ? 'Timeline preview' : 'Timeline tools unavailable',
-                style: const TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.metadataCompactSize,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: OrSpacing.x2),
-              _UnavailableTimelineAction(
-                tooltip: 'Undo is unavailable in this Developer Preview',
-                icon: Icons.undo_outlined,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// One timeline-toolbar action in either its labelled or icon-only form. Both
-/// forms keep the same ValueKey so journeys and shortcuts do not depend on the
-/// viewport width.
-class _TimelineAction extends StatelessWidget {
-  const _TimelineAction({
-    required this.actionKey,
-    required this.icon,
-    required this.label,
-    required this.shortLabel,
-    required this.showLabel,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final String actionKey;
-  final IconData icon;
-  final String label;
-  final String shortLabel;
-  final bool showLabel;
-  final bool enabled;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!showLabel) {
-      return IconButton(
-        key: ValueKey(actionKey),
-        tooltip: label,
-        onPressed: enabled ? onPressed : null,
-        visualDensity: VisualDensity.compact,
-        icon: Icon(icon, size: 17),
-      );
-    }
-    return TextButton.icon(
-      key: ValueKey(actionKey),
-      onPressed: enabled ? onPressed : null,
-      icon: Icon(icon, size: 16),
-      label: Text(shortLabel),
-    );
-  }
-}
-
-class _UnavailableTimelineAction extends StatelessWidget {
-  const _UnavailableTimelineAction({required this.tooltip, required this.icon});
-
-  final String tooltip;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: IconButton(
-        onPressed: null,
-        icon: Icon(icon, size: 17),
-        visualDensity: VisualDensity.compact,
-      ),
-    );
-  }
-}
-
 class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     super.key,
@@ -4362,6 +4080,12 @@ class _TimelinePanel extends StatefulWidget {
     required this.onRenameMarker,
     required this.onDeleteMarker,
     required this.snapEnabled,
+    this.onSnapChanged,
+    this.onImportCaptions,
+    this.onExportCaptions,
+    this.onAddTitle,
+    this.onAddCaption,
+    this.onRequestMarker,
     required this.onTimelineEditError,
     required this.mediaItems,
     required this.mediaPreviews,
@@ -4498,6 +4222,16 @@ class _TimelinePanel extends StatefulWidget {
   )?
   onClipSelectionChanged;
 
+  /// Snapping and the creation menu live in this zone's single control row.
+  final ValueChanged<bool>? onSnapChanged;
+  final VoidCallback? onImportCaptions;
+  final VoidCallback? onExportCaptions;
+  final VoidCallback? onAddTitle;
+  final VoidCallback? onAddCaption;
+
+  /// Opens the labelled marker dialog; the panel does not invent marker names.
+  final VoidCallback? onRequestMarker;
+
   @override
   State<_TimelinePanel> createState() => _TimelinePanelState();
 }
@@ -4560,17 +4294,18 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       ),
       child: Column(
         children: [
-          _PanelHeader(
-            title: 'Timeline',
-            height: widget.compact ? 34 : 38,
-            trailing: widget.isProjectWorkspace
-                ? const OrBadge('Project timeline')
-                : const OrBadge('Developer Preview'),
-          ),
           if (!widget.isProjectWorkspace)
             Expanded(
               child: Column(
                 children: [
+                  // The frozen preview names every zone; the project
+                  // workspace does not, because a working editor is identified
+                  // by its content rather than by labels.
+                  const _PanelHeader(
+                    title: 'Timeline',
+                    height: 32,
+                    trailing: OrBadge('Developer Preview'),
+                  ),
                   _TimelineRuler(compact: widget.compact),
                   const Expanded(
                     child: Column(
@@ -4634,74 +4369,88 @@ class _TimelinePanelState extends State<_TimelinePanel> {
       // This panel gets a small share of a short screen, so the empty state
       // must scroll: it previously overflowed by 154 px at 320x640 and 86 px at
       // 390x844, which is the emulator viewport.
-      return SingleChildScrollView(
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'No timeline tracks',
-                style: TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.metadataSize,
-                  fontWeight: FontWeight.w500,
+      // The control row always renders: zoom, snapping and the creation menu
+      // must stay reachable from the first empty timeline, otherwise the empty
+      // state is the only place that can create anything.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _timelineViewControls(),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'No timeline tracks',
+                      style: TextStyle(
+                        color: OrColors.textSecondary,
+                        fontSize: OrType.metadataSize,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: OrSpacing.x2),
+                    if (widget.mediaItems.isEmpty &&
+                        widget.isProjectWorkspace &&
+                        widget.onImportMedia != null) ...[
+                      const Text(
+                        'Import a video or audio file to start editing.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: OrType.metadataCompactSize,
+                        ),
+                      ),
+                      const SizedBox(height: OrSpacing.x2),
+                      FilledButton.icon(
+                        key: const ValueKey('timeline-empty-import-media'),
+                        onPressed: widget.busy ? null : widget.onImportMedia,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('Import Media'),
+                      ),
+                      const SizedBox(height: OrSpacing.x2),
+                    ],
+                    // One filled action, then quiet text links. Five bordered
+                    // buttons competed for the same click and the `+` menu
+                    // already lists the rest of the track kinds.
+                    Wrap(
+                      spacing: OrSpacing.x2,
+                      alignment: WrapAlignment.center,
+                      children: [
+                        TextButton.icon(
+                          key: const ValueKey('timeline-empty-add-video'),
+                          onPressed: widget.busy
+                              ? null
+                              : widget.onAddVideoTrack,
+                          icon: const Icon(Icons.movie_outlined, size: 16),
+                          label: const Text('Add video track'),
+                        ),
+                        TextButton.icon(
+                          key: const ValueKey('timeline-empty-add-audio'),
+                          onPressed: widget.busy
+                              ? null
+                              : widget.onAddAudioTrack,
+                          icon: const Icon(Icons.graphic_eq_outlined, size: 16),
+                          label: const Text('Add audio track'),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'More track kinds, titles, captions and markers are in '
+                      'the + menu above.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: OrColors.textMuted,
+                        fontSize: OrType.metadataCompactSize,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: OrSpacing.x2),
-              if (widget.mediaItems.isEmpty &&
-                  widget.isProjectWorkspace &&
-                  widget.onImportMedia != null) ...[
-                const Text(
-                  'Import a video or audio file to start editing.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: OrColors.textMuted,
-                    fontSize: OrType.metadataCompactSize,
-                  ),
-                ),
-                const SizedBox(height: OrSpacing.x2),
-                FilledButton.icon(
-                  key: const ValueKey('timeline-empty-import-media'),
-                  onPressed: widget.busy ? null : widget.onImportMedia,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('Import Media'),
-                ),
-                const SizedBox(height: OrSpacing.x2),
-              ],
-              Wrap(
-                spacing: OrSpacing.x2,
-                runSpacing: OrSpacing.x2,
-                alignment: WrapAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    key: const ValueKey('timeline-empty-add-video'),
-                    onPressed: widget.busy ? null : widget.onAddVideoTrack,
-                    icon: const Icon(Icons.movie_outlined, size: 16),
-                    label: const Text('Add Video Track'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('timeline-empty-add-audio'),
-                    onPressed: widget.busy ? null : widget.onAddAudioTrack,
-                    icon: const Icon(Icons.graphic_eq_outlined, size: 16),
-                    label: const Text('Add Audio Track'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('timeline-empty-add-text'),
-                    onPressed: widget.busy ? null : widget.onAddTextTrack,
-                    icon: const Icon(Icons.text_fields_outlined, size: 16),
-                    label: const Text('Add Text Track'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('timeline-empty-add-caption'),
-                    onPressed: widget.busy ? null : widget.onAddCaptionTrack,
-                    icon: const Icon(Icons.subtitles_outlined, size: 16),
-                    label: const Text('Add Caption Track'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       );
     }
 
@@ -5145,6 +4894,121 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                     },
               child: const Text('Fit'),
             ),
+            if (widget.onSnapChanged != null) ...[
+              Container(
+                width: 1,
+                height: 16,
+                margin: const EdgeInsets.symmetric(horizontal: OrSpacing.x1),
+                color: OrColors.border,
+              ),
+              // A FilterChip states its own selection to a screen reader and
+              // to a test, which an ad-hoc InkWell does not.
+              FilterChip(
+                key: const ValueKey('timeline-snap-toggle'),
+                selected: widget.snapEnabled,
+                onSelected: widget.busy
+                    ? null
+                    : (value) => widget.onSnapChanged!(value),
+                tooltip: widget.snapEnabled
+                    ? 'Snapping on · hold Option to bypass'
+                    : 'Snapping off',
+                avatar: Icon(
+                  Icons.straighten_outlined,
+                  size: 14,
+                  color: widget.snapEnabled
+                      ? OrColors.selection
+                      : OrColors.textMuted,
+                ),
+                label: const Text('Snap'),
+                labelStyle: TextStyle(
+                  fontSize: OrType.tinySize,
+                  color: widget.snapEnabled
+                      ? OrColors.text
+                      : OrColors.textMuted,
+                ),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                showCheckmark: false,
+                side: BorderSide(
+                  color: widget.snapEnabled
+                      ? OrColors.selection
+                      : OrColors.border,
+                ),
+                backgroundColor: Colors.transparent,
+                selectedColor: OrColors.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(OrRadii.small),
+                ),
+              ),
+            ],
+            if (widget.isProjectWorkspace) ...[
+              const SizedBox(width: OrSpacing.x1),
+              PopupMenuButton<String>(
+                key: const ValueKey('timeline-create-menu'),
+                tooltip: 'Add a track, title, caption or marker',
+                enabled: !widget.busy,
+                icon: const Icon(Icons.add, size: 17),
+                onSelected: (choice) {
+                  switch (choice) {
+                    case 'video':
+                      widget.onAddVideoTrack?.call();
+                    case 'audio':
+                      widget.onAddAudioTrack?.call();
+                    case 'text':
+                      widget.onAddTextTrack?.call();
+                    case 'caption':
+                      widget.onAddCaptionTrack?.call();
+                    case 'title':
+                      widget.onAddTitle?.call();
+                    case 'caption-clip':
+                      widget.onAddCaption?.call();
+                    case 'marker':
+                      widget.onRequestMarker?.call();
+                    case 'import-captions':
+                      widget.onImportCaptions?.call();
+                    case 'export-captions':
+                      widget.onExportCaptions?.call();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'video',
+                    child: Text('Add video track'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'audio',
+                    child: Text('Add audio track'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'text',
+                    child: Text('Add text track'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'caption',
+                    child: Text('Add caption track'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(value: 'title', child: Text('Add title')),
+                  const PopupMenuItem(
+                    value: 'caption-clip',
+                    child: Text('Add caption'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'marker',
+                    child: Text('Add marker at playhead'),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    value: 'import-captions',
+                    child: Text('Import captions (SRT)…'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'export-captions',
+                    child: Text('Export captions (SRT)…'),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -5205,6 +5069,45 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   void clearSelection() {
     if (_selectedClipId == null) return;
     _clearSelection();
+  }
+
+  /// Split at the playhead. Shares the enablement rules with the selection
+  /// strip so the keyboard and the button cannot disagree.
+  void splitSelectedClipAtPlayhead() {
+    final project = widget.project;
+    final clip = _selectedClip;
+    final track = _selectedTrack;
+    final position = widget.previewState.value?.position;
+    if (project == null ||
+        clip == null ||
+        track == null ||
+        position == null ||
+        track.state.locked ||
+        widget.busy ||
+        widget.onSplitClip == null) {
+      return;
+    }
+    if (_compareProjectRational(position, clip.timelineStart) <= 0 ||
+        _compareProjectRational(position, clip.timelineEnd) >= 0) {
+      return;
+    }
+    unawaited(widget.onSplitClip!(project, clip, position));
+  }
+
+  /// Ripple delete: removes the clip and closes the gap in one command.
+  void rippleDeleteSelectedClip() {
+    final project = widget.project;
+    final clip = _selectedClip;
+    final track = _selectedTrack;
+    if (project == null ||
+        clip == null ||
+        track == null ||
+        track.state.locked ||
+        widget.busy ||
+        widget.onRippleDeleteClip == null) {
+      return;
+    }
+    unawaited(widget.onRippleDeleteClip!(project, clip));
   }
 
   void _changeTimelineZoom(double zoom) {

@@ -103,3 +103,27 @@ class DeleteTimelineClipIntent extends Intent {
 class ClearTimelineSelectionIntent extends Intent {
   const ClearTimelineSelectionIntent();
 }
+
+class SplitClipIntent extends Intent {
+  const SplitClipIntent();
+}
+
+class RippleDeleteClipIntent extends Intent {
+  const RippleDeleteClipIntent();
+}
+
+class AddMarkerIntent extends Intent {
+  const AddMarkerIntent();
+}
+
+class ExportProjectIntent extends Intent {
+  const ExportProjectIntent();
+}
+
+/// Selects one of the editor's tool categories. The number keys and the tab
+/// strip therefore drive the same state.
+class SelectToolIntent extends Intent {
+  const SelectToolIntent(this.tool);
+
+  final String tool;
+}

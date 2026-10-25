@@ -19,6 +19,12 @@ class AppTopBar extends StatelessWidget {
     this.exportIsActive = false,
     this.statusLabel,
     this.statusIsError = false,
+    this.projectDirty,
+    this.onUndo,
+    this.onRedo,
+    this.onRenameProject,
+    this.onSaveProject,
+    this.onCloseProject,
   });
 
   final String title;
@@ -31,6 +37,16 @@ class AppTopBar extends StatelessWidget {
   final bool exportIsActive;
   final String? statusLabel;
   final bool statusIsError;
+
+  /// Non-null while a project is open. The bar then owns the project's save
+  /// state, its history controls and the project menu, so the workspace below
+  /// does not need a second title row (docs/EDITOR_WORKSPACE_DESIGN.md).
+  final bool? projectDirty;
+  final VoidCallback? onUndo;
+  final VoidCallback? onRedo;
+  final VoidCallback? onRenameProject;
+  final VoidCallback? onSaveProject;
+  final VoidCallback? onCloseProject;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +69,19 @@ class AppTopBar extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final showFullBrand = OrBreakpoints.isWide(constraints.maxWidth);
-          final showPreviewBadge = showFullBrand;
+          // Measured 2026-10-25 at 800 px: the project extras plus a labelled
+          // Export button overflowed the row by 63 px. Labels go before
+          // controls do.
+          final labelledExport = constraints.maxWidth >= 1000;
+          // Five project icons need ~200 px. A phone-width bar collapses them
+          // into one menu; an 800 px window keeps every action literal.
+          final literalProjectActions = constraints.maxWidth >= 760;
+          final showSaveStateText = constraints.maxWidth >= 1100;
+          // A project workspace names the project once, here. The developer
+          // preview chip is product scaffolding, not editing information, so it
+          // stays out of that mode.
+          final showPreviewBadge = showFullBrand && projectDirty == null;
+          final dirty = projectDirty;
 
           return Row(
             children: [
@@ -107,17 +135,158 @@ class AppTopBar extends StatelessWidget {
               Container(width: 1, height: 24, color: OrColors.border),
               const SizedBox(width: OrSpacing.x4),
               Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: OrColors.textSecondary,
-                    fontSize: OrType.metadataSize,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        title,
+                        // The workspace names its project here, so this is the
+                        // one place a test or harness reads that name.
+                        key: projectDirty != null
+                            ? const ValueKey('workspace-project-name')
+                            : null,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: OrColors.textSecondary,
+                          fontSize: OrType.metadataSize,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    if (dirty != null) ...[
+                      const SizedBox(width: OrSpacing.x2),
+                      Tooltip(
+                        message: dirty
+                            ? 'Unsaved changes · ${defaultTargetPlatform == TargetPlatform.macOS ? '⌘S' : 'Ctrl+S'} saves'
+                            : 'Every change is on disk',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              key: const ValueKey('project-save-dot'),
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: dirty
+                                    ? OrColors.warning
+                                    : OrColors.textMuted,
+                              ),
+                            ),
+                            // One save-state statement at a time: when the bar
+                            // already carries a transient status (export or a
+                            // recovery problem) the dot alone stands for the
+                            // dirty state.
+                            if (!compact &&
+                                showSaveStateText &&
+                                statusLabel == null) ...[
+                              const SizedBox(width: OrSpacing.x1),
+                              Text(
+                                dirty ? 'Unsaved' : 'Saved',
+                                key: const ValueKey('project-save-state'),
+                                style: TextStyle(
+                                  color: dirty
+                                      ? OrColors.warning
+                                      : OrColors.textMuted,
+                                  fontSize: OrType.tinySize,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
+              // All five project actions stay as icons in the one bar. At
+              // 800 px the previous design painted Undo and Close off-screen,
+              // so the icons are the floor and the labels above them are what
+              // collapse first.
+              if (dirty != null && !literalProjectActions)
+                PopupMenuButton<String>(
+                  key: const ValueKey('workspace-actions'),
+                  tooltip: 'Project actions',
+                  icon: const Icon(Icons.more_horiz, size: 19),
+                  iconColor: OrColors.textSecondary,
+                  onSelected: (choice) {
+                    switch (choice) {
+                      case 'rename':
+                        onRenameProject?.call();
+                      case 'save':
+                        onSaveProject?.call();
+                      case 'undo':
+                        onUndo?.call();
+                      case 'redo':
+                        onRedo?.call();
+                      case 'close':
+                        onCloseProject?.call();
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'rename',
+                      child: Text('Rename project…'),
+                    ),
+                    PopupMenuItem(
+                      value: 'save',
+                      enabled: dirty,
+                      child: const Text('Save now'),
+                    ),
+                    PopupMenuItem(
+                      value: 'undo',
+                      enabled: onUndo != null,
+                      child: const Text('Undo'),
+                    ),
+                    PopupMenuItem(
+                      value: 'redo',
+                      enabled: onRedo != null,
+                      child: const Text('Redo'),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                      value: 'close',
+                      child: Text('Close project'),
+                    ),
+                  ],
+                ),
+              if (dirty != null && literalProjectActions) ...[
+                _TopBarIcon(
+                  buttonKey: 'workspace-rename',
+                  tooltip: 'Rename project',
+                  icon: Icons.drive_file_rename_outline,
+                  onPressed: onRenameProject,
+                ),
+                _TopBarIcon(
+                  buttonKey: 'workspace-save',
+                  tooltip: dirty ? 'Save now (⌘S)' : 'Saved',
+                  icon: Icons.save_outlined,
+                  onPressed: dirty ? onSaveProject : null,
+                ),
+                _TopBarIcon(
+                  buttonKey: 'workspace-undo',
+                  tooltip: 'Undo (⌘Z)',
+                  icon: Icons.undo_outlined,
+                  onPressed: onUndo,
+                ),
+                _TopBarIcon(
+                  buttonKey: 'workspace-redo',
+                  tooltip: 'Redo (⇧⌘Z)',
+                  icon: Icons.redo_outlined,
+                  onPressed: onRedo,
+                ),
+                _TopBarIcon(
+                  buttonKey: 'workspace-close',
+                  tooltip: 'Close project',
+                  icon: Icons.close,
+                  onPressed: onCloseProject,
+                ),
+                const SizedBox(width: OrSpacing.x2),
+              ],
+              // One transient statement at a time: an export or recovery
+              // message is more urgent than the dirty dot's label, and the
+              // text is dropped before the icon so the bar never overflows.
               if (statusLabel != null) ...[
                 Tooltip(
                   key: const ValueKey('export-status'),
@@ -132,7 +301,7 @@ class AppTopBar extends StatelessWidget {
                         : OrColors.textMuted,
                   ),
                 ),
-                if (!compact) ...[
+                if (!compact && showSaveStateText) ...[
                   const SizedBox(width: OrSpacing.x1),
                   Text(
                     statusLabel!,
@@ -148,7 +317,7 @@ class AppTopBar extends StatelessWidget {
                   const SizedBox(width: OrSpacing.x1),
               ],
               if (onExport != null) ...[
-                if (compact)
+                if (compact || !labelledExport)
                   Tooltip(
                     message: 'Export project',
                     child: IconButton(
@@ -238,9 +407,34 @@ class AppTopBar extends StatelessWidget {
   }
 }
 
+class _TopBarIcon extends StatelessWidget {
+  const _TopBarIcon({
+    required this.buttonKey,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String buttonKey;
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      key: ValueKey(buttonKey),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 18),
+      color: OrColors.textSecondary,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+}
+
 class _PreviewBadge extends StatelessWidget {
   const _PreviewBadge();
-
   @override
   Widget build(BuildContext context) {
     return Container(

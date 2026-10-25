@@ -1,0 +1,20 @@
+{
+  "name": "workspace-chrome",
+  "harness": "or_ui",
+  "description": "Reads the editing workspace chrome at three widths without importing media, so a layout change can be reviewed from rectangles and pixels instead of a description. No step names a coordinate and no step injects canonical project state.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": ["wav"],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    {
+      "op": "enter_text",
+      "selector": { "key": "new-project-name" },
+      "value": "Chrome review"
+    },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait", "text": "No timeline tracks", "budget_ms": 20000 },
+    { "op": "shot", "name": "editor-1440" },
+    { "op": "tree", "name": "editor-1440" }
+  ]
+}

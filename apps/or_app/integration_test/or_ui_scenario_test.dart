@@ -358,6 +358,20 @@ class _Runner {
     _StepResult result,
   ) async {
     switch (op) {
+      case 'resize':
+        // Breakpoint review needs a real layout change at a stated size. The
+        // view size is the same thing the window would do, without depending
+        // on the window manager.
+        final width = (step['width'] as num?)?.toDouble();
+        final height = (step['height'] as num?)?.toDouble();
+        if (width == null || height == null) {
+          throw FormatException('resize needs numeric width and height');
+        }
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.physicalSize = Size(width, height);
+        await tester.pumpAndSettle();
+        result.detail = 'resized to ${width.toInt()}x${height.toInt()}';
+        return;
       case 'pump':
         await _pumpFor(_milliseconds(step['ms'] ?? 100));
         return;

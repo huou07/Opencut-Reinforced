@@ -2,70 +2,287 @@
   "name": "editor-journey",
   "harness": "or_ui",
   "description": "The Phase 0 end-to-end journey: Home -> Projects -> create -> import a synthetic fixture (rejected-import state first) -> build a timeline -> keyboard edit, undo, seek and save -> reopen the saved project -> export setup -> cancel. Every action names a widget key, a semantics label or a role; no step names a screen coordinate and no step injects canonical project state.",
-  "viewport": {"width": 1280, "height": 800},
-  "fixtures": ["wav", "invalid"],
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "wav",
+    "invalid"
+  ],
   "steps": [
-    {"op": "shot", "name": "home"},
-    {"op": "tree", "name": "home"},
-    {"op": "expect", "key": "home-new-project", "role": "button"},
-
-    {"op": "tap", "selector": {"key": "nav-projects"}},
-    {"op": "expect", "key": "projects-new-project", "role": "button"},
-    {"op": "tap", "selector": {"key": "projects-new-project"}},
-    {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "UI harness journey"},
-    {"op": "tap", "selector": {"key": "confirm-new-project"}},
-    {"op": "wait", "text": "No timeline tracks", "budget_ms": 20000},
-    {"op": "shot", "name": "editor-empty"},
-
-    {"op": "picker", "next": "invalid"},
-    {"op": "tap", "selector": {"key": "timeline-empty-import-media"}},
-    {"op": "wait_absent", "text": "fixture.wav", "budget_ms": 2000},
-    {"op": "expect", "key": "timeline-empty-import-media", "role": "button"},
-    {"op": "tree", "name": "import-rejected"},
-
-    {"op": "picker", "next": "media"},
-    {"op": "tap", "selector": {"key": "timeline-empty-import-media"}},
-    {"op": "wait", "text": "fixture.wav", "budget_ms": 20000},
-
-    {"op": "tap", "selector": {"key": "timeline-add-audio-track"}},
-    {"op": "tap", "selector": {"key_regex": "^media-add-timeline-.*$"}},
-    {"op": "tap", "selector": {"key": "timeline-confirm-insert"}},
-    {"op": "expect", "key_regex": "^timeline-clip-[0-9a-f-]+$"},
-    {"op": "tree", "name": "timeline"},
-    {"op": "shot", "name": "timeline"},
-
-    {"op": "tap", "selector": {"key_regex": "^timeline-clip-[0-9a-f-]+$"}},
-    {"op": "shot", "name": "clip-selected"},
-    {"op": "tap", "selector": {"key": "timeline-selection-actions"}},
-    {"op": "shot", "name": "clip-menu"},
-    {"op": "tap", "selector": {"label": "Advanced clip actions…"}},
-    {"op": "shot", "name": "clip-dialog"},
-    {"op": "tap", "selector": {"label": "Close", "within": {"type": "AlertDialog"}}},
-
-    {"op": "key", "chord": "ctrl+d"},
-    {"op": "tree", "name": "after-keyboard-duplicate"},
-    {"op": "key", "chord": "ctrl+z"},
-    {"op": "tree", "name": "after-keyboard-undo"},
-    {"op": "key", "chord": "period"},
-    {"op": "key", "chord": "period"},
-    {"op": "tree", "name": "after-keyboard-seek"},
-    {"op": "shot", "name": "after-keyboard-seek"},
-
-    {"op": "key", "chord": "ctrl+s"},
-    {"op": "tree", "name": "after-keyboard-save"},
-    {"op": "tap", "selector": {"key": "exit-editor-preview"}},
-    {"op": "expect", "key": "home-new-project", "role": "button"},
-    {"op": "tap", "selector": {"key": "nav-projects"}},
-    {"op": "tap", "selector": {"key": "projects-open-project"}},
-    {"op": "wait", "text": "fixture.wav", "budget_ms": 20000},
-    {"op": "expect", "key_regex": "^timeline-clip-[0-9a-f-]+$"},
-    {"op": "tree", "name": "reopened"},
-    {"op": "shot", "name": "reopened"},
-
-    {"op": "tap", "selector": {"key": "export-project"}},
-    {"op": "expect_text", "text": "Export video"},
-    {"op": "shot", "name": "export-setup"},
-    {"op": "tap", "selector": {"label": "Cancel", "within": {"type": "AlertDialog"}}},
-    {"op": "expect_absent", "text": "Export video"}
+    {
+      "op": "shot",
+      "name": "home"
+    },
+    {
+      "op": "tree",
+      "name": "home"
+    },
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "projects-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "UI harness journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "editor-empty"
+    },
+    {
+      "op": "picker",
+      "next": "invalid"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait_absent",
+      "text": "fixture.wav",
+      "budget_ms": 2000
+    },
+    {
+      "op": "expect",
+      "key": "timeline-empty-import-media",
+      "role": "button"
+    },
+    {
+      "op": "tree",
+      "name": "import-rejected"
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add audio track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tree",
+      "name": "timeline"
+    },
+    {
+      "op": "shot",
+      "name": "timeline"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "clip-selected"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-selection-actions"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "clip-menu"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Advanced clip actions…"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "clip-dialog"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Close",
+        "within": {
+          "type": "AlertDialog"
+        }
+      }
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+d"
+    },
+    {
+      "op": "tree",
+      "name": "after-keyboard-duplicate"
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+z"
+    },
+    {
+      "op": "tree",
+      "name": "after-keyboard-undo"
+    },
+    {
+      "op": "key",
+      "chord": "period"
+    },
+    {
+      "op": "key",
+      "chord": "period"
+    },
+    {
+      "op": "tree",
+      "name": "after-keyboard-seek"
+    },
+    {
+      "op": "shot",
+      "name": "after-keyboard-seek"
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+s"
+    },
+    {
+      "op": "tree",
+      "name": "after-keyboard-save"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "exit-editor-preview"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-open-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tree",
+      "name": "reopened"
+    },
+    {
+      "op": "shot",
+      "name": "reopened"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "export-project"
+      }
+    },
+    {
+      "op": "expect_text",
+      "text": "Export video"
+    },
+    {
+      "op": "shot",
+      "name": "export-setup"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Cancel",
+        "within": {
+          "type": "AlertDialog"
+        }
+      }
+    },
+    {
+      "op": "expect_absent",
+      "text": "Export video"
+    }
   ]
 }

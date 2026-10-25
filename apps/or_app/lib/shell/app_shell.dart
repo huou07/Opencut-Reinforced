@@ -222,6 +222,21 @@ class _AppShellState extends State<AppShell> {
                 DeleteTimelineClipIntent(),
             SingleActivator(LogicalKeyboardKey.escape):
                 ClearTimelineSelectionIntent(),
+            // Editing verbs. `S` and the command form of `B` both split, so a
+            // CapCut-style single key and the broadcast-editor shortcut agree.
+            SingleActivator(LogicalKeyboardKey.keyS): SplitClipIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyB): SplitClipIntent(),
+            SingleActivator(LogicalKeyboardKey.delete, shift: true):
+                RippleDeleteClipIntent(),
+            SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyE): ExportProjectIntent(),
+            SingleActivator(LogicalKeyboardKey.digit1):
+                SelectToolIntent('Media'),
+            SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
+            SingleActivator(LogicalKeyboardKey.digit3):
+                SelectToolIntent('Audio'),
+            SingleActivator(LogicalKeyboardKey.digit4):
+                SelectToolIntent('Motion'),
           },
           child: Actions(
             actions: {
@@ -320,6 +335,51 @@ class _AppShellState extends State<AppShell> {
                       return null;
                     },
                   ),
+              SplitClipIntent: CallbackAction<SplitClipIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.splitSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              RippleDeleteClipIntent: CallbackAction<RippleDeleteClipIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.rippleDeleteSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              AddMarkerIntent: CallbackAction<AddMarkerIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.addMarkerAtPlayhead();
+                  }
+                  return null;
+                },
+              ),
+              ExportProjectIntent: CallbackAction<ExportProjectIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      _activeSession != null &&
+                      widget.projectFilePicker.supportsExport &&
+                      !(_exportJob?.isActive ?? false) &&
+                      !_exportPublishing) {
+                    unawaited(_startExport());
+                  }
+                  return null;
+                },
+              ),
+              SelectToolIntent: CallbackAction<SelectToolIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.selectTool(intent.tool);
+                  }
+                  return null;
+                },
+              ),
             },
             child: Focus(
               autofocus: true,
@@ -337,6 +397,16 @@ class _AppShellState extends State<AppShell> {
                         statusIsError: _exportStatus != null
                             ? _exportFailed
                             : _autosaveFailed,
+                        // The bar is the workspace's only title row: it also
+                        // owns save state, history and the project menu.
+                        projectDirty: editor && _activeSession != null
+                            ? (_activeProject?.dirty ?? false)
+                            : null,
+                        onUndo: editor ? _undoProject : null,
+                        onRedo: editor ? _redoProject : null,
+                        onRenameProject: editor ? _renameProject : null,
+                        onSaveProject: editor ? _saveProject : null,
+                        onCloseProject: editor ? _closeProject : null,
                         onExport:
                             editor &&
                                 _activeSession != null &&
@@ -562,6 +632,37 @@ class _AppShellState extends State<AppShell> {
           label: 'Illustration Video',
           onSelected: () => unawaited(_openMotionMaterialize()),
         ),
+        // Editing commands live where the editing happens: a pointer user
+        // finds them in the timeline menu, a keyboard user types them here.
+        if (_destination == AppDestination.editorPreview) ...[
+          CommandPaletteAction(
+            label: 'Split Clip at Playhead',
+            onSelected: () => _editorKey.currentState?.splitSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Ripple Delete Selected Clip',
+            onSelected: () => _editorKey.currentState?.rippleDeleteSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Delete Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.confirmDeleteSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Add Marker at Playhead',
+            onSelected: () => _editorKey.currentState?.addMarkerAtPlayhead(),
+          ),
+          for (final tool in const ['Media', 'Text', 'Audio', 'Motion'])
+            CommandPaletteAction(
+              label: 'Show $tool Panel',
+              onSelected: () => _editorKey.currentState?.selectTool(tool),
+            ),
+          if (widget.projectFilePicker.supportsExport)
+            CommandPaletteAction(
+              label: 'Export Video',
+              onSelected: () => unawaited(_startExport()),
+            ),
+        ],
       ],
     ],
   );

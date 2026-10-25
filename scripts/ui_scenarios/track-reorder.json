@@ -58,13 +58,25 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-add-audio-track"
+        "key": "timeline-create-menu"
       }
     },
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-add-audio-track"
+        "text": "Add audio track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add audio track"
       }
     },
     {
@@ -92,7 +104,7 @@
     {
       "op": "tap",
       "selector": {
-        "label_regex": "^A2 \u00b7 audio$"
+        "label_regex": "^A2 · audio$"
       }
     },
     {
