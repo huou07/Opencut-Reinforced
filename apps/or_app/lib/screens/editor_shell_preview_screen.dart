@@ -343,6 +343,10 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String? _selectedClipId;
   ProjectTimelineTrackKind? _selectedTrackKind;
   bool _snapEnabled = true;
+
+  /// Snapping is a mode, so it needs a verb the palette and menus can call,
+  /// not only the chip in the timeline row.
+  void toggleSnapping() => setState(() => _snapEnabled = !_snapEnabled);
   bool _mobileSheetRefreshScheduled = false;
   late final ValueNotifier<ProjectPreviewState?> _previewState;
   final ValueNotifier<int> _mobileSheetRevision = ValueNotifier(0);

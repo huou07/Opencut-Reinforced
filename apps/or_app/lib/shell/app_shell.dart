@@ -943,6 +943,10 @@ class _AppShellState extends State<AppShell> {
                 _editorKey.currentState?.confirmDeleteSelectedClip(),
           ),
           CommandPaletteAction(
+            label: 'Toggle Snapping',
+            onSelected: () => _editorKey.currentState?.toggleSnapping(),
+          ),
+          CommandPaletteAction(
             label: 'Add Marker at Playhead',
             onSelected: () => _editorKey.currentState?.addMarkerAtPlayhead(),
           ),
