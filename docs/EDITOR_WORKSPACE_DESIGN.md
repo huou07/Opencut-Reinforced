@@ -592,3 +592,20 @@ viewer transport instead of two copies drifting apart.
    the only claim. Do not pretend the test lane can measure release.
 4. **VideoToolbox preview decode** — only after 3 gives a release baseline, so
    the change can be judged against a number that matters.
+
+### 21.1 Re-verified journey set (local, 2026-10-25)
+
+After the frame-rate row and the snapping verbs, the whole semantic journey set
+was re-run against the local debug app; every scenario passed:
+
+| Scenario | Proves |
+| --- | --- |
+| `workspace-layout.json` | one bar per zone at 1440x900, 1280x800, 1024x768 |
+| `workspace-chrome.json` | project create, tabs, control row, contextual inspector |
+| `viewer-transform.json` | stage move/scale/rotate, three nudges, one command per gesture |
+| `blade-cut.json` | blade mode cut at the pointer, speed badge |
+| `clipboard.json` | copy then paste at the playhead |
+| `illustration-video.json` | MotionScene render, insert, "Render again" |
+
+Widget suite: 154 tests. These are local debug-app results, not packaged-build
+claims; the release pacing and packaged-export checks stay in the gap list.
