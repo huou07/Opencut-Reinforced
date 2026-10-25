@@ -26,6 +26,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -537,6 +538,9 @@ class _Runner {
       case 'measure':
         result.measurement = await _measure(step);
         return;
+      case 'frames':
+        result.measurement = await _measureFrames(step);
+        return;
       default:
         throw _StepFailure('bad_scenario', 'unknown op "$op"');
     }
@@ -643,6 +647,80 @@ class _Runner {
   /// A measured interaction: run the sub-steps [repeat] times and report the
   /// distribution. Wall-clock on this host only; software-rendered Linux and a
   /// SwiftShader guest never become device performance claims.
+  /// Frame pacing while the preview plays: every presented frame's build and
+  /// raster cost, and the interval between presentations.
+  ///
+  /// This reads the engine's own timings rather than a widget's clock, so a
+  /// stutter shows up as a long interval instead of being averaged away.
+  Future<Map<String, Object?>> _measureFrames(
+    Map<String, Object?> step,
+  ) async {
+    final durationMs = (step['duration_ms'] as num?)?.toInt() ?? 3000;
+    final submitted = <FrameTiming>[];
+    void collect(List<FrameTiming> timings) => submitted.addAll(timings);
+    SchedulerBinding.instance.addTimingsCallback(collect);
+    try {
+      // The harness drives frames itself: nothing pumps unless the test does,
+      // so a bare delay would record the one frame this loop started on.
+      final deadline = DateTime.now().add(Duration(milliseconds: durationMs));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 6)),
+        );
+      }
+    } finally {
+      SchedulerBinding.instance.removeTimingsCallback(collect);
+    }
+
+    final frames = submitted.where((t) => t.totalSpan.inMicroseconds > 0).toList();
+    if (frames.isEmpty) {
+      return {
+        'name': '${step['name'] ?? 'frames'}',
+        'frames': 0,
+        'limits': 'no frame timings were reported for this window',
+      };
+    }
+    final builds = frames.map((t) => t.buildDuration.inMicroseconds / 1000.0).toList()..sort();
+    final rasters = frames.map((t) => t.rasterDuration.inMicroseconds / 1000.0).toList()..sort();
+    final spans = frames.map((t) => t.totalSpan.inMicroseconds / 1000.0).toList()..sort();
+    final intervals = <double>[];
+    for (var index = 1; index < frames.length; index += 1) {
+      final gap =
+          frames[index].timestampInMicroseconds(ui.FramePhase.vsyncStart) -
+          frames[index - 1].timestampInMicroseconds(ui.FramePhase.vsyncStart);
+      if (gap > 0) intervals.add(gap / 1000.0);
+    }
+    intervals.sort();
+    double percentile(List<double> sorted, double fraction) =>
+        sorted[((sorted.length - 1) * fraction).round()];
+    final firstStamp = frames.first.timestampInMicroseconds(ui.FramePhase.vsyncStart);
+    final lastStamp = frames.last.timestampInMicroseconds(ui.FramePhase.vsyncStart);
+    final elapsedSeconds = lastStamp > firstStamp
+        ? (lastStamp - firstStamp) / 1000000.0
+        : 0.0;
+    return {
+      'name': '${step['name'] ?? 'frames'}',
+      'frames': frames.length,
+      'fps': elapsedSeconds > 0
+          ? double.parse(((frames.length - 1) / elapsedSeconds).toStringAsFixed(2))
+          : 0,
+      'build_p50_ms': double.parse(percentile(builds, 0.50).toStringAsFixed(2)),
+      'build_p95_ms': double.parse(percentile(builds, 0.95).toStringAsFixed(2)),
+      'raster_p95_ms': double.parse(percentile(rasters, 0.95).toStringAsFixed(2)),
+      'span_p95_ms': double.parse(percentile(spans, 0.95).toStringAsFixed(2)),
+      'gap_p95_ms': intervals.isEmpty
+          ? 0
+          : double.parse(percentile(intervals, 0.95).toStringAsFixed(2)),
+      'gap_max_ms': intervals.isEmpty
+          ? 0
+          : double.parse(intervals.last.toStringAsFixed(2)),
+      'limits':
+          'engine FrameTiming on ${Platform.operatingSystem} in ${const bool.fromEnvironment('dart.vm.product') ? 'release' : 'a non-release build'}; '
+          'timings describe this run only',
+    };
+  }
+
   Future<Map<String, Object?>> _measure(Map<String, Object?> step) async {
     final repeat = (step['repeat'] as num?)?.toInt() ?? 10;
     final samples = <double>[];

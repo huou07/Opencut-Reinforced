@@ -490,3 +490,60 @@ Evidence: `flutter --no-version-check test --no-pub` → `+153`;
 `scripts/or_ui.py --report-dir /tmp/or-clip4 run scripts/ui_scenarios/clipboard.json`
 → PASS, with the timeline reading `starts 0/1, duration 1/2` and
 `starts 1/2, duration 1/2` after ⌘C then ⌘V on a real imported video.
+
+## 18. P8 delivery record — frame pacing and hardware (local, 2026-10-25)
+
+### What was measured
+
+`frames` op (integration_test lane) samples the engine's own `FrameTiming`s
+while the preview plays, so a stutter shows up as a long presentation interval
+instead of being averaged into a mean.
+
+Command:
+
+```sh
+python3 scripts/or_ui.py --report-dir /tmp/or-pace \
+  run scripts/ui_scenarios/playback-pacing.json
+```
+
+Result on this MacBook Air M5 (Mac17,3, 10 cores, 16 GB), 1440x900 window,
+1280x720 30 fps H.264/AAC clip, 5 s window:
+
+| Metric | Value |
+| --- | --- |
+| presented frames | 151 |
+| achieved rate | 29.9 fps of a 30 fps sequence |
+| build p50 / p95 | 0.65 ms / 0.76 ms |
+| presentation gap p95 / max | 33.33 ms / 50.0 ms |
+| raster p95 | 0.0 ms |
+
+Reading: the sequence presents at its own rate. The p95 gap equals exactly one
+30 fps frame period, so the typical frame is on cadence; the single 50 ms gap is
+one dropped frame in five seconds. UI-thread work is two orders of magnitude
+below the 33.3 ms budget, and `raster_p95_ms == 0` because the preview frame is
+an external texture that the platform layer composites rather than something
+Skia paints.
+
+### What this does and does not establish
+
+- PROVEN: playback of a 720p30 clip in this build presents at 29.9 fps with
+  sub-millisecond UI work, measured from engine timings.
+- NOT PROVEN: a release-mode claim. `flutter test` has no `--profile`
+  (`Could not find an option named "--profile"`), so the semantic harness can
+  only measure a non-release build. A release pacing number needs a packaged
+  build driven by something other than the test binding, which the harness does
+  not provide today. Treat the numbers above as a debug-build baseline.
+- Export throughput is separate and already observed: a 6.016 s 1280x720
+  H.264/AAC export completed inside a 486 ms wait window, and the MP4 profile
+  selects `h264_videotoolbox`, so the Apple hardware encoder is exercised.
+
+### Hardware path reality
+
+- Encode: `crates/or_media/src/encoder.rs:164` resolves `h264_videotoolbox` —
+  hardware.
+- Preview decode: `crates/or_media/src/decoder.rs` shows no VideoToolbox or
+  hwaccel request, so decode runs through the linked FFmpeg software path.
+  Presenting at 29.9 fps means that path is not the current bottleneck, but
+  hardware decode is the next real hardware win, not a present defect. It is
+  deliberately not attempted here: a hwaccel change alters the frame-transfer
+  contract with `or_viewer_texture` and needs its own measurement round.
