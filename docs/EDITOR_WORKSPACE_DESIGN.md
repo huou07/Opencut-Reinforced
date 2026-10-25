@@ -656,3 +656,36 @@ model cannot express yet without a new content kind, so it stays out of this cha
 
 Reverse is also reachable from the clip context menu ("Play backwards" /
 "Play forwards"), so an owner who never opens the inspector can still flip a clip.
+
+## 21.4 Packaged release journey, driven 2026-10-25
+
+Root cause of the "black release window" that blocked this journey: the native
+assets hook keeps its own cargo target directory under
+`.dart_tool/hooks_runner/shared/or_app_bridge/build/<hash>/target/`, so a release
+build could link a bridge compiled before the last `flutter_rust_bridge_codegen`
+run. `RustLib.init()` then threw `Bad state: Content hash on Dart side (-1104663897)
+is different from Rust side (1279668420)` before `runApp`, and the window stayed
+black while the process lived. Clearing the hook cache and `flutter_build` fixed it;
+`main.dart` now paints an `OrStartupFailure` screen (keys `startup-failure-title`,
+`startup-failure-message`) with the reason instead of nothing.
+
+Verified in the packaged release bundle (window-only captures, per the privacy rule
+in `docs/TOOLING.md`):
+
+| Check | Result |
+| --- | --- |
+| Home renders | Sidebar (Workspace: Home/Projects/Templates/Asset Library; Application: Settings), Quick actions, Recent Projects list |
+| Editor workspace renders | One top bar with project name + unsaved dot + rename/save/undo/redo/close icons + Export + ⌘K search; Media/Text/Audio/Motion tabs; inspector SEQUENCE (Frame rate 30 fps, Duration, Timeline 0 tracks · 0 clips) and PROJECT (Name, Save state); one timeline row (blade, zoom, Fit, Snap, +) |
+| ⌘N → New Project dialog | Name field focused, frame-rate choice, Cancel/Continue |
+| Choosing a folder | Native folder chooser, suggested name `Packaged journey j18.orproj` |
+| Project written | `/tmp/or-j18/Packaged journey j18.orproj`, 309 bytes, `format: opencut-reinforced-project`, `schema_version: 8`, the entered name |
+
+Limits observed while driving it:
+
+- Synthetic clicks (`System Events … click at {x,y}`) do not reach the Flutter view
+  in this environment; keystrokes do once the window is key. Import media and export
+  therefore still need the debug-lane harness, not this driver.
+- Because single-letter shortcuts are live when no text field has focus, a stray
+  keystroke typed while a native panel was expected opened the Add Marker dialog.
+  That is the designed shortcut, not a bug, but a packaged driver must type only
+  when a field or panel is known to be focused.
