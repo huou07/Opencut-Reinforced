@@ -12,6 +12,7 @@ import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../project/project_gateway.dart';
+import 'viewer_transform_overlay.dart';
 import '../widgets/or_widgets.dart';
 
 class EditorShellPreviewScreen extends StatefulWidget {
@@ -388,6 +389,107 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       _selectedClipId = clipId;
       _selectedTrackKind = kind;
     });
+    unawaited(_refreshSelectedVisualSettings());
+  }
+
+  /// Transform of the selected visual clip, kept in step with the selection so
+  /// the viewer can draw handles without asking the inspector.
+  ProjectTimelineVisualSettings? _selectedVisualSettings;
+  int _visualSettingsGeneration = 0;
+  /// Serializes viewer gestures and nudges; see [_queueSelectedTransform].
+  Future<void> _transformQueue = Future<void>.value();
+  int _transformCommitSeq = 0;
+
+  Future<void> _refreshSelectedVisualSettings() async {
+    final generation = ++_visualSettingsGeneration;
+    final project = widget.project;
+    final gateway = widget.projectGateway;
+    final session = widget.projectSession;
+    final trackId = _selectedTrackId;
+    final clipId = _selectedClipId;
+    final kind = _selectedTrackKind;
+    final isVisual =
+        kind == ProjectTimelineTrackKind.video ||
+        kind == ProjectTimelineTrackKind.text ||
+        kind == ProjectTimelineTrackKind.caption;
+    if (!widget.isProjectWorkspace ||
+        !isVisual ||
+        project == null ||
+        gateway == null ||
+        session == null ||
+        trackId == null ||
+        clipId == null) {
+      if (_selectedVisualSettings != null) {
+        setState(() => _selectedVisualSettings = null);
+      }
+      return;
+    }
+    try {
+      final settings = await gateway.getTimelineClipVisualSettings(
+        session,
+        project,
+        trackId: trackId,
+        clipId: clipId,
+      );
+      if (!mounted || generation != _visualSettingsGeneration) return;
+      setState(() => _selectedVisualSettings = settings);
+    } on ProjectGatewayException {
+      // A read that raced a revision bump is not a deselection: dropping the
+      // settings here put the handles away mid-nudge and made the next nudge a
+      // no-op. The next successful read corrects the value.
+      if (!mounted || generation != _visualSettingsGeneration) return;
+    } catch (_) {
+      if (!mounted || generation != _visualSettingsGeneration) return;
+    }
+  }
+
+  /// Moves the selected clip by one step without a pointer. The step is in
+  /// milli-canvas units, so it is the same field the viewer handles write.
+  Future<void> nudgeSelectedTransform(double dx, double dy) async {
+    final current = _selectedVisualSettings;
+    if (current == null) return;
+    final next = withTransform(
+      current,
+      xMilliCanvas: current.xMilliCanvas + dx,
+      yMilliCanvas: current.yMilliCanvas + dy,
+    );
+    setState(() => _selectedVisualSettings = next);
+    await _commitSelectedTransform(next);
+  }
+
+  /// One committed command per viewer gesture.
+  Future<void> _commitSelectedTransform(
+    ProjectTimelineVisualSettings next,
+  ) => _queueSelectedTransform(next);
+
+  /// Repeating a nudge faster than a command round-trips used to send a second
+  /// command built on the revision the first one had already replaced, so the
+  /// host rejected it and three presses moved the clip once. Commands are
+  /// serialized here: each waits for the previous one before it is built, and
+  /// only the last one refreshes the panel, so the visible position is always
+  /// the position the host holds.
+  Future<void> _queueSelectedTransform(ProjectTimelineVisualSettings next) {
+    final chained = _transformQueue.then((_) => _sendSelectedTransform(next));
+    _transformQueue = chained.then((_) {}, onError: (_) {});
+    return chained;
+  }
+
+  Future<void> _sendSelectedTransform(ProjectTimelineVisualSettings next) async {
+    final project = widget.project;
+    final trackId = _selectedTrackId;
+    final clipId = _selectedClipId;
+    final update = widget.onUpdateTimelineClipVisualSettings;
+    if (project == null || trackId == null || clipId == null || update == null) {
+      return;
+    }
+    final seq = ++_transformCommitSeq;
+    final result = await update(project, trackId, clipId, next);
+    if (!mounted || seq != _transformCommitSeq) return;
+    // The commit is the newest truth we hold: paint it immediately so the
+    // handles stay where the hand left them, then let a re-read correct any
+    // value the host normalized.
+    setState(() => _selectedVisualSettings = next);
+    if (result != null) await _refreshSelectedVisualSettings();
   }
 
   ProjectTimelineTrack? get _selectedInspectorTrack {
@@ -554,6 +656,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   previewSeekPosition: widget.previewSeekPosition,
                   onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
                   onStateChanged: _onPreviewStateChanged,
+                  selectedVisualSettings: _selectedVisualSettings,
+                  onCommitTransform: _commitSelectedTransform,
                   hasTimelineContent: widget.timelineClipPages.values.any(
                     (page) => page.totalCount > 0,
                   ),
@@ -1928,6 +2032,8 @@ class _ViewerPanel extends StatefulWidget {
     required this.onPreviewSeekConsumed,
     required this.onStateChanged,
     this.hasTimelineContent = false,
+    this.selectedVisualSettings,
+    this.onCommitTransform,
   });
 
   final bool compact;
@@ -1938,6 +2044,11 @@ class _ViewerPanel extends StatefulWidget {
   /// Whether any clip exists. An empty viewer placeholder says what to do
   /// instead of naming an internal state.
   final bool hasTimelineContent;
+
+  /// The selected clip's transform, or null when the selection is not a clip
+  /// the viewer can manipulate. A non-null value puts handles on the stage.
+  final ProjectTimelineVisualSettings? selectedVisualSettings;
+  final ValueChanged<ProjectTimelineVisualSettings>? onCommitTransform;
   final ProjectRationalTime? previewSeekPosition;
   final VoidCallback? onPreviewSeekConsumed;
   final ValueChanged<ProjectPreviewState> onStateChanged;
@@ -2397,6 +2508,18 @@ class _ViewerPanelState extends State<_ViewerPanel>
                       message: hasSession
                           ? 'Viewer texture unavailable'
                           : 'Open a project to preview',
+                    ),
+                  if (widget.selectedVisualSettings != null &&
+                      widget.onCommitTransform != null)
+                    ViewerTransformOverlay(
+                      key: const ValueKey('viewer-transform-overlay'),
+                      canvasSize: Size(
+                        (preview?.width ?? 0).toDouble(),
+                        (preview?.height ?? 0).toDouble(),
+                      ),
+                      settings: widget.selectedVisualSettings!,
+                      onCommit: widget.onCommitTransform!,
+                      enabled: !_busy,
                     ),
                   if (_busy)
                     const Center(

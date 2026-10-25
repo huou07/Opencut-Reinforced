@@ -47,6 +47,17 @@ hierarchy, colour, or a rendering artefact).
 `python3 scripts/or_tree_outline.py <tree-*.json>` prints one line per node with
 the global rect and its actions, which is the fast way to read a screen.
 
+A scenario step is one JSON object. `drag` is the pointer verb a direct-
+manipulation surface needs: it takes a selector plus `dx`/`dy` logical pixels
+from the widget centre and an optional `steps` sample count. The samples are
+sent without an intervening frame on purpose — a frame between moves lets a host
+rebuild swap a gesture recognizer mid-drag, which is a harness artefact rather
+than something the app does to a real pointer. `resize` sets the surface size
+(`width`, `height`) so breakpoint behaviour can be reviewed without a window
+manager. `fixtures` also accept `copy:<path>`, which imports a real file from
+the host through the real picker path; `scripts/ui_scenarios/viewer-transform.json`
+uses it to import a real video.
+
 ```sh
 python3 scripts/or_ui.py screens                       # inventory the app's screens (macos by default here)
 python3 scripts/or_ui.py tree --name editor           # semantics tree as JSON plus the dump

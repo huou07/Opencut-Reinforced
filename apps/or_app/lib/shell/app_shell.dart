@@ -237,6 +237,16 @@ class _AppShellState extends State<AppShell> {
                 SelectToolIntent('Audio'),
             SingleActivator(LogicalKeyboardKey.digit4):
                 SelectToolIntent('Motion'),
+            // Alt + arrows nudge the selected clip inside the frame. Plain
+            // arrows stay on the playhead, which is the more frequent verb.
+            SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
+                NudgeSelectedClipIntent(-10, 0),
+            SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
+                NudgeSelectedClipIntent(10, 0),
+            SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
+                NudgeSelectedClipIntent(0, 10),
+            SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+                NudgeSelectedClipIntent(0, -10),
           },
           child: Actions(
             actions: {
@@ -335,6 +345,17 @@ class _AppShellState extends State<AppShell> {
                       return null;
                     },
                   ),
+              NudgeSelectedClipIntent: CallbackAction<NudgeSelectedClipIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.nudgeSelectedTransform(
+                      intent.dxMilliCanvas,
+                      intent.dyMilliCanvas,
+                    );
+                  }
+                  return null;
+                },
+              ),
               SplitClipIntent: CallbackAction<SplitClipIntent>(
                 onInvoke: (_) {
                   if (editor && !_textInputFocused) {

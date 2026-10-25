@@ -127,3 +127,13 @@ class SelectToolIntent extends Intent {
 
   final String tool;
 }
+
+/// Moves the selected clip inside the frame by a fixed step. The pointer
+/// produces the same value through the viewer handles, so a keyboard user and
+/// a pointer user change the same field.
+class NudgeSelectedClipIntent extends Intent {
+  const NudgeSelectedClipIntent(this.dxMilliCanvas, this.dyMilliCanvas);
+
+  final double dxMilliCanvas;
+  final double dyMilliCanvas;
+}

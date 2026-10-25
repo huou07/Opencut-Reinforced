@@ -3912,7 +3912,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('inspector-visual-x')), findsOneWidget);
-    expect(gateway.getVisualSettingsCalls, 1);
+    // Two readers of the same clip settings: the inspector fields and the
+    // viewer's transform handles. Both are real consumers, so the count is two
+    // reads rather than one.
+    expect(gateway.getVisualSettingsCalls, 2);
     await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

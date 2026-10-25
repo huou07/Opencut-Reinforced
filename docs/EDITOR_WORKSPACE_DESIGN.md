@@ -202,7 +202,7 @@ local commit. A phase is not done because it compiles.
 |---|---|---|
 | P0 | framework: dsh plugin skills, macOS semantic harness | commit 2bf6c28, c8beb13 |
 | P1 | workspace IA: top bar, tabbed left panel, contextual inspector, single timeline toolbar, palette in editor | **DONE locally** — `scripts/ui_scenarios/workspace-chrome.json` and `workspace-layout.json` pass at 1440x900, 1280x800 and 1024x768; `flutter test` 140 passing; screenshots in `/tmp/or-chrome4` and `/tmp/or-layout3` |
-| P2 | viewer direct manipulation: move, scale, rotate, crop, snapping | drag produces exactly one command per gesture; numbers match the inspector; keyboard nudge equivalent |
+| P2 | viewer direct manipulation: move, scale, rotate, crop, snapping | **DONE locally (move, scale, rotate, nudge)** — `scripts/ui_scenarios/viewer-transform.json` passes; drags commit once and the inspector agrees (X 12.2 %, Width 124.4 %, Rotation 4.62°); crop stays an inspector field |
 | P3 | timeline power: blade tool, badges, multi-select, copy/paste, track state UI, markers, library search | scenario drives blade + multi-select + paste; badges reflect model state |
 | P4 | effects and transitions panels with apply/remove | apply then export changes pixels; badges update; undo restores |
 | P5 | speed extras: reverse, freeze frame | exported clip duration and direction verified with ffprobe |
@@ -246,3 +246,53 @@ Shipped in one increment on `codex/local-macos-dev`:
 Evidence class: `UNIT_VERIFIED` for the widget suite, `INTEGRATION_VERIFIED`
 local for the two harness scenarios. Not a packaged-build claim: the harness runs
 a debug build through the Flutter test binding.
+
+## 10. P2 delivery record (local, 2026-10-25)
+
+Direct manipulation on the stage, and the three defects it exposed in the
+surrounding code.
+
+Shipped:
+
+- `apps/or_app/lib/screens/viewer_transform_overlay.dart` — a selection box that
+  follows the clip transform with a move surface, four corner scale handles and
+  a rotate handle. A gesture paints a draft locally and calls `onCommit` exactly
+  once, on release, so one drag is one command and one undo step. Snapping pulls
+  the box to the frame centre within eight pixels; Shift bypasses the snap for
+  move and quantises rotation to 15° steps. Handles are inset and clamped into
+  the stage, because a clip larger than the frame otherwise put its corners
+  outside the clip region where they cannot be grabbed.
+- The stage draws the overlay only for a visual clip (video, text, caption) with
+  a committed selection, and the inspector keeps editing the same fields.
+- `Alt` + arrows nudge the selected clip by one percent of the canvas. Plain
+  arrows stay on the playhead and comma/period stay on frame stepping, so no
+  existing verb was taken.
+
+Three defects the work exposed, all fixed:
+
+1. **Rapid commands raced the revision.** Three nudges in a row sent three
+   commands built on revisions the host had already replaced, so two were
+   rejected and the clip moved once. Viewer commits and nudges now share one
+   queue: each command waits for the previous one, and only the last refresh
+   wins.
+2. **A failed settings read looked like a deselection.** Dropping the settings
+   when the read raced a revision bump put the handles away mid-gesture and made
+   the next nudge a no-op. A failed read now keeps the last known value.
+3. **A rebuild during a drag killed the gesture.** The overlay removed its
+   gesture detectors while `enabled` was false, and the viewer toggles that flag
+   during background work. The detectors now stay mounted and only the callbacks
+   are gated, so a drag survives a transient busy state.
+
+Evidence (local only, no packaged build):
+
+- `flutter test` — 146 passing (140 + 6 in
+  `apps/or_app/test/viewer_transform_overlay_test.dart`: box geometry including
+  the inverted y axis, field-preserving copy, one commit per drag, centre snap).
+- `python3 scripts/or_ui.py --report-dir /tmp/or-p2-t5 run
+  scripts/ui_scenarios/viewer-transform.json` — PASS on a real video import:
+  move drag → X 12.2 %, corner drag → Width 124.4 %, rotate drag → Rotation
+  4.622°, three `Alt+Right` presses → X 15.2 %. Artifacts
+  `shot-dragged-21.png`, `shot-scaled-23.png`, `shot-rotated-26.png`,
+  `tree-*.json`.
+- `workspace-chrome.json` and `workspace-layout.json` still PASS, so the P1
+  chrome survived P2.

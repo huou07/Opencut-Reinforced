@@ -1,0 +1,189 @@
+{
+  "name": "viewer-transform",
+  "harness": "or_ui",
+  "description": "Selects a real video clip and drives the viewer transform box with a pointer: handles appear only for a selection, the drag moves the composited frame, and one gesture commits one command instead of one per pointer sample.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Transform review"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "V1",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "tiny_h264_aac.mp4",
+      "budget_ms": 30000
+    },
+    {
+      "op": "shot",
+      "name": "imported"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "wait",
+      "text": "V1",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "inserted"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "TRANSFORM",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "selected"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "viewer-transform-overlay"
+      },
+      "dx": 60,
+      "dy": 0,
+      "steps": 8
+    },
+    {
+      "op": "tree",
+      "name": "dragged"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "viewer-transform-handle-br"
+      },
+      "dx": 60,
+      "dy": 40,
+      "steps": 8
+    },
+    {
+      "op": "tree",
+      "name": "scaled"
+    },
+    {
+      "op": "shot",
+      "name": "scaled"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "viewer-transform-handle-rotate"
+      },
+      "dx": 70,
+      "dy": 40,
+      "steps": 8
+    },
+    {
+      "op": "tree",
+      "name": "rotated"
+    },
+    {
+      "op": "shot",
+      "name": "rotated"
+    },
+    {
+      "op": "shot",
+      "name": "dragged"
+    },
+    {
+      "op": "shot",
+      "name": "selected"
+    },
+    {
+      "op": "key",
+      "chord": "alt+arrowright"
+    },
+    {
+      "op": "key",
+      "chord": "alt+arrowright"
+    },
+    {
+      "op": "key",
+      "chord": "alt+arrowright"
+    },
+    {
+      "op": "tree",
+      "name": "nudged"
+    },
+    {
+      "op": "shot",
+      "name": "nudged"
+    }
+  ]
+}

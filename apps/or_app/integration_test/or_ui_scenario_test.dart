@@ -434,6 +434,26 @@ class _Runner {
         });
         if (step['settle'] != false) await _settle();
         return;
+      case 'drag':
+        // A pointer drag over a widget: `dx`/`dy` are logical pixels from the
+        // widget centre, and `steps` splits the move into samples so a widget
+        // that follows the pointer is exercised the way a hand moves it.
+        final dx = _num(step['dx']);
+        final dy = _num(step['dy']);
+        final steps = (step['steps'] as num?)?.toInt() ?? 8;
+        await _act(step, (finder) async {
+          final centre = tester.getCenter(finder);
+          final gesture = await tester.startGesture(centre);
+          // Samples without an intervening frame: a pump between moves lets a
+          // host rebuild replace the recognizer mid-gesture, which is a harness
+          // artifact rather than something the app does to a real pointer.
+          for (var i = 0; i < steps; i++) {
+            await gesture.moveBy(Offset(dx / steps, dy / steps));
+          }
+          await gesture.up();
+        });
+        if (step['settle'] != false) await _settle();
+        return;
       case 'enter_text':
         final finder = _requireFinder(step);
         await _scrollIntoView(finder);
@@ -574,6 +594,12 @@ class _Runner {
     for (final modifier in modifiers.reversed) {
       await tester.sendKeyUpEvent(modifier);
     }
+  }
+
+  /// Step numbers arrive as JSON numbers and must stay finite.
+  double _num(Object? value, {double fallback = 0}) {
+    if (value is num && value.isFinite) return value.toDouble();
+    return double.tryParse('${value ?? ''}') ?? fallback;
   }
 
   LogicalKeyboardKey _logicalKey(String name) {
