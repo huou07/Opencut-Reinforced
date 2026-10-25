@@ -4843,6 +4843,8 @@ class _ToolbarScrollState extends State<_ToolbarScroll> {
   );
 }
 
+
+
 class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     super.key,
@@ -5096,6 +5098,12 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   final ScrollController _horizontalController = ScrollController();
   _TimelinePointerGesture? _gesture;
   _TimelineSnapGuide? _snapGuide;
+
+  /// A rubber-band selection in progress: which track it started on and the
+  /// lane-local rectangle it currently covers.
+  String? _marqueeTrackId;
+  Offset? _marqueeAnchor;
+  Offset? _marqueeCurrent;
   String? _selectedClipId;
 
   /// The full selection. `_selectedClipId` stays the primary clip (the one the
@@ -5489,6 +5497,22 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         selectedClipId: _selectedClipId,
                                         selectedClipIds: _selectedClipIds,
                                         bladeMode: widget.bladeMode,
+                                        marqueeRect:
+                                            _marqueeTrackId == track.trackId &&
+                                                _marqueeAnchor != null &&
+                                                _marqueeCurrent != null
+                                            ? Rect.fromPoints(
+                                                _marqueeAnchor!,
+                                                _marqueeCurrent!,
+                                              )
+                                            : null,
+                                        onMarqueeStart: (local) => _beginMarquee(
+                                          track.trackId,
+                                          local,
+                                        ),
+                                        onMarqueeUpdate: (local) =>
+                                            _updateMarquee(track.trackId, local),
+                                        onMarqueeEnd: () => _endMarquee(track),
                                         onBladeSplit:
                                             widget.project == null ||
                                                 widget.onSplitClip == null
@@ -6445,6 +6469,66 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           ..add(clip.clipId);
         _selectedClipId = clip.clipId;
       }
+    });
+    widget.onClipSelectionChanged?.call(
+      track.trackId,
+      _selectedClipId,
+      _selectedClipId == null ? null : track.kind,
+    );
+  }
+
+  void _beginMarquee(String trackId, Offset local) {
+    if (trackId != _marqueeTrackId) {
+      setState(() {
+        _marqueeTrackId = trackId;
+        _marqueeAnchor = local;
+        _marqueeCurrent = local;
+      });
+      return;
+    }
+    setState(() {
+      _marqueeAnchor = local;
+      _marqueeCurrent = local;
+    });
+  }
+
+  void _updateMarquee(String trackId, Offset local) {
+    if (_marqueeTrackId != trackId) return;
+    setState(() => _marqueeCurrent = local);
+  }
+
+  /// Selects every clip on the track whose span the band touched. A band that
+  /// never moved is a click on empty space, which clears the selection.
+  void _endMarquee(ProjectTimelineTrack track) {
+    final local = _marqueeCurrent ?? _marqueeAnchor ?? Offset.zero;
+    final anchor = _marqueeAnchor;
+    final marqueeTrackId = _marqueeTrackId;
+    setState(() {
+      _marqueeTrackId = null;
+      _marqueeAnchor = null;
+      _marqueeCurrent = null;
+    });
+    if (anchor == null || marqueeTrackId != track.trackId) return;
+    final left = math.min(anchor.dx, local.dx);
+    final right = math.max(anchor.dx, local.dx);
+    if (right - left < 4) {
+      _clearSelection();
+      return;
+    }
+    final startSeconds = left / _pixelsPerSecond;
+    final endSeconds = right / _pixelsPerSecond;
+    final clips = widget.clipPages[track.trackId]?.items ?? const [];
+    final hit = [
+      for (final clip in clips)
+        if (clip.timelineEnd.secondsForDisplay > startSeconds &&
+            clip.timelineStart.secondsForDisplay < endSeconds)
+          clip.clipId,
+    ];
+    setState(() {
+      _selectedClipIds
+        ..clear()
+        ..addAll(hit);
+      _selectedClipId = hit.isEmpty ? null : hit.last;
     });
     widget.onClipSelectionChanged?.call(
       track.trackId,
@@ -7593,6 +7677,10 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.selectedClipIds,
     required this.bladeMode,
     required this.onBladeSplit,
+    required this.marqueeRect,
+    required this.onMarqueeStart,
+    required this.onMarqueeUpdate,
+    required this.onMarqueeEnd,
     required this.onDropMedia,
     required this.onOpenClip,
     required this.onOpenClipMenu,
@@ -7626,6 +7714,12 @@ class _TimelineTrackLane extends StatelessWidget {
   final bool bladeMode;
   final void Function(ProjectTimelineClip clip, ProjectRationalTime time)?
   onBladeSplit;
+
+  /// The rubber band being drawn on this lane, in lane-local coordinates.
+  final Rect? marqueeRect;
+  final void Function(Offset local)? onMarqueeStart;
+  final void Function(Offset local)? onMarqueeUpdate;
+  final VoidCallback? onMarqueeEnd;
   final void Function(ProjectMediaItem, Offset)? onDropMedia;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
   final void Function(ProjectTimelineClip, Offset) onOpenClipMenu;
@@ -7683,6 +7777,46 @@ class _TimelineTrackLane extends StatelessWidget {
                 ),
               ),
             ),
+            if (onMarqueeStart != null)
+              Positioned.fill(
+                // A raw listener, not a gesture detector: the marquee must not
+                // join the gesture arena, or it would steal a drag that starts
+                // on a clip. It also stays out of the way when the pointer lands
+                // on a clip, which is what the pointer means.
+                child: Listener(
+                  key: ValueKey('timeline-marquee-${track.trackId}'),
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (event) {
+                    if (bladeMode || track.state.locked) return;
+                    final local = event.localPosition;
+                    final seconds = local.dx / pixelsPerSecond;
+                    final overClip = clips.any(
+                      (clip) =>
+                          seconds >= clip.timelineStart.secondsForDisplay &&
+                          seconds < clip.timelineEnd.secondsForDisplay,
+                    );
+                    if (overClip) return;
+                    onMarqueeStart!(local);
+                  },
+                  onPointerMove: (event) =>
+                      onMarqueeUpdate?.call(event.localPosition),
+                  onPointerUp: (_) => onMarqueeEnd?.call(),
+                  onPointerCancel: (_) => onMarqueeEnd?.call(),
+                ),
+              ),
+            if (marqueeRect != null)
+              Positioned.fromRect(
+                rect: marqueeRect!,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    key: const ValueKey('timeline-marquee-band'),
+                    decoration: BoxDecoration(
+                      color: OrColors.selection.withValues(alpha: 0.12),
+                      border: Border.all(color: OrColors.selection, width: 1),
+                    ),
+                  ),
+                ),
+              ),
             if (snapGuide?.trackId == track.trackId)
               Positioned(
                 key: ValueKey('timeline-snap-guide-${track.trackId}'),
@@ -7940,12 +8074,14 @@ class _TimelineTrackLane extends StatelessWidget {
                     _trimHandle(
                       context,
                       clip,
+                      clipWidth: clipWidth,
                       start: true,
                       label: 'Trim start of $title',
                     ),
                     _trimHandle(
                       context,
                       clip,
+                      clipWidth: clipWidth,
                       start: false,
                       label: 'Trim end of $title',
                     ),
@@ -7962,14 +8098,20 @@ class _TimelineTrackLane extends StatelessWidget {
   Widget _trimHandle(
     BuildContext context,
     ProjectTimelineClip clip, {
+    required double clipWidth,
     required bool start,
     required String label,
   }) {
     final onStart = start ? onTrimStart : onTrimEnd;
     final compact = OrBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
-    final hitWidth = compact
+    final comfortable = compact
         ? OrTouchTargets.comfortable
         : OrTouchTargets.minimum;
+    // A handle that covers the whole clip makes the clip impossible to move:
+    // two inflated targets meet in the middle. Capping each at a third of the
+    // clip keeps a draggable centre at every zoom level (a quarter-second clip
+    // at 100 % is 16 px wide, which the 24 px targets used to swallow whole).
+    final hitWidth = math.min(comfortable, clipWidth / 3);
     const visibleBar = 3.0;
     // A hit surface centred exactly on an outer edge is unreachable, because
     // hit testing treats a box's trailing edge as exclusive. Keeping the

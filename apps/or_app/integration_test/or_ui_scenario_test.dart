@@ -466,9 +466,16 @@ class _Runner {
         // that follows the pointer is exercised the way a hand moves it.
         final dx = _num(step['dx']);
         final dy = _num(step['dy']);
+        // Where inside the widget the pointer lands. A rubber band has to start
+        // where the clips are not, so the default centre is not always right.
+        final fromDx = _num(step['from_dx']);
+        final fromDy = _num(step['from_dy']);
         final steps = (step['steps'] as num?)?.toInt() ?? 8;
         await _act(step, (finder) async {
-          final centre = tester.getCenter(finder);
+          final origin = step['from'] == 'topLeft'
+              ? tester.getTopLeft(finder)
+              : tester.getCenter(finder);
+          final centre = origin + Offset(fromDx, fromDy);
           final gesture = await tester.startGesture(centre);
           // Samples without an intervening frame: a pump between moves lets a
           // host rebuild replace the recognizer mid-gesture, which is a harness

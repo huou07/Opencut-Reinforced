@@ -102,30 +102,29 @@
    "op": "tap",
    "selector": {
     "key_regex": "^timeline-clip-[0-9a-f-]+$"
-   }
-  },
-  {
-   "op": "wait_label",
-   "label_regex": "V1",
-   "budget_ms": 15000
+   },
+   "allow_multiple": true
   },
   {
    "op": "key",
    "chord": "v"
   },
   {
-   "op": "tap",
-   "selector": {
-    "key_regex": "^timeline-clip-[0-9a-f-]+$"
-   },
-   "allow_multiple": true
+   "op": "wait_label",
+   "label_regex": "2 clips",
+   "budget_ms": 15000
   },
   {
-   "op": "shift_tap",
+   "op": "drag",
    "selector": {
-    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    "key_regex": "^timeline-marquee-[0-9a-f-]+$"
    },
-   "index": 1
+   "from_dx": 60,
+   "from_dy": 24,
+   "dx": -80,
+   "dy": 0,
+   "steps": 12,
+   "from": "topLeft"
   },
   {
    "op": "wait_label",
@@ -134,14 +133,27 @@
   },
   {
    "op": "tree",
-   "name": "before-group-move"
+   "name": "after-marquee"
+  },
+  {
+   "op": "shot",
+   "name": "after-marquee"
+  },
+  {
+   "op": "pump",
+   "ms": 600
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "2 clips",
+   "budget_ms": 5000
   },
   {
    "op": "drag",
    "selector": {
     "key_regex": "^timeline-clip-[0-9a-f-]+$"
    },
-   "index": 1,
+   "allow_multiple": true,
    "dx": 64,
    "dy": 0
   },

@@ -2351,6 +2351,48 @@ void main() {
     },
   );
 
+  testWidgets('a narrow clip still moves instead of only trimming', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'narrow-track';
+    // A quarter second at 100 % zoom is 16 px wide: narrower than the trim
+    // hit targets, which used to cover the whole clip so every drag trimmed.
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = [
+        const ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'narrow-clip',
+            mediaId: 'narrow-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.one, 4),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/narrow.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Narrow clip');
+
+    final clip = find.byKey(const ValueKey('timeline-clip-narrow-clip'));
+    expect(clip, findsOneWidget);
+    await tester.drag(clip, const Offset(32, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      gateway.moveTimelineClipCalls,
+      1,
+      reason: 'the centre of a narrow clip must drag it, not start a trim',
+    );
+  });
+
   testWidgets('media drag inserts on a compatible timeline track', (
     tester,
   ) async {

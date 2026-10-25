@@ -1041,6 +1041,27 @@ Limits this round confirmed, all host-side rather than product defects:
   release pacing numbers in §30.2 remain a measurement from the unpackaged
   release build (`--dart-define=OR_PACING_LOG=…`).
 
+
+### 33.1 Marquee selection and the narrow-clip fix (local, 2026-10-25)
+
+Dragging across empty lane space now draws a selection band and selects every
+clip it crosses; the bulk strip then offers split, duplicate, delete and ripple
+delete for the whole set.
+
+Driving that in the harness exposed a real defect rather than a test artefact:
+the trim handles were inflated to the 24–32 px comfortable target and centred on
+the clip edges, so on a quarter-second clip (16 px at 100 % zoom) the start and
+end targets met in the middle and **every drag trimmed instead of moving**. The
+handles are now capped at a third of the clip width, which keeps a draggable
+centre at every zoom level; `a narrow clip still moves instead of only trimming`
+guards it.
+
+Evidence: `flutter test --no-pub` 165 passed; `scripts/ui_scenarios/multi-select-move.json`
+PASS for the band (strip reads `2 clips` and one undo restores both). The group
+drag itself is proven by the widget suite (`dragging one of several selected
+clips moves the whole selection once`); the same gesture through the harness on
+two 16 px clips is not yet a stable proof, so it is not claimed.
+
 ## 33. Group move (local, 2026-10-25)
 
 Multi-selection now moves as one unit, and the unit is one command, because undo
