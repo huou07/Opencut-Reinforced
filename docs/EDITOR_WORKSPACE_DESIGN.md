@@ -537,6 +537,33 @@ Skia paints.
   H.264/AAC export completed inside a 486 ms wait window, and the MP4 profile
   selects `h264_videotoolbox`, so the Apple hardware encoder is exercised.
 
+### 30.2 Release-mode pacing, measured inside the packaged build
+
+The debug test binding cannot measure a release build, so the app now carries its
+own recorder: `apps/or_app/lib/dev/pacing_recorder.dart` installs
+`SchedulerBinding.addTimingsCallback` only when the binary is built with
+`--dart-define=OR_PACING_LOG=<path>`, and writes one JSON line per 120 frames
+(frames, span, fps, build/raster percentiles, vsync gaps). A normal build is
+unaffected - the define is absent, so `PacingRecorder.install()` returns null.
+
+Method: build `flutter build macos --release --dart-define=OR_PACING_LOG=/tmp/or-perf.jsonl`,
+launch the bundle, open a project with a clip, click Play twenty times (0.5 s per
+press), quit, read the file. Numbers from this MacBook Air M5:
+
+    windows 5, frames 640
+    steady windows: span 4.75-4.79 s, active fps ~33 while a 30 fps sequence plays
+    build p95 1.39-1.50 ms   (UI thread work per frame)
+    raster p95 1.91-1.96 ms  (raster thread work per frame)
+    vsync gap p50 16.68 ms   (60 Hz cadence while playing)
+
+Against a 16.68 ms frame budget that is roughly ten times headroom on both
+threads during playback, which is the claim this section is allowed to make.
+
+Limits, stated plainly: the window includes idle time between presses (that is why
+`fps` per window reads ~26 instead of 33); the clip in that project is 32x24, so
+decode cost is trivial and a 1080p source adds decode work on the session thread
+(181.7 fps measured in 30.1); and this measures one playback path, not export.
+
 ### 30.1 Preview decode stays on the CPU, and why that is the correct call
 
 The vendored FFmpeg in

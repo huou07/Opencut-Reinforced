@@ -554,6 +554,22 @@ raw-PCM muxer, and it has `afftdn` but not `astats`/`ametadata`. Audio analysis 
 `or_core` therefore decodes to a temporary WAV and measures in Rust; anything that
 relies on a filter that prints statistics will fail on every build the app ships.
 
+## Recording release-mode frame pacing
+
+`flutter test` cannot run a release build, so pacing in a release bundle is
+measured by the app itself:
+
+    cd apps/or_app
+    flutter --no-version-check build macos --release --dart-define=OR_PACING_LOG=/tmp/or-perf.jsonl
+    open -n build/macos/Build/Products/Release/or_app.app
+    # open a project, play for a few seconds, quit
+    cat /tmp/or-perf.jsonl
+
+Each line covers 120 frames (frames, span, fps, build/raster p50/p95, vsync gaps).
+The define is absent in a normal build, so nothing is recorded and no callback is
+installed. Read `build_p95_ms` and `raster_p95_ms` against the 16.68 ms budget;
+`fps` per line includes idle time between interactions.
+
 ## Measuring decode throughput
 
 `crates/or_media/tests/decode_throughput.rs` holds one ignored test that decodes

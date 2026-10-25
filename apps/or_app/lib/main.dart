@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:or_app_bridge/or_app_bridge.dart' show ExternalLibrary, RustLib;
 
 import 'core_gateway.dart';
+import 'dev/pacing_recorder.dart';
 import 'design/or_theme.dart';
 import 'project/project_file_picker.dart';
 import 'project/project_gateway.dart';
@@ -26,6 +27,7 @@ Future<void> main() async {
     return;
   }
   runApp(const OrApp(gateway: RustCoreGateway()));
+  PacingRecorder.install();
 }
 
 /// Shown when the native bridge cannot load, instead of an empty window.
