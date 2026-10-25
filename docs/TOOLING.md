@@ -486,3 +486,21 @@ Driving the packaged bundle through System Events needs its window frontmost, an
 a full-screen `screencapture` then grabs whatever else the owner has open. Prefer
 `screencapture -l <window-id>` (or the window rect) so evidence never contains
 unrelated desktop content, and close the app when the run ends.
+
+## Harness limits: secondary click
+
+The scenario runner drives taps, keys, drags and text, but not a secondary
+(right) click. Clip dialogs that moved behind the clip context menu — advanced
+trim, slip, roll, move — are therefore covered by the widget suite
+(`widget_test.dart` asserts `timeline-trim-*`, `timeline-slip-*`, `timeline-roll-*`)
+rather than by a scenario. `ripple-trim.json`, `slip-roll-slide.json` and
+`track-reorder.json` still stop at the point where they used to tap an inline
+control; treat them as pending, not as failures of the feature.
+
+## Bundled FFmpeg is a media-interchange build
+
+`~/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-*/ffmpeg-install` ships six
+muxers (`image2`, `image2pipe`, `matroska`, `mov`, `wav`, `webm`) and no `null` or
+raw-PCM muxer, and it has `afftdn` but not `astats`/`ametadata`. Audio analysis in
+`or_core` therefore decodes to a temporary WAV and measures in Rust; anything that
+relies on a filter that prints statistics will fail on every build the app ships.

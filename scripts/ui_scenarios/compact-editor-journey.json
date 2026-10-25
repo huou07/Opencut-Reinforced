@@ -97,13 +97,7 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-create-menu"
-      }
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "text": "Add audio track"
+        "key": "timeline-empty-add-audio"
       }
     },
     {

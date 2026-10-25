@@ -105,13 +105,7 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-create-menu"
-      }
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "text": "Add audio track"
+        "key": "timeline-empty-add-audio"
       }
     },
     {
@@ -161,7 +155,7 @@
     {
       "op": "tap",
       "selector": {
-        "label": "Advanced clip actions…"
+        "label": "Advanced clip actions\u2026"
       }
     },
     {

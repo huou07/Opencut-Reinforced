@@ -104,7 +104,7 @@
     {
       "op": "tap",
       "selector": {
-        "label_regex": "^A2 · audio$"
+        "label_regex": "^A2 \u00b7 audio$"
       }
     },
     {
