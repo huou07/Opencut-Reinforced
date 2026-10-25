@@ -155,3 +155,13 @@ class CopyClipIntent extends Intent {
 class PasteClipIntent extends Intent {
   const PasteClipIntent();
 }
+
+/// Import one media file into the open project (⌘I).
+class ImportMediaIntent extends Intent {
+  const ImportMediaIntent();
+}
+
+/// Import every media file in a chosen folder (⌘⇧I).
+class ImportFolderIntent extends Intent {
+  const ImportFolderIntent();
+}

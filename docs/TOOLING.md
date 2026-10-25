@@ -581,3 +581,17 @@ or splitting a frozen clip behaves exactly like any other clip. The preview maps
 every offset of a frozen clip back to `source_start` (`mapped_source_time` in
 `crates/or_app_bridge/src/preview.rs`), which is what makes it a still without a
 separate render path.
+
+## Native panels cannot be driven by synthetic typing here
+
+Driving the packaged app through `System Events` reaches native AppKit panels, but
+keystrokes into them are unreliable on this host: a path typed as
+`/tmp/or-expr/artifacts/replacements/scenario.orproj` arrived as
+`pro/tmp/ö-ĕp/ắtifacts/…`, and Return then refused it. Window-relative
+`screencapture -x -R` still works, and window-level shortcuts (⌘N, ⌘O) work once the
+window is key, which is what the packaged journey evidence uses.
+
+Consequence: prove editing, export and MotionScene in the semantic harness
+(`scripts/or_ui.py`), and use packaged driving only for what it can actually reach —
+launch, Home/workspace rendering, project creation and opening a project through the
+documented menu path.

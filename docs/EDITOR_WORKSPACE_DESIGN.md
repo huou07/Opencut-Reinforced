@@ -713,3 +713,16 @@ footage and lets trim, split and ripple keep working without special cases.
   --lib` 32 passed (see docs/TOOLING.md for the loader path), `flutter test` 159
   passed, and `scripts/ui_scenarios/clip-freeze.json` PASS drives the real app:
   import a clip, select it, toggle the switch, and read the inspector back.
+
+## 23. Import from the keyboard (local, 2026-10-25)
+
+The library used to be mouse-only: importing meant clicking `Import Media` in the
+Media tab. `⌘I` (one file) and `⇧⌘I` (a folder) now do it from anywhere in the
+editor, and the same two verbs appear in the File menu and the command palette, so
+the action is discoverable instead of hidden in a panel.
+
+- Intents: `ImportMediaIntent`, `ImportFolderIntent` in
+  `apps/or_app/lib/shell/or_shortcuts.dart`, bound in the shell and guarded by
+  "editor open, no text field focused, picker supports import".
+- Evidence: widget test `command I imports media without the mouse` (asserts the
+  picker opened once and one import command was issued), `flutter test` 160 passed.

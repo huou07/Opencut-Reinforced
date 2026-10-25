@@ -129,6 +129,9 @@ class _PlatformMenus extends StatelessWidget {
     required this.onToggleSnapping,
     required this.onReverseClip,
     required this.onFreezeClip,
+  required this.canImport,
+  required this.onImportMedia,
+  required this.onImportFolder,
     required this.child,
   });
 
@@ -158,6 +161,9 @@ class _PlatformMenus extends StatelessWidget {
 
   /// Holds the selected clip's first frame, or releases it.
   final VoidCallback onFreezeClip;
+  final bool canImport;
+  final VoidCallback? onImportMedia;
+  final VoidCallback? onImportFolder;
   final Widget child;
 
   static const _command = SingleActivator(
@@ -233,6 +239,23 @@ class _PlatformMenus extends StatelessWidget {
                     meta: true,
                   ),
                   onSelected: canEditProject ? onSaveProject : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Import Media…',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyI,
+                    meta: true,
+                  ),
+                  onSelected: onImportMedia,
+                ),
+                PlatformMenuItem(
+                  label: 'Import Folder…',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyI,
+                    meta: true,
+                    shift: true,
+                  ),
+                  onSelected: onImportFolder,
                 ),
                 PlatformMenuItem(
                   label: 'Export Video…',
@@ -470,6 +493,9 @@ class _AppShellState extends State<AppShell> {
             SingleActivator(LogicalKeyboardKey.numpadSubtract):
                 ZoomTimelineIntent(0.8),
             SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyI): ImportMediaIntent(),
+            SingleActivator(LogicalKeyboardKey.keyI, shift: true):
+                ImportFolderIntent(),
             OrCommandActivator(LogicalKeyboardKey.keyD):
                 DuplicateTimelineClipIntent(),
             SingleActivator(LogicalKeyboardKey.delete):
@@ -561,6 +587,26 @@ class _AppShellState extends State<AppShell> {
                 onInvoke: (intent) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.seekBy(intent.seconds);
+                  }
+                  return null;
+                },
+              ),
+              ImportMediaIntent: CallbackAction<ImportMediaIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      widget.projectFilePicker.supportsMediaImport) {
+                    unawaited(_importMedia());
+                  }
+                  return null;
+                },
+              ),
+              ImportFolderIntent: CallbackAction<ImportFolderIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      widget.projectFilePicker.supportsMediaImport) {
+                    unawaited(_importMediaFolder());
                   }
                   return null;
                 },
@@ -698,6 +744,7 @@ class _AppShellState extends State<AppShell> {
                     !(_exportJob?.isActive ?? false) &&
                     !_exportPublishing,
                 canEditProject: editor && _activeSession != null,
+                canImport: editor && widget.projectFilePicker.supportsMediaImport,
                 onNewProject: _createProject,
                 onOpenProject: _openProject,
                 onSaveProject: _saveProject,
@@ -720,6 +767,12 @@ class _AppShellState extends State<AppShell> {
                     _editorKey.currentState?.rippleDeleteSelectedClip(),
                 onFreezeClip: () =>
                     _editorKey.currentState?.toggleSelectedClipFrozen(),
+                onImportMedia: editor && widget.projectFilePicker.supportsMediaImport
+                    ? () => unawaited(_importMedia())
+                    : null,
+                onImportFolder: editor && widget.projectFilePicker.supportsMediaImport
+                    ? () => unawaited(_importMediaFolder())
+                    : null,
                 onAddMarker: () =>
                     _editorKey.currentState?.addMarkerAtPlayhead(),
                 onToggleSnapping: () =>
@@ -1037,6 +1090,16 @@ class _AppShellState extends State<AppShell> {
             label: 'Add Marker at Playhead',
             onSelected: () => _editorKey.currentState?.addMarkerAtPlayhead(),
           ),
+          if (widget.projectFilePicker.supportsMediaImport) ...[
+            CommandPaletteAction(
+              label: 'Import Media…',
+              onSelected: () => unawaited(_importMedia()),
+            ),
+            CommandPaletteAction(
+              label: 'Import Media Folder…',
+              onSelected: () => unawaited(_importMediaFolder()),
+            ),
+          ],
           for (final tool in const ['Media', 'Text', 'Audio', 'Motion'])
             CommandPaletteAction(
               label: 'Show $tool Panel',

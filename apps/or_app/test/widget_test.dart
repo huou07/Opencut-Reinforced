@@ -2933,6 +2933,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('command I imports media without the mouse', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..mediaPath = '/tmp/keyboard-import.mov'
+      ..savePath = '/tmp/keyboard-import.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Keyboard import');
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyI);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyI);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the clip menu holds one frame without the inspector', (
     tester,
   ) async {
