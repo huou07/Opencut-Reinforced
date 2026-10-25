@@ -1,17 +1,20 @@
 {
-  "name": "illustration-video",
-  "harness": "or_ui",
-  "description": "The code-to-illustration surface, driven end to end on the running app: open the command palette, choose Illustration Video, refuse an empty source with a reason, then materialise a real repository fixture through the bridge and the software encoder and assert that the dialog reports the frames it wrote. This is the surface's own guard: the widget test proves the dialog's logic with an injected renderer, and this proves the palette action, the bridge call and the encoder work together on a real build.",
   "viewport": {
     "width": 1280,
     "height": 800
   },
-  "fixtures": [],
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/illustration-source.rs"
+  ],
+  "budget_ms": 900000,
   "steps": [
     {
-      "op": "expect",
-      "key": "home-new-project",
-      "role": "button"
+      "op": "shot",
+      "name": "home"
+    },
+    {
+      "op": "tree",
+      "name": "home"
     },
     {
       "op": "tap",
@@ -30,7 +33,7 @@
       "selector": {
         "key": "new-project-name"
       },
-      "value": "Illustration journey"
+      "value": "Illustration review"
     },
     {
       "op": "tap",
@@ -39,9 +42,9 @@
       }
     },
     {
-      "op": "wait",
-      "text": "No timeline tracks",
-      "budget_ms": 20000
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
     },
     {
       "op": "tap",
@@ -54,7 +57,7 @@
       "selector": {
         "key": "command-palette-query"
       },
-      "value": "Illustration"
+      "value": "Illustration Video"
     },
     {
       "op": "tap",
@@ -63,8 +66,8 @@
       }
     },
     {
-      "op": "wait",
-      "text": "Illustration Video",
+      "op": "wait_label",
+      "label_regex": "Illustration Video",
       "budget_ms": 10000
     },
     {
@@ -76,29 +79,34 @@
       "name": "illustration-dialog"
     },
     {
+      "op": "picker",
+      "next": "media"
+    },
+    {
       "op": "tap",
       "selector": {
-        "key": "motion-materialize-render"
+        "text": "Choose file"
       }
     },
     {
       "op": "wait_label",
-      "label_regex": "Choose a code file to illustrate",
+      "label_regex": "illustration-source",
       "budget_ms": 10000
     },
     {
-      "op": "enter_text",
-      "selector": {
-        "key": "motion-materialize-source"
-      },
-      "value": "$OR_UI_ROOT/scripts/ui_scenarios/illustration-source.rs"
+      "op": "picker",
+      "next": "export"
     },
     {
-      "op": "enter_text",
+      "op": "tap",
       "selector": {
-        "key": "motion-materialize-destination"
-      },
-      "value": "$OR_UI_ROOT/apps/or_app/build/illustration-journey.mkv"
+        "text": "Choose location"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "export\\.mkv",
+      "budget_ms": 10000
     },
     {
       "op": "enter_text",
@@ -122,26 +130,8 @@
       "value": "180"
     },
     {
-      "op": "tap",
-      "selector": {
-        "key": "motion-materialize-render"
-      }
-    },
-    {
-      "op": "tree",
-      "name": "render-attempt"
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Wrote .* frames",
-      "budget_ms": 60000
-    },
-    {
-      "op": "enter_text",
-      "selector": {
-        "key": "motion-materialize-source"
-      },
-      "value": "$OR_UI_ROOT/does-not-exist.rs"
+      "op": "shot",
+      "name": "illustration-ready"
     },
     {
       "op": "tap",
@@ -151,8 +141,8 @@
     },
     {
       "op": "wait_label",
-      "label_regex": "MOTION_SOURCE_UNREADABLE",
-      "budget_ms": 20000
+      "label_regex": "Add to timeline",
+      "budget_ms": 120000
     },
     {
       "op": "shot",
@@ -165,8 +155,50 @@
     {
       "op": "tap",
       "selector": {
-        "key": "motion-materialize-cancel"
+        "key": "motion-materialize-add-to-timeline"
       }
+    },
+    {
+      "op": "shot",
+      "name": "after-insert"
+    },
+    {
+      "op": "tree",
+      "name": "after-insert"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-motion"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "On timeline",
+      "budget_ms": 10000
+    },
+    {
+      "op": "shot",
+      "name": "motion-panel"
+    },
+    {
+      "op": "tree",
+      "name": "motion-panel"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-scene-rerender"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Rendered",
+      "budget_ms": 120000
+    },
+    {
+      "op": "shot",
+      "name": "motion-rerendered"
     }
   ]
 }

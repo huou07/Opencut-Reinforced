@@ -417,3 +417,52 @@ Evidence (local only, no packaged build):
   `tree-*.json`.
 - `workspace-chrome.json` and `workspace-layout.json` still PASS, so the P1
   chrome survived P2.
+
+## 16. P7 delivery record (local, 2026-10-25)
+
+The MotionScene journey used to end at the dialog: the owner rendered a scene,
+inserted it, and the app forgot the file the moment the dialog closed. P7 makes
+the Motion tab the place where that scene lives.
+
+Shipped:
+
+- `_MotionScenePanel` in the Motion tab: the file the session last rendered, its
+  frame count, rate, size and byte count, the source path, a
+  `Rendered`/`On timeline` badge, and three verbs — `Insert into timeline`
+  (disabled once inserted), `Render again` (re-renders the same source, settings
+  and destination, so a fix in the source lands in the asset the timeline
+  already points at instead of leaving a second, nearly identical clip), and
+  `New scene…`.
+- `MotionSceneSnapshot` in the project layer (`lib/project/motion_scene_snapshot.dart`)
+  so the editor reads render facts without depending on shell widgets.
+- The shell keeps the snapshot across dialog closes, marks it inserted when the
+  insert succeeds, and re-renders under a busy flag instead of queueing.
+
+### Defects found by driving the real app
+
+1. **Stale journey.** `illustration-video.json` still expected a validation
+   message from a Render button that is now disabled until both paths are
+   chosen, and typed into `motion-materialize-source` fields that no longer
+   exist. Rewritten to use the real `Choose file` / `Choose location` pickers.
+2. **The harness could not read repository fixtures.** The app process is
+   sandboxed: copying a fixture out of `~/Documents` failed with
+   `PathAccessException … Operation not permitted`, which `or_ui.py` reported as
+   a launch failure. `scripts/or_ui.py` now stages every `copy:` fixture into the
+   report directory before the run, so the picker still hands the app real bytes
+   on disk without depending on the app's TCC grants.
+3. **Media identity broke on symlinks.** Insert failed with "The video is
+   rendered, but could not be added to the timeline" because
+   `_findMaterializedMedia` compared `File(path).absolute.path` with the stored
+   source, and macOS stores the resolved path (`/tmp` → `/private/tmp`). Fixed by
+   `canonicalSourcePath`/`sameSourcePath` in `lib/project/source_path.dart`, with
+   a unit test that builds a real symlink.
+
+### Evidence
+
+- `flutter --no-version-check test --no-pub` → `+152`.
+- `python3 scripts/or_ui.py --report-dir /tmp/or-p7n run
+  scripts/ui_scenarios/illustration-video.json` → PASS through 37 steps: render
+  reports `Rendered 40 frames at 320×180.`, insert appends a clip, the Motion tab
+  shows `On timeline`, and `Render again` re-renders the same destination.
+- Class: INTEGRATION_VERIFIED on the local debug app through the Flutter test
+  binding. Not a packaged-build claim.

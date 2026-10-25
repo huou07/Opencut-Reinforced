@@ -180,10 +180,41 @@ def ensure_ui_apk() -> Path:
     )
 
 
+def stage_fixtures(payload: dict, report_dir: Path) -> None:
+    """Copy host fixtures into the report directory before the app reads them.
+
+    The scenario runs inside the app's own process, which macOS may refuse to
+    let read the repository (TCC protects Documents for unsigned processes).
+    Staging the bytes first keeps the import path real — the picker still hands
+    the app a file on disk — without depending on the app's file grants.
+    """
+    fixtures = payload.get("fixtures") or []
+    if not fixtures:
+        return
+    staged_dir = report_dir / "fixtures"
+    staged_dir.mkdir(parents=True, exist_ok=True)
+    staged: list[str] = []
+    for fixture in fixtures:
+        text = str(fixture)
+        if text.startswith("copy:"):
+            source = Path(text[len("copy:") :])
+            if not source.is_absolute():
+                source = ROOT / source
+            if source.is_file():
+                target = staged_dir / source.name
+                shutil.copyfile(source, target)
+                staged.append(f"copy:{target}")
+                continue
+            print(f"or_ui: fixture not found, passing through: {source}", file=sys.stderr)
+        staged.append(text)
+    payload["fixtures"] = staged
+
+
 # -- execution -------------------------------------------------------------
 def run_linux(payload: dict, report_dir: Path) -> int:
     require_linux_tools()
     report_dir.mkdir(parents=True, exist_ok=True)
+    stage_fixtures(payload, report_dir)
     scenario_path = report_dir / "scenario.json"
     scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     artifacts = report_dir / "artifacts"
@@ -248,6 +279,7 @@ def run_macos(payload: dict, report_dir: Path) -> int:
     """Drive the real macOS app: one integration_test run builds and launches it."""
     require_macos_tools()
     report_dir.mkdir(parents=True, exist_ok=True)
+    stage_fixtures(payload, report_dir)
     scenario_path = report_dir / "scenario.json"
     scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     artifacts = report_dir / "artifacts"

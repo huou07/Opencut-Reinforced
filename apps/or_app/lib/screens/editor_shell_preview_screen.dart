@@ -11,6 +11,7 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../project/motion_scene_snapshot.dart';
 import '../project/project_gateway.dart';
 import 'viewer_transform_overlay.dart';
 import '../widgets/or_widgets.dart';
@@ -49,6 +50,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddTextTrack,
     this.onAddCaptionTrack,
     this.onOpenMotion,
+    this.motionScene,
+    this.onInsertMotionScene,
+    this.onRerenderMotionScene,
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
@@ -118,6 +122,11 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
   final VoidCallback? onOpenMotion;
+  /// The scene this session last rendered, so the Motion tab can report the
+  /// file it produced instead of forgetting the moment the dialog closed.
+  final MotionSceneSnapshot? motionScene;
+  final Future<void> Function()? onInsertMotionScene;
+  final Future<void> Function()? onRerenderMotionScene;
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
@@ -660,6 +669,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       ? null
                       : widget.onExportCaptions,
                   onOpenMotion: widget.busy ? null : widget.onOpenMotion,
+                  motionScene: widget.motionScene,
+                  onInsertMotionScene: widget.busy
+                      ? null
+                      : widget.onInsertMotionScene,
+                  onRerenderMotionScene: widget.busy
+                      ? null
+                      : widget.onRerenderMotionScene,
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -966,6 +982,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                         onClose();
                         widget.onOpenMotion?.call();
                       },
+                motionScene: widget.motionScene,
+                onInsertMotionScene: widget.onInsertMotionScene,
+                onRerenderMotionScene: widget.onRerenderMotionScene,
                 onClose: onClose,
               ),
             );
@@ -1247,6 +1266,9 @@ class _EditorToolPanel extends StatelessWidget {
     this.onImportCaptions,
     this.onExportCaptions,
     this.onOpenMotion,
+    this.motionScene,
+    this.onInsertMotionScene,
+    this.onRerenderMotionScene,
     this.onClose,
   });
 
@@ -1286,6 +1308,9 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final VoidCallback? onOpenMotion;
+  final MotionSceneSnapshot? motionScene;
+  final Future<void> Function()? onInsertMotionScene;
+  final Future<void> Function()? onRerenderMotionScene;
   final VoidCallback? onClose;
 
   @override
@@ -1390,20 +1415,29 @@ class _EditorToolPanel extends StatelessWidget {
       );
     }
     if (selectedTool == 'Motion') {
-      return _ToolActionsPanel(
-        title: 'Motion',
-        showTitle: false,
-        subtitle:
-            'A code file becomes a deterministic MotionScene, rendered locally '
-            'and inserted as an ordinary clip that exports with the timeline.',
-        actions: [
-          _ToolAction(
-            keyName: 'tool-open-motion',
-            label: 'Create illustration video…',
-            icon: Icons.animation_outlined,
-            onPressed: onOpenMotion,
-          ),
-        ],
+      final scene = motionScene;
+      if (scene == null) {
+        return _ToolActionsPanel(
+          title: 'Motion',
+          showTitle: false,
+          subtitle:
+              'A code file becomes a deterministic MotionScene, rendered locally '
+              'and inserted as an ordinary clip that exports with the timeline.',
+          actions: [
+            _ToolAction(
+              keyName: 'tool-open-motion',
+              label: 'Create illustration video…',
+              icon: Icons.animation_outlined,
+              onPressed: onOpenMotion,
+            ),
+          ],
+        );
+      }
+      return _MotionScenePanel(
+        scene: scene,
+        onCreate: onOpenMotion,
+        onInsert: onInsertMotionScene,
+        onRerender: onRerenderMotionScene,
       );
     }
 
@@ -1443,6 +1477,147 @@ class _EditorToolPanel extends StatelessWidget {
     );
   }
 }
+
+/// The scene this session rendered: what it is, what it wrote, and the two
+/// things an author does next. A render is a file plus an insert, so the panel
+/// keeps both facts visible instead of asking the owner to remember them.
+class _MotionScenePanel extends StatelessWidget {
+  const _MotionScenePanel({
+    required this.scene,
+    required this.onCreate,
+    required this.onInsert,
+    required this.onRerender,
+  });
+
+  final MotionSceneSnapshot scene;
+  final VoidCallback? onCreate;
+  final Future<void> Function()? onInsert;
+  final Future<void> Function()? onRerender;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = scene.bytesWritten >= 1024 * 1024
+        ? '${(scene.bytesWritten / (1024 * 1024)).toStringAsFixed(1)} MB'
+        : '${(scene.bytesWritten / 1024).toStringAsFixed(0)} KB';
+    return ColoredBox(
+      color: OrColors.backgroundRaised,
+      child: ListView(
+        key: const ValueKey('motion-scene-list'),
+        padding: const EdgeInsets.all(OrSpacing.x3),
+        children: [
+          Container(
+            key: const ValueKey('motion-scene-card'),
+            padding: const EdgeInsets.all(OrSpacing.x3),
+            decoration: BoxDecoration(
+              color: OrColors.surface,
+              borderRadius: BorderRadius.circular(OrRadii.card),
+              border: Border.all(color: OrColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        scene.title,
+                        key: const ValueKey('motion-scene-title'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: OrColors.text,
+                          fontSize: OrType.controlSize,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    OrBadge(
+                      scene.inserted ? 'On timeline' : 'Rendered',
+                      key: const ValueKey('motion-scene-state'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                _fact('Frames', '${scene.frameCount}'),
+                _fact(
+                  'Rate',
+                  '${scene.frameRate} fps',
+                ),
+                _fact('Size', '${scene.width} × ${scene.height}'),
+                _fact('File', '$size · ${_fileName(scene.destinationPath)}'),
+                const SizedBox(height: OrSpacing.x2),
+                Text(
+                  'Source ${_fileName(scene.sourcePath)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: OrColors.textMuted,
+                    fontSize: OrType.tinySize,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          FilledButton.icon(
+            key: const ValueKey('motion-scene-insert'),
+            onPressed: scene.inserted || onInsert == null
+                ? null
+                : () => onInsert!(),
+            icon: const Icon(Icons.playlist_add, size: 16),
+            label: Text(scene.inserted ? 'Already on the timeline' : 'Insert into timeline'),
+          ),
+          const SizedBox(height: OrSpacing.x1),
+          OutlinedButton.icon(
+            key: const ValueKey('motion-scene-rerender'),
+            onPressed: onRerender == null ? null : () => onRerender!(),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Render again'),
+          ),
+          const SizedBox(height: OrSpacing.x1),
+          TextButton.icon(
+            key: const ValueKey('motion-scene-new'),
+            onPressed: onCreate,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('New scene…'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fact(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: OrSpacing.x1),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 56,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
 
 class _ToolAction {
   const _ToolAction({

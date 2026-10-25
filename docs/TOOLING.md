@@ -28,6 +28,15 @@ mission. The Linux, Android, Windows and hosted procedures below are retained
 for future work; they are not the default local workflow and do not authorize
 their execution in this mission.
 
+## Scenario fixtures
+
+A scenario may name fixtures for the picker. `copy:<path>` is resolved against
+the repository root, and `scripts/or_ui.py` stages every such file into the
+report directory before the run starts: the app process is sandboxed, so a
+fixture left in `~/Documents` fails to read with `Operation not permitted`. Write
+the fixture against the repository, and the harness will move the bytes to a
+place the app can read.
+
 ## The agent-facing UI harness
 
 `python3 scripts/or_ui.py` is the instrument behind OR's interface claims. It

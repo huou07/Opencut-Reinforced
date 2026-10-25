@@ -16,9 +16,11 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../core_gateway.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
+import '../project/motion_scene_snapshot.dart';
 import '../project/project_file_picker.dart';
 import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
+import '../project/source_path.dart';
 import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -721,6 +723,10 @@ class _AppShellState extends State<AppShell> {
 
   bool get _textInputFocused => orTextFieldHasFocus();
 
+  /// The last MotionScene this session rendered, if any.
+  MotionSceneSnapshot? _motionScene;
+  bool _motionRerendering = false;
+
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
       canPickProjects: widget.projectFilePicker.isSupported,
@@ -808,6 +814,11 @@ class _AppShellState extends State<AppShell> {
               onAddCaptionTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
               onOpenMotion: () => unawaited(_openMotionMaterialize()),
+              motionScene: _motionScene,
+              onInsertMotionScene: _insertMotionScene,
+              onRerenderMotionScene: _motionRerendering
+                  ? null
+                  : _rerenderMotionScene,
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
@@ -920,15 +931,34 @@ class _AppShellState extends State<AppShell> {
       context: context,
       chooseSource: _pickMotionSource,
       chooseDestination: _pickMotionDestination,
-      render: (request) => widget.projectGateway.materializeIllustration(
-        sourcePath: request.sourcePath,
-        destinationPath: request.destinationPath,
-        frameRateNumerator: request.frameRate,
-        frameRateDenominator: 1,
-        width: request.width,
-        height: request.height,
-        title: request.title,
-      ),
+      render: (request) async {
+        final outcome = await widget.projectGateway.materializeIllustration(
+          sourcePath: request.sourcePath,
+          destinationPath: request.destinationPath,
+          frameRateNumerator: request.frameRate,
+          frameRateDenominator: 1,
+          width: request.width,
+          height: request.height,
+          title: request.title,
+        );
+        if (outcome.succeeded && mounted) {
+          setState(() {
+            _motionScene = MotionSceneSnapshot(
+              title: request.title,
+              sourcePath: request.sourcePath,
+              destinationPath: outcome.destinationPath.isEmpty
+                  ? request.destinationPath
+                  : outcome.destinationPath,
+              frameRate: request.frameRate,
+              width: outcome.width == 0 ? request.width : outcome.width,
+              height: outcome.height == 0 ? request.height : outcome.height,
+              frameCount: outcome.frameCount,
+              bytesWritten: outcome.bytesWritten,
+            );
+          });
+        }
+        return outcome;
+      },
       addToTimeline: _addMaterializedIllustrationToTimeline,
     );
   }
@@ -971,9 +1001,76 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<bool> _addMaterializedIllustrationToTimeline(String path) async {
+    final added = await _addMaterializedIllustration(path);
+    if (added && mounted) {
+      setState(() => _motionScene = _motionScene?.copyWith(inserted: true));
+    }
+    return added;
+  }
+
+  Future<bool> _insertMotionScene() async {
+    final scene = _motionScene;
+    if (scene == null) return false;
+    return _addMaterializedIllustrationToTimeline(scene.destinationPath);
+  }
+
+  /// Renders the same scene again from the same source and settings. The file is
+  /// replaced, so a fix in the source lands in the asset the timeline already
+  /// points at instead of leaving a second, nearly identical clip behind.
+  Future<void> _rerenderMotionScene() async {
+    final scene = _motionScene;
+    if (scene == null) return;
+    setState(() => _motionRerendering = true);
+    try {
+      final outcome = await widget.projectGateway.materializeIllustration(
+        sourcePath: scene.sourcePath,
+        destinationPath: scene.destinationPath,
+        frameRateNumerator: scene.frameRate,
+        frameRateDenominator: 1,
+        width: scene.width,
+        height: scene.height,
+        title: scene.title,
+      );
+      if (!mounted) return;
+      setState(() {
+        _motionScene = MotionSceneSnapshot(
+          title: scene.title,
+          sourcePath: scene.sourcePath,
+          destinationPath: outcome.destinationPath.isEmpty
+              ? scene.destinationPath
+              : outcome.destinationPath,
+          frameRate: scene.frameRate,
+          width: outcome.width == 0 ? scene.width : outcome.width,
+          height: outcome.height == 0 ? scene.height : outcome.height,
+          frameCount: outcome.succeeded ? outcome.frameCount : scene.frameCount,
+          bytesWritten: outcome.succeeded
+              ? outcome.bytesWritten
+              : scene.bytesWritten,
+          inserted: scene.inserted,
+        );
+      });
+      if (!outcome.succeeded) {
+        OrSnackBar.show(context, outcome.message);
+      } else {
+        OrSnackBar.show(
+          context,
+          'Rendered ${outcome.frameCount} frames to '
+          '${scene.destinationPath.split(Platform.pathSeparator).last}',
+        );
+      }
+    } on ProjectSafStorageException catch (error) {
+      if (mounted) OrSnackBar.show(context, error.message);
+    } finally {
+      if (mounted) setState(() => _motionRerendering = false);
+    }
+  }
+
+  Future<bool> _addMaterializedIllustration(String path) async {
     final session = _activeSession;
     var project = _activeProject;
-    if (session == null || project == null || _busy) return false;
+    if (session == null || project == null || _busy) {
+      return false;
+    }
 
     try {
       var media = await _findMaterializedMedia(session, project, path);
@@ -1094,7 +1191,11 @@ class _AppShellState extends State<AppShell> {
     }
     if (first.totalCount == 0) return null;
 
-    final expectedPath = File(path).absolute.path;
+    // The command path stores the source it read, which on macOS is the
+    // resolved file: `/tmp` is a symlink to `/private/tmp`, and a library on a
+    // linked volume resolves elsewhere again. Comparing raw absolute paths
+    // silently misses the media that was just imported.
+    final expectedPath = canonicalSourcePath(path);
     var offset = ((first.totalCount - 1) ~/ first.limit) * first.limit;
     while (true) {
       final page = offset == 0
@@ -1111,7 +1212,11 @@ class _AppShellState extends State<AppShell> {
         );
       }
       for (final item in page.items.reversed) {
-        if (_mediaSourcePath(item) == expectedPath) return item;
+        final sourcePath = _mediaSourcePath(item);
+        if (sourcePath != null &&
+            canonicalSourcePath(sourcePath) == expectedPath) {
+          return item;
+        }
       }
       if (offset == 0) return null;
       offset = (offset - _mediaPageSize).clamp(0, offset).toInt();
