@@ -1743,6 +1743,7 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
                 source_range,
                 playback_rate: _,
                 reversed: _,
+                frozen: _,
             } => format!(
                 "{} media={} at={} source={} duration={}",
                 clip.clip_id,

@@ -87,6 +87,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onUpdateTimelineClipAudioSettings,
     this.onUpdateTimelineClipPlaybackRate,
     this.onSetTimelineClipReversed,
+    this.onSetTimelineClipFrozen,
     this.onSave,
     this.onRename,
     this.onUndo,
@@ -304,6 +305,13 @@ class EditorShellPreviewScreen extends StatefulWidget {
     bool reversed,
   )?
   onSetTimelineClipReversed;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool frozen,
+  )?
+  onSetTimelineClipFrozen;
   final VoidCallback? onSave;
   final VoidCallback? onRename;
   final VoidCallback? onUndo;
@@ -628,6 +636,25 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     }
   }
 
+  /// Holds the selected clip's first frame, or releases it.
+  ///
+  /// A freeze is a clip property like reverse, so it keeps the clip's place on the
+  /// timeline and its trim; unfreezing restores the footage untouched.
+  void toggleSelectedClipFrozen() {
+    final clipId = _selectedClipId;
+    final onSet = widget.onSetTimelineClipFrozen;
+    final project = widget.project;
+    if (clipId == null || onSet == null || project == null) return;
+    for (final entry in widget.timelineClipPages.entries) {
+      for (final clip in entry.value.items) {
+        if (clip.clipId != clipId) continue;
+        if (clip.contentKind != ProjectTimelineClipContentKind.media) return;
+        unawaited(onSet(project, entry.key, clip.clipId, !clip.frozen));
+        return;
+      }
+    }
+  }
+
   void selectTool(String tool) {
     if (_selectedTool == tool) return;
     setState(() => _selectedTool = tool);
@@ -779,6 +806,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                   onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
                   onSetReversed: widget.onSetTimelineClipReversed,
+                  onSetFrozen: widget.onSetTimelineClipFrozen,
                 ),
               ),
             ],
@@ -827,6 +855,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
                   onSetClipReversed: widget.onSetTimelineClipReversed,
+                  onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -913,6 +942,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
                   onSetClipReversed: widget.onSetTimelineClipReversed,
+                  onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -3394,6 +3424,7 @@ class _InspectorPanel extends StatefulWidget {
     required this.onUpdateAudio,
     this.onUpdatePlaybackRate,
     this.onSetReversed,
+    this.onSetFrozen,
     this.onClose,
   });
 
@@ -3444,6 +3475,13 @@ class _InspectorPanel extends StatefulWidget {
     bool reversed,
   )?
   onSetReversed;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool frozen,
+  )?
+  onSetFrozen;
   final VoidCallback? onClose;
 
   @override
@@ -3911,6 +3949,50 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     );
   }
 
+  Future<void> _applyFrozen(bool frozen) async {
+    final project = widget.project;
+    final trackId = widget.trackId;
+    final clipId = widget.clipId;
+    final onSet = widget.onSetFrozen;
+    if (project == null || trackId == null || clipId == null || onSet == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await onSet(project, trackId, clipId, frozen);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Widget _freezeRow(bool enabled) {
+    final clip = widget.clip;
+    if (clip == null || widget.onSetFrozen == null) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: OrSpacing.x1),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Hold this frame',
+              style: TextStyle(color: OrColors.textSecondary, fontSize: OrType.tinySize),
+            ),
+          ),
+          Switch(
+            key: const ValueKey('inspector-clip-frozen'),
+            value: clip.frozen,
+            onChanged: enabled ? _applyFrozen : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _playbackRateEditor() {
     final clip = widget.clip;
     if (clip == null ||
@@ -3992,6 +4074,7 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           ),
         ),
         _reverseRow(enabled),
+        _freezeRow(enabled),
         const SizedBox(height: OrSpacing.x3),
       ],
     );
@@ -4769,6 +4852,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onSlideClip,
     required this.onRippleDeleteClip,
     this.onSetClipReversed,
+    this.onSetClipFrozen,
     required this.onUpdateTextClip,
     required this.onAddMarker,
     required this.onMoveMarker,
@@ -4901,6 +4985,13 @@ class _TimelinePanel extends StatefulWidget {
     bool reversed,
   )?
   onSetClipReversed;
+  final Future<void> Function(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+    bool frozen,
+  )?
+  onSetClipFrozen;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -6041,6 +6132,17 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           ),
         ),
         PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.freeze,
+          enabled:
+              widget.onSetClipFrozen != null &&
+              !widget.busy &&
+              clip.contentKind == ProjectTimelineClipContentKind.media,
+          child: _ClipMenuItem(
+            clip.frozen ? 'Release this frame' : 'Hold this frame',
+            '',
+          ),
+        ),
+        PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.delete,
           enabled: widget.onDeleteClip != null && !widget.busy,
           child: _ClipMenuItem(
@@ -6076,6 +6178,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           track.trackId,
           clip.clipId,
           !clip.reversed,
+        );
+      case _ClipMenuChoice.freeze:
+        await widget.onSetClipFrozen!(
+          project,
+          track.trackId,
+          clip.clipId,
+          !clip.frozen,
         );
       case _ClipMenuChoice.delete:
         await widget.onDeleteClip!(project, clip);
@@ -7193,7 +7302,7 @@ class _TimelineLoadMoreLane extends StatelessWidget {
   );
 }
 
-enum _ClipMenuChoice { split, duplicate, reverse, delete, rippleDelete, advanced }
+enum _ClipMenuChoice { split, duplicate, reverse, freeze, delete, rippleDelete, advanced }
 
 /// One context-menu row: label on the left, shortcut on the right.
 class _ClipMenuItem extends StatelessWidget {

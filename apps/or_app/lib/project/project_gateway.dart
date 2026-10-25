@@ -492,6 +492,7 @@ class ProjectTimelineClip {
     this.contentKind = ProjectTimelineClipContentKind.media,
     this.playbackRate = const ProjectRationalRate(1, 1),
     this.reversed = false,
+    this.frozen = false,
     this.mediaId,
     this.text,
     this.formatting,
@@ -506,6 +507,9 @@ class ProjectTimelineClip {
 
   /// Whether the clip walks its source backwards.
   final bool reversed;
+
+  /// Whether the clip holds one frame for its whole duration.
+  final bool frozen;
   final String? mediaId;
   final String? text;
   final ProjectTextFormatting? formatting;
@@ -969,6 +973,15 @@ abstract interface class ProjectGateway {
     required String trackId,
     required String clipId,
     required bool reversed,
+  });
+  /// Hold one frame for the clip's whole duration, or release it. The source range
+  /// is untouched, so releasing restores the original footage.
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
   });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {

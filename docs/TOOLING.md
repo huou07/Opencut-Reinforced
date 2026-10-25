@@ -553,3 +553,31 @@ muxers (`image2`, `image2pipe`, `matroska`, `mov`, `wav`, `webm`) and no `null` 
 raw-PCM muxer, and it has `afftdn` but not `astats`/`ametadata`. Audio analysis in
 `or_core` therefore decodes to a temporary WAV and measures in Rust; anything that
 relies on a filter that prints statistics will fail on every build the app ships.
+
+## Running the bridge tests needs the FFmpeg libraries on the loader path
+
+`cargo test -p or_app_bridge` aborts before any test with
+
+```
+dyld: Library not loaded: @rpath/libavutil.60.dylib
+```
+
+because the crate links the FFmpeg dylibs but the test binary runs outside the app
+bundle that carries them. Point the loader at the cached prefix:
+
+```bash
+DYLD_FALLBACK_LIBRARY_PATH="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install/lib" \
+  cargo test -p or_app_bridge --lib
+```
+
+`cargo test -p or_core` needs no such variable; the bridge is the only crate that
+links FFmpeg directly.
+
+## A frozen clip still owns its source range
+
+Freeze is one boolean on the media content (`frozen`), not a new clip kind: the
+clip keeps its real `source_range`, so unfreezing restores the footage and trimming
+or splitting a frozen clip behaves exactly like any other clip. The preview maps
+every offset of a frozen clip back to `source_start` (`mapped_source_time` in
+`crates/or_app_bridge/src/preview.rs`), which is what makes it a still without a
+separate render path.

@@ -1528,23 +1528,41 @@ fn clip_source_time(
     clip: &VideoClip,
     offset: RationalTime,
 ) -> Result<RationalTime, PreviewError> {
-    let scaled = clip
-        .playback_rate
-        .apply(offset)
-        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-    let span = clip
-        .playback_rate
-        .apply(clip.duration)
-        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-    let walked = if clip.reversed {
-        span.checked_sub(scaled)
-            .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?
+    mapped_source_time(
+        clip.source_start,
+        clip.duration,
+        clip.playback_rate,
+        offset,
+        clip.reversed,
+        clip.frozen,
+    )
+}
+
+/// The mapping itself, separated from `VideoClip` so it can be exercised without a
+/// whole clip: frozen holds the first frame, reversed mirrors inside the clip span.
+pub(crate) fn mapped_source_time(
+    source_start: RationalTime,
+    duration: RationalTime,
+    playback_rate: RationalRate,
+    offset: RationalTime,
+    reversed: bool,
+    frozen: bool,
+) -> Result<RationalTime, PreviewError> {
+    let invalid = |error: or_core::TimeError| {
+        PreviewError::new("INVALID_SOURCE_TIME", error.to_string())
+    };
+    if frozen {
+        // A frozen clip shows the frame at its source start for the whole duration.
+        return Ok(source_start);
+    }
+    let scaled = playback_rate.apply(offset).map_err(invalid)?;
+    let span = playback_rate.apply(duration).map_err(invalid)?;
+    let walked = if reversed {
+        span.checked_sub(scaled).map_err(invalid)?
     } else {
         scaled
     };
-    clip.source_start
-        .checked_add(walked)
-        .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))
+    source_start.checked_add(walked).map_err(invalid)
 }
 
 fn direct_video_clip_at(
@@ -1608,6 +1626,7 @@ fn direct_video_clip_at(
                 video_clips: vec![VideoClip {
                     playback_rate: RationalRate::ONE,
                     reversed: false,
+                    frozen: false,
                     source: MediaSourceRef::local_file(local_media_uri("identity.mp4")).unwrap(),
                     source_dimensions: Some((1920, 1080)),
                     timeline_start: RationalTime::ZERO,
@@ -1649,6 +1668,7 @@ fn direct_video_clip_at(
             program.video_clips.push(VideoClip {
                 playback_rate: RationalRate::ONE,
                 reversed: false,
+                frozen: false,
                 source: MediaSourceRef::local_file(local_media_uri("second.mp4")).unwrap(),
                 source_dimensions: Some((1920, 1080)),
                 timeline_start: RationalTime::ZERO,
@@ -1751,6 +1771,9 @@ fn direct_video_clip_at(
         /// Set when the clip walks its source backwards; the source-time mapping
         /// mirrors inside the clip's own source range.
         reversed: bool,
+        /// Set when the clip holds one frame: every offset maps to the source start,
+        /// so the picture stops while the clip keeps its duration.
+        frozen: bool,
         transform: Transform,
         crop: Crop,
         opacity: Opacity,
@@ -1978,6 +2001,7 @@ fn direct_video_clip_at(
                     source_range,
                     playback_rate,
                     reversed,
+                    frozen,
                 },
                 ClipSettings::Visual(settings),
             ) => {
@@ -1992,6 +2016,7 @@ fn direct_video_clip_at(
                     duration: clip.timeline_duration,
                     playback_rate,
                     reversed,
+                    frozen,
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
@@ -2029,7 +2054,8 @@ fn direct_video_clip_at(
                     media_id,
                     source_range,
                     playback_rate,
-                    reversed,
+                    reversed: _,
+                    frozen: _,
                 },
                 ClipSettings::Audio(settings),
             ) => {
@@ -3396,3 +3422,58 @@ mod desktop {
 }
 
 pub(crate) use desktop::PreviewRuntime;
+
+#[cfg(test)]
+mod source_time_tests {
+    use super::desktop::mapped_source_time;
+    use or_core::{RationalRate, RationalTime};
+
+    fn seconds(value: i64) -> RationalTime {
+        RationalTime::new(value, 1).expect("valid time")
+    }
+
+    #[test]
+    fn a_frozen_clip_holds_its_first_frame() {
+        let start = seconds(3);
+        for offset in [seconds(0), seconds(1), seconds(5)] {
+            let mapped = mapped_source_time(
+                start,
+                seconds(4),
+                RationalRate::ONE,
+                offset,
+                false,
+                true,
+            )
+            .expect("frozen mapping");
+            assert_eq!(mapped, start, "a frozen clip must not advance at {offset:?}");
+        }
+    }
+
+    #[test]
+    fn a_forward_clip_walks_past_its_source_start() {
+        let mapped = mapped_source_time(
+            seconds(1),
+            seconds(2),
+            RationalRate::ONE,
+            seconds(2),
+            false,
+            false,
+        )
+        .expect("forward mapping");
+        assert_eq!(mapped, seconds(3));
+    }
+
+    #[test]
+    fn a_reversed_clip_mirrors_inside_its_own_span() {
+        let mapped = mapped_source_time(
+            seconds(1),
+            seconds(2),
+            RationalRate::ONE,
+            seconds(2),
+            true,
+            false,
+        )
+        .expect("reversed mapping");
+        assert_eq!(mapped, seconds(1), "the last offset maps back to the start");
+    }
+}

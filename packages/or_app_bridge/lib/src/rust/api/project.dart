@@ -349,6 +349,19 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectActionResult> save();
 
+  /// Holds one frame for the clip's whole duration, or releases it.
+  ///
+  /// The source range is left untouched, so unfreezing restores the original
+  /// footage instead of a shortened clip.
+  Future<ProjectActionResult> setTimelineClipFrozen({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  });
+
   /// Flip the direction a media clip plays without touching its duration.
   ///
   /// Reverse is not a rate: the clip still covers the same source span and the same
@@ -1233,6 +1246,7 @@ class ProjectTimelineClipView {
 
   /// True when the clip walks its source backwards.
   final bool reversed;
+  final bool frozen;
   final String? mediaId;
   final String? text;
   final ProjectTextFormattingView? formatting;
@@ -1245,6 +1259,7 @@ class ProjectTimelineClipView {
     required this.contentKind,
     required this.playbackRate,
     required this.reversed,
+    required this.frozen,
     this.mediaId,
     this.text,
     this.formatting,
@@ -1259,6 +1274,7 @@ class ProjectTimelineClipView {
       contentKind.hashCode ^
       playbackRate.hashCode ^
       reversed.hashCode ^
+      frozen.hashCode ^
       mediaId.hashCode ^
       text.hashCode ^
       formatting.hashCode ^
@@ -1275,6 +1291,7 @@ class ProjectTimelineClipView {
           contentKind == other.contentKind &&
           playbackRate == other.playbackRate &&
           reversed == other.reversed &&
+          frozen == other.frozen &&
           mediaId == other.mediaId &&
           text == other.text &&
           formatting == other.formatting &&

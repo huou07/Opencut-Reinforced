@@ -200,6 +200,13 @@ pub enum ClipContent {
         /// omitted from JSON when false, so an untouched project keeps its bytes.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         reversed: bool,
+        /// Whether the clip holds one frame instead of playing its source.
+        ///
+        /// Written only when true, so an untouched project keeps its bytes. A frozen
+        /// clip still reports its real source range, which is what lets a later
+        /// unfreeze restore the original footage.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        frozen: bool,
     },
     Text {
         #[serde(deserialize_with = "crate::project_document::deserialize_text_content")]
@@ -255,6 +262,16 @@ impl ClipContent {
     pub const fn reversed(&self) -> bool {
         match self {
             Self::Media { reversed, .. } => *reversed,
+            Self::Text { .. } | Self::Caption { .. } => false,
+        }
+    }
+
+    /// Whether the clip holds a single frame for its whole duration.
+    ///
+    /// Non-media content has no frames and answers false, matching `reversed`.
+    pub const fn frozen(&self) -> bool {
+        match self {
+            Self::Media { frozen, .. } => *frozen,
             Self::Text { .. } | Self::Caption { .. } => false,
         }
     }
@@ -648,6 +665,7 @@ impl TimelineClip {
                 source_range,
                 playback_rate: RationalRate::ONE,
                 reversed: false,
+                frozen: false,
             },
             ClipSettings::default_for(track_kind),
         )
@@ -1204,6 +1222,7 @@ fn validate_clip_content(
                 source_range,
                 playback_rate,
                 reversed: _,
+                frozen: _,
             },
             TrackKind::Video | TrackKind::Audio,
         ) => {
@@ -1325,6 +1344,7 @@ mod tests {
             .unwrap(),
             playback_rate: RationalRate::ONE,
             reversed: false,
+            frozen: false,
         };
         let encoded = serde_json::to_string(&forward).unwrap();
         assert!(
@@ -1341,6 +1361,7 @@ mod tests {
             .unwrap(),
             playback_rate: RationalRate::ONE,
             reversed: true,
+            frozen: false,
         };
         let encoded = serde_json::to_string(&reversed).unwrap();
         assert_eq!(
@@ -1349,6 +1370,25 @@ mod tests {
         );
         assert!(reversed.reversed());
         assert!(!forward.reversed());
+
+        // A frozen clip serializes its own flag and reports it; releasing the
+        // freeze must be expressible by writing the same content back.
+        let frozen = ClipContent::Media {
+            media_id: MediaId::generate(),
+            source_range: TimeRange::new(
+                RationalTime::ZERO,
+                RationalTime::new(2, 1).unwrap(),
+            )
+            .unwrap(),
+            playback_rate: RationalRate::ONE,
+            reversed: false,
+            frozen: true,
+        };
+        let encoded = serde_json::to_string(&frozen).unwrap();
+        assert!(encoded.contains("frozen"));
+        assert_eq!(serde_json::from_str::<ClipContent>(&encoded).unwrap(), frozen);
+        assert!(frozen.frozen());
+        assert!(!forward.frozen());
     }
 
 

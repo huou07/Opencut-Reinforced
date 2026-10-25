@@ -408,6 +408,7 @@ pub struct ProjectTimelineClipView {
     pub playback_rate: RationalRateView,
     /// True when the clip walks its source backwards.
     pub reversed: bool,
+    pub frozen: bool,
     pub media_id: Option<String>,
     pub text: Option<String>,
     pub formatting: Option<ProjectTextFormattingView>,
@@ -1586,6 +1587,57 @@ impl ProjectHostHandle {
                 return action_error(ProjectBridgeError {
                     code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
                     message: "Reverse is available for video and audio media clips.".to_owned(),
+                });
+            }
+        }
+        self.dispatch_command(CommandEnvelope::update_timeline_clip(
+            project_id,
+            project_instance_id,
+            revision,
+            clip.clip_id,
+            clip.timeline_duration,
+            content,
+            clip.settings,
+        ))
+    }
+
+    /// Holds one frame for the clip's whole duration, or releases it.
+    ///
+    /// The source range is left untouched, so unfreezing restores the original
+    /// footage instead of a shortened clip.
+    pub fn set_timeline_clip_frozen(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        frozen: bool,
+    ) -> ProjectActionResult {
+        let (project_id, project_instance_id, revision, track_kind, clip) = match self
+            .find_timeline_clip_state(
+                &project_id,
+                &project_instance_id,
+                expected_revision,
+                &track_id,
+                &clip_id,
+            ) {
+            Ok(result) => result,
+            Err(error) => return action_error(error),
+        };
+        if !matches!(track_kind, TrackKind::Video) {
+            return action_error(ProjectBridgeError {
+                code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                message: "Freeze is available for video clips.".to_owned(),
+            });
+        }
+        let mut content = clip.content;
+        match &mut content {
+            ClipContent::Media { frozen: current, .. } => *current = frozen,
+            ClipContent::Text { .. } | ClipContent::Caption { .. } => {
+                return action_error(ProjectBridgeError {
+                    code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
+                    message: "Freeze is available for video clips.".to_owned(),
                 });
             }
         }
@@ -3803,6 +3855,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
             source_range,
             playback_rate: _,
                 reversed: _,
+                frozen: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -3830,6 +3883,7 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
         content_kind,
         playback_rate: rational_rate_view(clip.content.playback_rate()),
         reversed: clip.content.reversed(),
+        frozen: clip.content.frozen(),
         media_id,
         text,
         formatting,
@@ -4651,6 +4705,7 @@ mod tests {
                     content: ClipContent::Media {
                         playback_rate: or_core::RationalRate::ONE,
                         reversed: false,
+                        frozen: false,
                         media_id,
                         source_range: TimeRange::new(
                             RationalTime::new(1, 2).unwrap(),

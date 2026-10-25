@@ -1772,6 +1772,7 @@ mod tests {
                         source_range,
                         playback_rate: RationalRate::new(3, 2).unwrap(),
                         reversed: false,
+                        frozen: false,
                     },
                     ClipSettings::Visual(VisualSettings::default()),
                 )],

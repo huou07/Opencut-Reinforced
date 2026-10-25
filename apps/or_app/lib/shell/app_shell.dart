@@ -128,6 +128,7 @@ class _PlatformMenus extends StatelessWidget {
     required this.onAddMarker,
     required this.onToggleSnapping,
     required this.onReverseClip,
+    required this.onFreezeClip,
     required this.child,
   });
 
@@ -154,6 +155,9 @@ class _PlatformMenus extends StatelessWidget {
   final VoidCallback onAddMarker;
   final VoidCallback onToggleSnapping;
   final VoidCallback onReverseClip;
+
+  /// Holds the selected clip's first frame, or releases it.
+  final VoidCallback onFreezeClip;
   final Widget child;
 
   static const _command = SingleActivator(
@@ -310,6 +314,10 @@ class _PlatformMenus extends StatelessWidget {
                 PlatformMenuItem(
                   label: 'Reverse Selected Clip',
                   onSelected: isEditor ? onReverseClip : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Freeze Selected Clip',
+                  onSelected: isEditor ? onFreezeClip : null,
                 ),
               ],
             ),
@@ -710,6 +718,8 @@ class _AppShellState extends State<AppShell> {
                     _editorKey.currentState?.confirmDeleteSelectedClip(),
                 onRippleDelete: () =>
                     _editorKey.currentState?.rippleDeleteSelectedClip(),
+                onFreezeClip: () =>
+                    _editorKey.currentState?.toggleSelectedClipFrozen(),
                 onAddMarker: () =>
                     _editorKey.currentState?.addMarkerAtPlayhead(),
                 onToggleSnapping: () =>
@@ -928,6 +938,7 @@ class _AppShellState extends State<AppShell> {
                   _updateTimelineClipAudioSettings,
               onUpdateTimelineClipPlaybackRate: _updateTimelineClipPlaybackRate,
               onSetTimelineClipReversed: _setTimelineClipReversed,
+              onSetTimelineClipFrozen: _setTimelineClipFrozen,
               onMoveTimelineClip: _moveTimelineClip,
               onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
@@ -1012,6 +1023,11 @@ class _AppShellState extends State<AppShell> {
             label: 'Reverse Selected Clip',
             onSelected: () =>
                 _editorKey.currentState?.toggleSelectedClipReverse(),
+          ),
+          CommandPaletteAction(
+            label: 'Freeze Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.toggleSelectedClipFrozen(),
           ),
           CommandPaletteAction(
             label: 'Toggle Snapping',
@@ -3356,6 +3372,22 @@ class _AppShellState extends State<AppShell> {
       trackId: trackId,
       clipId: clipId,
       reversed: reversed,
+    ),
+  );
+
+  Future<ProjectReadModel?> _setTimelineClipFrozen(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool frozen,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.setTimelineClipFrozen(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      frozen: frozen,
     ),
   );
 

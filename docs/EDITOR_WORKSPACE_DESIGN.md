@@ -689,3 +689,27 @@ Limits observed while driving it:
   keystroke typed while a native panel was expected opened the Add Marker dialog.
   That is the designed shortcut, not a bug, but a packaged driver must type only
   when a field or panel is known to be focused.
+
+## 22. Freeze frame (local, 2026-10-25)
+
+A frozen clip holds one frame for its whole duration. It is modelled as a boolean
+on the media content rather than a new content kind, because the clip must keep its
+real source range: that is what lets "Release this frame" restore the original
+footage and lets trim, split and ripple keep working without special cases.
+
+- Core: `ClipContent::Media.frozen` (serde default, skipped when false so older
+  projects keep their exact bytes), `ClipContent::frozen()`, and split propagates the
+  flag to both halves.
+- Bridge: `set_timeline_clip_frozen` flips only that flag through
+  `update_timeline_clip`, so revision checks and undo apply; video-only, with
+  `UNSUPPORTED_CLIP_CONTENT` for other tracks.
+- Preview: `mapped_source_time` returns `source_start` for a frozen clip, so the
+  picture stops while the timeline keeps running; three unit tests cover frozen,
+  forward and reversed mapping.
+- UI: inspector switch "Hold this frame" (`inspector-clip-frozen`), clip menu entries
+  "Hold this frame"/"Release this frame", command palette and Edit menu entries, all
+  through the one command.
+- Evidence: `cargo test -p or_core --lib` 364 passed, `cargo test -p or_app_bridge
+  --lib` 32 passed (see docs/TOOLING.md for the loader path), `flutter test` 159
+  passed, and `scripts/ui_scenarios/clip-freeze.json` PASS drives the real app:
+  import a clip, select it, toggle the switch, and read the inspector back.

@@ -2933,6 +2933,83 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the clip menu holds one frame without the inspector', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'menu-freeze-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'menu-freeze-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'menu-freeze-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-freeze.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Menu freeze');
+
+    final clipFinder = find.byKey(
+      const ValueKey('timeline-clip-menu-freeze-clip'),
+    );
+    await tester.ensureVisible(clipFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(clipFinder, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    // The inspector switch carries the same words; the menu entry is the last one.
+    await tester.tap(find.text('Hold this frame').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.frozenCalls, 1);
+    expect(gateway.lastFrozen, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the inspector holds a single frame', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'freeze-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'freeze-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'freeze-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/freeze.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Freeze review');
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-freeze-clip')));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const ValueKey('inspector-clip-frozen'));
+    expect(toggle, findsOneWidget);
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(gateway.frozenCalls, 1);
+    expect(gateway.lastFrozen, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the inspector offers reversing a media clip', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final clip = ProjectTimelineClip(
@@ -5851,6 +5928,8 @@ class _FakeProjectGateway implements ProjectGateway {
   /// Reverse flips the surface asked for, in order.
   int reversedCalls = 0;
   bool? lastReversed;
+  int frozenCalls = 0;
+  bool? lastFrozen;
   /// The illustration requests the surface sent, in order.
   final List<MotionMaterializeRequest> illustrationRequests = [];
   MotionMaterializationOutcome? illustrationOutcome;
@@ -6541,6 +6620,19 @@ class _FakeProjectGateway implements ProjectGateway {
   }) async {
     reversedCalls += 1;
     lastReversed = reversed;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) async {
+    frozenCalls += 1;
+    lastFrozen = frozen;
     return ProjectActionResult(succeeded: true, view: current);
   }
 

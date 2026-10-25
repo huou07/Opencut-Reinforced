@@ -355,6 +355,8 @@ class RustProjectGateway implements ProjectGateway {
                 formatting: clip.formatting == null
                     ? null
                     : _projectTextFormatting(clip.formatting!),
+                reversed: clip.reversed,
+                frozen: clip.frozen,
                 timelineStart: _projectRationalTime(clip.timelineStart),
                 timelineDuration: _projectRationalTime(clip.timelineDuration),
                 sourceStart: clip.sourceStart == null
@@ -561,6 +563,24 @@ class RustProjectGateway implements ProjectGateway {
       trackId: trackId,
       clipId: clipId,
       reversed: reversed,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) async => _action(
+    await _host(session).setTimelineClipFrozen(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      frozen: frozen,
     ),
   );
 
