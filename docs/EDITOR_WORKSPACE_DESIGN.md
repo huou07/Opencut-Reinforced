@@ -1014,3 +1014,29 @@ overwrite, track reorder, speed, volume, fades, transform by pointer and by keyb
 reverse, freeze, audio cleanup, markers, undo/redo, save/reopen, playback pacing, and
 the whole MotionScene render → insert → export journey. The packaged release was proven
 separately (§26, §29) with window-only captures and `ffprobe` on the exported files.
+
+## 32. Packaged re-verification at `f3522df` (local, 2026-10-25)
+
+The packaged release was rebuilt at this commit and driven by clicks only
+(`scripts/packaged_drive.py`), with window-only captures.
+
+| Claim | Observation |
+| --- | --- |
+| Release bundle builds and packages | `flutter build macos --release` → 47.9 MB; `scripts/package_local_macos_app.sh` → "Packaged and verified local macOS app" |
+| Home renders | sidebar WORKSPACE/APPLICATION, Quick actions, Recent Projects empty state, Developer Preview footer |
+| A saved project opens with its media | native open panel → `Documents/or27/proof.orproj` → "Allow Access" grant → editor shows `1 item`, the real probe line (`mov, mp4, m4a … · 64/125 s · 32×24 h264`), V1 with one clip, and the decoded frame painted in the viewer |
+| Inspector states the sequence | SEQUENCE `Frame rate 30 fps · Duration 0.50 s · Timeline 1 track · 1 clip`; PROJECT `Name r27 packaged proof · Save state Saved to disk` |
+| Export produces a playable file | Export → MP4 → save panel → `Export Here` → receipt `Exported r27 packaged proof.mp4 · 3 KB` with `Show in Finder`, top bar `Export complete`; `ffprobe` → `h264 32×24`, `r_frame_rate 30/1`, `aac`, `duration=0.512000`, 2 635 bytes |
+
+Limits this round confirmed, all host-side rather than product defects:
+
+- A sandboxed packaged app cannot read arbitrary paths, so seeding the recents
+  file from `/tmp` shows "No recent projects". Opening through the panel (with its
+  security-scoped grant) works.
+- Neither synthetic typing (`CGEvent` unicode) nor `⌘V` paste reaches a Flutter
+  text field in the release build, so a project cannot be named by the driver.
+  Flows must be reached by clicking existing rows; project creation stays an
+  owner-driven step in the packaged app.
+- The pacing recorder cannot write to `/tmp` from the sandboxed bundle, so the
+  release pacing numbers in §30.2 remain a measurement from the unpackaged
+  release build (`--dart-define=OR_PACING_LOG=…`).
