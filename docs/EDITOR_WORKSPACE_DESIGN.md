@@ -564,6 +564,34 @@ Limits, stated plainly: the window includes idle time between presses (that is w
 decode cost is trivial and a 1080p source adds decode work on the session thread
 (181.7 fps measured in 30.1); and this measures one playback path, not export.
 
+## 31. Multi-clip move: what it needs and why it was not rushed
+
+Multi-select itself is presentation; the reason it is still open is the command
+path. Two facts decide the shape, both read from the code rather than guessed:
+
+- `execute_transaction` is not a general multi-command transaction.
+  `apply_forward_commands` only stages commands through `stage_groupable_command`,
+  which today means project rename, so clip moves cannot travel inside a
+  transaction.
+- One undo entry per gesture requires one `ChangeSet`. `ProjectChange` already
+  carries `TimelineClipMoved { from_track_id, from_index, to_track_id, to_index,
+  before, after }`, and a `ChangeSet` holds a list of changes applied and inverted
+  in order, so a group move can be one revision and one undo entry by emitting N
+  such changes from a single command.
+
+So the unit is a new atomic command, `timeline.clips.move`, with arguments
+`{ moves: [{ clip_id, timeline_start }] }` (position only, no track change). It
+must validate the whole batch before touching state - unique clip ids, every clip
+present, every hosting track unlocked, and a final-state overlap check - then
+stage the auto-committed reorder indices by simulating the batch on a cloned
+timeline, because emitting per-clip indices computed against the original state
+would corrupt the second move on a shared track.
+
+Not shipped in this round because a half-built group move is worse than a
+single-clip one: today drag moves exactly one clip and does it correctly. The
+remaining UI work is selection state (`_selectedClipId` to a set), the marquee, and
+one commit per gesture.
+
 ### 30.1 Preview decode stays on the CPU, and why that is the correct call
 
 The vendored FFmpeg in
