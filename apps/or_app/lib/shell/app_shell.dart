@@ -127,6 +127,7 @@ class _PlatformMenus extends StatelessWidget {
     required this.onRippleDelete,
     required this.onAddMarker,
     required this.onToggleSnapping,
+    required this.onReverseClip,
     required this.child,
   });
 
@@ -152,6 +153,7 @@ class _PlatformMenus extends StatelessWidget {
   final VoidCallback onRippleDelete;
   final VoidCallback onAddMarker;
   final VoidCallback onToggleSnapping;
+  final VoidCallback onReverseClip;
   final Widget child;
 
   static const _command = SingleActivator(
@@ -304,6 +306,10 @@ class _PlatformMenus extends StatelessWidget {
                 PlatformMenuItem(
                   label: 'Toggle Snapping',
                   onSelected: isEditor ? onToggleSnapping : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Reverse Selected Clip',
+                  onSelected: isEditor ? onReverseClip : null,
                 ),
               ],
             ),
@@ -708,6 +714,8 @@ class _AppShellState extends State<AppShell> {
                     _editorKey.currentState?.addMarkerAtPlayhead(),
                 onToggleSnapping: () =>
                     _editorKey.currentState?.toggleSnapping(),
+                onReverseClip: () =>
+                    _editorKey.currentState?.toggleSelectedClipReverse(),
                 child: Scaffold(
                 body: SafeArea(
                   bottom: false,
