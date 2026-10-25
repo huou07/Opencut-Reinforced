@@ -1107,3 +1107,28 @@ clip ids, and one rational delta.
   selection is built by click and shift-click.
 - The drag preview offsets only the clip under the pointer; the commit moves the
   whole set. A group outline during the drag is the next polish step.
+
+## 34. Verification sweep at `95ffa11` (local, 2026-10-25)
+
+Measured after the marquee, the narrow-clip clamp and the atomic group move
+landed:
+
+| Lane | Result |
+| --- | --- |
+| `cargo test -p or_core --lib` | 365 passed |
+| `cargo test -p or_app_bridge --lib` (with the bundled FFmpeg on the loader path) | 32 passed, 3 ignored |
+| `flutter analyze --no-pub` | clean |
+| `flutter test --no-pub` | 165 passed |
+| `scripts/or_ui.py` journeys | 20/20 PASS |
+
+Journeys: `audio-cleanup`, `auto-track`, `blade-cut`, `clip-freeze`,
+`clip-reverse`, `clipboard`, `compact-editor-journey`, `editor-journey`,
+`export-ready`, `illustration-video`, `interaction-latency`,
+`multi-select-move`, `overwrite-insert`, `playback-pacing`, `ripple-trim`,
+`slip-roll-slide`, `track-reorder`, `viewer-transform`, `workspace-chrome`,
+`workspace-layout`.
+
+Still open, unchanged: the group drag is proven by the widget suite but not yet
+by a harness gesture on very narrow clips; VideoToolbox preview decode waits on
+a vendored FFmpeg with the VT H.264 decoder; the packaged build cannot be typed
+into, so project naming stays owner-driven.
