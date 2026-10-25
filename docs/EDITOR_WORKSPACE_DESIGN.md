@@ -742,3 +742,19 @@ dialog, because the owner already said what they meant by selecting the set.
 - Evidence: widget test `shift-click selects a second clip and one Delete removes
   both` (asserts `2 clips`, two delete commands, no dialog), `flutter test` 161
   passed, `editor-journey.json` PASS.
+
+## 25. What the M5 actually does today (local, 2026-10-25)
+
+Objective item "use the M5 hardware properly" is met by these four, each with a
+source of truth rather than a claim:
+
+| Concern | Where it lives | Evidence |
+| --- | --- | --- |
+| Hardware encode | `crates/or_media/src/encoder.rs:164` selects `h264_videotoolbox` for the MP4 profile | a real 6.0 s 1280x720 H.264/AAC export decoded clean with ffprobe |
+| Bounded decode concurrency | `MediaArtifactService` runs a `JobManager` with `JobManagerConfig::new(2, 32, 128)` (`crates/or_app_bridge/src/api/project.rs:688`) — thumbnails and waveforms queue behind two workers and identical in-flight requests share one job | job-manager unit tests plus `media_artifacts_integration.rs` |
+| Cached thumbnails and waveforms | artifact cache with `CacheStoreConfig::new(8 MiB entry, 256 MiB total)` | `system_ffmpeg_generates_cached_thumbnail_and_waveform_previews`, `thumbnail_and_waveform_generators_cache_pngs_and_emit_ordered_events` |
+| Measured playback | harness `frames` op over the real app | 148-156 frames at 29.9 fps of a 30 fps sequence, build p95 0.66-0.76 ms, gap p95 33.33 ms (debug lane) |
+
+Not done, and stated as such: preview *decode* still runs through the linked FFmpeg
+software path (`crates/or_media/src/decoder.rs` has no `videotoolbox` request), and
+release-mode pacing has no measurement lane on this host (see §21.4 and §26).
