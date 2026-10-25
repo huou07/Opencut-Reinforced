@@ -302,6 +302,22 @@ def run_macos(payload: dict, report_dir: Path) -> int:
         f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n",
         encoding="utf-8")
     if completed.returncode != 0:
+        # `flutter test` on macOS fails its teardown when the tool cannot bring the
+        # host window forward ("Failed to foreground app; open returned 1"), which
+        # says nothing about the scenario. The transcript is the observation, so a
+        # complete run with no failing step is a pass even when the runner exits
+        # non-zero for that reason; anything else keeps the failure.
+        transcript = read_transcript(artifacts, payload["name"])
+        steps = transcript.get("steps", [])
+        teardown_only = (
+            completed.returncode == 1
+            and steps
+            and all(step.get("status") == "ok" for step in steps)
+            and "Failed to foreground app" in (completed.stderr + completed.stdout)
+        )
+        if teardown_only:
+            passed = finish(report_dir, artifacts, payload, "macos")
+            return passed
         reason = [line for line in (completed.stdout + completed.stderr).splitlines()
                   if line.strip()][-8:]
         payload_out = {
@@ -458,10 +474,15 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
         if step.get("status") != "ok" and step.get("detail"):
             print(f"      {step['detail']}")
         if step.get("measurement"):
+            # Latency runs and frame-pacing runs report different fields; print what
+            # the step measured instead of assuming one shape.
             measurement = step["measurement"]
-            print(f"      measured {measurement['name']}: p50 "
-                  f"{measurement['p50_ms']} ms / p95 {measurement['p95_ms']} ms "
-                  f"over {measurement['repeat']} runs")
+            fields = " ".join(
+                f"{key}={value}"
+                for key, value in measurement.items()
+                if key not in {"name", "limits"}
+            )
+            print(f"      measured {measurement.get('name', step['op'])}: {fields}")
     if report["screens"]:
         print(f"  screens: {report['screens'].get('count')} "
               f"({', '.join(s['destination'] for s in report['screens']['screens'])})")
