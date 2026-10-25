@@ -386,9 +386,23 @@ machine. Evidence class is stated per row; none of it is a release claim.
 | Freeze a clip to a held frame (same four routes) | `clip-freeze.json` PASS + widget tests on `inspector-clip-frozen` and the clip menu |
 | Playback pacing measured from engine timings | `playback-pacing.json`: 29.9 fps, build p95 0.76 ms, gap p95 33.33 ms (debug lane) |
 
-Known gaps that stay out of "done": release-mode pacing (the semantic harness
-cannot run a profile build), VideoToolbox preview decode, reverse/freeze frame,
-multi-select marquee.
+Delivered since that table was written, each with the check that produced it:
+
+| Surface | Evidence |
+| --- | --- |
+| Reverse a clip (inspector, clip menu, palette, Edit menu) | `cargo test -p or_core --lib` 364 passed; `scripts/ui_scenarios/clip-reverse.json` PASS |
+| Hold one frame / release it (same four routes) | `crates/or_app_bridge` source-time tests; `scripts/ui_scenarios/clip-freeze.json` PASS |
+| Insert media into a timeline with no track yet | `auto-track.json` PASS; packaged release driven by clicks |
+| MotionScene authored, rendered, inserted and exported in the packaged app | `illustration-video.json` PASS; packaged journey + `ffprobe` |
+| Native macOS menu bar with File/Edit/View/OR | widget test on `PlatformMenuBar`; packaged bar read via System Events |
+| Export receipt naming the file, with Show in Finder | widget suite; the reveal path compiles and routes (not driven end to end) |
+| Release-mode frame pacing recorded inside the packaged build | `docs/EDITOR_WORKSPACE_DESIGN.md` §30.2 (build p95 1.4-1.5 ms, raster p95 1.9-2.0 ms) |
+
+Known gaps that stay out of "done": VideoToolbox preview decode (the vendored
+FFmpeg has no `h264_videotoolbox` decoder; decode measured at 181.7 fps for
+1080p on the CPU instead), multi-select marquee and group drag (needs the atomic
+`timeline.clips.move` command described in `docs/EDITOR_WORKSPACE_DESIGN.md` §31),
+and driving native file panels with synthetic typing on this host.
 
 ## PRODUCTION REQUIRED FUTURE
 
