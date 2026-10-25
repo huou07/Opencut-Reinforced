@@ -1147,7 +1147,22 @@ The second one closes a real gap: moving a clip between tracks is the operation
 that makes a multi-track timeline worth having, and nothing until now exercised
 it through the pointer.
 
-### Marquee selection: proven. Marquee *drag*: not claimed.
+### Marquee selection and marquee drag: both proven
+
+`scripts/ui_scenarios/multi-select-move.json` asserts the band result explicitly
+(`expect_text "2 clips"`), then drags one of the band-selected clips and asserts the
+moved geometry (`expect` with `label_regex "spans 1/1 to 5/4"`), then `⌘Z` and asserts
+the clips are back. All three steps pass.
+
+The reason it took a round to get there is worth keeping: the band used to be a raw
+`Listener` inside the lane stack. A raw listener does not join the gesture arena, so
+the horizontal `SingleChildScrollView` around the lanes took the drag for a scroll,
+and Flutter's `Scrollable` mounts an `IgnorePointer` over its own content for the rest
+of that gesture — which is why a clip was not hit-testable at its own centre right
+after a band (`hitTestOnBinding` returned the viewport path with no clip render
+object, and `_beginMoveGesture` never ran). The band is now a gesture detector with
+`onHorizontalDragStart/Update/End/Cancel`, so it wins that arena, the scroller no
+longer steals the pointer, and the drag after a band reaches the clip.
 
 `scripts/ui_scenarios/multi-select-move.json` asserts the band result explicitly
 (`expect_text "2 clips"`), so a silent non-selection cannot pass any more, and it
@@ -1164,12 +1179,12 @@ failure is understood well enough to state honestly rather than paper over:
   subtree) made the band stop selecting instead, which is why that experiment was
   reverted.
 
-The multi-clip move itself is proven twice: `timeline.clips.move` is one atomic
-command with one history entry (`cargo test -p or_core --lib` 365, including a
-two-clip move that one `undo` restores), and the widget suite drives
+The multi-clip move itself is proven three times: `timeline.clips.move` is one
+atomic command with one history entry (`cargo test -p or_core --lib` 365, including a
+two-clip move that one `undo` restores), the widget suite drives
 `dragging one of several selected clips moves the whole selection once` through a
-shift-click selection. What stays open is only the *pointer* route from a band
-selection into that command.
+shift-click selection, and the harness now drives band → drag → moved geometry →
+undo through the real pointer.
 
 Evidence class: local, debug-lane (harness) plus unit/widget suites. Not a
 packaged-build claim.

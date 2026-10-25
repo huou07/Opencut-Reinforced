@@ -167,6 +167,12 @@
    "budget_ms": 20000
   },
   {
+   "op": "expect",
+   "selector": {
+    "label_regex": "spans 1/1 to 5/4"
+   }
+  },
+  {
    "op": "tree",
    "name": "after-group-move"
   },

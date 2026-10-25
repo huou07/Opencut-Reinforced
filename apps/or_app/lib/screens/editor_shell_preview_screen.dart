@@ -7789,16 +7789,16 @@ class _TimelineTrackLane extends StatelessWidget {
               ),
             if (onMarqueeStart != null)
               Positioned.fill(
-                // A raw listener, not a gesture detector: the marquee must not
-                // join the gesture arena, or it would steal a drag that starts
-                // on a clip. It also stays out of the way when the pointer lands
-                // on a clip, which is what the pointer means.
-                child: Listener(
+                // A gesture detector, not a raw listener: the band has to win
+                // the horizontal-drag arena, otherwise the timeline scroller
+                // takes the pointer and leaves its content un-hit-testable
+                // (IgnorePointer) for the rest of the gesture.
+                child: GestureDetector(
                   key: ValueKey('timeline-marquee-${track.trackId}'),
                   behavior: HitTestBehavior.translucent,
-                  onPointerDown: (event) {
+                  onHorizontalDragStart: (details) {
                     if (bladeMode || track.state.locked) return;
-                    final local = event.localPosition;
+                    final local = details.localPosition;
                     final seconds = local.dx / pixelsPerSecond;
                     final overClip = clips.any(
                       (clip) =>
@@ -7808,10 +7808,10 @@ class _TimelineTrackLane extends StatelessWidget {
                     if (overClip) return;
                     onMarqueeStart!(local);
                   },
-                  onPointerMove: (event) =>
-                      onMarqueeUpdate?.call(event.localPosition),
-                  onPointerUp: (_) => onMarqueeEnd?.call(),
-                  onPointerCancel: (_) => onMarqueeEnd?.call(),
+                  onHorizontalDragUpdate: (details) =>
+                      onMarqueeUpdate?.call(details.localPosition),
+                  onHorizontalDragEnd: (_) => onMarqueeEnd?.call(),
+                  onHorizontalDragCancel: () => onMarqueeEnd?.call(),
                 ),
               ),
             if (marqueeRect != null)
