@@ -95,6 +95,188 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+/// The macOS menu bar. Every item routes to the same callback the on-screen
+/// control uses, so the menu can never drift from the visible surface.
+/// Non-Apple platforms get the child unchanged: a menu bar that only exists on
+/// one platform should not change the widget tree anywhere else.
+class _PlatformMenus extends StatelessWidget {
+  const _PlatformMenus({
+    required this.isEditor,
+    required this.canExport,
+    required this.canEditProject,
+    required this.onNewProject,
+    required this.onOpenProject,
+    required this.onSaveProject,
+    required this.onExport,
+    required this.onUndo,
+    required this.onRedo,
+    required this.onCloseProject,
+    required this.onHome,
+    required this.onProjects,
+    required this.onSettings,
+    required this.onCommandPalette,
+    required this.onSplit,
+    required this.onDuplicate,
+    required this.onDelete,
+    required this.onRippleDelete,
+    required this.onAddMarker,
+    required this.child,
+  });
+
+  final bool isEditor;
+  final bool canExport;
+  final bool canEditProject;
+  final VoidCallback onNewProject;
+  final VoidCallback onOpenProject;
+  final VoidCallback onSaveProject;
+  final VoidCallback onExport;
+  final VoidCallback onUndo;
+  final VoidCallback onRedo;
+  final VoidCallback onCloseProject;
+  final VoidCallback onHome;
+  final VoidCallback onProjects;
+  final VoidCallback onSettings;
+  final VoidCallback onCommandPalette;
+  final VoidCallback onSplit;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+  final VoidCallback onRippleDelete;
+  final VoidCallback onAddMarker;
+  final Widget child;
+
+  static const _command = SingleActivator(
+    LogicalKeyboardKey.keyZ,
+    meta: true,
+  );
+  static const _shiftCommand = SingleActivator(
+    LogicalKeyboardKey.keyZ,
+    meta: true,
+    shift: true,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!Platform.isMacOS) return child;
+    return PlatformMenuBar(
+      menus: [
+        PlatformMenu(
+          label: 'File',
+          menus: [
+            PlatformMenuItem(
+              label: 'New Project…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.keyN, meta: true),
+              onSelected: onNewProject,
+            ),
+            PlatformMenuItem(
+              label: 'Open Project…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.keyO, meta: true),
+              onSelected: onOpenProject,
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Save',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyS,
+                    meta: true,
+                  ),
+                  onSelected: canEditProject ? onSaveProject : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Export Video…',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.keyE,
+                    meta: true,
+                  ),
+                  onSelected: canExport ? onExport : null,
+                ),
+              ],
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Close Project',
+                  onSelected: canEditProject ? onCloseProject : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+        PlatformMenu(
+          label: 'Edit',
+          menus: [
+            PlatformMenuItem(
+              label: 'Undo',
+              shortcut: _command,
+              onSelected: canEditProject ? onUndo : null,
+            ),
+            PlatformMenuItem(
+              label: 'Redo',
+              shortcut: _shiftCommand,
+              onSelected: canEditProject ? onRedo : null,
+            ),
+            PlatformMenuItemGroup(
+              members: [
+                PlatformMenuItem(
+                  label: 'Split at Playhead',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.keyB, meta: true),
+                  onSelected: isEditor ? onSplit : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Duplicate Clip',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.keyD, meta: true),
+                  onSelected: isEditor ? onDuplicate : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Delete Clip',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.delete),
+                  onSelected: isEditor ? onDelete : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Ripple Delete Clip',
+                  shortcut: const SingleActivator(
+                    LogicalKeyboardKey.delete,
+                    shift: true,
+                  ),
+                  onSelected: isEditor ? onRippleDelete : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Add Marker',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.keyM),
+                  onSelected: isEditor ? onAddMarker : null,
+                ),
+              ],
+            ),
+          ],
+        ),
+        PlatformMenu(
+          label: 'View',
+          menus: [
+            PlatformMenuItem(label: 'Home', onSelected: onHome),
+            PlatformMenuItem(label: 'Projects', onSelected: onProjects),
+            PlatformMenuItem(
+              label: 'Command Palette…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+              onSelected: onCommandPalette,
+            ),
+          ],
+        ),
+        PlatformMenu(
+          label: 'OR',
+          menus: [
+            PlatformMenuItem(
+              label: 'Settings…',
+              shortcut: const SingleActivator(LogicalKeyboardKey.comma, meta: true),
+              onSelected: onSettings,
+            ),
+          ],
+        ),
+      ],
+      child: child,
+    );
+  }
+}
+
 class _AppShellState extends State<AppShell> {
   AppDestination _destination = AppDestination.home;
   ProjectSessionHandle? _activeSession;
@@ -417,7 +599,36 @@ class _AppShellState extends State<AppShell> {
             },
             child: Focus(
               autofocus: true,
-              child: Scaffold(
+              child: _PlatformMenus(
+                isEditor: editor,
+                canExport:
+                    editor &&
+                    _activeSession != null &&
+                    widget.projectFilePicker.supportsExport &&
+                    !(_exportJob?.isActive ?? false) &&
+                    !_exportPublishing,
+                canEditProject: editor && _activeSession != null,
+                onNewProject: _createProject,
+                onOpenProject: _openProject,
+                onSaveProject: _saveProject,
+                onExport: () => unawaited(_startExport()),
+                onUndo: _undoProject,
+                onRedo: _redoProject,
+                onCloseProject: _closeProject,
+                onHome: () => _select(AppDestination.home),
+                onProjects: () => _select(AppDestination.projects),
+                onSettings: () => _select(AppDestination.settings),
+                onCommandPalette: _openCommandPalette,
+                onSplit: () => _editorKey.currentState?.splitSelectedClip(),
+                onDuplicate: () =>
+                    _editorKey.currentState?.duplicateSelectedClip(),
+                onDelete: () =>
+                    _editorKey.currentState?.confirmDeleteSelectedClip(),
+                onRippleDelete: () =>
+                    _editorKey.currentState?.rippleDeleteSelectedClip(),
+                onAddMarker: () =>
+                    _editorKey.currentState?.addMarkerAtPlayhead(),
+                child: Scaffold(
                 body: SafeArea(
                   bottom: false,
                   child: Column(
@@ -493,6 +704,7 @@ class _AppShellState extends State<AppShell> {
                         onSelected: _select,
                       )
                     : null,
+              ),
               ),
             ),
           ),

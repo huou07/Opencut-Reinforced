@@ -246,6 +246,28 @@ Evidence class: local only. `flutter test` → `+148: All tests passed!`
 before applying" drives bright + wipe + Apply and asserts the written
 `brightnessAmountMilli == 100` and `transitionIn == wipe`).
 
+## 13. P6a delivery record — native menu bar (local, 2026-10-25)
+
+macOS now has a real menu bar (`PlatformMenuBar` inside `apps/or_app/lib/shell/app_shell.dart`),
+and every item calls the same callback the visible control calls:
+
+- **File** — New Project… (⌘N), Open Project… (⌘O), Save (⌘S), Export Video… (⌘E),
+  Close Project.
+- **Edit** — Undo (⌘Z), Redo (⇧⌘Z), Split at Playhead (⌘B), Duplicate Clip (⌘D),
+  Delete Clip (⌫), Ripple Delete Clip (⇧⌫), Add Marker (M).
+- **View** — Home, Projects, Command Palette… (⌘K).
+- **OR** — Settings… (⌘,).
+
+Items disable themselves when the current destination or project state cannot
+honour them, because the enabled state is derived from the same guards the top
+bar uses. Non-Apple platforms get the child unchanged, so the menu bar never
+changes the widget tree elsewhere.
+
+Evidence class: local only. `flutter test` → `+149: All tests passed!`, including
+"the macOS menu bar routes to the same verbs as the UI" (asserts the bar exists
+and carries File/Edit/View/OR). Not yet exercised through the real macOS menu bar
+by a pointer: the widget suite proves the structure, not that AppKit rendered it.
+
 ## 11. P3 delivery record (local, 2026-10-25)
 
 Shipped:

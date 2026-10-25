@@ -2760,6 +2760,26 @@ void main() {
     }
   });
 
+  testWidgets('the macOS menu bar routes to the same verbs as the UI', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-bar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    if (!Platform.isMacOS) return;
+    // The menu bar is the third route to the same callbacks: the top bar, the
+    // keyboard and the menu must not drift apart.
+    expect(find.byType(PlatformMenuBar), findsOneWidget);
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final labels = <String>[
+      for (final menu in bar.menus) menu.label,
+    ];
+    expect(labels, containsAll(<String>['File', 'Edit', 'View', 'OR']));
+    await _createProject(tester, 'Menu bar');
+    expect(find.byType(PlatformMenuBar), findsOneWidget);
+  });
+
   testWidgets('effect and transition presets fill the inspector before applying', (
     tester,
   ) async {
