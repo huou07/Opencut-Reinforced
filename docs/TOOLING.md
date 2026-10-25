@@ -503,6 +503,18 @@ Right-click the clip by its own label, not by key regex with `allow_multiple`: t
 first clip in the lane is rarely the one under test, and the dialog would edit the
 wrong clip while the scenario still looked green.
 
+## Building a release bundle: use the script
+
+`scripts/build_macos_release.sh` builds (and, with `--package <bundle-id>`,
+packages and codesigns) the local macOS release bundle. It compares the bridge's
+generated content hash on both sides, fails when they disagree, and clears the
+native-assets hook cache only when the hash changed since the last build. That is
+the trap in the next section; the script makes it impossible to ship by accident.
+
+```
+scripts/build_macos_release.sh --package io.github.huou07.orApp.local
+```
+
 ## After flutter_rust_bridge_codegen, clear the hook cache
 
 The bridge is built by a native-assets hook (`packages/or_app_bridge/hook/build.dart`)
