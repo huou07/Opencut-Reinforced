@@ -125,6 +125,7 @@ class _PlatformMenus extends StatelessWidget {
     required this.onDelete,
     required this.onRippleDelete,
     required this.onAddMarker,
+    required this.onToggleSnapping,
     required this.child,
   });
 
@@ -149,6 +150,7 @@ class _PlatformMenus extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onRippleDelete;
   final VoidCallback onAddMarker;
+  final VoidCallback onToggleSnapping;
   final Widget child;
 
   static const _command = SingleActivator(
@@ -261,6 +263,10 @@ class _PlatformMenus extends StatelessWidget {
                   label: 'Add Marker',
                   shortcut: const SingleActivator(LogicalKeyboardKey.keyM),
                   onSelected: isEditor ? onAddMarker : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Toggle Snapping',
+                  onSelected: isEditor ? onToggleSnapping : null,
                 ),
               ],
             ),
@@ -663,6 +669,8 @@ class _AppShellState extends State<AppShell> {
                     _editorKey.currentState?.rippleDeleteSelectedClip(),
                 onAddMarker: () =>
                     _editorKey.currentState?.addMarkerAtPlayhead(),
+                onToggleSnapping: () =>
+                    _editorKey.currentState?.toggleSnapping(),
                 child: Scaffold(
                 body: SafeArea(
                   bottom: false,
