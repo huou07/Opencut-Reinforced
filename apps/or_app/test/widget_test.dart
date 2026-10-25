@@ -1994,6 +1994,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('copy and paste recreate the clip at the playhead', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'copy-clip',
+      mediaId: 'copy-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'copy-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'copy-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-copy.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Timeline copy');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-copy-clip')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Clip copied.'), findsOneWidget);
+    expect(gateway.insertTimelineClipCalls, 0);
+
+    // The eye moved, so the paste lands where the playhead is.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTrackId, 'copy-track');
+    // The playhead never moved, so the paste anchors after the copied clip.
+    expect(
+      _sameRational(
+        gateway.lastInsertTimelineStart!,
+        ProjectRationalTime(BigInt.from(2), 1),
+      ),
+      isTrue,
+    );
+    expect(_sameRational(gateway.lastInsertDuration!, clip.timelineDuration), isTrue);
+    expect(gateway.lastSession!.clips['copy-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'timeline selection supports Ctrl+D and zoom stays presentation-only',
     (tester) async {

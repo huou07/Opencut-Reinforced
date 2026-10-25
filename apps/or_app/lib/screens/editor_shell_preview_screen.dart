@@ -50,6 +50,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onAddTextTrack,
     this.onAddCaptionTrack,
     this.onOpenMotion,
+    this.onCopyClip,
+    this.onPasteClip,
     this.motionScene,
     this.onInsertMotionScene,
     this.onRerenderMotionScene,
@@ -122,6 +124,18 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onAddTextTrack;
   final VoidCallback? onAddCaptionTrack;
   final VoidCallback? onOpenMotion;
+  final void Function(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  )?
+  onCopyClip;
+  final void Function(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectRationalTime position,
+  )?
+  onPasteClip;
   /// The scene this session last rendered, so the Motion tab can report the
   /// file it produced instead of forgetting the moment the dialog closed.
   final MotionSceneSnapshot? motionScene;
@@ -556,6 +570,10 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   void duplicateSelectedClip() =>
       _timelineKey.currentState?.duplicateSelectedClip();
 
+  void copySelectedClip() => _timelineKey.currentState?.copySelectedClip();
+
+  void pasteClipboardClip() => _timelineKey.currentState?.pasteClipboardClip();
+
   void confirmDeleteSelectedClip() =>
       _timelineKey.currentState?.confirmDeleteSelectedClip();
 
@@ -738,6 +756,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             compact: false,
             previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
+            onCopyClip: widget.onCopyClip,
+            onPasteClip: widget.onPasteClip,
             project: widget.project,
             tracks: widget.timelineTracks,
             clipPages: widget.timelineClipPages,
@@ -823,6 +843,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             compact: true,
             previewState: _previewState,
             isProjectWorkspace: widget.isProjectWorkspace,
+            onCopyClip: widget.onCopyClip,
+            onPasteClip: widget.onPasteClip,
             project: widget.project,
             tracks: widget.timelineTracks,
             clipPages: widget.timelineClipPages,
@@ -4595,6 +4617,8 @@ class _TimelinePanel extends StatefulWidget {
     required this.onTrimClip,
     required this.onSplitClip,
     this.bladeMode = false,
+    this.onCopyClip,
+    this.onPasteClip,
     this.onToggleBladeMode,
     required this.onSlipClip,
     required this.onRollClip,
@@ -4690,6 +4714,18 @@ class _TimelinePanel extends StatefulWidget {
 
   /// Blade mode turns a click on a clip into a split at the pointer.
   final bool bladeMode;
+  final void Function(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  )?
+  onCopyClip;
+  final void Function(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectRationalTime position,
+  )?
+  onPasteClip;
   final VoidCallback? onToggleBladeMode;
   final Future<void> Function(
     ProjectReadModel,
@@ -5592,6 +5628,43 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     if (_horizontalController.hasClients) {
       _horizontalController.jumpTo(0);
     }
+  }
+
+  void copySelectedClip() {
+    final project = widget.project;
+    final clip = _selectedClip;
+    final track = _selectedTrack;
+    if (project == null || clip == null || track == null) return;
+    final onCopy = widget.onCopyClip;
+    if (onCopy == null) return;
+    onCopy(project, track, clip);
+  }
+
+  /// Paste at the playhead on the selected track, which is where the eye is:
+  /// the owner moved the playhead to the place the clip belongs.
+  void pasteClipboardClip() {
+    final project = widget.project;
+    final track = _selectedTrack;
+    final onPaste = widget.onPasteClip;
+    var position = widget.previewState.value?.position;
+    // A paste at the very start would sit on top of the first clip. When the
+    // playhead is still at zero and a clip is selected, the clip the owner is
+    // working with is the better anchor: paste lands right after it.
+    final selected = _selectedClip;
+    if (position != null &&
+        position.numerator == BigInt.zero &&
+        selected != null) {
+      position = ProjectRationalTime.tryParse(selected.timelineEnd.canonical);
+    }
+    if (project == null ||
+        track == null ||
+        position == null ||
+        track.state.locked ||
+        widget.busy ||
+        onPaste == null) {
+      return;
+    }
+    onPaste(project, track, position);
   }
 
   void duplicateSelectedClip() {

@@ -1,0 +1,126 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "budget_ms": 600000,
+  "steps": [
+    {
+      "op": "shot",
+      "name": "home"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Clipboard review"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "tiny_h264",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Insert",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "key",
+      "chord": "meta+c"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Clip copied",
+      "budget_ms": 10000
+    },
+    {
+      "op": "key",
+      "chord": "meta+v"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "duration 1/2, spans",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tree",
+      "name": "pasted"
+    },
+    {
+      "op": "shot",
+      "name": "pasted"
+    }
+  ]
+}

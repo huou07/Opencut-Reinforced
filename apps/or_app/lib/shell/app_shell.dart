@@ -21,6 +21,7 @@ import '../project/project_file_picker.dart';
 import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
 import '../project/source_path.dart';
+import '../project/timeline_clip_clipboard.dart';
 import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -119,6 +120,8 @@ class _PlatformMenus extends StatelessWidget {
     required this.onCommandPalette,
     required this.onSplit,
     required this.onDuplicate,
+    required this.onCopy,
+    required this.onPaste,
     required this.onDelete,
     required this.onRippleDelete,
     required this.onAddMarker,
@@ -141,6 +144,8 @@ class _PlatformMenus extends StatelessWidget {
   final VoidCallback onCommandPalette;
   final VoidCallback onSplit;
   final VoidCallback onDuplicate;
+  final VoidCallback onCopy;
+  final VoidCallback onPaste;
   final VoidCallback onDelete;
   final VoidCallback onRippleDelete;
   final VoidCallback onAddMarker;
@@ -228,6 +233,16 @@ class _PlatformMenus extends StatelessWidget {
                   label: 'Duplicate Clip',
                   shortcut: const SingleActivator(LogicalKeyboardKey.keyD, meta: true),
                   onSelected: isEditor ? onDuplicate : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Copy Clip',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.keyC, meta: true),
+                  onSelected: isEditor ? onCopy : null,
+                ),
+                PlatformMenuItem(
+                  label: 'Paste Clip',
+                  shortcut: const SingleActivator(LogicalKeyboardKey.keyV, meta: true),
+                  onSelected: isEditor ? onPaste : null,
                 ),
                 PlatformMenuItem(
                   label: 'Delete Clip',
@@ -413,7 +428,9 @@ class _AppShellState extends State<AppShell> {
             // Blade mode is a mode, not a one-shot command: `C` arms the
             // pointer and `V` puts it back. Both are plain letters, so they
             // stop at a focused text field like the rest of the editing verbs.
-            SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
+            OrCommandActivator(LogicalKeyboardKey.keyC): CopyClipIntent(),
+        OrCommandActivator(LogicalKeyboardKey.keyV): PasteClipIntent(),
+        SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
             SingleActivator(LogicalKeyboardKey.keyV): SetBladeModeIntent(false),
             SingleActivator(LogicalKeyboardKey.delete, shift: true):
                 RippleDeleteClipIntent(),
@@ -553,7 +570,21 @@ class _AppShellState extends State<AppShell> {
                   return null;
                 },
               ),
-              SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
+              CopyClipIntent: CallbackAction<CopyClipIntent>(
+              onInvoke: (intent) {
+                if (!editor || _textInputFocused) return null;
+                _editorKey.currentState?.copySelectedClip();
+                return null;
+              },
+            ),
+            PasteClipIntent: CallbackAction<PasteClipIntent>(
+              onInvoke: (intent) {
+                if (!editor || _textInputFocused) return null;
+                _editorKey.currentState?.pasteClipboardClip();
+                return null;
+              },
+            ),
+            SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
                 onInvoke: (intent) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.setBladeMode(intent.enabled);
@@ -624,6 +655,8 @@ class _AppShellState extends State<AppShell> {
                 onSplit: () => _editorKey.currentState?.splitSelectedClip(),
                 onDuplicate: () =>
                     _editorKey.currentState?.duplicateSelectedClip(),
+                onCopy: () => _editorKey.currentState?.copySelectedClip(),
+                onPaste: () => _editorKey.currentState?.pasteClipboardClip(),
                 onDelete: () =>
                     _editorKey.currentState?.confirmDeleteSelectedClip(),
                 onRippleDelete: () =>
@@ -725,6 +758,7 @@ class _AppShellState extends State<AppShell> {
 
   /// The last MotionScene this session rendered, if any.
   MotionSceneSnapshot? _motionScene;
+  TimelineClipClipboard? _clipboardClip;
   bool _motionRerendering = false;
 
   Widget _screen() => switch (_destination) {
@@ -814,6 +848,8 @@ class _AppShellState extends State<AppShell> {
               onAddCaptionTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
               onOpenMotion: () => unawaited(_openMotionMaterialize()),
+              onCopyClip: _copyTimelineClip,
+              onPasteClip: _pasteTimelineClip,
               motionScene: _motionScene,
               onInsertMotionScene: _insertMotionScene,
               onRerenderMotionScene: _motionRerendering
@@ -3223,6 +3259,75 @@ class _AppShellState extends State<AppShell> {
         identical(session, _activeSession)) {
       await _refreshProjectState(session);
     }
+  }
+
+  void _copyTimelineClip(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  ) {
+    final copied = TimelineClipClipboard.fromClip(clip);
+    if (copied == null) {
+      _showUnavailable('This clip has nothing to copy.');
+      return;
+    }
+    setState(() => _clipboardClip = copied);
+    setState(() => _projectNotice = 'Clip copied.');
+  }
+
+  /// Paste at the playhead on the track the owner is working on. The content
+  /// kinds are gated here rather than at the command path so the refusal names
+  /// the reason instead of surfacing a raw overlap or kind error.
+  Future<void> _pasteTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectRationalTime position,
+  ) async {
+    final clip = _clipboardClip;
+    if (clip == null) return;
+    final wantsTextTrack =
+        clip.contentKind == ProjectTimelineClipContentKind.text ||
+        clip.contentKind == ProjectTimelineClipContentKind.caption;
+    final trackIsText =
+        track.kind == ProjectTimelineTrackKind.text ||
+        track.kind == ProjectTimelineTrackKind.caption;
+    if (wantsTextTrack != trackIsText) {
+      _showUnavailable(
+        wantsTextTrack
+            ? 'Select a text or caption track to paste this clip.'
+            : 'Select a video or audio track to paste this clip.',
+      );
+      return;
+    }
+    if (clip.isMedia) {
+      final mediaId = clip.mediaId;
+      final sourceStart = clip.sourceStart;
+      if (mediaId == null || sourceStart == null) return;
+      await _runProjectActionAtSnapshot(
+        expected,
+        (session, current) => widget.projectGateway.insertTimelineClip(
+          session,
+          current,
+          trackId: track.trackId,
+          mediaId: mediaId,
+          timelineStart: position,
+          sourceStart: sourceStart,
+          duration: clip.duration,
+        ),
+      );
+      return;
+    }
+    await _insertTimelineTextClip(
+      expected,
+      track,
+      position,
+      clip.duration,
+      ProjectTimelineTextContent(
+        kind: clip.contentKind,
+        text: clip.text ?? '',
+        formatting: clip.formatting ?? ProjectTextFormatting.defaults,
+      ),
+    );
   }
 
   Future<void> _duplicateTimelineClip(

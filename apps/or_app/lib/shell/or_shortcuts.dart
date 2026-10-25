@@ -145,3 +145,13 @@ class SetBladeModeIntent extends Intent {
 
   final bool enabled;
 }
+
+/// Copy the selected clip into the editor's clipboard.
+class CopyClipIntent extends Intent {
+  const CopyClipIntent();
+}
+
+/// Paste the clipboard at the playhead on the selected track.
+class PasteClipIntent extends Intent {
+  const PasteClipIntent();
+}

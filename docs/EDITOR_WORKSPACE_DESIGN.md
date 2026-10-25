@@ -466,3 +466,27 @@ Shipped:
   shows `On timeline`, and `Render again` re-renders the same destination.
 - Class: INTEGRATION_VERIFIED on the local debug app through the Flutter test
   binding. Not a packaged-build claim.
+
+## 17. Copy and paste (local, 2026-10-25)
+
+The clipboard completes the P3 list's second half: a clip can leave one place and
+arrive at another without being duplicated in place.
+
+- `TimelineClipClipboard` (lib/project/timeline_clip_clipboard.dart) holds the
+  content a clip needs to be recreated — media id and source range, or text and
+  formatting — plus the duration. Identity is deliberately absent: pasting asks
+  the command path to create a clip instead of writing an id.
+- ⌘C / ⌘V, the Edit menu, and the command palette all reach the same two verbs.
+  Text inputs keep their own copy/paste because the shortcut handlers refuse
+  while a text field has focus.
+- Paste lands at the playhead on the selected track. When the playhead is still
+  at zero and a clip is selected, it lands after that clip: pasting onto the
+  first clip would only produce an overlap error, and "after the clip I am
+  working on" is what the owner means at that moment.
+- Content kinds are gated before the command: pasting a media clip onto a text
+  track says so, instead of surfacing a raw kind or overlap failure.
+
+Evidence: `flutter --no-version-check test --no-pub` → `+153`;
+`scripts/or_ui.py --report-dir /tmp/or-clip4 run scripts/ui_scenarios/clipboard.json`
+→ PASS, with the timeline reading `starts 0/1, duration 1/2` and
+`starts 1/2, duration 1/2` after ⌘C then ⌘V on a real imported video.
