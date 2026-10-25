@@ -25,6 +25,7 @@ const TIMELINE_CLIP_INSERT_ID: &str = "timeline.clip.insert";
 const TIMELINE_CLIP_INSERT_CONTENT_ID: &str = "timeline.clip.insert_content";
 const TIMELINE_CAPTIONS_IMPORT_ID: &str = "timeline.captions.import";
 const TIMELINE_CLIP_MOVE_ID: &str = "timeline.clip.move";
+const TIMELINE_CLIPS_MOVE_ID: &str = "timeline.clips.move";
 const TIMELINE_CLIP_UPDATE_ID: &str = "timeline.clip.update";
 const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
 const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
@@ -65,7 +66,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 27] = [
+const COMMANDS: [CommandDescriptor; 28] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -152,6 +153,12 @@ const COMMANDS: [CommandDescriptor; 27] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_MOVE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIPS_MOVE_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -556,6 +563,29 @@ impl CommandEnvelope {
                 "clip_id": clip_id,
                 "track_id": track_id,
                 "timeline_start": timeline_start,
+            }),
+        }
+    }
+
+    /// Moves every listed clip on one track by the same delta in a single step.
+    pub fn move_timeline_clips(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+        clip_ids: Vec<ClipId>,
+        delta: RationalTime,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIPS_MOVE_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "track_id": track_id,
+                "clip_ids": clip_ids,
+                "delta": delta,
             }),
         }
     }
@@ -2451,6 +2481,7 @@ impl ProjectSession {
                 self.apply_timeline_captions_import(envelope.arguments)?
             }
             TIMELINE_CLIP_MOVE_ID => self.apply_timeline_clip_move(envelope.arguments)?,
+            TIMELINE_CLIPS_MOVE_ID => self.apply_timeline_clips_move(envelope.arguments)?,
             TIMELINE_CLIP_UPDATE_ID => self.apply_timeline_clip_update(envelope.arguments)?,
             TIMELINE_CLIP_DELETE_ID => self.apply_timeline_clip_delete(envelope.arguments)?,
             TIMELINE_CLIP_TRIM_ID => self.apply_timeline_clip_trim(envelope.arguments)?,
@@ -3909,6 +3940,69 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    /// Moves several clips on one track by the same delta as a single step.
+    ///
+    /// A group drag is one gesture and one undo: the change carries the whole
+    /// track before and after, exactly like overwrite, because five separate
+    /// moves would take five undos and could stop half-applied.
+    fn apply_timeline_clips_move(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipsMoveArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if arguments.clip_ids.is_empty() {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let track_id = arguments.track_id;
+        let track_index = find_timeline_track_index(&self.project, track_id)
+            .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineTrackNotFound))?;
+        let tracks = self.project.timeline().tracks();
+        let track = &tracks[track_index];
+        if track.state().locked() {
+            return Err(OperationError::new(OperationErrorCode::TimelineTrackLocked));
+        }
+        let track_kind = track.kind();
+        let before: Vec<TimelineClipState> =
+            track.clips().iter().map(TimelineClipState::from).collect();
+        let delta = arguments
+            .delta
+            .into_time()
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let mut after = before.clone();
+        for clip_id in &arguments.clip_ids {
+            let index = after
+                .iter()
+                .position(|state| state.clip_id == *clip_id)
+                .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineClipNotFound))?;
+            let timeline_start = after[index]
+                .timeline_start
+                .checked_add(delta)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            after[index].timeline_start = timeline_start;
+        }
+        if after == before {
+            return Ok(ChangeSet::default());
+        }
+        validate_track_states(&self.project, track_kind, &after)?;
+        let clips = states_into_domain(after.clone())?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (change_set, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+            track_id,
+            before: before.clone(),
+            after: after.clone(),
+        })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     fn apply_timeline_clip_move(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
         let arguments: TimelineClipMoveArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -4905,6 +4999,14 @@ struct TimelineClipMoveArguments {
     clip_id: ClipId,
     track_id: TrackId,
     timeline_start: RationalTimeArguments,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineClipsMoveArguments {
+    track_id: TrackId,
+    clip_ids: Vec<ClipId>,
+    delta: RationalTimeArguments,
 }
 
 #[derive(Deserialize)]
@@ -8144,6 +8246,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "timeline.clips.move",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.clip.delete",
                     schema_version: 1,
                     mutates_project: true,
@@ -8255,7 +8363,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 27);
+        assert_eq!(COMMANDS.len(), 28);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -9571,6 +9679,97 @@ mod tests {
     }
 
     #[test]
+    fn timeline_clips_move_moves_a_selection_in_one_step_and_one_undo() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (0, 1), (1, 1)).unwrap();
+        insert_clip(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (1, 1), (1, 1)).unwrap();
+        let before = clip_spans(&session, TRACK_A);
+
+        let moved = execute(
+            &mut session,
+            "timeline.clips.move",
+            json!({
+                "track_id": TRACK_A,
+                "clip_ids": [CLIP_A, CLIP_B],
+                "delta": rational_json(1, 1),
+            }),
+        )
+        .unwrap();
+        assert!(moved.changed);
+        assert_eq!(moved.change_set.changes().len(), 1);
+        let after = clip_spans(&session, TRACK_A);
+        assert_eq!(after[0].1, RationalTime::new(1, 1).unwrap());
+        assert_eq!(after[1].1, RationalTime::new(3, 1).unwrap());
+
+        execute(&mut session, "history.undo", json!({})).unwrap();
+        assert_eq!(
+            clip_spans(&session, TRACK_A),
+            before,
+            "one undo restores the whole selection"
+        );
+    }
+
+    #[test]
+    fn timeline_clips_move_rejects_unknown_clip_and_a_start_below_zero() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                media_item(MEDIA_A, "file:///missing/offline.mov"),
+                0,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "video").unwrap();
+        insert_clip(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (0, 1), (1, 1)).unwrap();
+
+        // A malformed id never reaches the handler: the envelope rejects it.
+        let malformed = execute(
+            &mut session,
+            "timeline.clips.move",
+            json!({
+                "track_id": TRACK_A,
+                "clip_ids": ["missing-clip"],
+                "delta": rational_json(1, 1),
+            }),
+        );
+        assert_eq!(
+            malformed.unwrap_err().code,
+            OperationErrorCode::InvalidArguments
+        );
+
+        // A well-formed id that is not on the track is the handler's own error.
+        let unknown = execute(
+            &mut session,
+            "timeline.clips.move",
+            json!({
+                "track_id": TRACK_A,
+                "clip_ids": ["00000000-0000-4000-8000-000000000000"],
+                "delta": rational_json(1, 1),
+            }),
+        );
+        assert_eq!(
+            unknown.unwrap_err().code,
+            OperationErrorCode::TimelineClipNotFound
+        );
+
+        let behind_zero = execute(
+            &mut session,
+            "timeline.clips.move",
+            json!({
+                "track_id": TRACK_A,
+                "clip_ids": [CLIP_A],
+                "delta": rational_json(-1, 1),
+            }),
+        );
+        assert!(behind_zero.is_err());
+    }
+
     fn timeline_clip_move_reorders_and_preserves_semantics_across_same_kind_tracks() {
         let mut session = fixed_session();
         session

@@ -1103,6 +1103,17 @@ abstract interface class ProjectGateway {
     required String trackId,
     required ProjectRationalTime timelineStart,
   });
+  /// Moves every listed clip on [trackId] by [delta] as one undo step.
+  ///
+  /// A group drag is one gesture; five separate moves would cost five undos and
+  /// could stop half-applied, so the whole selection travels in one command.
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  });
   Future<ProjectActionResult> deleteTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current,

@@ -439,6 +439,20 @@ class _Runner {
         });
         if (step['settle'] != false) await _settle();
         return;
+      case 'shift_tap':
+        // Shift-click extends a selection. The app reads the hardware keyboard
+        // state during the tap, so the modifier is held across the gesture.
+        await _act(step, (finder) async {
+          await _scrollIntoView(finder, settle: step['settle'] != false);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+          try {
+            await tester.tap(finder);
+          } finally {
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+          }
+        });
+        if (step['settle'] != false) await _settle();
+        return;
       case 'long_press':
         await _act(step, (finder) async {
           await _scrollIntoView(finder, settle: step['settle'] != false);

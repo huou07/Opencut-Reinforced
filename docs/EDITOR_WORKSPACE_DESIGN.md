@@ -1040,3 +1040,49 @@ Limits this round confirmed, all host-side rather than product defects:
 - The pacing recorder cannot write to `/tmp` from the sandboxed bundle, so the
   release pacing numbers in §30.2 remain a measurement from the unpackaged
   release build (`--dart-define=OR_PACING_LOG=…`).
+
+## 33. Group move (local, 2026-10-25)
+
+Multi-selection now moves as one unit, and the unit is one command, because undo
+has to restore the whole gesture in a single step.
+
+### Surface
+
+- `Shift`-click adds a clip to the selection (the timeline already kept a
+  `_selectedClipIds` set for bulk verbs; the pointer now drags all of it).
+- Dragging any selected clip moves every selected clip on that track by the same
+  delta. Dropping outside the source track still keeps the single-clip path, so a
+  cross-track drag is unchanged.
+- One `⌘Z` puts every clip back: the commit is `timeline.clips.move`, a new
+  atomic command, not a loop of single-clip moves.
+
+### Why a new command instead of a transaction
+
+`ChangeSet::stage_history_change` accepts exactly one `ProjectChange`
+(`let [change] = self.changes.as_slice() else { HistoryConflict }`), and
+`execute_transaction` only groups commands that opt in through
+`stage_groupable_command` (project rename today). A loop of single-clip moves
+would therefore push N history entries, and undo would rewind one clip per
+press. `timeline.clips.move` reuses the whole-track change shape
+(`ProjectChange::TimelineClipsOverwritten`) so one history entry carries every
+before/after placement, while the command arguments stay narrow: a track, the
+clip ids, and one rational delta.
+
+### Evidence
+
+- `cargo test -p or_core --lib` → 365 passed (new tests: a two-clip move is one
+  change set and one undo restores both; an unknown clip and a start below zero
+  are rejected).
+- `flutter test --no-pub` → 164 passed (new: shift-selecting two clips and
+  dragging one issues one `moveTimelineClips` call).
+- `scripts/ui_scenarios/multi-select-move.json` PASS in the real app: split one
+  clip, shift-click both, drag `+1 s` → both clips read `starts 1/1` and
+  `starts 5/4`, then one `⌘Z` returns them to `starts 0/1` and `starts 1/4`.
+  The harness gained a `shift_tap` op for this.
+
+### Not done
+
+- A marquee drag on empty lane space does not rubber-band a selection yet; the
+  selection is built by click and shift-click.
+- The drag preview offsets only the clip under the pointer; the commit moves the
+  whole set. A group outline during the drag is the next polish step.

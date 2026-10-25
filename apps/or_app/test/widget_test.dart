@@ -28,16 +28,23 @@ import 'package:or_app/shell/or_shortcuts.dart';
 import 'package:or_app/widgets/or_widgets.dart';
 
 void main() {
-  testWidgets('a bridge that cannot start explains itself instead of going blank',
-      (tester) async {
-    await tester.pumpWidget(const OrStartupFailure(message: 'Bad state: hash'));
-    expect(find.byKey(const ValueKey('startup-failure-title')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('startup-failure-message')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Bad state: hash'), findsOneWidget);
-  });
+  testWidgets(
+    'a bridge that cannot start explains itself instead of going blank',
+    (tester) async {
+      await tester.pumpWidget(
+        const OrStartupFailure(message: 'Bad state: hash'),
+      );
+      expect(
+        find.byKey(const ValueKey('startup-failure-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('startup-failure-message')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Bad state: hash'), findsOneWidget);
+    },
+  );
 
   testWidgets('text fields are recognized as focused for shell shortcuts', (
     tester,
@@ -288,10 +295,7 @@ void main() {
     );
     // Revision counters are developer detail. The workspace states the one
     // thing an editor needs: whether the project on disk matches the edits.
-    expect(
-      find.byKey(const ValueKey('project-save-dot')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
     // The bar states 'Saved'; the inspector states 'Saved to disk'. One
     // statement per surface, so each assertion names its surface by key.
     expect(
@@ -302,7 +306,10 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('No timeline tracks'), findsOneWidget);
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -374,10 +381,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('project-save-dot')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -980,7 +984,10 @@ void main() {
       find.byKey(const ValueKey('media-preview-image-media-video')),
       findsNothing,
     );
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
@@ -1044,7 +1051,10 @@ void main() {
     expect(gateway.mediaListCalls, greaterThan(queriesBeforeImport));
     expect(find.text('imported.mov'), findsOneWidget);
     expect(find.text('Unsaved'), findsOneWidget);
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('compact empty timeline imports through the project picker', (
@@ -1107,10 +1117,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2 items'), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const ValueKey('media-search')),
-      'broll',
-    );
+    await tester.enterText(find.byKey(const ValueKey('media-search')), 'broll');
     await tester.pumpAndSettle();
     expect(find.text('broll.mkv'), findsOneWidget);
     expect(find.text('interview.mp4'), findsNothing);
@@ -1422,7 +1429,10 @@ void main() {
       find.text('Import a video, image or audio file to start.'),
       findsOneWidget,
     );
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -2039,8 +2049,7 @@ void main() {
   ) async {
     _setViewport(tester, const Size(1280, 800));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/sequence-rate.orproj';
+    final picker = _FakeProjectPicker()..savePath = '/tmp/sequence-rate.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Sequence rate');
 
@@ -2079,8 +2088,7 @@ void main() {
       ..initialTimelineClips = {
         'copy-track': [clip],
       };
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/timeline-copy.orproj';
+    final picker = _FakeProjectPicker()..savePath = '/tmp/timeline-copy.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Timeline copy');
 
@@ -2111,7 +2119,10 @@ void main() {
       ),
       isTrue,
     );
-    expect(_sameRational(gateway.lastInsertDuration!, clip.timelineDuration), isTrue);
+    expect(
+      _sameRational(gateway.lastInsertDuration!, clip.timelineDuration),
+      isTrue,
+    );
     expect(gateway.lastSession!.clips['copy-track'], hasLength(2));
     expect(tester.takeException(), isNull);
   });
@@ -2288,6 +2299,58 @@ void main() {
     },
   );
 
+  testWidgets(
+    'dragging one of several selected clips moves the whole selection once',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      const trackId = 'group-track';
+      ProjectTimelineClip clip(String id, int start) => ProjectTimelineClip(
+        clipId: id,
+        mediaId: 'group-media',
+        timelineStart: ProjectRationalTime(BigInt.from(start), 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.one, 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = [
+          const ProjectTimelineTrack(
+            trackId: trackId,
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 2,
+          ),
+        ]
+        ..initialTimelineClips = {
+          trackId: [clip('group-a', 0), clip('group-b', 2)],
+        };
+      final picker = _FakeProjectPicker()..savePath = '/tmp/group-move.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Group move');
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-group-a')));
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-group-b')));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('2 clips'), findsOneWidget);
+
+      await tester.drag(
+        find.byKey(const ValueKey('timeline-clip-group-b')),
+        const Offset(64, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.moveClipsCalls, 1);
+      expect(gateway.lastMovedClipIds, containsAll(['group-a', 'group-b']));
+      expect(
+        gateway.moveTimelineClipCalls,
+        0,
+        reason: 'a group drag is one command, not one per clip',
+      );
+      expect(gateway.lastMoveDelta!.numerator, isNot(BigInt.zero));
+    },
+  );
+
   testWidgets('media drag inserts on a compatible timeline track', (
     tester,
   ) async {
@@ -2405,10 +2468,7 @@ void main() {
       gateway.externalAddTimelineTrack(ProjectTimelineTrackKind.video);
       await tester.pumpAndSettle();
       expect(find.text('V1'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('project-save-dot')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-event-media')),
@@ -2425,10 +2485,7 @@ void main() {
         find.textContaining('this action was not retried'),
         findsOneWidget,
       );
-      expect(
-        find.byKey(const ValueKey('project-save-dot')),
-        findsOneWidget,
-      );
+      expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
     },
   );
 
@@ -2913,9 +2970,7 @@ void main() {
     // keyboard and the menu must not drift apart.
     expect(find.byType(PlatformMenuBar), findsOneWidget);
     final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
-    final labels = <String>[
-      for (final menu in bar.menus) menu.label,
-    ];
+    final labels = <String>[for (final menu in bar.menus) menu.label];
     expect(labels, containsAll(<String>['File', 'Edit', 'View', 'OR']));
     await _createProject(tester, 'Menu bar');
     expect(find.byType(PlatformMenuBar), findsOneWidget);
@@ -3141,81 +3196,82 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('effect and transition presets fill the inspector before applying', (
-    tester,
-  ) async {
-    _setViewport(tester, const Size(1440, 900));
-    final clip = ProjectTimelineClip(
-      clipId: 'preset-clip',
-      playbackRate: const ProjectRationalRate(1, 1),
-      timelineStart: ProjectRationalTime(BigInt.zero, 1),
-      sourceStart: ProjectRationalTime(BigInt.zero, 1),
-      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
-    );
-    final gateway = _FakeProjectGateway()
-      ..initialTimelineTracks = const [
-        ProjectTimelineTrack(
-          trackId: 'preset-track',
-          kind: ProjectTimelineTrackKind.video,
-          clipCount: 1,
-        ),
-      ]
-      ..initialTimelineClips = {
-        'preset-track': [clip],
-      };
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/inspector-presets.orproj';
-    await _mount(tester, gateway: gateway, picker: picker);
-    await _createProject(tester, 'Inspector presets');
+  testWidgets(
+    'effect and transition presets fill the inspector before applying',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final clip = ProjectTimelineClip(
+        clipId: 'preset-clip',
+        playbackRate: const ProjectRationalRate(1, 1),
+        timelineStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'preset-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'preset-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/inspector-presets.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Inspector presets');
 
-    await tester.tap(find.byKey(const ValueKey('timeline-clip-preset-clip')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-preset-clip')));
+      await tester.pumpAndSettle();
 
-    final inspectorScrollable = find
-        .descendant(
-          of: find.byKey(const ValueKey('inspector-scroll')),
-          matching: find.byType(Scrollable),
-        )
-        .first;
-
-    // A preset is a starting point, not a silent command: it fills the field
-    // and the owner still presses Apply.
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('effect-preset-bright')),
-      200,
-      scrollable: inspectorScrollable,
-    );
-    await tester.tap(find.byKey(const ValueKey('effect-preset-bright')));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<EditableText>(
-            find.descendant(
-              of: find.byKey(const ValueKey('inspector-visual-brightness')),
-              matching: find.byType(EditableText),
-            ),
+      final inspectorScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('inspector-scroll')),
+            matching: find.byType(Scrollable),
           )
-          .controller
-          .text,
-      '10',
-    );
+          .first;
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('transition-preset-wipe')),
-      200,
-      scrollable: inspectorScrollable,
-    );
-    await tester.tap(find.byKey(const ValueKey('transition-preset-wipe')));
-    await tester.pumpAndSettle();
+      // A preset is a starting point, not a silent command: it fills the field
+      // and the owner still presses Apply.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('effect-preset-bright')),
+        200,
+        scrollable: inspectorScrollable,
+      );
+      await tester.tap(find.byKey(const ValueKey('effect-preset-bright')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('inspector-visual-brightness')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .controller
+            .text,
+        '10',
+      );
 
-    await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
-    await tester.pumpAndSettle();
-    final written = gateway.lastVisualSettings;
-    // 10 % is 100 milli-percent; the inspector labels percent, the model stores milli.
-    expect(written?.brightnessAmountMilli, 100);
-    expect(written?.transitionIn, ProjectTimelineTransition.wipe);
-    expect(written?.transitionInDuration?.canonical, '1/2');
-  });
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('transition-preset-wipe')),
+        200,
+        scrollable: inspectorScrollable,
+      );
+      await tester.tap(find.byKey(const ValueKey('transition-preset-wipe')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
+      await tester.pumpAndSettle();
+      final written = gateway.lastVisualSettings;
+      // 10 % is 100 milli-percent; the inspector labels percent, the model stores milli.
+      expect(written?.brightnessAmountMilli, 100);
+      expect(written?.transitionIn, ProjectTimelineTransition.wipe);
+      expect(written?.transitionInDuration?.canonical, '1/2');
+    },
+  );
 
   testWidgets('audio inspector writes gain, pan, and exact fades', (
     tester,
@@ -3933,8 +3989,7 @@ void main() {
         width: 0,
         height: 0,
       );
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/auto-track.orproj';
+    final picker = _FakeProjectPicker()..savePath = '/tmp/auto-track.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Auto track');
 
@@ -3947,7 +4002,10 @@ void main() {
     // clip goes instead of answering "Add a compatible Video or Audio track first."
     expect(gateway.addTimelineTrackCalls, 1);
     expect(find.text('Insert Clip'), findsOneWidget);
-    expect(find.text('Add a compatible Video or Audio track first.'), findsNothing);
+    expect(
+      find.text('Add a compatible Video or Audio track first.'),
+      findsNothing,
+    );
     expect(find.textContaining('video'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
@@ -4964,7 +5022,10 @@ void main() {
     expect(find.text('Viewer'), findsOneWidget);
     expect(find.text('Timeline'), findsOneWidget);
     expect(find.text('Inspector'), findsOneWidget);
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(find.text('No selection'), findsOneWidget);
     expect(find.text('Timeline engine not implemented'), findsOneWidget);
     expect(find.textContaining('.mp4'), findsNothing);
@@ -5085,7 +5146,10 @@ void main() {
     ]) {
       expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
     }
-    expect(find.text('Drag a clip to the timeline to preview it'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -6064,6 +6128,7 @@ class _FakeProjectGateway implements ProjectGateway {
   bool? lastReversed;
   int frozenCalls = 0;
   bool? lastFrozen;
+
   /// The illustration requests the surface sent, in order.
   final List<MotionMaterializeRequest> illustrationRequests = [];
   MotionMaterializationOutcome? illustrationOutcome;
@@ -6742,6 +6807,24 @@ class _FakeProjectGateway implements ProjectGateway {
     );
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  int moveClipsCalls = 0;
+  List<String>? lastMovedClipIds;
+  ProjectRationalTime? lastMoveDelta;
+
+  @override
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  }) async {
+    moveClipsCalls += 1;
+    lastMovedClipIds = List<String>.of(clipIds);
+    lastMoveDelta = delta;
+    return ProjectActionResult(succeeded: true, view: current);
   }
 
   @override

@@ -71,6 +71,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onInsertTimelineTextClip,
     this.onUpdateTimelineTextClip,
     this.onMoveTimelineClip,
+    this.onMoveTimelineClips,
     this.onDuplicateTimelineClip,
     this.onResolveTimelineSnap,
     this.onDeleteTimelineClip,
@@ -203,6 +204,15 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime timelineStart,
   )?
   onMoveTimelineClip;
+
+  /// Moves every selected clip on one track by one delta, as one undo step.
+  final Future<void> Function(
+    ProjectReadModel expected,
+    String trackId,
+    List<String> clipIds,
+    ProjectRationalTime delta,
+  )?
+  onMoveTimelineClips;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -851,6 +861,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
+            onMoveClips: widget.onMoveTimelineClips,
             onDuplicateClip: widget.onDuplicateTimelineClip,
             onResolveSnap: widget.onResolveTimelineSnap,
             onDeleteClip: widget.onDeleteTimelineClip,
@@ -940,6 +951,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onLoadMoreMarkers: widget.onLoadMoreTimelineMarkers,
             onRefresh: widget.onRefreshTimeline,
             onMoveClip: widget.onMoveTimelineClip,
+            onMoveClips: widget.onMoveTimelineClips,
             onDuplicateClip: widget.onDuplicateTimelineClip,
             onResolveSnap: widget.onResolveTimelineSnap,
             onDeleteClip: widget.onDeleteTimelineClip,
@@ -4858,6 +4870,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onLoadMoreMarkers,
     required this.onRefresh,
     required this.onMoveClip,
+    this.onMoveClips,
     required this.onDuplicateClip,
     required this.onResolveSnap,
     required this.onDeleteClip,
@@ -4930,6 +4943,15 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalTime,
   )?
   onMoveClip;
+
+  /// Moves the whole selection on [String] track by one delta in one command.
+  final Future<void> Function(
+    ProjectReadModel,
+    String,
+    List<String>,
+    ProjectRationalTime,
+  )?
+  onMoveClips;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -6497,6 +6519,30 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         return;
       }
       if (gesture.kind == _TimelinePointerEditKind.move) {
+        final onMoveClips = widget.onMoveClips;
+        final selection = _selectedClipIds.toList(growable: false);
+        // A drag that started on one of several selected clips moves the whole
+        // set in one command, so one gesture still costs one undo.
+        if (onMoveClips != null &&
+            selection.length > 1 &&
+            selection.contains(gesture.clip.clipId) &&
+            gesture.targetTrackId == gesture.sourceTrack.trackId) {
+          final delta = resolvedTargetTime.add(
+            ProjectRationalTime(
+              -gesture.clip.timelineStart.numerator,
+              gesture.clip.timelineStart.denominator,
+            ),
+          );
+          if (delta.numerator != BigInt.zero) {
+            await onMoveClips(
+              gesture.project,
+              gesture.sourceTrack.trackId,
+              selection,
+              delta,
+            );
+            return;
+          }
+        }
         final onMove = widget.onMoveClip;
         if (onMove == null) return;
         await onMove(

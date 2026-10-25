@@ -1,0 +1,175 @@
+{
+ "name": "multi-select-move",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "shot",
+   "name": "home"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Group move"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-add-video"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tree",
+   "name": "inserted"
+  },
+  {
+   "op": "key",
+   "chord": "c"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "key",
+   "chord": "v"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+   },
+   "allow_multiple": true
+  },
+  {
+   "op": "shift_tap",
+   "selector": {
+    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+   },
+   "index": 1
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "2 clips",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tree",
+   "name": "before-group-move"
+  },
+  {
+   "op": "drag",
+   "selector": {
+    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+   },
+   "index": 1,
+   "dx": 64,
+   "dy": 0
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Unsaved|Saved",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tree",
+   "name": "after-group-move"
+  },
+  {
+   "op": "shot",
+   "name": "after-group-move"
+  },
+  {
+   "op": "key",
+   "chord": "cmd+z"
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tree",
+   "name": "after-undo"
+  }
+ ]
+}

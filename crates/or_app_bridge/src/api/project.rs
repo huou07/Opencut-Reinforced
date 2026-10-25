@@ -2302,6 +2302,59 @@ impl ProjectHostHandle {
         )
     }
 
+    /// Moves every listed clip on one track by the same delta, as one undo step.
+    ///
+    /// A group drag is one gesture: five separate moves would cost five undos
+    /// and could stop half-applied, so the whole selection travels in a single
+    /// command whose change carries the track before and after.
+    pub fn move_timeline_clips(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_ids: Vec<String>,
+        delta_numerator: i64,
+        delta_denominator: u32,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        if clip_ids.is_empty() {
+            return action_error(ProjectBridgeError {
+                code: "INVALID_CLIP_IDS".to_owned(),
+                message: "Select at least one clip to move.".to_owned(),
+            });
+        }
+        let mut parsed = Vec::with_capacity(clip_ids.len());
+        for clip_id in &clip_ids {
+            match ClipId::from_str(clip_id) {
+                Ok(clip_id) => parsed.push(clip_id),
+                Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+            }
+        }
+        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
+            Ok(time) => time,
+            Err(_) => return action_error(timeline_arguments_error()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::move_timeline_clips(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    parsed,
+                    delta,
+                )
+            },
+        )
+    }
+
     pub fn delete_timeline_clip(
         &self,
         project_id: String,

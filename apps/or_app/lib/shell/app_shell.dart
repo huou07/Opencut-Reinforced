@@ -994,6 +994,7 @@ class _AppShellState extends State<AppShell> {
               onSetTimelineClipReversed: _setTimelineClipReversed,
               onSetTimelineClipFrozen: _setTimelineClipFrozen,
               onMoveTimelineClip: _moveTimelineClip,
+              onMoveTimelineClips: _moveTimelineClips,
               onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
               onDeleteTimelineClip: _deleteTimelineClip,
@@ -3515,6 +3516,32 @@ class _AppShellState extends State<AppShell> {
         clipId: clip.clipId,
         trackId: trackId,
         timelineStart: timelineStart,
+      ),
+    );
+    if (result == null &&
+        mounted &&
+        session != null &&
+        identical(session, _activeSession)) {
+      await _refreshProjectState(session);
+    }
+  }
+
+  /// Moves a multi-clip selection on one track as a single undo step.
+  Future<void> _moveTimelineClips(
+    ProjectReadModel expected,
+    String trackId,
+    List<String> clipIds,
+    ProjectRationalTime delta,
+  ) async {
+    final session = _activeSession;
+    final result = await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineClips(
+        session,
+        current,
+        trackId: trackId,
+        clipIds: clipIds,
+        delta: delta,
       ),
     );
     if (result == null &&

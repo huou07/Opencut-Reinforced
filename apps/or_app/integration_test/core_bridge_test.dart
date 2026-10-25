@@ -1923,6 +1923,24 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     rate: rate,
   );
 
+  int moveClipsCalls = 0;
+  List<String>? lastMovedClipIds;
+  ProjectRationalTime? lastMoveDelta;
+
+  @override
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  }) async {
+    moveClipsCalls += 1;
+    lastMovedClipIds = List<String>.of(clipIds);
+    lastMoveDelta = delta;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
   @override
   Future<ProjectActionResult> setTimelineClipReversed(
     ProjectSessionHandle session,

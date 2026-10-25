@@ -213,6 +213,21 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required int timelineStartDenominator,
   });
 
+  /// Moves every listed clip on one track by the same delta, as one undo step.
+  ///
+  /// A group drag is one gesture: five separate moves would cost five undos
+  /// and could stop half-applied, so the whole selection travels in a single
+  /// command whose change carries the track before and after.
+  Future<ProjectActionResult> moveTimelineClips({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required List<String> clipIds,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
   Future<ProjectActionResult> moveTimelineMarker({
     required String projectId,
     required String projectInstanceId,
