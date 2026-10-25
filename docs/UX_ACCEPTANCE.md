@@ -397,12 +397,13 @@ Delivered since that table was written, each with the check that produced it:
 | Native macOS menu bar with File/Edit/View/OR | widget test on `PlatformMenuBar`; packaged bar read via System Events |
 | Export receipt naming the file, with Show in Finder | widget suite; the reveal path compiles and routes (not driven end to end) |
 | Release-mode frame pacing recorded inside the packaged build | `docs/EDITOR_WORKSPACE_DESIGN.md` §30.2 (build p95 1.4-1.5 ms, raster p95 1.9-2.0 ms) |
+| Marquee select, marquee drag and one-undo group move | `multi-select-move.json` PASS (band → drag → `spans 1/1 to 5/4` → ⌘Z restores); `timeline.clips.move` unit tests; `moveClipsCalls == 1` widget test |
+| Save and reopen a project, and move a clip across tracks | `save-reopen.json` PASS; `cross-track-move.json` PASS (`V1 0 clips` / `V2 1 clips`) |
 
 Known gaps that stay out of "done": VideoToolbox preview decode (the vendored
-FFmpeg has no `h264_videotoolbox` decoder; decode measured at 181.7 fps for
-1080p on the CPU instead), multi-select marquee and group drag (needs the atomic
-`timeline.clips.move` command described in `docs/EDITOR_WORKSPACE_DESIGN.md` §31),
-and driving native file panels with synthetic typing on this host.
+FFmpeg has no `h264_videotoolbox` decoder; decode measured at 181.7 fps for 1080p
+on the CPU instead), and driving native file panels with synthetic typing on this
+host (the packaged driver clicks rows instead).
 
 ## PRODUCTION REQUIRED FUTURE
 
