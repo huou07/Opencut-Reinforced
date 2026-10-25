@@ -595,3 +595,17 @@ Consequence: prove editing, export and MotionScene in the semantic harness
 (`scripts/or_ui.py`), and use packaged driving only for what it can actually reach —
 launch, Home/workspace rendering, project creation and opening a project through the
 documented menu path.
+
+## Flutter does not publish an AppKit accessibility tree to System Events
+
+Tried and rejected: turning on semantics at startup
+(`SemanticsBinding.instance.ensureSemantics()` in `main.dart`) so a packaged build
+could be driven by pressing AX elements. The packaged window still reports only five
+UI elements — the three traffic-light buttons, a group and a static text — because
+the macOS engine only attaches its accessibility bridge when an assistive client
+(VoiceOver) asks for it; a `System Events` query is not such a request.
+
+The change was reverted rather than kept: it cost semantics work at startup and
+bought nothing provable. If packaged UI driving becomes a requirement, the honest
+routes are a test-only entry point or a VoiceOver-style client, not synthetic
+keystrokes.
