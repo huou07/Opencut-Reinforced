@@ -3250,6 +3250,73 @@ class _InspectorPanelState extends State<_InspectorPanel> {
     super.dispose();
   }
 
+  Widget _presetRow({
+    required String keyPrefix,
+    required List<(String, String)> presets,
+    required void Function(String preset) onPick,
+  }) => Wrap(
+    spacing: OrSpacing.x1,
+    runSpacing: OrSpacing.x1,
+    children: [
+      for (final (id, label) in presets)
+        ActionChip(
+          key: ValueKey('$keyPrefix-$id'),
+          label: Text(
+            label,
+            style: const TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          backgroundColor: OrColors.backgroundRaised,
+          side: const BorderSide(color: OrColors.border),
+          onPressed: () => onPick(id),
+        ),
+    ],
+  );
+
+  /// Presets fill the numeric fields; the apply step stays explicit so a
+  /// preset is reviewable before it becomes a command. A second "apply preset"
+  /// command path would hide the value that was written.
+  void _setFieldText(String name, String value) {
+    final field = _fields[name];
+    if (field == null) return;
+    field.text = value;
+  }
+
+  void _applyEffectPreset(String preset) {
+    switch (preset) {
+      case 'none':
+        _setFieldText('brightness', '0');
+        _setFieldText('contrast', '0');
+        _setFieldText('saturation', '0');
+        _setFieldText('blur', '0');
+      case 'bright':
+        _setFieldText('brightness', '10');
+      case 'punch':
+        _setFieldText('contrast', '20');
+        _setFieldText('saturation', '15');
+      case 'muted':
+        _setFieldText('saturation', '-30');
+      case 'soft':
+        _setFieldText('blur', '2');
+    }
+    setState(() {});
+  }
+
+  void _applyTransitionPreset(String preset) {
+    final kind = switch (preset) {
+      'black' => ProjectTimelineTransition.fadeThroughBlack,
+      'wipe' => ProjectTimelineTransition.wipe,
+      _ => ProjectTimelineTransition.crossDissolve,
+    };
+    _setFieldText('transition_in_kind', '${kind.index}');
+    _setFieldText('transition_in_duration', preset == 'none' ? '0' : '0.5');
+    setState(() {});
+  }
+
   Future<void> _loadSettings() async {
     final generation = ++_loadGeneration;
     final project = widget.project;
@@ -4177,6 +4244,18 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                     ),
                   ),
                   const SizedBox(height: OrSpacing.x1),
+                  _presetRow(
+                    keyPrefix: 'effect-preset',
+                    presets: const [
+                      ('none', 'None'),
+                      ('bright', 'Bright'),
+                      ('punch', 'Punch'),
+                      ('muted', 'Muted'),
+                      ('soft', 'Soft blur'),
+                    ],
+                    onPick: _applyEffectPreset,
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
                   _numberField('brightness', 'Brightness (%)', signed: true),
                   const SizedBox(height: OrSpacing.x1),
                   _pair(
@@ -4197,6 +4276,17 @@ class _InspectorPanelState extends State<_InspectorPanel> {
                       fontSize: OrType.tinySize,
                       fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  const SizedBox(height: OrSpacing.x1),
+                  _presetRow(
+                    keyPrefix: 'transition-preset',
+                    presets: const [
+                      ('none', 'None'),
+                      ('cross', 'Cross dissolve'),
+                      ('black', 'Fade to black'),
+                      ('wipe', 'Wipe'),
+                    ],
+                    onPick: _applyTransitionPreset,
                   ),
                   const SizedBox(height: OrSpacing.x1),
                   _transitionField('transition_in_kind', 'Transition in'),

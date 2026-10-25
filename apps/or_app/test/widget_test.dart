@@ -2760,6 +2760,82 @@ void main() {
     }
   });
 
+  testWidgets('effect and transition presets fill the inspector before applying', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'preset-clip',
+      playbackRate: const ProjectRationalRate(1, 1),
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'preset-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'preset-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/inspector-presets.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Inspector presets');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-preset-clip')));
+    await tester.pumpAndSettle();
+
+    final inspectorScrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('inspector-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+
+    // A preset is a starting point, not a silent command: it fills the field
+    // and the owner still presses Apply.
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('effect-preset-bright')),
+      200,
+      scrollable: inspectorScrollable,
+    );
+    await tester.tap(find.byKey(const ValueKey('effect-preset-bright')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: find.byKey(const ValueKey('inspector-visual-brightness')),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      '10',
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('transition-preset-wipe')),
+      200,
+      scrollable: inspectorScrollable,
+    );
+    await tester.tap(find.byKey(const ValueKey('transition-preset-wipe')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
+    await tester.pumpAndSettle();
+    final written = gateway.lastVisualSettings;
+    // 10 % is 100 milli-percent; the inspector labels percent, the model stores milli.
+    expect(written?.brightnessAmountMilli, 100);
+    expect(written?.transitionIn, ProjectTimelineTransition.wipe);
+    expect(written?.transitionInDuration?.canonical, '1/2');
+  });
+
   testWidgets('audio inspector writes gain, pan, and exact fades', (
     tester,
   ) async {

@@ -220,6 +220,32 @@ superseded for planning by this file; its evidence log stays valid.
 for commands, `or-media-render` for pipeline work, `or-motionscene` for P7, and
 `or-dev-loop` for every verification.
 
+## 12. P4 delivery record (local, 2026-10-25)
+
+Presets live where the values already live. The inspector's EFFECTS and
+TRANSITIONS sections now open with a chip row, and a chip only fills the numeric
+fields: the Apply button still turns the values into one command.
+
+- `effect-preset-{none,bright,punch,muted,soft}` — None clears the four effect
+  fields, Bright = +10 % brightness, Punch = +20 % contrast / +15 % saturation,
+  Muted = −30 % saturation, Soft blur = 2 px.
+- `transition-preset-{none,cross,black,wipe}` — writes the transition-in kind and
+  a 0.5 s duration (None writes kind 0 and 0 s).
+- Chips are ordinary widgets in the existing inspector scroll, so keyboard focus,
+  the focus ring and the 11 px type floor apply without new code.
+
+Why not a separate effects library panel: the model carries four numeric effects
+and three transition kinds, and every effect is scoped to one clip. A library
+tab would either duplicate the same five chips or imply stackable effect layers
+the renderer does not have. When the model gains real effect layers, the panel
+becomes worth its own zone; until then the presets belong beside the fields they
+fill.
+
+Evidence class: local only. `flutter test` → `+148: All tests passed!`
+(`test/widget_test.dart` "effect and transition presets fill the inspector
+before applying" drives bright + wipe + Apply and asserts the written
+`brightnessAmountMilli == 100` and `transitionIn == wipe`).
+
 ## 11. P3 delivery record (local, 2026-10-25)
 
 Shipped:
