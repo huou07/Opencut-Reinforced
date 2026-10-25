@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -168,6 +169,42 @@ class _PlatformMenus extends StatelessWidget {
     if (!Platform.isMacOS) return child;
     return PlatformMenuBar(
       menus: [
+        // macOS owns the first menu slot and titles it with the application
+        // name; without an app menu of our own the File menu is swallowed into
+        // that slot and never appears (observed: bar read "or_app, Edit, View,
+        // OR" while File's items lived under "or_app").
+        // `PlatformProvidedMenuItem` refuses to exist on a target without that
+        // built-in item, and `flutter test` reports an android target even on a
+        // macOS host, so the app menu is added only for a real macOS target.
+        if (defaultTargetPlatform == TargetPlatform.macOS)
+          PlatformMenu(
+            label: 'Opencut Reinforced',
+          menus: [
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.about,
+              ),
+              PlatformMenuItemGroup(
+                members: [
+                  PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.hide,
+                  ),
+                  PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.hideOtherApplications,
+                  ),
+                  PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.showAllApplications,
+                  ),
+                ],
+              ),
+              PlatformMenuItemGroup(
+                members: [
+                  PlatformProvidedMenuItem(
+                    type: PlatformProvidedMenuItemType.quit,
+                  ),
+                ],
+              ),
+          ],
+        ),
         PlatformMenu(
           label: 'File',
           menus: [

@@ -609,3 +609,19 @@ was re-run against the local debug app; every scenario passed:
 
 Widget suite: 154 tests. These are local debug-app results, not packaged-build
 claims; the release pacing and packaged-export checks stay in the gap list.
+
+### 21.2 Packaged-release check (local, 2026-10-25)
+
+Building `flutter build macos --release` and packaging it with
+`scripts/package_local_macos_app.sh` (FFmpeg prefix
+`~/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install`)
+surfaced two packaged-only facts a debug run cannot show:
+
+1. Editing `Info.plist` after the build invalidates the signature and a
+   sandboxed launch dies in `_libsecinit_appsandbox` (SIGTRAP). Re-sign with the
+   packaging script; never `cp -R` + `PlistBuddy` alone.
+2. The menu bar read `or_app, Edit, View, OR`: macOS owns the first menu slot and
+   titles it with the application name, so the `File` menu was swallowed into it.
+   Adding our own app menu (About/hide/quit provided items) first makes the bar
+   read `or_app, File, Edit, View, OR` in the packaged app, verified through
+   System Events.
