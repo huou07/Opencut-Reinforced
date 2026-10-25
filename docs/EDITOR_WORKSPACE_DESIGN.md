@@ -625,3 +625,15 @@ surfaced two packaged-only facts a debug run cannot show:
    Adding our own app menu (About/hide/quit provided items) first makes the bar
    read `or_app, File, Edit, View, OR` in the packaged app, verified through
    System Events.
+
+### 21.3 Packaged-build journey driven by the native menu (local, 2026-10-25)
+
+With the release bundle packaged and signed, the menu bar was driven through
+System Events: `⌘N` opened the New Project dialog (name field, frame rate
+"30 fps", Cancel/Continue), typing a name and pressing Return handed off to the
+macOS save panel titled "Choose where to save Packaged journey.orproj.". That
+is the packaged app creating a project through the same path the semantic
+harness drives in debug, so the packaged build is not limited to launching.
+
+Not yet driven in the packaged bundle: media import, timeline edits, export and
+the MotionScene dialog. Those still rest on debug-lane evidence.
