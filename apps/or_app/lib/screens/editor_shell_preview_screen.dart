@@ -806,6 +806,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRollClip: widget.onRollTimelineClip,
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+                  onSetClipReversed: widget.onSetTimelineClipReversed,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -891,6 +892,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRollClip: widget.onRollTimelineClip,
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
+                  onSetClipReversed: widget.onSetTimelineClipReversed,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -4746,6 +4748,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onRollClip,
     required this.onSlideClip,
     required this.onRippleDeleteClip,
+    this.onSetClipReversed,
     required this.onUpdateTextClip,
     required this.onAddMarker,
     required this.onMoveMarker,
@@ -4869,6 +4872,15 @@ class _TimelinePanel extends StatefulWidget {
   onSlideClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
+  /// Flips the direction of one media clip; the clip menu offers it beside
+  /// Duplicate so reversal does not require opening the inspector.
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool reversed,
+  )?
+  onSetClipReversed;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -5998,6 +6010,17 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           child: _ClipMenuItem('Duplicate', _shortcutLabel('D')),
         ),
         PopupMenuItem<_ClipMenuChoice>(
+          value: _ClipMenuChoice.reverse,
+          enabled:
+              widget.onSetClipReversed != null &&
+              !widget.busy &&
+              clip.contentKind == ProjectTimelineClipContentKind.media,
+          child: _ClipMenuItem(
+            clip.reversed ? 'Play forwards' : 'Play backwards',
+            '',
+          ),
+        ),
+        PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.delete,
           enabled: widget.onDeleteClip != null && !widget.busy,
           child: _ClipMenuItem(
@@ -6027,6 +6050,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
         }
       case _ClipMenuChoice.duplicate:
         await widget.onDuplicateClip!(project, track, clip);
+      case _ClipMenuChoice.reverse:
+        await widget.onSetClipReversed!(
+          project,
+          track.trackId,
+          clip.clipId,
+          !clip.reversed,
+        );
       case _ClipMenuChoice.delete:
         await widget.onDeleteClip!(project, clip);
       case _ClipMenuChoice.rippleDelete:
@@ -7143,7 +7173,7 @@ class _TimelineLoadMoreLane extends StatelessWidget {
   );
 }
 
-enum _ClipMenuChoice { split, duplicate, delete, rippleDelete, advanced }
+enum _ClipMenuChoice { split, duplicate, reverse, delete, rippleDelete, advanced }
 
 /// One context-menu row: label on the left, shortcut on the right.
 class _ClipMenuItem extends StatelessWidget {

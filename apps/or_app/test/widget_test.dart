@@ -2881,6 +2881,47 @@ void main() {
     expect(find.byType(PlatformMenuBar), findsOneWidget);
   });
 
+  testWidgets('the clip menu reverses a media clip without the inspector', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'menu-reverse-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'menu-reverse-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'menu-reverse-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-reverse.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Menu reverse');
+
+    final clipFinder = find.byKey(
+      const ValueKey('timeline-clip-menu-reverse-clip'),
+    );
+    await tester.ensureVisible(clipFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(clipFinder, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    // The inspector switch carries the same words; the menu entry is the last one.
+    await tester.tap(find.text('Play backwards').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reversedCalls, 1);
+    expect(gateway.lastReversed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the inspector offers reversing a media clip', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final clip = ProjectTimelineClip(

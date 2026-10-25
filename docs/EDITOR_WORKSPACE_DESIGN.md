@@ -653,3 +653,6 @@ the inspector after selecting an imported clip).
 
 Freeze frame remains open: it is a still derived from one source time, which the
 model cannot express yet without a new content kind, so it stays out of this change.
+
+Reverse is also reachable from the clip context menu ("Play backwards" /
+"Play forwards"), so an owner who never opens the inspector can still flip a clip.
