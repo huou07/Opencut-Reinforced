@@ -832,6 +832,35 @@ void main() {
     },
   );
 
+  testWidgets('a non-Rust file for the illustration explains the requirement', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/illustration-source-check.orproj'
+      ..mediaPaths = ['/tmp/notes.orproj']
+      ..exportPath = '/tmp/illustration.mkv';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Illustration source check');
+
+    await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tool-open-motion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+
+    // Solving source code is the whole feature, so the dialog says what it needs
+    // instead of carrying a project file into the renderer.
+    expect(
+      find.text('Choose a Rust source file (.rs) to illustrate.'),
+      findsOneWidget,
+    );
+    expect(find.text('No code file selected'), findsOneWidget);
+    expect(gateway.illustrationRequests, isEmpty);
+  });
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {

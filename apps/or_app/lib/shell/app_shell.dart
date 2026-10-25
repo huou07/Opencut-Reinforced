@@ -1163,7 +1163,14 @@ class _AppShellState extends State<AppShell> {
         _showUnavailable('Select one code file to illustrate.');
         return null;
       }
-      return sources.single;
+      final source = sources.single;
+      // The picker offers every file the platform will show, so a project file
+      // can be chosen here; naming the requirement beats failing at render time.
+      if (!source.toLowerCase().endsWith('.rs')) {
+        _showUnavailable('Choose a Rust source file (.rs) to illustrate.');
+        return null;
+      }
+      return source;
     } on ProjectSafStorageException catch (error) {
       _showUnavailable(error.message);
       return null;

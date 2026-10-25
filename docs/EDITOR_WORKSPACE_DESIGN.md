@@ -831,3 +831,33 @@ PASS at 1280x800 with the tree reading `Timeline 1 track · 1 clip` and the clip
 `starts 0/1, duration 1/2`; and the packaged release drove the same path end to
 end — import, one click on the media row, `Insert Clip` with `V1 · video`, insert,
 export → `ffprobe` `h264 32×24 + aac, duration=0.512000, 2 635 bytes`.
+
+## 29. MotionScene in the packaged app, proven (local, 2026-10-25)
+
+Queue item 5 from §27. Driven through the release bundle with the CoreGraphics
+driver (`scripts/packaged_drive.py`), clicking only:
+
+| Step | Observed |
+| --- | --- |
+| Motion tab → **Create illustration video…** | Dialog: Code file / Save video / Title `Illustration` / Frames per second `10` / 640×360 |
+| Choose file → Desktop `j23-scene.rs` | Code file row shows `j23-scene.rs` |
+| Choose location → Desktop | Save sheet: `Save Illustration-1792929207651.mkv in the selected folder.` |
+| Render | Status `Rendered 40 frames at 640×360.`; Motion card appears with `Frames 40 · Rate 10 fps · Size 640×360 · 744 KB` and badge `Rendered` |
+| Add to timeline | Notice `Illustration added to the timeline.`, V1 created, `Timeline 1 track · 1 clip`, `Duration 4.00 s`, viewer paints the rendered scene, badge `On timeline`, button becomes `Already on the timeline` |
+| Export → MP4 → Export Here | `ffprobe`: `h264 640×360`, `r_frame_rate 30/1`, `aac`, `duration=4.010000`, 138 820 B |
+
+The rendered source itself probes as `ffv1 640×360` + `pcm_s16le` in Matroska, which
+is the lossless intermediate the dialog promises; the export re-encodes it through
+the normal timeline path, so a MotionScene clip is not a special case in export.
+
+Defect found while driving and fixed: the **Code file** picker offered every file the
+platform shows, so a project file could be chosen and carried into the renderer. The
+shell now refuses anything that is not `.rs` with `Choose a Rust source file (.rs) to
+illustrate.` and keeps the dialog open (`_pickMotionSource` in
+`apps/or_app/lib/shell/app_shell.dart`), covered by
+`a non-Rust file for the illustration explains the requirement`.
+
+Evidence class: INTEGRATION_VERIFIED on the packaged release this machine builds,
+driven by clicks; the project name in these runs reads `asd` because synthetic typing
+into a release text field garbles characters (docs/TOOLING.md), which is a driver
+limit, not an app defect.
