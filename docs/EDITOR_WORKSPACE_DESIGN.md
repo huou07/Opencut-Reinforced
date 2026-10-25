@@ -784,3 +784,28 @@ with no compatible track still answers "Add a compatible Video or Audio track
 first." CapCut-class behaviour is to create the track as part of the insert. The
 honest fix is one command sequence in the shell (ensure track → insert clip), not
 a second dialog; it is queued in §27 with multi-select leftovers.
+
+## 27. Queue after the packaged journey
+
+Ordered by what a CapCut user would notice first, each with the reason it is not
+already done:
+
+1. **Insert creates its own track.** Adding media to a timeline with no compatible
+   track currently asks the owner to add one. The fix belongs in the shell as one
+   command sequence (insert track → insert clip) so the dialog never shows a dead
+   end; it was queued instead of rushed because the insert dialog owns start,
+   duration and mode and must keep them.
+2. **Multi-select drag.** A set of clips still moves one clip at a time. Moving a
+   set needs its own snapping and conflict rules (does a set move ripple? does a
+   locked track in the set block the whole gesture?), so the single-clip path stays
+   until that case has a test.
+3. **Release-mode pacing lane.** The harness can only measure a debug build
+   (`flutter test` has no `--profile`), and a profile bundle cannot run the
+   integration entry because it lacks the bundled FFmpeg dylibs. A measurement
+   needs a dedicated entry point or an external frame-time sampler.
+4. **VideoToolbox preview decode.** Only the encoder is hardware today. Preview
+   decode goes through the linked FFmpeg software path; moving it to a hardware
+   device context is a decoder rewrite with its own fallback story.
+5. **Packaged MotionScene dialog drive.** The packaged journey proves create,
+   import, insert, preview and export. The MotionScene path was proven in the
+   harness only, because its native panels cannot be typed into (see docs/TOOLING.md).
