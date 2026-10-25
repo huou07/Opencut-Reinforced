@@ -24,6 +24,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
@@ -426,6 +427,16 @@ class _Runner {
         // following wait_* step observes the state instead, so the measured time
         // is the latency to the visible result (plus at most one 16 ms poll
         // interval).
+        if (step['settle'] != false) await _settle();
+        return;
+      case 'secondary_tap':
+        // A right click. Clip dialogs (trim, slip, roll, move) live behind the clip
+        // context menu, and a pointer owner reaches them that way; without this op
+        // the harness can only assert those dialogs through the widget suite.
+        await _act(step, (finder) async {
+          await _scrollIntoView(finder, settle: step['settle'] != false);
+          await tester.tap(finder, buttons: kSecondaryMouseButton);
+        });
         if (step['settle'] != false) await _settle();
         return;
       case 'long_press':

@@ -487,15 +487,21 @@ a full-screen `screencapture` then grabs whatever else the owner has open. Prefe
 `screencapture -l <window-id>` (or the window rect) so evidence never contains
 unrelated desktop content, and close the app when the run ends.
 
-## Harness limits: secondary click
+## Driving clip dialogs: `secondary_tap`
 
-The scenario runner drives taps, keys, drags and text, but not a secondary
-(right) click. Clip dialogs that moved behind the clip context menu — advanced
-trim, slip, roll, move — are therefore covered by the widget suite
-(`widget_test.dart` asserts `timeline-trim-*`, `timeline-slip-*`, `timeline-roll-*`)
-rather than by a scenario. `ripple-trim.json`, `slip-roll-slide.json` and
-`track-reorder.json` still stop at the point where they used to tap an inline
-control; treat them as pending, not as failures of the feature.
+Clip dialogs (advanced trim, slip, roll, move) live behind the clip context menu,
+which opens on a right click. The runner has a `secondary_tap` op for exactly that,
+so a scenario reaches those dialogs the way a pointer owner does:
+
+```json
+{"op": "secondary_tap", "selector": {"label_regex": "spans 1/4 to 1/2"}},
+{"op": "tap", "selector": {"text": "Advanced clip actions…"}},
+{"op": "tap", "selector": {"key_regex": "^timeline-slip-[0-9a-f-]+$"}}
+```
+
+Right-click the clip by its own label, not by key regex with `allow_multiple`: the
+first clip in the lane is rarely the one under test, and the dialog would edit the
+wrong clip while the scenario still looked green.
 
 ## Bundled FFmpeg is a media-interchange build
 

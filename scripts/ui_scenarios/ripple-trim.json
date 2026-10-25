@@ -159,6 +159,19 @@
       "budget_ms": 20000
     },
     {
+      "op": "secondary_tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Advanced clip actions\u2026"
+      }
+    },
+    {
       "op": "tap",
       "selector": {
         "key_regex": "^timeline-trim-[0-9a-f-]+$"
@@ -232,6 +245,19 @@
       "op": "wait",
       "text": "CLIP",
       "budget_ms": 20000
+    },
+    {
+      "op": "secondary_tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Advanced clip actions\u2026"
+      }
     },
     {
       "op": "tap",

@@ -170,7 +170,13 @@
     {
       "op": "tap",
       "selector": {
-        "key": "project-undo"
+        "key": "workspace-actions"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Undo"
       }
     },
     {
