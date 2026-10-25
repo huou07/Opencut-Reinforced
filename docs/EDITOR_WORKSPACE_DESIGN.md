@@ -567,3 +567,12 @@ case, `flutter --no-version-check analyze --no-pub` is clean and the widget suit
 is `+153`. NOT driven end-to-end: opening Finder needs a real export through the
 native save panel, which the semantic harness cannot click; the reveal call is
 therefore compiled-and-routed but not observed.
+
+## 20. Sequence frame rate in the project inspector (local, 2026-10-25)
+
+The inspector states the frame rate when nothing is selected; stating a project
+setting without offering to change it is the kind of dead surface the rebuild
+removed elsewhere. The row is now a menu (23.976/24/25/30/50/60) that runs the
+existing `setTimelineSequenceFrameRate` command, so undo, revision checks and
+the read-model refresh come for free. One list of rates is shared with the
+viewer transport instead of two copies drifting apart.

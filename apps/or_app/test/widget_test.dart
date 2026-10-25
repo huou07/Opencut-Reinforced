@@ -1994,6 +1994,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the project inspector changes the sequence frame rate', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/sequence-rate.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Sequence rate');
+
+    expect(find.byKey(const ValueKey('inspector-project')), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('inspector-sequence-frame-rate')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('60 fps').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastPreviewRate, isNotNull);
+    expect(gateway.lastPreviewRate!.canonical, '60/1');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('copy and paste recreate the clip at the playhead', (
     tester,
   ) async {

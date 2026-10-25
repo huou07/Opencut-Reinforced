@@ -813,6 +813,7 @@ class _AppShellState extends State<AppShell> {
                   ? _pendingMotionPreviewPosition
                   : null,
               onPreviewSeekConsumed: _consumeMotionPreviewPosition,
+              onSetSequenceFrameRate: _setSequenceFrameRate,
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,
@@ -2418,6 +2419,18 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _redoProject() async {
     await _runProjectAction(widget.projectGateway.redo);
+  }
+
+  /// Sequence frame rate is a project setting, so it goes through the same
+  /// command runner as every other edit: revision check, notice and undo.
+  Future<void> _setSequenceFrameRate(ProjectRationalRate? rate) async {
+    await _runProjectAction(
+      (session, current) => widget.projectGateway.setTimelineSequenceFrameRate(
+        session,
+        current,
+        rate,
+      ),
+    );
   }
 
   Future<void> _addTimelineTrack(ProjectTimelineTrackKind kind) async {

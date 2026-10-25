@@ -25,6 +25,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.projectSession,
     this.previewSeekPosition,
     this.onPreviewSeekConsumed,
+    this.onSetSequenceFrameRate,
     this.notice,
     this.busy = false,
     this.mediaPage,
@@ -98,6 +99,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final ProjectGateway? projectGateway;
   final ProjectSessionHandle? projectSession;
   final ProjectRationalTime? previewSeekPosition;
+  final ValueChanged<ProjectRationalRate?>? onSetSequenceFrameRate;
   final VoidCallback? onPreviewSeekConsumed;
   final String? notice;
   final bool busy;
@@ -735,7 +737,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   busy: widget.busy,
                   sequenceFrameRate: _previewState.value?.sequenceFrameRate,
                   contentEnd: _previewState.value?.contentEnd,
-                  trackCount: widget.timelineTracks?.items.length ?? 0,
+                  onSetSequenceFrameRate: widget.onSetSequenceFrameRate,
+                trackCount: widget.timelineTracks?.items.length ?? 0,
                   clipCount: widget.timelineClipPages.values.fold<int>(
                     0,
                     (total, page) => total + page.totalCount,
@@ -2392,9 +2395,9 @@ mixin _ViewerCommands {
   void seekBy(double seconds);
 }
 
-class _ViewerPanelState extends State<_ViewerPanel>
-    with _ViewerCommands, WidgetsBindingObserver {
-  static const _rateChoices = [
+/// Frame rates the sequence can carry. One list, because the viewer transport
+/// and the inspector both offer the same choice and a second copy would drift.
+const _sequenceRateChoices = [
     _FrameRateChoice(
       rate: ProjectRationalRate(24000, 1001),
       label: '23.976 (24000/1001) fps',
@@ -2404,8 +2407,12 @@ class _ViewerPanelState extends State<_ViewerPanel>
     _FrameRateChoice(rate: ProjectRationalRate(30, 1), label: '30 fps'),
     _FrameRateChoice(rate: ProjectRationalRate(50, 1), label: '50 fps'),
     _FrameRateChoice(rate: ProjectRationalRate(60, 1), label: '60 fps'),
-    _FrameRateChoice.unset(),
-  ];
+  _FrameRateChoice.unset(),
+];
+
+class _ViewerPanelState extends State<_ViewerPanel>
+    with _ViewerCommands, WidgetsBindingObserver {
+  static const _rateChoices = _sequenceRateChoices;
 
   ProjectPreviewState? _preview;
   ProjectRationalTime? _scrubPosition;
@@ -3347,6 +3354,7 @@ class _InspectorPanel extends StatefulWidget {
     this.contentEnd,
     this.trackCount = 0,
     this.clipCount = 0,
+    this.onSetSequenceFrameRate,
     required this.onUpdate,
     required this.onUpdateAudio,
     this.onUpdatePlaybackRate,
@@ -3369,6 +3377,7 @@ class _InspectorPanel extends StatefulWidget {
   /// right panel always answers a question instead of going blank.
   final ProjectRationalRate? sequenceFrameRate;
   final ProjectRationalTime? contentEnd;
+  final ValueChanged<ProjectRationalRate?>? onSetSequenceFrameRate;
   final int trackCount;
   final int clipCount;
   final Future<ProjectReadModel?> Function(
@@ -4100,10 +4109,13 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       padding: const EdgeInsets.all(OrSpacing.x3),
       children: [
         _inspectorSectionLabel('SEQUENCE'),
-        _inspectorFactRow(
-          'Frame rate',
-          rate == null ? 'Not set yet' : _frameRateLabel(rate),
-        ),
+        if (widget.onSetSequenceFrameRate == null)
+          _inspectorFactRow(
+            'Frame rate',
+            rate == null ? 'Not set yet' : _frameRateLabel(rate),
+          )
+        else
+          _inspectorFrameRateRow(rate),
         _inspectorFactRow(
           'Duration',
           duration == null
@@ -4138,6 +4150,50 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           ),
         ),
       ],
+    );
+  }
+
+  /// The sequence frame rate is a project setting, so the inspector row that
+  /// states it is also the row that changes it. A second home for the same
+  /// value would let the two drift apart.
+  Widget _inspectorFrameRateRow(ProjectRationalRate? rate) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 88,
+            child: Text(
+              'Frame rate',
+              style: const TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+          ),
+          Expanded(
+            child: PopupMenuButton<_FrameRateChoice>(
+              key: const ValueKey('inspector-sequence-frame-rate'),
+              tooltip: 'Sequence frame rate',
+              onSelected: (choice) =>
+                  widget.onSetSequenceFrameRate?.call(choice.rate),
+              itemBuilder: (context) => [
+                for (final choice in _sequenceRateChoices)
+                  PopupMenuItem(value: choice, child: Text(choice.label)),
+              ],
+              child: Text(
+                rate == null ? 'Not set yet' : _frameRateLabel(rate),
+                style: const TextStyle(
+                  color: OrColors.selection,
+                  fontSize: OrType.tinySize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
