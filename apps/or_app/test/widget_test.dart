@@ -2933,6 +2933,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('shift-click selects a second clip and one Delete removes both', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    ProjectTimelineClip clip(String id, int start) => ProjectTimelineClip(
+      clipId: id,
+      timelineStart: ProjectRationalTime(BigInt.from(start), 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(1), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'multi-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 2,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'multi-track': [clip('multi-a', 0), clip('multi-b', 1)],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/multi.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Multi select');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-multi-a')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-multi-b')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-selection-count')),
+      findsOneWidget,
+    );
+    expect(find.text('2 clips'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pumpAndSettle();
+
+    // A set of two deletes without a per-clip dialog.
+    expect(gateway.deleteTimelineClipCalls, 2);
+    expect(find.text('Delete clip?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('command I imports media without the mouse', (tester) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();

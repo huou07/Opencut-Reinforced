@@ -5055,6 +5055,10 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   _TimelinePointerGesture? _gesture;
   _TimelineSnapGuide? _snapGuide;
   String? _selectedClipId;
+
+  /// The full selection. `_selectedClipId` stays the primary clip (the one the
+  /// inspector edits); this set is what bulk verbs act on.
+  final Set<String> _selectedClipIds = <String>{};
   double _timelineZoom = 1;
   double _pixelsPerSecond = 64;
   bool _fitTimelineToView = false;
@@ -5441,6 +5445,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         gesture: _gesture,
                                         snapGuide: _snapGuide,
                                         selectedClipId: _selectedClipId,
+                                        selectedClipIds: _selectedClipIds,
                                         bladeMode: widget.bladeMode,
                                         onBladeSplit:
                                             widget.project == null ||
@@ -5586,6 +5591,19 @@ class _TimelinePanelState extends State<_TimelinePanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selectedClip != null) ...[
+              if (_selectedClipIds.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(left: OrSpacing.x1),
+                  child: Text(
+                    '${_selectedClipIds.length} clips',
+                    key: const ValueKey('timeline-selection-count'),
+                    style: const TextStyle(
+                      fontSize: OrType.tinySize,
+                      fontWeight: FontWeight.w600,
+                      color: OrColors.selection,
+                    ),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(left: OrSpacing.x1),
                 child: Text(
@@ -5927,7 +5945,50 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     unawaited(widget.onDuplicateClip!(project, track, clip));
   }
 
+  ProjectTimelineClip? _clipById(String clipId) {
+    for (final page in widget.clipPages.values) {
+      for (final clip in page.items) {
+        if (clip.clipId == clipId) return clip;
+      }
+    }
+    return null;
+  }
+
+  ProjectTimelineTrack? _trackForClipId(String clipId) {
+    for (final track
+        in widget.tracks?.items ?? const <ProjectTimelineTrack>[]) {
+      final page = widget.clipPages[track.trackId];
+      if (page == null) continue;
+      if (page.items.any((clip) => clip.clipId == clipId)) return track;
+    }
+    return null;
+  }
+
+  /// Deletes every selected clip, in order, without a dialog per clip: the owner
+  /// already said what they meant by selecting the set.
+  Future<void> _deleteSelectedClips() async {
+    final project = widget.project;
+    final onDelete = widget.onDeleteClip;
+    if (project == null || onDelete == null) return;
+    for (final id in _selectedClipIds.toList(growable: false)) {
+      final clip = _clipById(id);
+      final track = _trackForClipId(id);
+      if (clip == null || track == null || track.state.locked) continue;
+      await onDelete(project, clip);
+    }
+    if (!mounted) return;
+    setState(() {
+      _selectedClipIds.clear();
+      _selectedClipId = null;
+    });
+    widget.onClipSelectionChanged?.call(null, null, null);
+  }
+
   void confirmDeleteSelectedClip() {
+    if (_selectedClipIds.length > 1) {
+      unawaited(_deleteSelectedClips());
+      return;
+    }
     final clip = _selectedClip;
     final track = _selectedTrack;
     final project = widget.project;
@@ -6327,12 +6388,34 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   }
 
   void _selectClip(ProjectTimelineTrack track, ProjectTimelineClip clip) {
-    setState(() => _selectedClipId = clip.clipId);
-    widget.onClipSelectionChanged?.call(track.trackId, clip.clipId, track.kind);
+    final extend = HardwareKeyboard.instance.isShiftPressed;
+    setState(() {
+      if (extend) {
+        if (!_selectedClipIds.remove(clip.clipId)) {
+          _selectedClipIds.add(clip.clipId);
+        }
+        _selectedClipId = _selectedClipIds.contains(clip.clipId)
+            ? clip.clipId
+            : (_selectedClipIds.isEmpty ? null : _selectedClipIds.last);
+      } else {
+        _selectedClipIds
+          ..clear()
+          ..add(clip.clipId);
+        _selectedClipId = clip.clipId;
+      }
+    });
+    widget.onClipSelectionChanged?.call(
+      track.trackId,
+      _selectedClipId,
+      _selectedClipId == null ? null : track.kind,
+    );
   }
 
   void _clearSelection() {
-    setState(() => _selectedClipId = null);
+    setState(() {
+      _selectedClipId = null;
+      _selectedClipIds.clear();
+    });
     widget.onClipSelectionChanged?.call(null, null, null);
   }
 
@@ -7441,6 +7524,7 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.gesture,
     required this.snapGuide,
     required this.selectedClipId,
+    required this.selectedClipIds,
     required this.bladeMode,
     required this.onBladeSplit,
     required this.onDropMedia,
@@ -7469,6 +7553,10 @@ class _TimelineTrackLane extends StatelessWidget {
   final _TimelinePointerGesture? gesture;
   final _TimelineSnapGuide? snapGuide;
   final String? selectedClipId;
+
+  /// Every clip the owner has selected. Shift-click extends the set so a bulk
+  /// delete is one gesture instead of a dialog per clip.
+  final Set<String> selectedClipIds;
   final bool bladeMode;
   final void Function(ProjectTimelineClip clip, ProjectRationalTime time)?
   onBladeSplit;
@@ -7676,10 +7764,12 @@ class _TimelineTrackLane extends StatelessWidget {
                 filterQuality: FilterQuality.low,
               ),
         border: Border.all(
-          color: clip.clipId == selectedClipId
+          color: selectedClipIds.contains(clip.clipId)
               ? OrColors.selection
               : OrColors.borderStrong,
-          width: clip.clipId == selectedClipId ? 1.5 : 1,
+          width: clip.clipId == selectedClipId
+              ? 1.5
+              : (selectedClipIds.contains(clip.clipId) ? 1.2 : 1),
         ),
         borderRadius: BorderRadius.circular(OrRadii.small),
       ),

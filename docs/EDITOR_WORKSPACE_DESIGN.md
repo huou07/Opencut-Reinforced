@@ -726,3 +726,19 @@ the action is discoverable instead of hidden in a panel.
   "editor open, no text field focused, picker supports import".
 - Evidence: widget test `command I imports media without the mouse` (asserts the
   picker opened once and one import command was issued), `flutter test` 160 passed.
+
+## 24. Selecting more than one clip (local, 2026-10-25)
+
+`⇧`-click on a second clip adds it to the selection; the strip shows `2 clips` and
+every selected clip paints its selection border (the primary stays thicker). One
+`Delete` then removes the whole set with one command per clip and no per-clip
+dialog, because the owner already said what they meant by selecting the set.
+
+- The primary clip is still the one the inspector edits, so multi-select does not
+  fork the property surface.
+- Trim, move and slip stay single-clip on purpose: dragging a set is a different
+  interaction with its own snapping and conflict rules, and it is not needed by any
+  journey in this mission.
+- Evidence: widget test `shift-click selects a second clip and one Delete removes
+  both` (asserts `2 clips`, two delete commands, no dialog), `flutter test` 161
+  passed, `editor-journey.json` PASS.
