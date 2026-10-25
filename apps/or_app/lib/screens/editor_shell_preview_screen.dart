@@ -6478,6 +6478,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   }
 
   void _beginMarquee(String trackId, Offset local) {
+
     if (trackId != _marqueeTrackId) {
       setState(() {
         _marqueeTrackId = trackId;
@@ -7777,6 +7778,15 @@ class _TimelineTrackLane extends StatelessWidget {
                 ),
               ),
             ),
+            if (snapGuide?.trackId == track.trackId)
+              Positioned(
+                key: ValueKey('timeline-snap-guide-${track.trackId}'),
+                left: snapGuide!.time.secondsForDisplay * pixelsPerSecond,
+                top: 0,
+                bottom: 0,
+                width: 2,
+                child: Container(color: OrColors.selection),
+              ),
             if (onMarqueeStart != null)
               Positioned.fill(
                 // A raw listener, not a gesture detector: the marquee must not
@@ -7816,15 +7826,6 @@ class _TimelineTrackLane extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
-            if (snapGuide?.trackId == track.trackId)
-              Positioned(
-                key: ValueKey('timeline-snap-guide-${track.trackId}'),
-                left: snapGuide!.time.secondsForDisplay * pixelsPerSecond,
-                top: 0,
-                bottom: 0,
-                width: 2,
-                child: Container(color: OrColors.selection),
               ),
             for (final clip in clips)
               if (gesture?.clip.clipId != clip.clipId)

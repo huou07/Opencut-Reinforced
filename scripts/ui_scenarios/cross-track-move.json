@@ -1,0 +1,27 @@
+{
+ "name": "cross-track-move",
+ "viewport": {"width": 1280, "height": 800},
+ "fixtures": ["copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"],
+ "steps": [
+  {"op": "shot", "name": "home"},
+  {"op": "tap", "selector": {"key": "nav-projects"}},
+  {"op": "tap", "selector": {"key": "projects-new-project"}},
+  {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Cross track"},
+  {"op": "tap", "selector": {"key": "confirm-new-project"}},
+  {"op": "wait_label", "label_regex": "No timeline tracks", "budget_ms": 15000},
+  {"op": "tap", "selector": {"key": "timeline-empty-add-video"}},
+  {"op": "picker", "next": "media"},
+  {"op": "tap", "selector": {"key": "media-import"}},
+  {"op": "wait_label", "label_regex": "tiny_h264_aac\\.mp4", "budget_ms": 20000},
+  {"op": "tap", "selector": {"key_regex": "^media-add-timeline-.*$"}},
+  {"op": "tap", "selector": {"key": "timeline-confirm-insert"}},
+  {"op": "wait_label", "label_regex": "spans 0/1", "budget_ms": 20000},
+  {"op": "tap", "selector": {"key": "timeline-create-menu"}},
+  {"op": "tap", "selector": {"text": "Add video track"}},
+  {"op": "wait_label", "label_regex": "V2", "budget_ms": 20000},
+  {"op": "tree", "name": "two-tracks"},
+  {"op": "drag", "selector": {"key_regex": "^timeline-clip-[0-9a-f-]+$"}, "allow_multiple": true, "dx": 0, "dy": 58},
+  {"op": "tree", "name": "moved"},
+  {"op": "shot", "name": "moved"}
+ ]
+}

@@ -119,12 +119,16 @@
    "selector": {
     "key_regex": "^timeline-marquee-[0-9a-f-]+$"
    },
-   "from_dx": 60,
+   "from_dx": 700,
    "from_dy": 24,
-   "dx": -80,
+   "dx": -690,
    "dy": 0,
    "steps": 12,
    "from": "topLeft"
+  },
+  {
+   "op": "expect_text",
+   "text": "2 clips"
   },
   {
    "op": "wait_label",

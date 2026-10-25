@@ -1132,3 +1132,44 @@ Still open, unchanged: the group drag is proven by the widget suite but not yet
 by a harness gesture on very narrow clips; VideoToolbox preview decode waits on
 a vendored FFmpeg with the VT H.264 decoder; the packaged build cannot be typed
 into, so project naming stays owner-driven.
+
+## 35. Save/reopen and cross-track move, proven (local, 2026-10-25)
+
+Two journeys that the workspace rebuild promised had no end-to-end evidence until
+now. Both are proven by the semantic harness against the real app.
+
+| Journey | Steps | Result |
+| --- | --- | --- |
+| `scripts/ui_scenarios/save-reopen.json` | create → import → insert → ⌘S → close → reopen from Projects | PASS: reopened tree reads `Saved`, `1 item`, `Timeline 1 track · 1 clip`, clip `spans 0/1 to 1/2, source 0/1` |
+| `scripts/ui_scenarios/cross-track-move.json` | create → import → insert → add V2 → drag the clip 58 px down | PASS: `Video track V1, 0 clips` / `Video track V2, 1 clips`, clip still `spans 0/1 to 1/2` |
+
+The second one closes a real gap: moving a clip between tracks is the operation
+that makes a multi-track timeline worth having, and nothing until now exercised
+it through the pointer.
+
+### Marquee selection: proven. Marquee *drag*: not claimed.
+
+`scripts/ui_scenarios/multi-select-move.json` asserts the band result explicitly
+(`expect_text "2 clips"`), so a silent non-selection cannot pass any more, and it
+passes. Dragging one of the band-selected clips still moves nothing, and the
+failure is understood well enough to state honestly rather than paper over:
+
+- Instrumenting `_beginMoveGesture`, `_beginTrimGesture` and `_selectClip` showed
+  none of them firing for a drag that starts on a band-selected clip.
+- `tester.hitTestOnBinding` at that clip's own centre returns the band's
+  `IgnorePointer`/viewport path with **no clip render object in it**, while the
+  same clip reports a normal rect. Something in the horizontal scroll view's hit
+  path keeps the clip out of the hit test while the band listener is mounted.
+- Moving the band onto the lane's right-click listener (so the band adds no
+  subtree) made the band stop selecting instead, which is why that experiment was
+  reverted.
+
+The multi-clip move itself is proven twice: `timeline.clips.move` is one atomic
+command with one history entry (`cargo test -p or_core --lib` 365, including a
+two-clip move that one `undo` restores), and the widget suite drives
+`dragging one of several selected clips moves the whole selection once` through a
+shift-click selection. What stays open is only the *pointer* route from a band
+selection into that command.
+
+Evidence class: local, debug-lane (harness) plus unit/widget suites. Not a
+packaged-build claim.
