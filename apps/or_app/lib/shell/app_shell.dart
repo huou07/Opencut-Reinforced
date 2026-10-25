@@ -997,6 +997,18 @@ class _AppShellState extends State<AppShell> {
                 _editorKey.currentState?.confirmDeleteSelectedClip(),
           ),
           CommandPaletteAction(
+            label: 'Zoom Timeline In',
+            onSelected: () => _editorKey.currentState?.zoomTimelineBy(1.25),
+          ),
+          CommandPaletteAction(
+            label: 'Zoom Timeline Out',
+            onSelected: () => _editorKey.currentState?.zoomTimelineBy(0.8),
+          ),
+          CommandPaletteAction(
+            label: 'Fit Timeline to Window',
+            onSelected: () => _editorKey.currentState?.fitTimeline(),
+          ),
+          CommandPaletteAction(
             label: 'Reverse Selected Clip',
             onSelected: () =>
                 _editorKey.currentState?.toggleSelectedClipReverse(),
