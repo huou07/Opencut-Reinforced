@@ -42,7 +42,9 @@ uses source code to create, preview, render and edit a short deterministic scene
 3. Use CodeGraph before searching or reading indexed source. Reuse the existing
    command, media and rendering paths; make the smallest complete change.
 4. Add the relevant regression check. For user-visible work, build and exercise
-   the actual macOS app with an isolated project and inspect the result.
+   the actual macOS app with an isolated project and inspect the result. Drive the
+   interface with `scripts/or_ui.py` semantics first; use coordinate clicking,
+   MCP or a screenshot only when semantics cannot answer the question.
 5. Commit a coherent verified increment locally. Report evidence and gaps without
    promoting a build, test, screenshot or model statement into another class.
 
@@ -59,6 +61,8 @@ orchestrator, service, database, editing engine or second project state.
 - Editing path: [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md)
 - Design and UX: [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md)
 - Source checks and platform procedures: [docs/TESTING.md](docs/TESTING.md), [docs/TOOLING.md](docs/TOOLING.md)
-- OR-specific skill routing: [docs/skills.md](docs/skills.md)
+- OR-specific skill routing: [docs/skills.md](docs/skills.md). OR skills are the
+  local plugin in [tooling/dsh-or-skills](tooling/dsh-or-skills/README.md), not
+  project-local skill files.
 
 Framework artifacts are written in English; conversation follows the owner's language.

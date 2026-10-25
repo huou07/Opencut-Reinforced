@@ -7,7 +7,7 @@ description: Add or fix ordinary OR editing behavior—projects, media-library c
 
 Keep an edit in the existing canonical project model. This skill supplies OR
 state-ownership constraints; the general implementation process is in
-[DEVELOPMENT_WORKFLOW.md](../../../docs/DEVELOPMENT_WORKFLOW.md).
+[DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md).
 
 ## Read for the change
 
@@ -43,3 +43,13 @@ before exploring indexed source.
 Do not broaden platform parity work unless the owner selects it. During the
 current mission, make and verify local changes on macOS and commit coherent work
 locally; do not push or trigger remote CI.
+
+## Session skills
+
+This plugin supplies only the OR-specific contract. Pair it with the session
+skills the host exposes: `brainstorming` before changing an interaction model,
+`writing-plans` when a change spans several commits, `test-driven-development`
+for the regression guard, `systematic-debugging` when behavior is wrong, and
+`verification-before-completion` before any done claim. `ui-ux-pro-max`
+(`design_recommend` / `design_review` / `design_search`) owns visual and UX
+decision advice. Do not re-create those procedures here.

@@ -60,7 +60,7 @@ Rendering, preview and materialisation make no provider or network calls. See
 Choose the cheapest check that answers the question, then run the real local
 journey needed for the claim. The current host's permitted build and verification
 procedure is in [TOOLING.md](TOOLING.md) and skill
-[or-dev-loop](../.agents/skills/or-dev-loop/SKILL.md). Do not run unrelated
+[or-dev-loop](../tooling/dsh-or-skills/skills/or-dev-loop/SKILL.md). Do not run unrelated
 platform matrices. See [TESTING.md](TESTING.md) for test inventory and
 [QUALITY.md](QUALITY.md) for existing measured budgets and their limits.
 

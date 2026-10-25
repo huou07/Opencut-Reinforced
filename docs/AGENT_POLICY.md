@@ -65,7 +65,7 @@ Run a check that distinguishes the hypothesis before another repair.
 Use the cheapest check that answers the question, then exercise the affected
 real-app path for user-visible work. The current mission authorizes local macOS
 builds and runtime dogfooding; see [AGENT-AUTHORITY.md](AGENT-AUTHORITY.md) and
-[or-dev-loop](../.agents/skills/or-dev-loop/SKILL.md). Do not run unrelated
+[or-dev-loop](../tooling/dsh-or-skills/skills/or-dev-loop/SKILL.md). Do not run unrelated
 platform matrices or remote CI.
 
 Report each claim at its actual evidence level:

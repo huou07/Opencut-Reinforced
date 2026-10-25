@@ -1,0 +1,37 @@
+{
+  "name": "dsh-or-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Opencut Reinforced repo contracts as DeepSeek Harness skills (or-edit-feature, or-ui-ux, or-media-render, or-motionscene, or-dev-loop, or-claim-evidence, or-release). Local-only plugin: registers a SkillProvider over ./skills so any session in this repository gets the OR contracts without project-local .agents/skills copies.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "skills",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/provider.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "opencut-reinforced",
+    "skills"
+  ],
+  "license": "MIT"
+}

@@ -7,7 +7,7 @@ description: Add or fix OR media import, decode/playback, audio, compositing, FF
 
 Keep media behavior inside the existing Rust media, audio and render layers,
 with Flutter acting as the presentation surface. Follow
-[DEVELOPMENT_WORKFLOW.md](../../../docs/DEVELOPMENT_WORKFLOW.md); this skill
+[DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md); this skill
 records only OR media boundaries.
 
 ## Boundaries
@@ -33,3 +33,13 @@ separate UX review when controls or layout change.
 
 AI providers, model downloads and cloud services are outside this skill and the
 current product scope.
+
+## Session skills
+
+This plugin supplies only the OR-specific contract. Pair it with the session
+skills the host exposes: `brainstorming` before changing an interaction model,
+`writing-plans` when a change spans several commits, `test-driven-development`
+for the regression guard, `systematic-debugging` when behavior is wrong, and
+`verification-before-completion` before any done claim. `ui-ux-pro-max`
+(`design_recommend` / `design_review` / `design_search`) owns visual and UX
+decision advice. Do not re-create those procedures here.

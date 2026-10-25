@@ -11,9 +11,9 @@ product acceptance.
 
 ## Preconditions
 
-- Read [evidence/claims/README.md](../../../docs/evidence/claims/README.md) — it owns the
-  schema and the field meanings — plus [TESTING.md](../../../docs/TESTING.md) and
-  [QUALITY.md](../../../docs/QUALITY.md) for evidence classes and the quality bar.
+- Read [evidence/claims/README.md](docs/evidence/claims/README.md) — it owns the
+  schema and the field meanings — plus [TESTING.md](docs/TESTING.md) and
+  [QUALITY.md](docs/QUALITY.md) for evidence classes and the quality bar.
 - Confirm the exact implementation SHA and the hosted run you are about to cite.
   Do not cite a run at a different revision: CI green at another SHA is `STALE`,
   not evidence.
@@ -64,3 +64,13 @@ the claim overstate the journey or the platform; is it superseded; does the
 
 Claim path, requirement id, implementation SHA, run and job, evidence class,
 whether it supersedes or is superseded, and the exact limits the record states.
+
+## Session skills
+
+This plugin supplies only the OR-specific contract. Pair it with the session
+skills the host exposes: `brainstorming` before changing an interaction model,
+`writing-plans` when a change spans several commits, `test-driven-development`
+for the regression guard, `systematic-debugging` when behavior is wrong, and
+`verification-before-completion` before any done claim. `ui-ux-pro-max`
+(`design_recommend` / `design_review` / `design_search`) owns visual and UX
+decision advice. Do not re-create those procedures here.

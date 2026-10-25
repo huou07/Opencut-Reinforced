@@ -11,10 +11,10 @@ by itself.
 
 ## Preconditions
 
-- Read [RELEASE.md](../../../docs/RELEASE.md) — it is the authority — plus
-  [DEVELOPER_PREVIEW_INSTALL.md](../../../docs/DEVELOPER_PREVIEW_INSTALL.md),
-  [AGENT-AUTHORITY.md](../../../docs/AGENT-AUTHORITY.md) and the release requirements in
-  [SECURITY_LICENSING.md](../../../docs/SECURITY_LICENSING.md).
+- Read [RELEASE.md](docs/RELEASE.md) — it is the authority — plus
+  [DEVELOPER_PREVIEW_INSTALL.md](docs/DEVELOPER_PREVIEW_INSTALL.md),
+  [AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md) and the release requirements in
+  [SECURITY_LICENSING.md](docs/SECURITY_LICENSING.md).
 - Establish the exact commit and whether Platform Verification has passed for
   **that** commit. A green run at another SHA is `STALE` and is not a
   precondition.
@@ -56,7 +56,7 @@ by itself.
 Stable releases are a later, owner-owned milestone. They require product
 readiness, a reviewed platform matrix, packaging, checksums, a dependency and
 licence inventory, human-readable notes, and applicable signing, notarization or
-attestation. [RELEASE.md](../../../docs/RELEASE.md) deliberately defines no separate
+attestation. [RELEASE.md](docs/RELEASE.md) deliberately defines no separate
 version, health or rollback gate, and none may be claimed as one. Installer
 formats and platform-specific distribution remain undecided until scoped.
 
@@ -74,3 +74,13 @@ formats and platform-specific distribution remain undecided until scoped.
 Commit, exact-SHA Platform Verification run, workflow and dispatch used, tag,
 asset list with sizes and checksums, signing reality, and every precondition that
 is still unmet.
+
+## Session skills
+
+This plugin supplies only the OR-specific contract. Pair it with the session
+skills the host exposes: `brainstorming` before changing an interaction model,
+`writing-plans` when a change spans several commits, `finishing-a-development-branch`
+for the regression guard, `systematic-debugging` when behavior is wrong, and
+`verification-before-completion` before any done claim. `ui-ux-pro-max`
+(`design_recommend` / `design_review` / `design_search`) owns visual and UX
+decision advice. Do not re-create those procedures here.

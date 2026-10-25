@@ -13,7 +13,7 @@ No remote CI, publishing or cross-platform test matrix is in scope.
 Use automated tests for domain contracts and regression guards, then exercise
 the normal UI for user-facing behavior. Validate exported video independently.
 See [TOOLING.md](TOOLING.md) and skill
-[or-dev-loop](../.agents/skills/or-dev-loop/SKILL.md) for current local procedure.
+[or-dev-loop](../tooling/dsh-or-skills/skills/or-dev-loop/SKILL.md) for current local procedure.
 
 ## Current local playback-rate verification (2026-10-22)
 
