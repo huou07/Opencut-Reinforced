@@ -44,6 +44,18 @@ Right-click a clip by its own label rather than a key regex with
 `report.json`, and `artifacts/` with the transcript, screenshots and semantics
 JSON. These are gitignored runtime state, not evidence records.
 
+## Trap: the harness overwrites the Debug app bundle
+
+`or_ui.py` builds through `flutter test -d macos`, so
+`apps/or_app/build/macos/Build/Products/Debug/or_app.app` afterwards contains the
+**integration-test entrypoint**, not `lib/main.dart`. Launching that bundle by
+hand shows a black window because it waits for `OR_UI_SCENARIO_FILE`. Rebuild the
+normal app before handing the path to a person:
+
+```sh
+cd apps/or_app && flutter build macos --debug
+```
+
 ## Exit codes
 
 `2` bad invocation/scenario, `3` BLOCKED (no guest, no Xvfb, another lane holding
