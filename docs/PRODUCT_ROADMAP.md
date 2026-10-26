@@ -516,6 +516,18 @@ class each claim actually has:
     MotionScene journeys and independent export validation remain
     `BLOCKED`/`NOT RUN`. This is developer evidence, not `ACCEPTED`; the Mac
     mission still requires those app journeys and export checks.
+  - **Real-app journey (2026-10-26).** `scripts/ui_scenarios/clip-speed.json`
+    drives the built macOS app on an isolated profile: import a one-second WAV,
+    add it to a new track, select the clip, set the Inspector playback rate to
+    2×, assert the clip's speed badge, drag the playhead to the sequence end and
+    read `00:00:00:15`, undo with Cmd+Z and read `00:00:01:00` with the badge
+    gone, re-apply 2×, save, close the project, reopen it, and assert the badge
+    and the `00:00:00:15` end survive. The playhead drag is the pointer scrub
+    described in the timeline section above.
+    This is `VERIFIED_VISUAL` and `VERIFIED_NATIVE` for the inspector speed
+    selector, the derived duration, undo/redo and save/reopen on one WAV clip.
+    It does not establish export-time rate mapping, mixer pitch behaviour, or
+    video clips; those remain covered only by the unit and bridge suites.
   - The dated notes below preserve earlier design analysis and stopped attempts;
     they do not describe the current implementation status.
   - **Baseline before the rate model (2026-10-20):** `validate_clip_content`

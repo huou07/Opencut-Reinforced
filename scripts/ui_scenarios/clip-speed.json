@@ -1,0 +1,238 @@
+{
+  "name": "clip-speed",
+  "harness": "or_ui",
+  "description": "Clip speed through the real pointer and the real command path. A one second audio clip is sped to 2x from the inspector and the sequence end halves to 15 frames: the playhead is dragged to the end from the middle of the ruler, and the transport readout reports the clamped position, so a passing step means the speed reached the Rust command instead of only repainting the badge. Undo restores the original duration, and a sped clip survives save and reopen.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Clip speed"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "inspector-playback-rate"
+    },
+    {
+      "op": "expect_absent",
+      "key_regex": "^timeline-clip-speed-.*$"
+    },
+    {
+      "op": "shot",
+      "name": "one-times"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "inspector-playback-rate"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "2×"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-speed-.*$"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "timeline-ruler-scrub"
+      },
+      "dx": 900,
+      "steps": 12
+    },
+    {
+      "op": "wait",
+      "text": "00:00:00:15",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "two-times-halves-the-sequence"
+    },
+    {
+      "op": "tree",
+      "name": "two-times-halves-the-sequence"
+    },
+    {
+      "op": "key",
+      "chord": "cmd+z"
+    },
+    {
+      "op": "expect_absent",
+      "key_regex": "^timeline-clip-speed-.*$"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "timeline-ruler-scrub"
+      },
+      "dx": 900,
+      "steps": 12
+    },
+    {
+      "op": "wait",
+      "text": "00:00:01:00",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "undo-restores-the-duration"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "inspector-playback-rate"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "2×"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-speed-.*$"
+    },
+    {
+      "op": "key",
+      "chord": "cmd+s"
+    },
+    {
+      "op": "wait_absent",
+      "text": "Unsaved",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "workspace-close"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "wait_label",
+      "budget_ms": 15000,
+      "label_regex": "^Clip speed"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^recent-project-"
+      }
+    },
+    {
+      "op": "wait_label",
+      "budget_ms": 25000,
+      "label_regex": "^Opencut Reinforced"
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-speed-.*$"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "timeline-ruler-scrub"
+      },
+      "dx": 900,
+      "steps": 12
+    },
+    {
+      "op": "wait",
+      "text": "00:00:00:15",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "speed-survives-reopen"
+    },
+    {
+      "op": "tree",
+      "name": "speed-survives-reopen"
+    }
+  ]
+}
