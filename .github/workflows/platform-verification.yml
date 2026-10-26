@@ -42,7 +42,7 @@ env:
   # enables win over the minimal defaults, and list options accumulate. Every
   # additions except the system zlib compression library are native
   # FFmpeg components under the same LGPL-2.1-or-later posture;
-  # see the 9B1 review in docs/SECURITY_LICENSING.md. Android and the Rust link
+  # see the 9B1 review in docs/reference/security-licensing.md. Android and the Rust link
   # probe keep the minimal library-only build. The Android export profile below
   # is enabled separately after its pinned static codecs are built.
   FFMPEG_HELPER_CONFIGURE_ARGS: >-

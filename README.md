@@ -1,87 +1,53 @@
 # Opencut Reinforced
 
-Last reviewed: 2026-10-17.
+Last reviewed: 2026-10-26
 
-A free and open-source cross-platform video editor designed around one structured editing core shared by the human interface, CLI automation, and AI agents.
+A free and open-source video editor built around one structured editing core
+shared by the human interface, CLI automation and AI agents.
 
 ## Status
 
-**Pre-MVP, with an active cross-platform editor implementation.** The current
-application creates, opens, edits, saves, and recovers `.orproj` projects on
-macOS, Windows, Linux, and Android. A Rust-owned project session serves the
-Flutter UI and attached CLI through shared validated commands. Users can import
-multiple local media files on desktop and multiple Android SAF documents,
-preview media, assemble and revise timeline clips, add titles and manual
-captions, and export Matroska or desktop WebM. Android projects use SAF
-documents and an app-private working copy with explicit synchronization; the
-Android WebM profile is claimed only after its exact-SHA all-ABI packaged
-journey passes; run 38172368290 records that check passing at `33f7f355`. Dirty work
-periodically updates a recovery checkpoint without overwriting the canonical
-project file; Save remains explicit.
+**Pre-MVP with an active editor implementation.** The application creates, opens,
+edits, saves and recovers `.orproj` projects on macOS, Windows, Linux and
+Android. A Rust-owned project session serves the Flutter UI and an attached CLI
+through the same validated commands. Users can import local media or Android SAF
+documents, assemble and revise timeline clips, preview, add titles and manual
+captions, import/export subtitles, and export Matroska or WebM.
 
-The product is not yet a complete general-purpose editor: advanced editing,
-some media formats, and AI workflows beyond local English transcription remain
-incomplete. A validation-only candidate has passed the packaged desktop
-transcription and caption journey; this does not establish clean-machine
-installation or production signing. Android physical-device performance has
-not yet been measured. Stable application releases: none. Debug Developer Preview prereleases are available from
-[GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); they
-are for testing, not production distribution. See the active outcome-based
-[product roadmap](docs/PRODUCT_ROADMAP.md) and
-[release limitations](docs/RELEASE.md), plus the
-[Developer Preview install and dogfood guide](docs/DEVELOPER_PREVIEW_INSTALL.md).
+Stable releases: none. Debug Developer Preview prereleases are published from
+[GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for
+testing only; see [docs/reference/developer-preview-install.md](docs/reference/developer-preview-install.md).
+Advanced editing, most codec profiles, AI workflows, hardware acceleration and
+production signing remain open. Current work is selected by
+[docs/reference/roadmap.md](docs/reference/roadmap.md).
 
-The former checkpoint plan and state remain preserved for traceability in
-[docs/archive/execution/README.md](docs/archive/execution/README.md); they do not select active
-product work. The [convergence audit](docs/OPEN_SOURCE_CONVERGENCE.md) records
-which components OR should keep, reuse, evaluate, or defer based on inspected
-upstream evidence.
+## Architecture in one paragraph
 
-## Vision
-
-OR aims to be a powerful but approachable editor that is desktop-first, Android-capable, local-first where practical, agent-native, and open to community-created content. Editing state should stay structured and inspectable, and editing behavior should be deterministic across the GUI, CLI, and agents.
-
-## Architecture direction
-
-The Flutter app and attached CLI share one `LiveProjectHost` and one `ProjectFileSession`; Flutter calls it through a typed opaque Rust handle, while the CLI reaches it through local IPC. Both use the same command/query dispatch and runtime identity, revision, history, and dirty state. The Flutter UI has a production-direction native shell aligned with the frozen prototype; the broader product architecture remains the intended direction:
-
-    Flutter UI
-        |
-    shared Command API  <--- CLI
-        |                 <--- Agents
-    Rust Core
-        |
-    Timeline / Media / Render
-
-Flutter is the presentation layer. The Rust core is intended to own editing and project truth so the GUI, CLI, and agents do not grow separate editing engines.
-
-The project format has bounded filesystem load, race-safe no-clobber creation, explicit migrations, atomic save, and recovery checkpoints. Android project storage uses SAF documents with a bounded app-private working copy and explicit synchronization. Desktop and Android can import media through their platform permission models; generated previews use bounded background jobs and disposable indexed cache. The shared Rust session supports timeline tracks, exact clip edits, markers, snapping, history, preview, and desktop Matroska/WebM export. Android WebM's exact-SHA all-ABI build and real SAF output check passed at
-`33f7f355` (run 38172368290, recorded in [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md));
-physical-device performance remains unverified. Proxies remain a cache foundation rather than an exposed workflow. Advanced editing, some codec/container choices, AI assistance, and production packaging remain incomplete. Packaged FFmpeg components and provenance are documented in the release plan.
-
-## Product direction
-
-The planned product covers project and timeline editing, text and captions, audio, color and effects, export and interchange, creative assets, templates and themes, local and optional cloud AI, dubbing, safe agent and CLI workflows, and a future community ecosystem.
+Flutter is presentation. Rust owns canonical project state, history, recovery and
+timeline semantics. The desktop app and an attached CLI share one live session —
+the app through a typed opaque bridge, the CLI through local IPC — and both use
+the same command/query dispatch, revisions and undo. Playback and rendering run
+on a separate real-time plane that consumes immutable, versioned snapshots and
+never mutates the project. See [docs/architecture/system-overview.md](docs/architecture/system-overview.md).
 
 ## Platforms
 
-Current intended release targets:
+macOS, Windows, Linux and Android. iOS and web are not targets.
 
-- macOS
-- Windows
-- Linux
-- Android
+## Documentation
 
-iOS and web are not current release targets.
-
-## Design and documentation
-
-The application design source of truth is [DESIGN.md](DESIGN.md). The full documentation map is [docs/INDEX.md](docs/INDEX.md), including the [product vision](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and the [active product roadmap](docs/PRODUCT_ROADMAP.md). What has been verified, by which run, and what that evidence does not establish is recorded in [docs/evidence/claims/](docs/evidence/claims/). Notable changes are in [CHANGELOG.md](CHANGELOG.md). The original phased [roadmap](docs/ROADMAP.md) and the paused [execution control plane](docs/archive/execution/README.md) are preserved as archival history.
+[AGENTS.md](AGENTS.md) is the routing index: one short description, one "when to
+use it" trigger and one exact path per document, tool and skill. Design source of
+truth: [docs/design/design-language.md](docs/design/design-language.md). Recorded
+verification claims: [docs/evidence/claims/](docs/evidence/claims/). Notable
+changes: [CHANGELOG.md](CHANGELOG.md). Superseded plans, delivery logs and dated
+receipts are preserved under [docs/archive/](docs/archive/).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor path and repository expectations, and [docs/TOOLING.md](docs/TOOLING.md) for local checks and hosted platform verification.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor path, and
+[AGENTS.md](AGENTS.md) for the document that owns whatever you are changing.
 
 ## License
 
-OR is licensed under the MIT License. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

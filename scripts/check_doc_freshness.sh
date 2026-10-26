@@ -24,27 +24,41 @@ failed=0
 in_scope=(
   README.md
   AGENTS.md
-  DESIGN.md
-  docs/AGENT-AUTHORITY.md
-  docs/AGENT_POLICY.md
-  docs/ARCHITECTURE.md
-  docs/DEVELOPMENT_WORKFLOW.md
-  docs/INDEX.md
-  docs/OPEN_SOURCE_CONVERGENCE.md
-  docs/PRODUCT.md
-  docs/PRODUCT_ROADMAP.md
-  docs/PROJECT_FORMAT.md
-  docs/QUALITY.md
-  docs/RELEASE.md
-  docs/SECURITY_LICENSING.md
-  docs/TECHNICAL_PLAN.md
-  docs/TESTING.md
-  docs/TOOLING.md
-  docs/skills.md
-  docs/UX_ACCEPTANCE.md
+  docs/design/design-language.md
+  docs/design/ux-invariants.md
+  docs/architecture/system-overview.md
+  docs/architecture/control-plane.md
+  docs/architecture/realtime-plane.md
+  docs/architecture/media-pipeline.md
+  docs/architecture/project-format.md
+  docs/architecture/platforms.md
+  docs/architecture/security-boundaries.md
+  docs/features/project-lifecycle.md
+  docs/features/editing.md
+  docs/features/media-library.md
+  docs/features/preview-playback.md
+  docs/features/text-captions.md
+  docs/features/effects-audio.md
+  docs/features/export.md
+  docs/features/motionscene.md
+  docs/features/workspace-ui.md
+  docs/operations/workflow.md
+  docs/operations/verification.md
+  docs/operations/local-macos.md
+  docs/operations/ui-harness.md
+  docs/operations/git.md
+  docs/operations/permissions.md
+  docs/operations/docs-maintenance.md
+  docs/operations/skills.md
+  docs/reference/product.md
+  docs/reference/roadmap.md
+  docs/reference/quality.md
+  docs/reference/testing.md
+  docs/reference/tooling.md
+  docs/reference/security-licensing.md
+  docs/reference/release.md
+  docs/reference/developer-preview-install.md
   docs/evidence/claims/README.md
-  docs/prompts/README.md
-  docs/prompts/OR-BUILD.md
 )
 
 date_to_epoch() {

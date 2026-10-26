@@ -40,7 +40,7 @@ class AppTopBar extends StatelessWidget {
 
   /// Non-null while a project is open. The bar then owns the project's save
   /// state, its history controls and the project menu, so the workspace below
-  /// does not need a second title row (docs/EDITOR_WORKSPACE_DESIGN.md).
+  /// does not need a second title row (docs/archive/legacy/EDITOR_WORKSPACE_DESIGN.md).
   final bool? projectDirty;
   final VoidCallback? onUndo;
   final VoidCallback? onRedo;

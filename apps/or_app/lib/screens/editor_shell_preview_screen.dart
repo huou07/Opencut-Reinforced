@@ -694,7 +694,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               // The project's name, save state, history controls and project
               // menu live in the application bar; a second workspace title row
               // repeated the same facts and cost 52 px of editing space
-              // (docs/EDITOR_WORKSPACE_DESIGN.md §3).
+              // (docs/archive/legacy/EDITOR_WORKSPACE_DESIGN.md §3).
               if (!widget.isProjectWorkspace) const _EditorPreviewHeader(),
               if (widget.notice != null)
                 _ProjectNotice(
@@ -1272,7 +1272,7 @@ String _toolDescription(String label) => switch (label) {
 
 /// The editing tool categories, as one segmented strip at the top of the tool
 /// panel. A separate icon rail repeated the same four choices in a second
-/// column and cost 68 px of viewer width (docs/EDITOR_WORKSPACE_DESIGN.md §3).
+/// column and cost 68 px of viewer width (docs/archive/legacy/EDITOR_WORKSPACE_DESIGN.md §3).
 class _ToolTabs extends StatelessWidget {
   const _ToolTabs({
     required this.selected,

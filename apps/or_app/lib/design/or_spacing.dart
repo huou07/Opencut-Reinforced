@@ -32,7 +32,7 @@ abstract final class OrBreakpoints {
 
 /// Minimum pointer/contact area for a control.
 ///
-/// DESIGN.md requires usable touch targets; the compact layout gets the
+/// docs/design/design-language.md requires usable touch targets; the compact layout gets the
 /// larger figure because it is the one reached by touch.
 abstract final class OrTouchTargets {
   /// Pointer-driven desktop minimum.

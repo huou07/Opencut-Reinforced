@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// The OR type scale.
 ///
-/// Sizes come straight from the DESIGN.md suggested hierarchy (display,
+/// Sizes come straight from the docs/design/design-language.md suggested hierarchy (display,
 /// page title, section title, control, body, metadata, tiny/status). UI code
 /// references these names instead of carrying its own literal font sizes, so
 /// the scale is a contract rather than a convention.
@@ -14,7 +14,7 @@ abstract final class OrType {
   static const controlSize = 15.0;
   static const bodySize = 14.0;
 
-  /// Metadata has a 12-13 px range in DESIGN.md. Both ends are in use, so
+  /// Metadata has a 12-13 px range in docs/design/design-language.md. Both ends are in use, so
   /// both are named rather than silently collapsing to one and restyling
   /// every call site.
   static const metadataSize = 13.0;
@@ -94,7 +94,7 @@ abstract final class OrType {
 
 /// The OR motion scale.
 ///
-/// Durations come from the DESIGN.md motion tiers. Motion in OR is
+/// Durations come from the docs/design/design-language.md motion tiers. Motion in OR is
 /// functional, not decorative, so these are only used where a real
 /// transition exists and every consumer honours the platform's reduced-motion
 /// request.

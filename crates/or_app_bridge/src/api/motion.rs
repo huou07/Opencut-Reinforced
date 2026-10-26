@@ -420,7 +420,7 @@ mod tests {
         assert!(!output.exists());
     }
 
-    /// The materialisation-throughput row docs/QUALITY.md owed: a named canvas, a named
+    /// The materialisation-throughput row docs/reference/quality.md owed: a named canvas, a named
     /// rate and a scene built from real source, measured through the client the product
     /// actually calls.
     #[test]

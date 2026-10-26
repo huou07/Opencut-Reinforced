@@ -5353,7 +5353,7 @@ void main() {
   });
 
   // -- Phase 0 design, accessibility and keyboard guards ---------------------
-  // These assert the DESIGN.md / docs/UX_ACCEPTANCE.md presentation contract.
+  // These assert the docs/design/design-language.md / docs/design/ux-invariants.md presentation contract.
   // They are deliberately written against the intended behavior so that they
   // fail on the defect and pass on the repair.
 
@@ -5399,13 +5399,13 @@ void main() {
         failures,
         isEmpty,
         reason:
-            'DESIGN.md:454 requires sufficient contrast and a visible keyboard '
+            'docs/design/design-language.md:454 requires sufficient contrast and a visible keyboard '
             'focus indicator:\n${failures.join('\n')}',
       );
     },
   );
 
-  test('ThemeData exposes the DESIGN.md typography scale', () {
+  test('ThemeData exposes the docs/design/design-language.md typography scale', () {
     final textTheme = OrTheme.dark.textTheme;
     final scale = <String, TextStyle?>{
       'displayLarge': textTheme.displayLarge,
@@ -5416,7 +5416,7 @@ void main() {
       'bodySmall': textTheme.bodySmall,
       'labelSmall': textTheme.labelSmall,
     };
-    // DESIGN.md:154-162 suggested hierarchy.
+    // docs/design/design-language.md:154-162 suggested hierarchy.
     const bounds = <String, (double, double)>{
       'displayLarge': (36, 48),
       'headlineSmall': (28, 32),
@@ -5438,7 +5438,7 @@ void main() {
       final size = style.fontSize!;
       if (size < range.$1 || size > range.$2) {
         failures.add(
-          '${entry.key} is $size px (DESIGN.md wants '
+          '${entry.key} is $size px (docs/design/design-language.md wants '
           '${range.$1.toInt()}-${range.$2.toInt()} px)',
         );
       }
@@ -5448,12 +5448,12 @@ void main() {
       failures,
       isEmpty,
       reason:
-          'the theme must carry the DESIGN.md scale:\n'
+          'the theme must carry the docs/design/design-language.md scale:\n'
           '${failures.join('\n')}',
     );
   });
 
-  test('no UI TextStyle uses a font size below the DESIGN.md 11 px floor', () {
+  test('no UI TextStyle uses a font size below the docs/design/design-language.md 11 px floor', () {
     final offenders = <String>[];
     for (final file in _dartFilesUnder('lib')) {
       final lines = file.readAsLinesSync();
@@ -5481,7 +5481,7 @@ void main() {
       offenders,
       isEmpty,
       reason:
-          'DESIGN.md:162 sets a 11-12 px tiny/status floor; smaller text is '
+          'docs/design/design-language.md:162 sets a 11-12 px tiny/status floor; smaller text is '
           'not readable:\n${offenders.join('\n')}',
     );
   });
@@ -5521,7 +5521,7 @@ void main() {
     return gateway;
   }
 
-  // DESIGN.md:456 requires usable touch targets; the visible bar stays
+  // docs/design/design-language.md:456 requires usable touch targets; the visible bar stays
   // restrained while the pointer target grows.
   void expectRestrainedTrimHandle(
     WidgetTester tester, {
@@ -5778,7 +5778,7 @@ void main() {
         paintedContainers,
         1,
         reason:
-            'docs/UX_ACCEPTANCE.md:23-24 keeps panel resizing at prototype '
+            'docs/design/ux-invariants.md:23-24 keeps panel resizing at prototype '
             'reference tier, so a divider with no resize handler must render '
             'only the structural divider and no drag-looking grip',
       );
@@ -5904,7 +5904,7 @@ void main() {
   });
 
   testWidgets('a focused control paints a visible focus ring', (tester) async {
-    // DESIGN.md:455 requires a visible keyboard focus. ThemeData.focusColor
+    // docs/design/design-language.md:455 requires a visible keyboard focus. ThemeData.focusColor
     // alone is not enough for controls that own their own decoration, so the
     // ring has to be real and reserved in layout even before focus.
     final focusNode = FocusNode(debugLabel: 'probe control');

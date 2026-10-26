@@ -9,8 +9,8 @@ or compatibility promise.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) once stable
-releases exist. See [docs/RELEASE.md](docs/RELEASE.md) for how a release is
-produced, and [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) for what the
+releases exist. See [docs/reference/release.md](docs/reference/release.md) for how a release is
+produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
 ## Unreleased
@@ -30,11 +30,18 @@ product still needs.
 
 ### Changed
 
+- **Documentation restructured around task routing.** `AGENTS.md` is now a pure
+  index: one project sentence, one rule, and a name / when-to-use / exact-path
+  entry for every document, tool and skill. The former monolithic documents are
+  split into `docs/architecture/`, `docs/features/`, `docs/design/`,
+  `docs/operations/` and `docs/reference/`; the superseded set is preserved under
+  `docs/archive/legacy/`, and OR skills were trimmed to their OR-specific
+  contracts.
 - **Add to Timeline** now inserts at the occupied timeline's content end rather
   than at the timeline origin.
 - Home no longer presents the visual-only editor shell as a usable project.
 - Documentation reorganised: the paused checkpoint ledger moved to
-  `docs/archive/execution/`, `docs/ROADMAP.md` is labelled archival, and
+  `docs/archive/execution/`, `docs/archive/legacy/ROADMAP.md` is labelled archival, and
   `DEVELOPMENT_WORKFLOW.md` selects work from the product roadmap instead of the
   historical `NEXT` cursor.
 

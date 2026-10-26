@@ -11,12 +11,11 @@
 
 # Architecture decisions, roadmap and permanent policy. These change what the
 # rest of the repository is allowed to become.
-/docs/adr/              @huou07
-/docs/ARCHITECTURE.md   @huou07
-/docs/TECHNICAL_PLAN.md @huou07
-/docs/AGENT_POLICY.md   @huou07
-/AGENTS.md              @huou07
-/DESIGN.md              @huou07
+/docs/adr/                  @huou07
+/docs/architecture/         @huou07
+/docs/operations/           @huou07
+/docs/design/design-language.md @huou07
+/AGENTS.md                  @huou07
 
 # Verification gates. A weakening here silently removes a safety net for
 # everyone else.
@@ -28,4 +27,4 @@
 
 # Release and packaging surface.
 /scripts/package_linux_deb.sh    @huou07
-/docs/RELEASE.md                 @huou07
+/docs/reference/release.md       @huou07

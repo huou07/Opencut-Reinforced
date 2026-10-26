@@ -5,50 +5,39 @@ description: Design, change or review an OR user-visible screen or interaction, 
 
 # OR UI/UX
 
-This skill binds interface work to OR's existing design and acceptance rules. Use
-the `ui-ux-pro-max` tools for the decision advice (`design_recommend`,
-`design_search`, `design_review`); do not copy a generic review framework into
-this repository.
+Bind interface work to OR's existing design and acceptance rules. Use the
+`ui-ux-pro-max` tools for design advice; do not copy a generic review framework
+into this repository.
 
 ## Authorities
 
-Read `DESIGN.md` and the relevant section of `docs/UX_ACCEPTANCE.md`. Read
-PRODUCT and QUALITY sections only when they own behavior or a measured target.
+- `docs/design/design-language.md` — tokens, hard visual rules, shell, motion.
+- `docs/design/ux-invariants.md` — behaviour that must not regress, and the
+  evidence a UI change needs.
+- `docs/features/workspace-ui.md` — where controls live and interaction parity.
 
 ## OR-specific rules
 
-- Use the existing Focused Monochrome design and shell slots. Common editing
-  actions should be direct and discoverable.
-- Pointer actions need a usable keyboard path. Controls expose honest labels,
-  roles, states and actions; do not add semantics wrappers just to satisfy a
-  test.
-- Keep visible project state grounded in Rust query results. A ghost or hover
-  state is presentation only.
-- Preserve the established contrast, type-size and hit-target thresholds in
-  `docs/UX_ACCEPTANCE.md`.
-- The current runtime target is the real macOS app. Check compact layouts only
-  when the task changes them or the owner selects mobile work.
+- Use the existing Focused Monochrome design and shell slots; integrate into an
+  existing slot instead of inventing a region.
+- Every pointer action needs a keyboard path; controls expose honest labels,
+  roles, states and actions — do not add semantics wrappers to satisfy a test.
+- Keep visible project state grounded in Rust query results; hover/ghost states
+  are presentation only.
+- Preserve contrast, type-size and hit-target thresholds from the invariants.
+- The current runtime target is the real macOS app; check compact layouts only
+  when the task changes them.
 - A new interaction model is an architecture decision: write the information
-  architecture down first — panels, zones, what stays visible, what the pointer
-  does, what the keyboard does — then rebuild widgets against it.
+  architecture down first (panels, zones, visibility, pointer, keyboard), then
+  rebuild widgets against it.
 
 ## Review
 
-Describe the journey and its state, then inspect the actual app interaction.
-Prefer `scripts/or_ui.py` (see `or-dev-loop`): `tree` plus
-`scripts/or_tree_outline.py` answers hierarchy, labels, global rects, states and
-keyboard reachability without a screenshot. Capture a screenshot only when it
-answers a visual question; inspect it for clipping, hierarchy, alignment, focus
-and readability. Assert semantics and canonical project state at their
-appropriate layers. Measure interaction or frame performance when that path
-changes. Report uncovered viewports and states as UNVERIFIED.
+Describe the journey and its state, then inspect the real interaction with
+`scripts/or_ui.py` (`tree` plus `scripts/or_tree_outline.py` answers hierarchy,
+labels, rects, states and keyboard reachability). Capture a screenshot only when
+it answers a visual question. Assert semantics and canonical state at their own
+layers. Report uncovered viewports and states as UNVERIFIED.
 
-Use `or-dev-loop` for local builds and checks. Update `docs/UX_ACCEPTANCE.md`
-when a lasting regression guard or acceptance rule changes.
-
-## Session skills
-
-Pair this contract with `brainstorming` before changing an interaction model,
-`ui-ux-pro-max` for style, palette, type and UX-rule advice, `writing-plans`
-when the work spans several commits, and `verification-before-completion` before
-claiming a screen is done.
+Update `docs/design/ux-invariants.md` when a lasting guard or acceptance rule
+changes.

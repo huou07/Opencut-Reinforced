@@ -2,7 +2,7 @@
 //!
 //! The desktop application archives and CLI packages carry their platform's
 //! `ffmpeg`/`ffprobe` programs as siblings of the main application binary (see
-//! the 9B1 review in `docs/SECURITY_LICENSING.md`). Import probing and
+//! the 9B1 review in `docs/reference/security-licensing.md`). Import probing and
 //! disposable artifact generation resolve through this module so a packaged
 //! application never depends on a system executable or a developer `PATH`.
 //!

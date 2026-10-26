@@ -97,7 +97,7 @@ fi
 # One bounded performance budget, measured on this named host class. A breach
 # fails the gate; a host that cannot produce an honest number is UNVERIFIED with
 # the exact command that would settle it, never a fabricated threshold. Scope,
-# baselines and limits are in `scripts/bench_quality.py` and `docs/QUALITY.md`.
+# baselines and limits are in `scripts/bench_quality.py` and `docs/reference/quality.md`.
 printf '\n== Performance budget (local, Debian OptiPlex-class host) ==\n'
 bench_rc=0
 timeout --signal=TERM --kill-after=30 "${CHECK_TIMEOUT}s" \

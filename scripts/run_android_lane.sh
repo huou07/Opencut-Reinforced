@@ -34,7 +34,7 @@
 # and the driver; an apk-only run needs the build JVMs instead. The previous flat
 # 7 GiB floor contradicted this host's measured reality on two counts: the
 # default 6144 MB guest cannot fit under 7 GiB at all (see
-# docs/AGENT-AUTHORITY.md), and an apk-only run does not need the guest's RAM.
+# docs/operations/permissions.md), and an apk-only run does not need the guest's RAM.
 #
 #   floor(guest steps) = GUEST_RAM_MB + OR_ANDROID_EMULATOR_OVERHEAD_MB
 #                                        + OR_ANDROID_HOST_MARGIN_MB

@@ -5,7 +5,7 @@ Why this exists: the semantic harness (`scripts/or_ui.py`) runs a *debug* build
 through the Flutter test binding, so it cannot prove anything about the shipped
 bundle. This driver talks to the packaged app the way a person does -- real
 clicks and real keystrokes -- and captures only the app window, never the desktop
-(see docs/TOOLING.md, "Verifying a packaged build without capturing the desktop").
+(see docs/operations/local-macos.md, "Driving the built app").
 
 Requirements: macOS, `swiftc` (Xcode command line tools), Accessibility permission
 for the terminal that runs it, and the packaged app launched with the same bundle

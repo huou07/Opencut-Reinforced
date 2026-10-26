@@ -5,41 +5,30 @@ description: Add or fix OR media import, decode/playback, audio, compositing, FF
 
 # OR media and rendering
 
-Keep media behavior inside the existing Rust media, audio and render layers,
-with Flutter acting as the presentation surface. Follow
-[DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md); this skill
-records only OR media boundaries.
+Keep media behaviour inside the existing Rust media, audio and render layers,
+with Flutter as presentation. Read `docs/architecture/media-pipeline.md`,
+`docs/architecture/realtime-plane.md` and the owning feature document from
+[AGENTS.md](AGENTS.md).
 
 ## Boundaries
 
-- Reuse crates/or_media, crates/or_audio, crates/or_render and the existing
-  bridge, FFmpeg helper and export paths before proposing new infrastructure.
-- Do not put decode, audio processing or compositing work in Flutter widgets or
+- Reuse `crates/or_media`, `crates/or_audio`, `crates/or_render`, the bridge, the
+  FFmpeg helper and the export paths before proposing new infrastructure.
+- No decode, audio processing or compositing work in Flutter widgets or
   project-mutation commands. Keep queues, buffers and background work bounded.
-- Preview and export should represent the same composition. Runtime frame/audio
-  activity does not mutate the project or increment its revision.
-- Check the actual FFmpeg build, linked libraries, supported codecs, muxers and
-  licenses before exposing a format or acceleration option.
-- Keep a correct fallback. Measure software and hardware paths on equal settings
-  before claiming that acceleration is faster or higher quality.
+- Preview and export represent the same composition. Frame/audio activity never
+  mutates the project or increments its revision.
+- Check the actual FFmpeg build, linked libraries, codecs, muxers and licences
+  before exposing a format or acceleration option.
+- Keep a correct fallback, and measure software and hardware paths on equal
+  settings before claiming acceleration is faster or better.
 
 ## Evidence
 
-For preview, exercise real media in the macOS app and verify seek/playback and
-audio behavior as relevant. For export, record profile, codec, dimensions,
-frame rate, backend, duration and file size; inspect with ffprobe, decode the
-result, and play it. Use or-dev-loop for the local build and checks. Use a
-separate UX review when controls or layout change.
+For preview, exercise real media in the macOS app and verify seek, playback and
+audio as relevant. For export, record profile, codec, dimensions, frame rate,
+backend, duration and file size; probe the file, decode it and play it. Use
+`or-dev-loop` for the local build and `or-ui-ux` when controls change.
 
 AI providers, model downloads and cloud services are outside this skill and the
 current product scope.
-
-## Session skills
-
-This plugin supplies only the OR-specific contract. Pair it with the session
-skills the host exposes: `brainstorming` before changing an interaction model,
-`writing-plans` when a change spans several commits, `test-driven-development`
-for the regression guard, `systematic-debugging` when behavior is wrong, and
-`verification-before-completion` before any done claim. `ui-ux-pro-max`
-(`design_recommend` / `design_review` / `design_search`) owns visual and UX
-decision advice. Do not re-create those procedures here.

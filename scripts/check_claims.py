@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CLAIMS_DIR = ROOT / "docs" / "evidence" / "claims"
-ROADMAP = ROOT / "docs" / "PRODUCT_ROADMAP.md"
+ROADMAP = ROOT / "docs" / "reference" / "roadmap.md"
 
 FILENAME = re.compile(r"^(\d{4}-\d{2}-\d{2})-[A-Za-z0-9][A-Za-z0-9._-]*\.json$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -179,7 +179,7 @@ def validate_record(path: Path, data: object, known_requirements: set[str],
             and requirement not in known_requirements):
         problems.append(
             f"{name}: requirement {requirement!r} is not declared in "
-            f"PRODUCT_ROADMAP.md")
+            f"docs/reference/roadmap.md")
 
     return problems
 

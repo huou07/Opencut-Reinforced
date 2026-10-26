@@ -116,7 +116,7 @@ jobs:
               echo
               echo "Source: \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\`. Exact-commit Platform Verification: [run ${platform_run_id}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${platform_run_id})."
               echo "This run cannot create a release or tag. The five app packages are temporary Actions artifacts with seven-day retention for direct dogfooding."
-              echo "Install, update, uninstall, safety limitations, and the suggested user journey: [Developer Preview guide](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/DEVELOPER_PREVIEW_INSTALL.md)."
+              echo "Install, update, uninstall, safety limitations, and the suggested user journey: [Developer Preview guide](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/reference/developer-preview-install.md)."
               echo
               echo "Try the ordinary journey: install for your OS, create a project, import real video and audio, preview and revise a clip, add a title or manual caption, save/close/reopen, then export and play the result independently. On desktop, test English transcription only after confirming the optional model download; review/edit captions before applying and save/export SRT. Android transcription is unsupported."
               echo
@@ -364,7 +364,7 @@ jobs:
                str(package_dir / app_name)],
               check=True,
           )
-          (package_dir / "README-FIRST.md").write_bytes(pathlib.Path("docs/DEVELOPER_PREVIEW_INSTALL.md").read_bytes())
+          (package_dir / "README-FIRST.md").write_bytes(pathlib.Path("docs/reference/developer-preview-install.md").read_bytes())
           subprocess.run(
               ["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(package_dir), str(archive)],
               check=True,
@@ -632,7 +632,7 @@ jobs:
           Copy-Item -Path (Join-Path $buildOutput "*") -Destination $applicationDir -Recurse
           python scripts/check_app_bundle.py --platform windows $applicationDir
           if ($LASTEXITCODE -ne 0) { throw "Packaged Windows application is not the application build" }
-          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "docs/DEVELOPER_PREVIEW_INSTALL.md") -Destination (Join-Path $packageDir "README-FIRST.md")
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE "docs/reference/developer-preview-install.md") -Destination (Join-Path $packageDir "README-FIRST.md")
           Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $archive -CompressionLevel Optimal
           if ((Get-Item -LiteralPath $archive).Length -eq 0) { throw "Windows debug archive is empty" }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -912,7 +912,7 @@ jobs:
           test -n "$(find "$bundle" -mindepth 1 -maxdepth 1 -print -quit)"
           cp -a "$bundle" "$package_dir/opencut-reinforced"
           python3 scripts/check_app_bundle.py --platform linux "$package_dir/opencut-reinforced"
-          cp docs/DEVELOPER_PREVIEW_INSTALL.md "$package_dir/README-FIRST.md"
+          cp docs/reference/developer-preview-install.md "$package_dir/README-FIRST.md"
           tar -czf "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz" -C "$package_dir" .
           test -s "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.tar.gz"
           bash scripts/package_linux_deb.sh "$bundle" "$RUNNER_TEMP/opencut-reinforced-linux-x64-debug.deb" "$GITHUB_SHA"
@@ -1081,7 +1081,7 @@ jobs:
           # exactly five plus three, so a loose file here becomes a ninth and fails the
           # release. macOS, Windows and Linux carry the install guidance *inside* their
           # archives, which the publish job verifies; an APK cannot embed a document, so
-          # the guidance travels in docs/DEVELOPER_PREVIEW_INSTALL.md and the release note.
+          # the guidance travels in docs/reference/developer-preview-install.md and the release note.
           test -s "$package_dir/opencut-reinforced-android-debug.apk"
           test "$(find "$package_dir" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d '[:space:]')" = "1"
 
@@ -1501,7 +1501,7 @@ jobs:
           Source commit: @SOURCE_COMMIT@
 
           This preview is built only after the same source commit passes hosted Platform Verification. It is an unsigned or ad-hoc-signed test build, not a stable release or performance benchmark. On Debian 13 or Ubuntu 24.04 amd64, use the Linux .deb; on other Linux distributions, use the TAR.GZ archive.
-          Read the [install and dogfood guide](https://github.com/huou07/Opencut-Reinforced/blob/@SOURCE_COMMIT@/docs/DEVELOPER_PREVIEW_INSTALL.md) before downloading a package.
+          Read the [install and dogfood guide](https://github.com/huou07/Opencut-Reinforced/blob/@SOURCE_COMMIT@/docs/reference/developer-preview-install.md) before downloading a package.
 
           ## Try one ordinary project
 

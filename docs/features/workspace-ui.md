@@ -1,0 +1,61 @@
+# Feature — Workspace and UI Shell
+
+Last reviewed: 2026-10-26
+
+Scope: the application shell, where controls live, and the interaction rules the
+UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
+non-regression invariants are in [design/ux-invariants.md](../design/ux-invariants.md).
+
+## Shell slots
+
+Stable regions: App Bar, Editor Tool Rail, Left Tool Panel, Viewer, Inspector,
+Timeline Toolbar, Timeline, Task/Status Area, Command Palette, Dialog or Mobile
+Sheet. New work integrates into an existing slot; a permanent new region needs
+justification and review.
+
+## Editor layout
+
+- One bar per zone: project name and save state, undo/redo, project menu, export,
+  command palette — primary actions right-aligned.
+- Tabbed library (Media / Text / Audio / Motion) instead of a placeholder icon
+  rail. No dead entries: every control opens a real panel.
+- Centre viewer with transport, timecode and transform/crop affordances.
+- Right inspector with human units, presets and a sticky action row; it shows
+  project facts when nothing is selected.
+- Bottom timeline with thumbnail/waveform clips, visible trim handles, context
+  menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
+- Status/snackbar feedback goes through the shared snackbar so shell and editor
+  cannot diverge.
+
+## Interaction rules
+
+- Keyboard and pointer have parity: every transport, timeline and edit verb is
+  reachable by key, menu, palette and pointer where applicable.
+- Shortcuts resolve through the single shell `Shortcuts`/`Actions` map and do not
+  fire while a text field has focus.
+- One gesture dispatches one command; no optimistic edit geometry in Flutter.
+- Simple and Advanced modes are visibility preferences over the same state and
+  commands. Hiding a control never forks or removes project data.
+- Mobile/compact layout exposes the same semantics as the desktop rail, with
+  selection carried by fill and border, not colour alone.
+- Native macOS menu bar mirrors the same verbs (File/Edit/View/OR).
+
+## Rules
+
+- Flutter keeps presentation state only: navigation, panel layout, selection,
+  input, bounded read-model caches. Never a second editable project model.
+- New features use a lightweight static descriptor (id, label, icon, group,
+  availability, command IDs, panel, inspector sections, shortcut metadata); do
+  not build a plugin framework for it.
+- Every visible action must work or be visibly unavailable — no silent dead ends.
+
+## Where
+
+- `apps/or_app/lib/` — shell, panels, inspector, timeline widgets, palette, menus
+- `apps/or_app/test/` — widget guards for the invariants above
+
+## Related
+
+- [editing.md](editing.md)
+- [design/design-language.md](../design/design-language.md)
+- [operations/ui-harness.md](../operations/ui-harness.md)
