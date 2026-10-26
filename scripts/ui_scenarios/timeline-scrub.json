@@ -139,6 +139,29 @@
     {
       "op": "tree",
       "name": "back-at-zero"
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-playhead-grab-.*$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-marquee-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "00:00:01:00",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "lane-press-seeks"
+    },
+    {
+      "op": "tree",
+      "name": "lane-press-seeks"
     }
   ]
 }

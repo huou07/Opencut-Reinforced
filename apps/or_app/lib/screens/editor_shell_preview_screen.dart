@@ -5296,7 +5296,7 @@ class _TimelinePanelState extends State<_TimelinePanel> {
     );
   }
 
-  /// Moves the playhead to [position] from a ruler gesture.
+  /// Moves the playhead to [position] from a ruler or lane gesture.
   ///
   /// The pointer emits far more targets than a frame can be rendered for, so a
   /// move smaller than half a pixel changes nothing the user can see and is
@@ -5304,18 +5304,27 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   void _scrubAt(ProjectRationalTime position) {
     final onScrubTo = widget.onScrubTo;
     if (onScrubTo == null) return;
+    final end = widget.previewState.value?.contentEnd;
+    var target = position;
+    if (target.numerator < BigInt.zero) {
+      target = ProjectRationalTime(BigInt.zero, 1);
+    } else if (end != null && _compareProjectRational(target, end) > 0) {
+      // Seeking past the last frame leaves the preview with nothing to show,
+      // so every scrub surface stops at the sequence end.
+      target = end;
+    }
     final previous = _scrubPosition;
     if (_scrubbing &&
         previous != null &&
-        (position.secondsForDisplay - previous.secondsForDisplay).abs() <
+        (target.secondsForDisplay - previous.secondsForDisplay).abs() <
             0.5 / math.max(1.0, _pixelsPerSecond)) {
       return;
     }
     setState(() {
       _scrubbing = true;
-      _scrubPosition = position;
+      _scrubPosition = target;
     });
-    onScrubTo(position);
+    onScrubTo(target);
   }
 
   void _endScrub() {
@@ -5641,6 +5650,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                         onMarqueeUpdate: (local) =>
                                             _updateMarquee(track.trackId, local),
                                         onMarqueeEnd: () => _endMarquee(track),
+                                        // Pressing empty lane space moves the
+                                        // playhead, and the playhead line is
+                                        // itself a drag surface in every lane.
+                                        onScrubTo: widget.onScrubTo == null
+                                            ? null
+                                            : _scrubAt,
+                                        onScrubEnd: _endScrub,
                                         onBladeSplit:
                                             widget.project == null ||
                                                 widget.onSplitClip == null
@@ -6912,6 +6928,10 @@ double _timelineTrackHeaderWidthFor(double availableWidth) =>
 const double _timelineRulerHeight = 38;
 const double _timelineLaneHeight = 58;
 
+/// How wide the playhead's grab band is in the lanes. Wide enough for a
+/// pointer, narrow enough that a clip press beside the line still selects.
+const double _playheadGrabWidth = 12;
+
 Map<String, String> _timelineTrackLabels(List<ProjectTimelineTrack> tracks) {
   var video = 0;
   var audio = 0;
@@ -7945,6 +7965,8 @@ class _TimelineTrackLane extends StatelessWidget {
     required this.onMarqueeStart,
     required this.onMarqueeUpdate,
     required this.onMarqueeEnd,
+    this.onScrubTo,
+    this.onScrubEnd,
     required this.onDropMedia,
     required this.onOpenClip,
     required this.onOpenClipMenu,
@@ -7984,6 +8006,12 @@ class _TimelineTrackLane extends StatelessWidget {
   final void Function(Offset local)? onMarqueeStart;
   final void Function(Offset local)? onMarqueeUpdate;
   final VoidCallback? onMarqueeEnd;
+
+  /// Moves the playhead from a lane press, or from dragging its line, which is
+  /// the gesture CapCut binds to the whole timeline. Null when nothing can
+  /// seek, so the lane keeps its select-only behaviour.
+  final ValueChanged<ProjectRationalTime>? onScrubTo;
+  final VoidCallback? onScrubEnd;
   final void Function(ProjectMediaItem, Offset)? onDropMedia;
   final ValueChanged<ProjectTimelineClip> onOpenClip;
   final void Function(ProjectTimelineClip, Offset) onOpenClipMenu;
@@ -7999,6 +8027,19 @@ class _TimelineTrackLane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final playheadSeconds = playhead?.secondsForDisplay;
+    final playheadVisible =
+        playheadSeconds != null &&
+        playheadSeconds.isFinite &&
+        playheadSeconds >= 0 &&
+        playheadSeconds * pixelsPerSecond <= width;
+    final playheadX = playheadVisible ? playheadSeconds * pixelsPerSecond : 0.0;
+    // The grab band is held inside the canvas, so the line stays grabbable at
+    // either end of the sequence.
+    final grabLeft = (playheadX - _playheadGrabWidth / 2)
+        .clamp(0.0, math.max(0.0, width - _playheadGrabWidth))
+        .toDouble();
+    final canScrub = onScrubTo != null && !bladeMode && !track.state.locked;
     final lane = Container(
       key: laneKey,
       height: _timelineLaneHeight,
@@ -8075,6 +8116,20 @@ class _TimelineTrackLane extends StatelessWidget {
                       onMarqueeUpdate?.call(details.localPosition),
                   onHorizontalDragEnd: (_) => onMarqueeEnd?.call(),
                   onHorizontalDragCancel: () => onMarqueeEnd?.call(),
+                  // A plain click on empty lane space moves the playhead. Clip
+                  // presses still land on the clip above this layer, so
+                  // selecting a clip never moves the playhead.
+                  onTapUp: onScrubTo == null || bladeMode || track.state.locked
+                      ? null
+                      : (details) {
+                          onScrubTo!(
+                            _timeFromSeconds(
+                              details.localPosition.dx / pixelsPerSecond,
+                            ),
+                          );
+                          onScrubEnd?.call();
+                        },
+                  onTapCancel: onScrubTo == null ? null : onScrubEnd,
                 ),
               ),
             if (marqueeRect != null)
@@ -8090,18 +8145,43 @@ class _TimelineTrackLane extends StatelessWidget {
                   ),
                 ),
               ),
+            // The playhead line is grabbable in the lane, the CapCut gesture.
+            // The band sits under the clips, so a press on a clip — however
+            // narrow — still selects, moves or trims it, and the line is
+            // grabbable everywhere else on the track.
+            if (canScrub && playheadVisible)
+              Positioned(
+                key: ValueKey('timeline-playhead-grab-${track.trackId}'),
+                left: grabLeft,
+                top: 0,
+                bottom: 0,
+                width: _playheadGrabWidth,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeLeftRight,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTapDown: (details) =>
+                        _scrubFromGrab(grabLeft, details.localPosition.dx),
+                    onTapUp: (_) => onScrubEnd?.call(),
+                    onTapCancel: onScrubEnd,
+                    onHorizontalDragStart: (details) =>
+                        _scrubFromGrab(grabLeft, details.localPosition.dx),
+                    onHorizontalDragUpdate: (details) =>
+                        _scrubFromGrab(grabLeft, details.localPosition.dx),
+                    onHorizontalDragEnd: (_) => onScrubEnd?.call(),
+                    onHorizontalDragCancel: () => onScrubEnd?.call(),
+                  ),
+                ),
+              ),
             for (final clip in clips)
               if (gesture?.clip.clipId != clip.clipId)
                 _positionedClip(context, clip),
             if (gesture != null && gesture!.targetTrackId == track.trackId)
               _positionedGhost(gesture!),
-            if (playhead != null &&
-                playhead!.secondsForDisplay.isFinite &&
-                playhead!.secondsForDisplay >= 0 &&
-                playhead!.secondsForDisplay * pixelsPerSecond <= width)
+            if (playheadVisible)
               Positioned(
                 key: ValueKey('timeline-playhead-${track.trackId}'),
-                left: playhead!.secondsForDisplay * pixelsPerSecond,
+                left: playheadX,
                 top: 0,
                 bottom: 0,
                 width: 2,
@@ -8139,6 +8219,17 @@ class _TimelineTrackLane extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Turns a press on the playhead's grab band into a playhead time.
+  ///
+  /// The band reports positions relative to itself, so the lane offset comes
+  /// back from [grabLeft]; the panel clamps the result to the sequence end.
+  void _scrubFromGrab(double grabLeft, double dx) {
+    final onScrubTo = this.onScrubTo;
+    if (onScrubTo == null) return;
+    final x = (grabLeft + dx).clamp(0.0, math.max(0.0, width)).toDouble();
+    onScrubTo(_timeFromSeconds(x / pixelsPerSecond));
   }
 
   Widget _positionedClip(BuildContext context, ProjectTimelineClip clip) {

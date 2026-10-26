@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 # Markdown link check for tracked documentation.
 #
 # Deterministic, read-only, stdlib-only Python. Relative links are resolved on
@@ -23,6 +23,12 @@ SKIP_DIRS = {".git", "build", ".dart_tool", "node_modules", "target",
              "migration-preserved", ".codegraph", ".opencode"}
 # Directories whose markdown is archival receipts, not a routing surface.
 ARCHIVE_OK = ("docs/archive/",)
+# Skill instruction files are installed into the harness and read inside a
+# project session, so their relative paths name files in that project's root,
+# not next to the skill. Resolving them against the repository root keeps the
+# check real: a skill that names a document the repository no longer has still
+# fails here.
+WORKSPACE_ROOTS = ("tooling/dsh-or-skills/",)
 
 
 def tracked_markdown() -> list[Path]:
@@ -37,6 +43,22 @@ def tracked_markdown() -> list[Path]:
 def is_skipped(path: Path) -> bool:
     parts = path.parts
     return bool(SKIP_DIRS.intersection(parts))
+
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def link_base(doc: Path) -> Path:
+    """The directory a link in `doc` is written relative to.
+
+    Documentation names files next to itself. Skill instructions name files in
+    the project root the skill runs inside, so they resolve from the root.
+    """
+    doc_path = str(doc)
+    for prefix in WORKSPACE_ROOTS:
+        if doc_path.startswith(prefix):
+            return REPO_ROOT
+    return doc.parent
 
 
 def main(argv: list[str]) -> int:
@@ -70,7 +92,7 @@ def main(argv: list[str]) -> int:
             # evidence; rewriting them would falsify the record.
             if str(doc).startswith(ARCHIVE_OK):
                 continue
-            resolved = (doc.parent / path_part).resolve()
+            resolved = (link_base(doc) / path_part).resolve()
             if not resolved.exists():
                 broken.append((doc, target, str(resolved)))
 

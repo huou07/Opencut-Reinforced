@@ -5252,6 +5252,72 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('timeline lane press seeks and the playhead line drags', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1600, 900));
+    const trackId = 'lane-scrub-video';
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      )
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'lane-clip',
+            mediaId: 'lane-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/lane-scrub.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Lane scrub');
+    await tester.pumpAndSettle();
+
+    // Empty lane space past the clip end, at the 64 px/s the lane draws with.
+    final marquee = find.byKey(const ValueKey('timeline-marquee-$trackId'));
+    expect(marquee, findsOneWidget);
+    final laneRect = tester.getRect(marquee);
+    await tester.tapAt(laneRect.topLeft + const Offset(384, 30));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSeek!.canonical, '6/1');
+
+    // The playhead line itself is a drag surface in the lane, the CapCut
+    // gesture. Dragging it one second right lands a second later.
+    final grab = find.byKey(const ValueKey('timeline-playhead-grab-$trackId'));
+    expect(grab, findsOneWidget);
+    final dragCalls = gateway.previewSeekCalls;
+    await tester.dragFrom(tester.getRect(grab).center, const Offset(64, 0));
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(dragCalls));
+    final after = gateway.lastPreviewSeek!.secondsForDisplay;
+    expect(after, greaterThan(6));
+    expect(after, lessThanOrEqualTo(7.5));
+
+    // A lane seek is presentation only, and it never reaches a clip command.
+    expect(gateway.moveTimelineClipCalls, 0);
+    expect(gateway.trimTimelineClipCalls, 0);
+    expect(gateway.lastSession!.undo, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('empty preview keeps play and frame step unavailable', (
     tester,
   ) async {
