@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
+import '../assistant/assistant_controller.dart';
+import '../assistant/assistant_models.dart';
+import '../assistant/assistant_panel.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
@@ -23,6 +26,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.project,
     this.projectGateway,
     this.projectSession,
+    this.assistant,
     this.previewSeekPosition,
     this.onPreviewSeekConsumed,
     this.onSetSequenceFrameRate,
@@ -102,6 +106,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final ProjectReadModel? project;
   final ProjectGateway? projectGateway;
   final ProjectSessionHandle? projectSession;
+  final AssistantController? assistant;
   final ProjectRationalTime? previewSeekPosition;
   final ValueChanged<ProjectRationalRate?>? onSetSequenceFrameRate;
   final VoidCallback? onPreviewSeekConsumed;
@@ -370,6 +375,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   );
 
   String _selectedTool = 'Media';
+  _RightPanelTab _rightPanelTab = _RightPanelTab.inspector;
   String? _selectedTrackId;
   String? _selectedClipId;
   ProjectTimelineTrackKind? _selectedTrackKind;
@@ -386,6 +392,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   void initState() {
     super.initState();
     _previewState = ValueNotifier(null);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncAssistantContext();
+    });
   }
 
   @override
@@ -407,6 +416,52 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         oldWidget.project?.revision != widget.project?.revision) {
       _previewState.value = null;
     }
+    if (projectIdentityChanged || oldWidget.assistant != widget.assistant) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncAssistantContext();
+      });
+    }
+  }
+
+  /// Publishes the editor focus (selected clip, playhead) to the assistant so
+  /// "this clip" has a concrete meaning without the agent guessing.
+  void _syncAssistantContext() {
+    final assistant = widget.assistant;
+    if (assistant == null) return;
+    final position = _previewState.value?.position;
+    final seconds = position?.secondsForDisplay;
+    ProjectTimelineClip? selected;
+    final clipId = _selectedClipId;
+    if (clipId != null) {
+      for (final page in widget.timelineClipPages.values) {
+        for (final clip in page.items) {
+          if (clip.clipId == clipId) selected = clip;
+        }
+      }
+    }
+    assistant.setContext(
+      AssistantEditorContext(
+        clipId: clipId,
+        clipLabel: selected == null
+            ? null
+            : '${selected.contentKind.name} clip',
+        trackKind: _selectedTrackKind?.name,
+        playheadSeconds: seconds,
+      ),
+    );
+  }
+
+  /// Switches the right rail between clip settings and the assistant.
+  void showAssistantPanel() {
+    if (widget.assistant == null) return;
+    if (_rightPanelTab == _RightPanelTab.assistant) return;
+    setState(() => _rightPanelTab = _RightPanelTab.assistant);
+    _syncAssistantContext();
+  }
+
+  void showInspectorPanel() {
+    if (_rightPanelTab == _RightPanelTab.inspector) return;
+    setState(() => _rightPanelTab = _RightPanelTab.inspector);
   }
 
   void _scheduleMobileSheetRefresh() {
@@ -429,6 +484,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   void _onPreviewStateChanged(ProjectPreviewState state) {
     final previous = _previewState.value;
     _previewState.value = state;
+    _syncAssistantContext();
     if (mounted &&
         (previous == null || previous.contentEnd != state.contentEnd)) {
       setState(() {});
@@ -450,6 +506,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       _selectedClipId = clipId;
       _selectedTrackKind = kind;
     });
+    _syncAssistantContext();
     unawaited(_refreshSelectedVisualSettings());
   }
 
@@ -799,36 +856,72 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               ),
               const VerticalDivider(width: 1),
               SizedBox(
-                width: wide ? 300 : 264,
-                child: _InspectorPanel(
-                  isProjectWorkspace: widget.isProjectWorkspace,
-                  project: widget.project,
-                  gateway: widget.projectGateway,
-                  session: widget.projectSession,
-                  trackId: _selectedTrackId,
-                  clipId: _selectedClipId,
-                  clip: _selectedInspectorClip,
-                  isVisualTrack:
-                      _selectedTrackKind == ProjectTimelineTrackKind.video ||
-                      _selectedTrackKind == ProjectTimelineTrackKind.text ||
-                      _selectedTrackKind == ProjectTimelineTrackKind.caption,
-                  isAudioTrack:
-                      _selectedTrackKind == ProjectTimelineTrackKind.audio,
-                  trackLocked: _selectedInspectorTrack?.state.locked ?? true,
-                  busy: widget.busy,
-                  sequenceFrameRate: _previewState.value?.sequenceFrameRate,
-                  contentEnd: _previewState.value?.contentEnd,
-                  onSetSequenceFrameRate: widget.onSetSequenceFrameRate,
-                trackCount: widget.timelineTracks?.items.length ?? 0,
-                  clipCount: widget.timelineClipPages.values.fold<int>(
-                    0,
-                    (total, page) => total + page.totalCount,
-                  ),
-                  onUpdate: widget.onUpdateTimelineClipVisualSettings,
-                  onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
-                  onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
-                  onSetReversed: widget.onSetTimelineClipReversed,
-                  onSetFrozen: widget.onSetTimelineClipFrozen,
+                width: wide ? 320 : 280,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (widget.assistant != null) ...[
+                      _RightPanelTabs(
+                        selected: _rightPanelTab,
+                        assistantBusy: widget.assistant!.busy,
+                        onSelected: (tab) {
+                          setState(() => _rightPanelTab = tab);
+                          _syncAssistantContext();
+                        },
+                      ),
+                      const Divider(height: 1),
+                    ],
+                    Expanded(
+                      child:
+                          _rightPanelTab == _RightPanelTab.assistant &&
+                              widget.assistant != null
+                          ? AssistantPanel(
+                              controller: widget.assistant!,
+                              compact: !wide,
+                            )
+                          : _InspectorPanel(
+                              showHeader: widget.assistant == null,
+                              isProjectWorkspace: widget.isProjectWorkspace,
+                              project: widget.project,
+                              gateway: widget.projectGateway,
+                              session: widget.projectSession,
+                              trackId: _selectedTrackId,
+                              clipId: _selectedClipId,
+                              clip: _selectedInspectorClip,
+                              isVisualTrack:
+                                  _selectedTrackKind ==
+                                      ProjectTimelineTrackKind.video ||
+                                  _selectedTrackKind ==
+                                      ProjectTimelineTrackKind.text ||
+                                  _selectedTrackKind ==
+                                      ProjectTimelineTrackKind.caption,
+                              isAudioTrack:
+                                  _selectedTrackKind ==
+                                  ProjectTimelineTrackKind.audio,
+                              trackLocked:
+                                  _selectedInspectorTrack?.state.locked ?? true,
+                              busy: widget.busy,
+                              sequenceFrameRate:
+                                  _previewState.value?.sequenceFrameRate,
+                              contentEnd: _previewState.value?.contentEnd,
+                              onSetSequenceFrameRate:
+                                  widget.onSetSequenceFrameRate,
+                              trackCount:
+                                  widget.timelineTracks?.items.length ?? 0,
+                              clipCount: widget.timelineClipPages.values.fold<
+                                int
+                              >(0, (total, page) => total + page.totalCount),
+                              onUpdate:
+                                  widget.onUpdateTimelineClipVisualSettings,
+                              onUpdateAudio:
+                                  widget.onUpdateTimelineClipAudioSettings,
+                              onUpdatePlaybackRate:
+                                  widget.onUpdateTimelineClipPlaybackRate,
+                              onSetReversed: widget.onSetTimelineClipReversed,
+                              onSetFrozen: widget.onSetTimelineClipFrozen,
+                            ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1046,6 +1139,15 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onUpdateAudio: widget.onUpdateTimelineClipAudioSettings,
                 onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
                 onClose: onClose,
+              ),
+            );
+          }
+          if (tool == 'Assistant' && widget.assistant != null) {
+            return SizedBox(
+              height: height,
+              child: AssistantPanel(
+                controller: widget.assistant!,
+                compact: true,
               ),
             );
           }
@@ -3510,8 +3612,10 @@ class _InspectorPanel extends StatefulWidget {
     this.onSetReversed,
     this.onSetFrozen,
     this.onClose,
+    this.showHeader = true,
   });
 
+  final bool showHeader;
   final bool isProjectWorkspace;
   final ProjectReadModel? project;
   final ProjectGateway? gateway;
@@ -4635,7 +4739,8 @@ class _InspectorPanelState extends State<_InspectorPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _PanelHeader(
+          if (widget.showHeader)
+            _PanelHeader(
             title: 'Inspector',
             trailing: widget.onClose == null
                 ? null
@@ -10540,6 +10645,8 @@ class _MobileToolDock extends StatelessWidget {
               _editorTools.first,
               if (hasClipSelection)
                 const _EditorTool('Inspector', Icons.tune_outlined),
+              if (isProjectWorkspace)
+                const _EditorTool('Assistant', Icons.chat_bubble_outline),
               ..._editorTools.skip(1),
             ])
               Tooltip(
@@ -10669,6 +10776,126 @@ class _UnavailableToolSheet extends StatelessWidget {
             ),
             const SizedBox(height: OrSpacing.x4),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _RightPanelTab { inspector, assistant }
+
+/// The right rail's two surfaces. The Assistant tab is a tab, not a new
+/// permanent region: it reuses the inspector slot and keeps the shell stable.
+class _RightPanelTabs extends StatelessWidget {
+  const _RightPanelTabs({
+    required this.selected,
+    required this.assistantBusy,
+    required this.onSelected,
+  });
+
+  final _RightPanelTab selected;
+  final bool assistantBusy;
+  final ValueChanged<_RightPanelTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: OrSpacing.x2,
+          vertical: OrSpacing.x1,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _RightPanelTabButton(
+                keyName: 'editor-tab-inspector',
+                label: 'Inspector',
+                selected: selected == _RightPanelTab.inspector,
+                onTap: () => onSelected(_RightPanelTab.inspector),
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x1),
+            Expanded(
+              child: _RightPanelTabButton(
+                keyName: 'editor-tab-assistant',
+                label: 'Assistant',
+                selected: selected == _RightPanelTab.assistant,
+                busy: assistantBusy,
+                onTap: () => onSelected(_RightPanelTab.assistant),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RightPanelTabButton extends StatelessWidget {
+  const _RightPanelTabButton({
+    required this.keyName,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.busy = false,
+  });
+
+  final String keyName;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label panel',
+      child: OrFocusRing(
+        radius: OrRadii.small,
+        child: InkWell(
+          key: ValueKey(keyName),
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(OrRadii.small),
+          child: Container(
+            height: 28,
+            decoration: BoxDecoration(
+              color: selected ? OrColors.surfaceSelected : Colors.transparent,
+              border: Border.all(
+                color: selected ? OrColors.borderStrong : Colors.transparent,
+              ),
+              borderRadius: BorderRadius.circular(OrRadii.small),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (busy) ...[
+                  const SizedBox(
+                    width: 8,
+                    height: 8,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.4,
+                      color: OrColors.ai,
+                    ),
+                  ),
+                  const SizedBox(width: OrSpacing.x1),
+                ],
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: selected
+                        ? OrColors.text
+                        : OrColors.textSecondary,
+                    fontSize: OrType.tinySize,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

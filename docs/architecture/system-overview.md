@@ -17,6 +17,7 @@ document.
 Flutter UI ──typed bridge──┐
 CLI ─────────local IPC─────┼──> command/query dispatch ──> Rust domain core
 Agents ──────local IPC─────┘         │
+Assistant panel ──ACP──> dsh ──MCP──> or mcp ──local IPC──┘
                                      ├─> ProjectDocument + history + persistence
                                      └─> evaluated RenderSnapshot
                                               │
@@ -28,6 +29,10 @@ Agents ──────local IPC─────┘         │
 Flutter keeps presentation state (navigation, selection, panel layout, input)
 and bounded read-model caches. It never keeps a second editable project model,
 and it never writes project state directly.
+
+The in-editor assistant follows the same rule. DeepSeek Harness runs out of
+process; its `or mcp` tools attach to the running app and use the typed command
+path. Provider credentials stay with the harness (ADR 0009).
 
 ## Two planes
 
@@ -86,7 +91,8 @@ its feature document, and recheck source and runtime before relying on it.
 - Implemented: project create/open/save/recovery, media import and relink,
   timeline tracks/clips with exact edits, markers and snapping, typed
   transforms, text and captions, selected audio controls, preview transport on
-  desktop, Matroska/WebM export, local IPC and CLI parity.
+  desktop, Matroska/WebM export, local IPC and CLI parity, and a desktop
+  assistant panel over ACP plus `or mcp`.
 - Planned or partial: hardware decode/encode, proxies as a user workflow, AI
   providers, plugins, OTIO/Lottie interchange, cross-platform parity evidence.
 

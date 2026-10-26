@@ -2213,6 +2213,45 @@ pub enum ApplicationRequest {
     Query(QueryEnvelope),
     Transaction(TransactionEnvelope),
     Export(ExportRequest),
+    MotionMaterialize(MotionMaterializeRequest),
+}
+
+/// A bounded request to turn a code file or an existing scene into a video.
+///
+/// Materialisation writes a persistent file and never changes the project; the
+/// output is registered through the ordinary media and timeline commands. It
+/// lives on the application contract because only the application runtime links
+/// the FFmpeg encoder.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "operation",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum MotionMaterializeRequest {
+    FromCode {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        source_path: String,
+        destination: String,
+        frame_rate_numerator: u32,
+        frame_rate_denominator: u32,
+        width: u32,
+        height: u32,
+        #[serde(default)]
+        title: String,
+    },
+    FromScene {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        scene_path: String,
+        destination: String,
+        frame_rate_numerator: u32,
+        frame_rate_denominator: u32,
+        width: u32,
+        height: u32,
+    },
 }
 
 /// Runtime-only export command routed through the same application and IPC path as edits.
@@ -2285,6 +2324,52 @@ mod export_profile_tests {
     }
 
     #[test]
+    fn motion_materialize_round_trips_on_the_application_contract() {
+        use super::{
+            ApplicationRequest, ApplicationResponse, MotionMaterializeRequest,
+            MotionMaterializeResponse, RationalTime,
+        };
+        let project_id = ProjectId::generate();
+        let project_instance_id = ProjectInstanceId::generate();
+        let request = ApplicationRequest::MotionMaterialize(MotionMaterializeRequest::FromCode {
+            project_id,
+            project_instance_id,
+            source_path: "/tmp/sample.rs".to_owned(),
+            destination: "/tmp/out.mkv".to_owned(),
+            frame_rate_numerator: 12,
+            frame_rate_denominator: 1,
+            width: 640,
+            height: 360,
+            title: "Fixture".to_owned(),
+        });
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["kind"], "motion_materialize");
+        assert_eq!(value["request"]["operation"], "from_code");
+        let decoded: ApplicationRequest = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, request);
+
+        let response = ApplicationResponse::MotionMaterialize(MotionMaterializeResponse {
+            succeeded: true,
+            error_code: String::new(),
+            message: "Rendered.".to_owned(),
+            output_path: "/tmp/out.mkv".to_owned(),
+            scene_id: "scene".to_owned(),
+            scene_name: "Fixture".to_owned(),
+            width: 640,
+            height: 360,
+            frame_rate_numerator: 12,
+            frame_rate_denominator: 1,
+            frame_count: 24,
+            duration: RationalTime::new(2, 1).unwrap(),
+            bytes_written: 1024,
+        });
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(value["kind"], "motion_materialize");
+        let decoded: ApplicationResponse = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, response);
+    }
+
+    #[test]
     fn webm_profile_has_a_stable_wire_name() {
         assert_eq!(
             serde_json::to_value(ExportProfile::WebmVp9Opus).unwrap(),
@@ -2336,7 +2421,47 @@ pub enum ApplicationResponse {
     Query(QueryResult),
     Transaction(TransactionResult),
     Export(ExportResponse),
+    MotionMaterialize(MotionMaterializeResponse),
     Error(OperationError),
+}
+
+/// Result of materialising a MotionScene. It never changes the project revision.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionMaterializeResponse {
+    pub succeeded: bool,
+    pub error_code: String,
+    pub message: String,
+    pub output_path: String,
+    pub scene_id: String,
+    pub scene_name: String,
+    pub width: u32,
+    pub height: u32,
+    pub frame_rate_numerator: u32,
+    pub frame_rate_denominator: u32,
+    pub frame_count: u64,
+    pub duration: RationalTime,
+    pub bytes_written: u64,
+}
+
+impl MotionMaterializeResponse {
+    pub fn failure(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            succeeded: false,
+            error_code: code.into(),
+            message: message.into(),
+            output_path: String::new(),
+            scene_id: String::new(),
+            scene_name: String::new(),
+            width: 0,
+            height: 0,
+            frame_rate_numerator: 0,
+            frame_rate_denominator: 0,
+            frame_count: 0,
+            duration: RationalTime::ZERO,
+            bytes_written: 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -2410,6 +2535,12 @@ impl ProjectSession {
                 "EXPORT_RUNTIME_UNAVAILABLE",
                 "the project host has no export runtime",
             )),
+            ApplicationRequest::MotionMaterialize(_) => {
+                ApplicationResponse::MotionMaterialize(MotionMaterializeResponse::failure(
+                    "MOTION_RUNTIME_UNAVAILABLE",
+                    "the project host has no motion materialisation runtime",
+                ))
+            }
         }
     }
 
@@ -3987,11 +4118,12 @@ impl ProjectSession {
             .project_revision()
             .checked_next()
             .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
-        let (change_set, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
-            track_id,
-            before: before.clone(),
-            after: after.clone(),
-        })?;
+        let (change_set, history_entry) =
+            timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+                track_id,
+                before: before.clone(),
+                after: after.clone(),
+            })?;
         self.history
             .undo
             .try_reserve(1)
@@ -9688,8 +9820,26 @@ mod tests {
             ))
             .unwrap();
         add_track(&mut session, TRACK_A, "video").unwrap();
-        insert_clip(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (0, 1), (1, 1)).unwrap();
-        insert_clip(&mut session, CLIP_B, TRACK_A, MEDIA_A, (2, 1), (1, 1), (1, 1)).unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (1, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_A,
+            MEDIA_A,
+            (2, 1),
+            (1, 1),
+            (1, 1),
+        )
+        .unwrap();
         let before = clip_spans(&session, TRACK_A);
 
         let moved = execute(
@@ -9726,7 +9876,16 @@ mod tests {
             ))
             .unwrap();
         add_track(&mut session, TRACK_A, "video").unwrap();
-        insert_clip(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (0, 1), (1, 1)).unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (1, 1),
+        )
+        .unwrap();
 
         // A malformed id never reaches the handler: the envelope rejects it.
         let malformed = execute(

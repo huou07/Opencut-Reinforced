@@ -34,14 +34,18 @@ journey. See [operations/verification.md](../operations/verification.md).
 - Every visible action works or is visibly unavailable — no dead-end controls, no
   clipped actions at supported window sizes.
 - Simple mode is a visibility setting over one state and command model.
+- The editor's right rail exposes Inspector and Assistant as two tabs over one
+  project state; switching tabs is presentation only, and the assistant never
+  writes project state outside the shared command path.
 
 ## Proven interaction surfaces
 
 Project create/open/save/reopen and cross-track move; import and library search;
 pointer trim/move/split/reorder, marquee select and group move with one undo;
 blade tool; speed badge and inspector speed; copy/paste; reverse and freeze; text
-and captions; effect presets; MotionScene render-and-insert; native menus; export
-receipt; pacing recorded from the app.
+and captions; effect presets; MotionScene render-and-insert; assistant chat edits
+and assistant-driven MotionScene insertion through the real harness; native
+menus; export receipt; pacing recorded from the app.
 
 Each of these is backed by a named scenario or widget test in
 `scripts/ui_scenarios/` or `apps/or_app/test/`. Re-run the affected one when you

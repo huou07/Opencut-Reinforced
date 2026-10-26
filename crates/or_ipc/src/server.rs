@@ -38,7 +38,7 @@ impl LocalIpcServer {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, IpcProtocolError> {
-        Self::start_shared(shared_host_state(session, None), descriptor_path)
+        Self::start_shared(shared_host_state(session, None, None), descriptor_path)
     }
 
     pub(crate) fn start_shared(
@@ -524,6 +524,9 @@ fn dispatch_application_response(response: ApplicationResponse) -> IpcResponseRe
         )),
         ApplicationResponse::Export(result) => IpcResponseResult::Success(Box::new(
             IpcSuccess::Application(ApplicationSuccess::Export(result)),
+        )),
+        ApplicationResponse::MotionMaterialize(result) => IpcResponseResult::Success(Box::new(
+            IpcSuccess::Application(ApplicationSuccess::MotionMaterialize(result)),
         )),
         ApplicationResponse::Error(error) => IpcResponseResult::ApplicationError(error),
     }

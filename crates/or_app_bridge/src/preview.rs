@@ -63,12 +63,13 @@ mod desktop {
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
         EffectReference, ExportProfile, ExportRequest, ExportResponse, JobCancelOutcome,
         JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
-        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata, Opacity,
-        ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
+        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
+        MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId,
+        ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
         RationalRate, RationalTime, TextFormatting, TimeRange, TimelineClipState,
         TimelineTrackSummaryV2, TrackKind, Transform, TransitionReference,
     };
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use or_ipc::{ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler};
     use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
@@ -1447,6 +1448,105 @@ mod desktop {
             request: ExportRequest,
         ) -> ExportResponse {
             PreviewRuntime::handle_export_request(self, session, request)
+        }
+    }
+
+    impl MotionMaterializeHandler for PreviewRuntime {
+        fn handle_motion_materialize_request(
+            &self,
+            session: &ProjectSession,
+            request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            let view = match request {
+                MotionMaterializeRequest::FromCode {
+                    project_id,
+                    project_instance_id,
+                    source_path,
+                    destination,
+                    frame_rate_numerator,
+                    frame_rate_denominator,
+                    width,
+                    height,
+                    title,
+                } => {
+                    if project_id != session.project_id()
+                        || project_instance_id != session.project_instance_id()
+                    {
+                        return MotionMaterializeResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "motion request belongs to a different project session",
+                        );
+                    }
+                    if !std::path::Path::new(&destination).is_absolute() {
+                        return MotionMaterializeResponse::failure(
+                            "INVALID_MOTION_DESTINATION",
+                            "choose an absolute destination path for the rendered video",
+                        );
+                    }
+                    let view = crate::api::motion::materialize_motion_scene_from_code(
+                        source_path,
+                        destination,
+                        frame_rate_numerator,
+                        frame_rate_denominator,
+                        width,
+                        height,
+                        title,
+                    );
+                    view
+                }
+                MotionMaterializeRequest::FromScene {
+                    project_id,
+                    project_instance_id,
+                    scene_path,
+                    destination,
+                    frame_rate_numerator,
+                    frame_rate_denominator,
+                    width,
+                    height,
+                } => {
+                    if project_id != session.project_id()
+                        || project_instance_id != session.project_instance_id()
+                    {
+                        return MotionMaterializeResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "motion request belongs to a different project session",
+                        );
+                    }
+                    if !std::path::Path::new(&destination).is_absolute() {
+                        return MotionMaterializeResponse::failure(
+                            "INVALID_MOTION_DESTINATION",
+                            "choose an absolute destination path for the rendered video",
+                        );
+                    }
+                    let view = crate::api::motion::materialize_motion_scene(
+                        scene_path,
+                        destination,
+                        frame_rate_numerator,
+                        frame_rate_denominator,
+                        width,
+                        height,
+                    );
+                    view
+                }
+            };
+            let duration =
+                RationalTime::new(view.duration_numerator, view.duration_denominator as u32)
+                    .unwrap_or(RationalTime::ZERO);
+            MotionMaterializeResponse {
+                succeeded: view.succeeded,
+                error_code: view.code,
+                message: view.message,
+                output_path: view.output_path,
+                scene_id: view.scene_id,
+                scene_name: view.scene_name,
+                width: view.width,
+                height: view.height,
+                frame_rate_numerator: view.frame_rate_numerator,
+                frame_rate_denominator: view.frame_rate_denominator,
+                frame_count: view.frame_count,
+                duration,
+                bytes_written: view.bytes_written,
+            }
         }
     }
 
@@ -3341,8 +3441,11 @@ fn direct_video_clip_at(
 )))]
 mod desktop {
     use super::{PreviewError, PreviewPreparation, PreviewPreparationAction, PreviewSnapshot};
-    use or_core::{ExportRequest, ExportResponse, ProjectSession, RationalTime};
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use or_core::{
+        ExportRequest, ExportResponse, MotionMaterializeRequest, MotionMaterializeResponse,
+        ProjectSession, RationalTime,
+    };
+    use or_ipc::{ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler};
     use or_runtime::PreviewFrameStep;
 
     pub struct PreviewRuntime;
@@ -3416,6 +3519,19 @@ mod desktop {
             ExportResponse::failure(
                 "EXPORT_UNAVAILABLE",
                 "software export is currently supported on desktop only",
+            )
+        }
+    }
+
+    impl MotionMaterializeHandler for PreviewRuntime {
+        fn handle_motion_materialize_request(
+            &self,
+            _session: &ProjectSession,
+            _request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            MotionMaterializeResponse::failure(
+                "MOTION_UNAVAILABLE",
+                "motion materialisation is currently supported on desktop only",
             )
         }
     }

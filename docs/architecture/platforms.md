@@ -34,9 +34,12 @@ Android rules that must hold:
 
 - App bundles carry their matching FFmpeg shared libraries and licence notices,
   plus packaged-first helper executables.
-- macOS: sandboxed app; the private IPC runtime directory lives in the sandbox
-  temporary directory and the packaged app holds the local-server entitlement,
-  but the code still binds only a Unix-domain socket.
+- macOS: the Developer Preview runs unsandboxed because the in-editor assistant
+  starts the local DeepSeek Harness and its `or mcp` bridge; App Sandbox cannot
+  grant process launching plus the harness's home-directory credentials. The
+  private IPC runtime directory stays owner-only and the code still binds only
+  a Unix-domain socket. Reintroducing the sandbox needs a separately installed
+  assistant host (ADR 0009).
 - Windows: runtime directory, descriptor file and named pipe use protected
   owner-only DACLs; the pipe rejects remote clients.
 - Linux: Unix-domain socket with owner-only permissions; desktop package formats

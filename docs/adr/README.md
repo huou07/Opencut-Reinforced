@@ -14,6 +14,7 @@ the machine execution plan; they do not replace `docs/archive/execution/PLAN.jso
 - [0006 — Autonomous agent execution contract](0006-autonomous-agent-execution-contract.md)
 - [0007 — Declarative MotionScene and procedural isolation](0007-declarative-motion-scenes-and-procedural-isolation.md)
 - [0008 — Product acceptance and execution quality](0008-product-acceptance-and-execution-quality.md)
+- [0009 — Assistant panel and external harness boundary](0009-assistant-panel-and-harness-boundary.md)
 
 All records are architecture intent. A later implementation checkpoint must
 provide its own dependency, platform, licensing, test, and migration evidence.

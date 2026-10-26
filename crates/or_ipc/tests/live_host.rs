@@ -1,13 +1,13 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
     ExportRequest, ExportResponse, JobId, JobKind, JobProgress, JobSnapshot, JobState,
-    OperationErrorCode, ProjectFileSession, ProjectRevision, QueryEnvelope, QueryResult,
-    RationalRate, RecoveryInspection, TextFormatting, TrackId, TrackKind, VisualSettings,
-    inspect_project_recovery,
+    MotionMaterializeRequest, MotionMaterializeResponse, OperationErrorCode, ProjectFileSession,
+    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RecoveryInspection, TextFormatting,
+    TrackId, TrackKind, VisualSettings, inspect_project_recovery,
 };
 use or_ipc::{
     ApplicationSuccess, ExportRequestHandler, IpcProtocolError, LiveProjectHost, LocalIpcClient,
-    OR_LOCAL_IPC_PROTOCOL_VERSION, ProjectHostEventKind,
+    MotionMaterializeHandler, OR_LOCAL_IPC_PROTOCOL_VERSION, ProjectHostEventKind,
 };
 use serde_json::json;
 use std::{
@@ -578,4 +578,78 @@ fn revision_conflicts_reach_the_direct_host_without_automatic_retry() {
     ));
     assert_eq!(host.describe().unwrap().summary.name, "CLI");
     host.shutdown(true).unwrap();
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn motion_materialisation_is_a_runtime_request_that_never_moves_the_revision() {
+    struct FixedMotionHandler(Mutex<Vec<MotionMaterializeRequest>>);
+
+    impl MotionMaterializeHandler for FixedMotionHandler {
+        fn handle_motion_materialize_request(
+            &self,
+            session: &or_core::ProjectSession,
+            request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            self.0.lock().unwrap().push(request.clone());
+            MotionMaterializeResponse {
+                succeeded: true,
+                error_code: String::new(),
+                message: "Rendered the fixture.".to_owned(),
+                output_path: "/tmp/fixture.mkv".to_owned(),
+                scene_id: "scene".to_owned(),
+                scene_name: "Fixture".to_owned(),
+                width: 640,
+                height: 360,
+                frame_rate_numerator: 12,
+                frame_rate_denominator: 1,
+                frame_count: 24,
+                duration: or_core::RationalTime::new(2, 1).unwrap(),
+                bytes_written: 1024,
+            }
+        }
+    }
+
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    let descriptor_path = directory.descriptor_path();
+    let session = ProjectFileSession::create_new(&project_path, "Motion").unwrap();
+    let handler = Arc::new(FixedMotionHandler(Mutex::new(Vec::new())));
+    let mut host = LiveProjectHost::start_with_handlers(
+        session,
+        Some(&descriptor_path),
+        None,
+        Some(handler.clone()),
+    )
+    .unwrap();
+    let client = LocalIpcClient::open(&descriptor_path).unwrap();
+    let initial = host.describe().unwrap();
+    let request = MotionMaterializeRequest::FromCode {
+        project_id: initial.summary.project_id,
+        project_instance_id: initial.summary.project_instance_id,
+        source_path: "/tmp/sample.rs".to_owned(),
+        destination: "/tmp/fixture.mkv".to_owned(),
+        frame_rate_numerator: 12,
+        frame_rate_denominator: 1,
+        width: 640,
+        height: 360,
+        title: "Fixture".to_owned(),
+    };
+
+    let ApplicationSuccess::MotionMaterialize(response) = client
+        .application(ApplicationRequest::MotionMaterialize(request.clone()))
+        .unwrap()
+    else {
+        panic!("expected the motion materialisation response");
+    };
+    assert!(response.succeeded);
+    assert_eq!(response.output_path, "/tmp/fixture.mkv");
+    assert_eq!(response.frame_count, 24);
+    assert_eq!(handler.0.lock().unwrap().as_slice(), &[request]);
+    assert_eq!(
+        host.describe().unwrap().summary.project_revision,
+        ProjectRevision::new(0)
+    );
+    assert!(!host.is_dirty().unwrap());
+    host.shutdown(false).unwrap();
 }

@@ -27,6 +27,19 @@ client → validate identity + expected revision → apply → ChangeSet
 Media history stores the exact item and its original insertion index instead of
 whole-document snapshots.
 
+## Runtime-only requests
+
+Two requests run on the same application and IPC path without touching the
+project revision: export (`ExportRequest`) and MotionScene materialisation
+(`MotionMaterializeRequest`). Both are handled by an application runtime that the
+headless host does not have; without one they return an explicit unavailable
+error. Materialisation writes a persistent file, and the caller registers it
+through ordinary media and timeline commands.
+
+`or mcp` is an MCP stdio server that exposes these commands and queries to an
+external agent. It holds no project state: every tool call attaches through the
+live descriptor, so the CLI, the GUI and the assistant share one session.
+
 ## Queries
 
 Queries are read-only and never mutate a project or bump its revision. They

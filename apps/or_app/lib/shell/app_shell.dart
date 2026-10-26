@@ -29,6 +29,7 @@ import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/templates_screen.dart';
+import '../assistant/assistant_controller.dart';
 import '../widgets/or_widgets.dart';
 import 'app_navigation.dart';
 import 'or_shortcuts.dart';
@@ -85,6 +86,7 @@ class AppShell extends StatefulWidget {
     required this.projectFilePicker,
     required this.recentProjectStore,
     this.audioCleanupDirectory,
+    this.assistantController,
   });
 
   final CoreGateway gateway;
@@ -94,6 +96,9 @@ class AppShell extends StatefulWidget {
 
   /// Where cleaned audio is written. Injectable so a test does not need a plugin.
   final Future<Directory> Function()? audioCleanupDirectory;
+
+  /// Injectable so widget tests never spawn a harness process.
+  final AssistantController? assistantController;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -375,6 +380,10 @@ class _PlatformMenus extends StatelessWidget {
 }
 
 class _AppShellState extends State<AppShell> {
+  late final AssistantController _assistant =
+      widget.assistantController ?? AssistantController();
+  bool _ownsAssistant = false;
+  bool _assistantSyncScheduled = false;
   AppDestination _destination = AppDestination.home;
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
@@ -430,6 +439,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _ownsAssistant = widget.assistantController == null;
     _autosaveTimer = Timer.periodic(
       _autosaveInterval,
       (_) => unawaited(_autosaveProject()),
@@ -447,11 +457,33 @@ class _AppShellState extends State<AppShell> {
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
+    if (_ownsAssistant) _assistant.dispose();
     super.dispose();
+  }
+
+  /// Keeps the assistant's MCP pointer in step with the open project. The
+  /// pointer is what lets a running harness session edit the project the user
+  /// switched to, without restarting the conversation.
+  void _scheduleAssistantProjectSync() {
+    if (_assistantSyncScheduled) return;
+    _assistantSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _assistantSyncScheduled = false;
+      if (!mounted) return;
+      final project = _activeProject;
+      unawaited(
+        _assistant.updateProject(
+          descriptorPath: project?.descriptorPath ?? '',
+          projectPath: _activeProjectPath ?? '',
+          projectName: project?.name ?? '',
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    _scheduleAssistantProjectSync();
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = OrBreakpoints.isCompact(constraints.maxWidth);
@@ -493,6 +525,8 @@ class _AppShellState extends State<AppShell> {
             SingleActivator(LogicalKeyboardKey.numpadSubtract):
                 ZoomTimelineIntent(0.8),
             SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
+            OrCommandActivator(LogicalKeyboardKey.keyA, shift: true):
+                ShowAssistantIntent(),
             OrCommandActivator(LogicalKeyboardKey.keyI): ImportMediaIntent(),
             SingleActivator(LogicalKeyboardKey.keyI, shift: true):
                 ImportFolderIntent(),
@@ -711,6 +745,14 @@ class _AppShellState extends State<AppShell> {
                   return null;
                 },
               ),
+              ShowAssistantIntent: CallbackAction<ShowAssistantIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.showAssistantPanel();
+                  }
+                  return null;
+                },
+              ),
               ExportProjectIntent: CallbackAction<ExportProjectIntent>(
                 onInvoke: (_) {
                   if (editor &&
@@ -916,8 +958,9 @@ class _AppShellState extends State<AppShell> {
     ),
     AppDestination.editorPreview =>
       _activeSession == null
-          ? const EditorShellPreviewScreen()
+          ? EditorShellPreviewScreen(assistant: _assistant)
           : EditorShellPreviewScreen(
+              assistant: _assistant,
               key: _editorKey,
               isProjectWorkspace: true,
               project: _activeProject,

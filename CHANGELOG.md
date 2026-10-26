@@ -17,6 +17,20 @@ product still needs.
 
 ### Added
 
+- **Assistant panel**: a right-rail tab connects to a locally installed
+  DeepSeek Harness over ACP, lets the user pick the workspace and model, streams
+  replies and tool calls, and renders permission prompts. The harness edits the
+  open project through `or mcp`, which attaches to the same local IPC descriptor
+  and validated command path as the CLI.
+- **`or mcp`**: an MCP stdio bridge with project, timeline, media, text, marker,
+  save/undo and motion-insertion tools; `or motion materialize` renders a code
+  file or scene through the app's MotionScene/FFmpeg runtime. The assistant turns
+  a code file into an ordinary, editable timeline clip this way.
+- An `or_core` application request and IPC route for MotionScene
+  materialisation, plus focused contract, MCP and UI tests.
+- Two real-app journeys: `scripts/ui_scenarios/assistant-edit.json` and
+  `assistant-motion.json`.
+
 - Empty new projects present a working **Import Media** action that reaches the
   existing platform picker and permission path, on desktop and compact layouts.
 - **Folder import**: selecting a folder imports the selected files plus files in
@@ -30,6 +44,9 @@ product still needs.
 
 ### Changed
 
+- **macOS Developer Preview runs unsandboxed** so the assistant can start the
+  local harness and its bridge; App Sandbox cannot grant that process boundary
+  (ADR 0009). Packaging now asserts the entitlement stays absent.
 - **Documentation restructured around task routing.** `AGENTS.md` is now a pure
   index: one project sentence, one rule, and a name / when-to-use / exact-path
   entry for every document, tool and skill. The former monolithic documents are

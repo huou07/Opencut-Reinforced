@@ -1,0 +1,122 @@
+{
+  "name": "assistant-motion",
+  "harness": "or_ui",
+  "description": "Ask the assistant to write a small code file and turn it into a MotionScene video through mcp__or__motion_insert_scene, then observe the generated clip on the timeline. The render runs at 640x360 and 12 fps so the journey stays short.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Assistant motion"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 15000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-connect-15s"
+    },
+    {
+      "op": "wait",
+      "text": "Ask for an edit",
+      "budget_ms": 120000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings"
+      }
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "assistant-settings-dialog"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-auto-approve"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-save"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "assistant-composer"
+      },
+      "value": "Call the or motion_insert_scene tool with source_path \"/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/illustration-source.rs\", title Demo Motion, width 640, height 360, frame_rate 12/1. Append it to the timeline and save. Use the tool directly; do not edit files or ask questions."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-send"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 20000
+    },
+    {
+      "op": "pump",
+      "ms": 30000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-motion-tools"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": ".*demo-motion.*\\.mkv.*",
+      "budget_ms": 240000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-motion-edited"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-motion-edited"
+    }
+  ]
+}

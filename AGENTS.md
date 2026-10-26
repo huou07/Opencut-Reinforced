@@ -67,6 +67,9 @@ any other rule to this file.
 - **Workspace and UI shell** — shell slots, editor layout, interaction rules.
   When: adding or moving any control, panel, menu, shortcut or compact layout.
   Path: `docs/features/workspace-ui.md`
+- **Assistant panel** — ACP harness connection, MCP editing tools, motion insertion, panel states.
+  When: changing the assistant panel, its harness overlay, or the `or mcp` tools.
+  Path: `docs/features/assistant.md`
 
 ### Design
 

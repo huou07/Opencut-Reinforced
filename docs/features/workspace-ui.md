@@ -20,8 +20,9 @@ justification and review.
 - Tabbed library (Media / Text / Audio / Motion) instead of a placeholder icon
   rail. No dead entries: every control opens a real panel.
 - Centre viewer with transport, timecode and transform/crop affordances.
-- Right inspector with human units, presets and a sticky action row; it shows
-  project facts when nothing is selected.
+- Right rail with **Inspector** and **Assistant** tabs. The inspector keeps human
+  units, presets and a sticky action row and shows project facts when nothing is
+  selected; the assistant reuses the same slot instead of adding a region.
 - Bottom timeline with thumbnail/waveform clips, visible trim handles, context
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
@@ -30,7 +31,8 @@ justification and review.
 ## Interaction rules
 
 - Keyboard and pointer have parity: every transport, timeline and edit verb is
-  reachable by key, menu, palette and pointer where applicable.
+  reachable by key, menu, palette and pointer where applicable. `Cmd/Ctrl+Shift+A`
+  opens the assistant rail, and the palette exposes both rail tabs.
 - Shortcuts resolve through the single shell `Shortcuts`/`Actions` map and do not
   fire while a text field has focus.
 - One gesture dispatches one command; no optimistic edit geometry in Flutter.

@@ -1,0 +1,344 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:path_provider/path_provider.dart';
+
+/// Local preferences for the assistant panel. Nothing here is project state.
+class AssistantSettings {
+  const AssistantSettings({
+    this.harnessPath = '',
+    this.orCliPath = '',
+    this.workspacePath = '',
+    this.modelValue = '',
+    this.reasoningValue = '',
+    this.autoApprove = false,
+  });
+
+  /// Empty means "discover the installed harness".
+  final String harnessPath;
+
+  /// Empty means "discover the `or` CLI beside the checkout or on PATH".
+  final String orCliPath;
+
+  /// Empty means "use the project's directory".
+  final String workspacePath;
+
+  /// Opaque ACP model option value, e.g. `["opencode-go","deepseek-v4.1-flash"]`.
+  final String modelValue;
+
+  /// Opaque ACP reasoning-effort value; empty means the provider default.
+  final String reasoningValue;
+
+  /// When true, permission requests for tool calls are allowed automatically.
+  final bool autoApprove;
+
+  AssistantSettings copyWith({
+    String? harnessPath,
+    String? orCliPath,
+    String? workspacePath,
+    String? modelValue,
+    String? reasoningValue,
+    bool? autoApprove,
+  }) => AssistantSettings(
+    harnessPath: harnessPath ?? this.harnessPath,
+    orCliPath: orCliPath ?? this.orCliPath,
+    workspacePath: workspacePath ?? this.workspacePath,
+    modelValue: modelValue ?? this.modelValue,
+    reasoningValue: reasoningValue ?? this.reasoningValue,
+    autoApprove: autoApprove ?? this.autoApprove,
+  );
+
+  Map<String, Object?> toJson() => {
+    'version': 1,
+    'harnessPath': harnessPath,
+    'orCliPath': orCliPath,
+    'workspacePath': workspacePath,
+    'modelValue': modelValue,
+    'reasoningValue': reasoningValue,
+    'autoApprove': autoApprove,
+  };
+
+  static AssistantSettings fromJson(Object? value) {
+    if (value is! Map<String, Object?>) return const AssistantSettings();
+    String string(String key) {
+      final raw = value[key];
+      return raw is String && raw.length <= 4096 ? raw : '';
+    }
+
+    return AssistantSettings(
+      harnessPath: string('harnessPath'),
+      orCliPath: string('orCliPath'),
+      workspacePath: string('workspacePath'),
+      modelValue: string('modelValue'),
+      reasoningValue: string('reasoningValue'),
+      autoApprove: value['autoApprove'] == true,
+    );
+  }
+}
+
+/// Persists assistant preferences in the application support directory.
+///
+/// Writes are serialized so two quick preference changes cannot interleave.
+class AssistantSettingsStore {
+  AssistantSettingsStore({Future<Directory> Function()? supportDirectory})
+    : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
+
+  final Future<Directory> Function() _supportDirectory;
+  AssistantSettings _lastLoaded = const AssistantSettings();
+  Future<void> _writeChain = Future.value();
+
+  Future<File> _file() async => File(
+    '${(await _supportDirectory()).path}${Platform.pathSeparator}'
+    'assistant${Platform.pathSeparator}settings.v1.json',
+  );
+
+  Future<AssistantSettings> load() async {
+    final file = await _file();
+    if (!await file.exists() || await file.length() > 64 * 1024) {
+      _lastLoaded = const AssistantSettings();
+      return _lastLoaded;
+    }
+    try {
+      _lastLoaded = AssistantSettings.fromJson(
+        jsonDecode(await file.readAsString()),
+      );
+    } catch (_) {
+      _lastLoaded = const AssistantSettings();
+    }
+    return _lastLoaded;
+  }
+
+  AssistantSettings get cached => _lastLoaded;
+
+  Future<void> save(AssistantSettings settings) {
+    _lastLoaded = settings;
+    final next = _writeChain.then((_) async {
+      final file = await _file();
+      await file.parent.create(recursive: true);
+      await file.writeAsString(jsonEncode(settings.toJson()));
+    });
+    _writeChain = next.catchError((Object _) {});
+    return next;
+  }
+}
+
+/// A dsh profile's provider layer, extracted so the assistant can boot the same
+/// provider and model the user already runs in DeepSeek Harness.
+class HarnessOverlay {
+  const HarnessOverlay({
+    required this.patchBlock,
+    required this.provider,
+    required this.model,
+    required this.profile,
+  });
+
+  /// The verbatim `llm-pi-ai` entry, including its provider model catalog.
+  final String patchBlock;
+  final String provider;
+  final String model;
+  final String profile;
+}
+
+/// Candidate harness executables, resolved without trusting the GUI PATH.
+Future<String?> resolveHarnessPath({
+  required AssistantSettings settings,
+  Map<String, String>? environment,
+}) async {
+  final env = environment ?? Platform.environment;
+  if (settings.harnessPath.isNotEmpty &&
+      await File(settings.harnessPath).exists()) {
+    return settings.harnessPath;
+  }
+  final home = env['HOME'];
+  final candidates = <String>[
+    '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
+    if (home != null) '$home/.local/bin/dsh',
+  ];
+  for (final candidate in candidates) {
+    if (await File(candidate).exists()) return candidate;
+  }
+  return _findOnPath('dsh', env);
+}
+
+/// Locates the `or` CLI, which carries the MCP bridge.
+Future<String?> resolveOrCliPath({
+  required AssistantSettings settings,
+  Map<String, String>? environment,
+  Directory? currentDirectory,
+}) async {
+  final env = environment ?? Platform.environment;
+  if (settings.orCliPath.isNotEmpty) {
+    return await File(settings.orCliPath).exists() ? settings.orCliPath : null;
+  }
+  final starts = <Directory>[
+    (currentDirectory ?? Directory.current).absolute,
+    // A packaged or `open`-launched app has `/` as its working directory, but
+    // a development build still sits inside the checkout, so walk from the
+    // executable too.
+    Directory(Platform.resolvedExecutable).parent.absolute,
+  ];
+  for (final start in starts) {
+    var directory = start;
+    for (var depth = 0; depth < 12; depth += 1) {
+      for (final relative in const ['target/debug/or', 'target/release/or']) {
+        final candidate = File(
+          '${directory.path}${Platform.pathSeparator}'
+          '${relative.replaceAll('/', Platform.pathSeparator)}',
+        );
+        if (await candidate.exists()) return candidate.path;
+      }
+      final parent = directory.parent;
+      if (parent.path == directory.path) break;
+      directory = parent;
+    }
+  }
+  const applicationCandidate =
+      '/Applications/Opencut Reinforced.app/Contents/MacOS/or';
+  if (await File(applicationCandidate).exists()) return applicationCandidate;
+  return _findOnPath('or', env);
+}
+
+Future<String?> _findOnPath(String name, Map<String, String> env) async {
+  final path = env['PATH'];
+  if (path == null) return null;
+  for (final directory in path.split(':')) {
+    if (directory.isEmpty) continue;
+    final candidate = File('$directory/$name');
+    if (await candidate.exists()) return candidate.path;
+  }
+  return null;
+}
+
+/// Finds the user's active dsh profile overlay (desktop first) and copies the
+/// provider/model configuration out of it.
+Future<HarnessOverlay?> findHarnessOverlay({
+  Map<String, String>? environment,
+  Directory? profilesDirectory,
+}) async {
+  final env = environment ?? Platform.environment;
+  final home = env['HOME'];
+  final root =
+      profilesDirectory ??
+      (home == null ? null : Directory('$home/.dsh/profiles'));
+  if (root == null || !await root.exists()) return null;
+  final candidates = await root
+      .list()
+      .where((entity) => entity is Directory)
+      .cast<Directory>()
+      .toList();
+  candidates.sort((a, b) {
+    final aDesktop = _basename(a.path) == 'desktop' ? 0 : 1;
+    final bDesktop = _basename(b.path) == 'desktop' ? 0 : 1;
+    if (aDesktop != bDesktop) return aDesktop - bDesktop;
+    return a.path.compareTo(b.path);
+  });
+  for (final directory in candidates) {
+    final patch = File(
+      '${directory.path}${Platform.pathSeparator}cordis.patch.yml',
+    );
+    if (!await patch.exists()) continue;
+    final text = await patch.readAsString();
+    final block = _yamlEntry(text, 'llm-pi-ai');
+    if (block == null) continue;
+    final defaults = _yamlEntry(text, 'agent-default-model');
+    final provider = _yamlValue(defaults, 'provider') ?? '';
+    final model = _yamlValue(defaults, 'model') ?? '';
+    if (provider.isEmpty || model.isEmpty) continue;
+    return HarnessOverlay(
+      patchBlock: block.trimRight(),
+      provider: provider,
+      model: model,
+      profile: _basename(directory.path),
+    );
+  }
+  return null;
+}
+
+String _basename(String path) =>
+    path.split(RegExp(r'[\\/]')).where((part) => part.isNotEmpty).last;
+
+/// Returns the top-level patch entry with this id, verbatim.
+String? _yamlEntry(String text, String id) {
+  final lines = const LineSplitter().convert(text);
+  final start = lines.indexWhere(
+    (line) => RegExp('^- id:\\s*$id\\s*\$').hasMatch(line),
+  );
+  if (start < 0) return null;
+  var end = start + 1;
+  while (end < lines.length && !RegExp(r'^- id:').hasMatch(lines[end])) {
+    end += 1;
+  }
+  return lines.sublist(start, end).join('\n');
+}
+
+String? _yamlValue(String? entry, String key) {
+  if (entry == null) return null;
+  for (final line in const LineSplitter().convert(entry)) {
+    final match = RegExp('^\\s*$key:\\s*(.+)\$').firstMatch(line);
+    if (match != null) {
+      return match.group(1)!.trim().replaceAll(RegExp(r'''^["']|["']$'''), '');
+    }
+  }
+  return null;
+}
+
+/// Builds the `--patch` overlay the assistant boots the harness with.
+///
+/// The overlay keeps the user's provider catalog, selects their model, and
+/// replaces the persona with OR's assistant contract. It contains no secrets;
+/// the harness resolves credentials from its own credential service.
+String buildHarnessPatch({
+  required HarnessOverlay? overlay,
+  required String workspace,
+  required String projectName,
+}) {
+  final buffer = StringBuffer();
+  if (overlay != null) {
+    buffer.writeln('- id: acp');
+    buffer.writeln('  config:');
+    buffer.writeln('    provider: ${_yamlScalar(overlay.provider)}');
+    buffer.writeln('    model: ${_yamlScalar(overlay.model)}');
+  }
+  buffer.writeln('- id: system-prompt');
+  buffer.writeln('  config:');
+  buffer.writeln('    personaPrefix: |-');
+  for (final line in _assistantPersona(
+    workspace: workspace,
+    projectName: projectName,
+  ).split('\n')) {
+    buffer.writeln('      $line');
+  }
+  buffer.writeln('    personaSuffix: |-');
+  buffer.writeln(
+    '      Work only inside the session workspace shown above; the or tools '
+    'own the project.',
+  );
+  if (overlay != null) {
+    buffer.writeln(overlay.patchBlock);
+  }
+  return buffer.toString();
+}
+
+String _assistantPersona({
+  required String workspace,
+  required String projectName,
+}) =>
+    '''
+You are the built-in editing assistant inside Opencut Reinforced, a local-first video editor.
+The open project is "$projectName". The session workspace is $workspace.
+
+Use only the mcp__or__* tools to read or change the project. The running application owns the project; never edit a .orproj file directly.
+
+Work in this order:
+1. Call mcp__or__project_status, then mcp__or__timeline_overview or mcp__or__media_list when you need ids, tracks, clips or durations. Use the real ids and exact times those calls return.
+2. Make the smallest edit the user asked for with mcp__or__insert_clip, mcp__or__insert_text, mcp__or__move_clip, mcp__or__trim_clip, mcp__or__split_clip, mcp__or__delete_clip, mcp__or__set_frame_rate or mcp__or__add_marker.
+3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). Durations default to the media's full length when omitted.
+4. For an illustration or motion graphic, write a small source file in the workspace (or use an existing one) and call mcp__or__motion_insert_scene. It renders through the app's MotionScene renderer and inserts an ordinary, editable clip.
+5. After finishing an edit, call mcp__or__save unless the user asked to review first.
+
+Never claim a change you did not make. If a tool fails, report the error and the next concrete step. Keep replies short: say what changed, on which track, at what time.''';
+
+String _yamlScalar(String value) {
+  if (RegExp(r'^[A-Za-z0-9_.\-/]+$').hasMatch(value)) return value;
+  return "'${value.replaceAll("'", "''")}'";
+}

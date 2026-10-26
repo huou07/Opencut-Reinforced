@@ -120,6 +120,11 @@ class ExportProjectIntent extends Intent {
   const ExportProjectIntent();
 }
 
+/// Opens the assistant rail without a pointer.
+class ShowAssistantIntent extends Intent {
+  const ShowAssistantIntent();
+}
+
 /// Selects one of the editor's tool categories. The number keys and the tab
 /// strip therefore drive the same state.
 class SelectToolIntent extends Intent {

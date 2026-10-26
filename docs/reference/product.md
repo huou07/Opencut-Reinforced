@@ -66,13 +66,20 @@ for the contracts. Product-level expectations: useful metadata and errors,
 thumbnails/waveforms, offline/relink, captions and subtitle interchange, typed
 transform and effect parameters, coherent preview/export parity.
 
-## AI assistance (deferred)
+## AI assistance
+
+**MVP FOUNDATION (external harness):** an in-editor assistant panel that connects
+to a locally installed DeepSeek Harness over ACP, selects workspace and model,
+and edits the open project through `or mcp` and the shared command path. It can
+also turn a code file into a deterministic MotionScene video and insert it as an
+ordinary clip. OR stores no provider credentials; the harness keeps them.
 
 **PLANNED/FUTURE:** transcripts and caption proposals, translation, scene/silence
 analysis, selected generative assets, dubbing, local models and optional cloud
-providers. Requirements: provider-independent tasks returning proposals/assets,
-review before apply, credentials outside project/CLI, explicit consent and cost,
-no bundled model weights by default, no network call in deterministic rendering.
+providers inside OR. Requirements: provider-independent tasks returning
+proposals/assets, review before apply, credentials outside project/CLI, explicit
+consent and cost, no bundled model weights by default, no network call in
+deterministic rendering.
 
 ## Interchange and extensibility
 

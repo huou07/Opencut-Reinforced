@@ -131,9 +131,14 @@ bundle_external_dependencies
 
 codesign --force --deep --sign - --timestamp=none --preserve-metadata=entitlements "$app"
 codesign --verify --deep --strict "$app"
+# The Developer Preview runs unsandboxed: the in-editor assistant starts the
+# local DeepSeek Harness and its `or mcp` bridge, which App Sandbox cannot
+# grant (see docs/adr/0009-assistant-panel-and-harness-boundary.md). A stale
+# sandbox entitlement would still be a signing regression, so assert its
+# absence rather than its presence.
 sandbox_entitlement="$(codesign --display --entitlements - --xml "$app" 2>/dev/null | \
   python3 -c 'import plistlib, sys; print(plistlib.loads(sys.stdin.buffer.read()).get("com.apple.security.app-sandbox", False))')"
-[[ "$sandbox_entitlement" == True ]] || fail "The app sandbox entitlement was lost while signing: $app"
+[[ "$sandbox_entitlement" != True ]] || fail "The app is still sandboxed, so the local assistant host cannot start: $app"
 
 check_relocated() {
   local binary="$1"

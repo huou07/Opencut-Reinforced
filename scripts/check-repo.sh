@@ -57,6 +57,7 @@ required_files=(
   docs/features/export.md
   docs/features/motionscene.md
   docs/features/workspace-ui.md
+  docs/features/assistant.md
   docs/operations/workflow.md
   docs/operations/verification.md
   docs/operations/local-macos.md

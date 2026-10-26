@@ -18,6 +18,10 @@ One near-term delivery mission for the local macOS app, in this order:
    declarative illustration, preview and render it through the existing
    architecture, insert it into the ordinary timeline, and export the combined
    edit.
+3. **Assistant panel (owner request, 2026-10-26).** Let the user edit the open
+   project and generate MotionScene illustrations by chatting with the local
+   DeepSeek Harness. This is an external client over ACP and `or mcp`, not an OR
+   provider integration; provider and inference work inside OR stays deferred.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.

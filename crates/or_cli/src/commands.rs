@@ -1,11 +1,12 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
     CommandResult, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId,
-    MediaItem, OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError,
-    ProjectFileSession, ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate,
-    RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
-    TrackId, TrackKind, TrackState, VisualSettings, apply_project_recovery, command_catalog,
-    discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
+    MediaItem, MotionMaterializeRequest, OperationError, ProjectFileMediaImportError,
+    ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
+    QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, TextFormatting, TrackId, TrackKind, TrackState, VisualSettings,
+    apply_project_recovery, command_catalog, discard_project_recovery, inspect_project_recovery,
+    prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -484,11 +485,129 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
         "evaluate" => run_motion_evaluate(&args[1..], json),
         "render" => run_motion_render(&args[1..], json),
         "from-code" => run_motion_from_code(&args[1..], json),
+        "materialize" => run_motion_materialize(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate, inspect, evaluate, render or from-code",
+            "unknown motion action; expected validate, inspect, evaluate, render, from-code or materialize",
         )),
     }
+}
+
+/// Materialises a code file or an authored scene into a video through the live
+/// application runtime.
+///
+/// Only the application links the FFmpeg encoder, so this verb attaches to the
+/// running app over local IPC instead of linking a second encoder into the CLI.
+/// Materialisation writes a persistent file and never mutates the project; the
+/// caller registers the result with the ordinary media and timeline commands.
+fn run_motion_materialize(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--attach",
+            "--source",
+            "--scene",
+            "--output",
+            "--frame-rate",
+            "--width",
+            "--height",
+            "--title",
+        ],
+        &[],
+        json,
+    )?;
+    let descriptor_path = required_path(&options, "--attach", json)?;
+    let output = required_path(&options, "--output", json)?;
+    if !output.is_absolute() {
+        return Err(CliError::usage(
+            json,
+            "--output must be an absolute destination path",
+        ));
+    }
+    let source = options.optional_path("--source");
+    let scene = options.optional_path("--scene");
+    if source.is_some() == scene.is_some() {
+        return Err(CliError::usage(
+            json,
+            "pass exactly one of --source or --scene",
+        ));
+    }
+    let rate = match options.value("--frame-rate") {
+        Some(value) => parse_cli_rate(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--frame-rate must be valid UTF-8"))?,
+            "--frame-rate",
+            json,
+        )?,
+        None => RationalRate::new(30, 1).expect("30/1 is a valid rate"),
+    };
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(1920);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(1080);
+    let title = options
+        .value("--title")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let client =
+        LocalIpcClient::open(&descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let request = match (source, scene) {
+        (Some(source), None) => MotionMaterializeRequest::FromCode {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            source_path: source.display().to_string(),
+            destination: output.display().to_string(),
+            frame_rate_numerator: rate.numerator(),
+            frame_rate_denominator: rate.denominator(),
+            width,
+            height,
+            title,
+        },
+        (None, Some(scene)) => MotionMaterializeRequest::FromScene {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            scene_path: scene.display().to_string(),
+            destination: output.display().to_string(),
+            frame_rate_numerator: rate.numerator(),
+            frame_rate_denominator: rate.denominator(),
+            width,
+            height,
+        },
+        _ => unreachable!("exactly one input was required above"),
+    };
+    let response = client
+        .application(ApplicationRequest::MotionMaterialize(request))
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = match response {
+        ApplicationSuccess::MotionMaterialize(response) => response,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the project host returned an unexpected response",
+            ));
+        }
+    };
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            response.error_code.clone(),
+            response.message.clone(),
+            serde_json::to_value(&response).ok(),
+        ));
+    }
+    if json {
+        return Ok(json_string(json!({"motion_materialization": response})));
+    }
+    Ok(format!(
+        "Materialised {} frames ({}/{} s) to {} ({} bytes).",
+        response.frame_count,
+        response.duration.numerator(),
+        response.duration.denominator(),
+        response.output_path,
+        response.bytes_written
+    ))
 }
 
 /// Evaluates a scene at one exact time and prints the resolved instructions.
@@ -3090,6 +3209,22 @@ fn error_message_for_remote(code: IpcErrorCode) -> String {
 }
 
 impl CliError {
+    fn application_failure(
+        json: bool,
+        code: impl Into<String>,
+        message: impl Into<String>,
+        details: Option<Value>,
+    ) -> Self {
+        Self {
+            exit_code: 3,
+            json,
+            category: "application",
+            code: code.into(),
+            message: message.into(),
+            details,
+        }
+    }
+
     fn operation_message(json: bool, message: impl Into<String>) -> Self {
         Self::new(3, json, "application", "APPLICATION_ERROR", message)
     }

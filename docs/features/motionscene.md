@@ -41,9 +41,11 @@ timeline-referenced materialised asset is not cache-only.
 ## Producers and surfaces
 
 - Authored in the app's Motion panel (render facts, insert, render again).
-- External agents and templates are first-class producers; CLI verbs are
-  `or motion validate`, `inspect` and `render`, which are read-only unless an
-  explicit materialisation/project command is requested.
+- External agents and templates are first-class producers. `or mcp` exposes
+  `motion_insert_scene` to the assistant; it materialises through the app
+  runtime, then imports and inserts through ordinary commands. CLI verbs are
+  `or motion validate`, `inspect`, `render` and `materialize`; only
+  `materialize` needs a live app because the CLI ships no FFmpeg libraries.
 - Materialised output appears in the library and on the timeline like any media.
 
 ## Bounds

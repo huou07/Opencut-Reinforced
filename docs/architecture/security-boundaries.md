@@ -34,6 +34,13 @@ generated EditPlan passes the same permission and domain validation. Agents
 cannot read arbitrary paths through IPC, run shell commands through it, or
 retrieve stored credentials.
 
+The in-editor assistant adds two hops, not a new trust path: an external
+DeepSeek Harness process speaks ACP to the app, and its `or mcp` server attaches
+to the same local IPC descriptor. The MCP tools expose project commands only;
+they cannot read project files directly, execute a shell, or receive the
+descriptor token. Provider credentials stay in the harness's credential service,
+and the generated `--patch` overlay contains no secret.
+
 ## Deterministic rendering
 
 MotionScene validation, preview, rendering and materialisation make zero
@@ -48,6 +55,8 @@ scene cannot fetch remote assets, run scripts, or perform hidden font lookups.
 | No secrets in tracked files or history | `gitleaks detect` in the acceptance lane and pinned in CI |
 | Project mutations only through the command path | code review plus command/revision tests |
 | Local IPC cannot reach arbitrary paths or shell | protocol surface plus transport tests |
+| Assistant tools go through the command path | `or mcp` has no file/shell tool; only typed commands and queries |
+| Assistant host can reach the harness credentials | macOS Developer Preview runs unsandboxed on purpose (ADR 0009); the harness keeps the credentials, OR never receives them |
 
 ## Related
 

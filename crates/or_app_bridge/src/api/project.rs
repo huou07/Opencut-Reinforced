@@ -25,8 +25,8 @@ use or_core::{
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
 use or_ipc::{
-    ExportRequestHandler, LiveProjectHost, LiveProjectHostError, ProjectHostEvent,
-    ProjectHostEventKind,
+    ExportRequestHandler, LiveProjectHost, LiveProjectHostError, MotionMaterializeHandler,
+    ProjectHostEvent, ProjectHostEventKind,
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -665,8 +665,16 @@ fn start_project_host(
     #[cfg(target_os = "android")]
     let host = LiveProjectHost::in_process_with_export_handler(session, export_handler);
     #[cfg(not(target_os = "android"))]
-    let host = LiveProjectHost::start_with_export_handler(session, None, export_handler)
-        .map_err(host_error)?;
+    let host = {
+        let motion_handler: Arc<dyn MotionMaterializeHandler> = preview_runtime.clone();
+        LiveProjectHost::start_with_handlers(
+            session,
+            None,
+            Some(export_handler),
+            Some(motion_handler),
+        )
+        .map_err(host_error)?
+    };
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
