@@ -75,6 +75,12 @@ product still needs.
 
 ### Fixed
 
+- **Text input in every field**: the shell's shortcut map no longer captures
+  typing keys while a text field is focused. Backspace, Space, letters, arrows,
+  Undo, Copy and Paste now reach the focused field; the native menu no longer
+  owns modifier-less or ⌘Z/⌘C/⌘V equivalents. The assistant composer also lets
+  an IME commit a Vietnamese composition before Enter sends.
+
 - **Developer Preview desktop packages opened to a black screen.** The macOS,
   Windows and Linux jobs ran `flutter test -d <platform>` after building the app
   and then packaged the same output directory, which the test run rebuilt with

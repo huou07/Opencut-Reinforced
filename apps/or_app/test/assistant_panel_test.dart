@@ -4,6 +4,9 @@ import 'package:or_app/assistant/assistant_controller.dart';
 import 'package:or_app/assistant/assistant_models.dart';
 import 'package:or_app/assistant/assistant_panel.dart';
 import 'package:or_app/design/or_theme.dart';
+import 'package:or_app/shell/app_shell.dart';
+import 'package:or_app/shell/or_shortcuts.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   Future<void> mount(
@@ -38,6 +41,47 @@ void main() {
     expect(find.byKey(const ValueKey('assistant-composer')), findsOneWidget);
     expect(find.byKey(const ValueKey('assistant-send')), findsOneWidget);
     expect(find.byKey(const ValueKey('assistant-model')), findsOneWidget);
+  });
+
+  testWidgets('the composer receives typing keys through the shell map', (
+    tester,
+  ) async {
+    final controller = AssistantController()
+      ..debugSeedConversation(state: AssistantConnectionState.ready);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Shortcuts(
+          shortcuts: orShellShortcuts(textInputFocused: true),
+          child: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 720,
+              child: AssistantPanel(controller: controller),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('assistant-composer')));
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isTrue);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('assistant-composer')),
+      'xin chào',
+    );
+    await tester.pump();
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('assistant-composer')),
+    );
+    expect(field.controller?.text, 'xin chào');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(field.controller?.text, 'xin chà');
   });
 
   testWidgets('a failed connection explains the fix instead of an empty rail', (

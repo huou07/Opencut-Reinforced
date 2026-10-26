@@ -264,6 +264,33 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Backspace edits a dialog text field instead of being taken by the shell',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()..savePath = '/tmp/or-input-check';
+      await _mount(tester, gateway: gateway, picker: picker);
+
+      await tester.tap(find.byKey(const ValueKey('home-new-project')));
+      await tester.pumpAndSettle();
+      final nameField = find.byKey(const ValueKey('new-project-name'));
+      await tester.enterText(nameField, 'abc');
+      await tester.showKeyboard(nameField);
+      await tester.pump();
+      expect(orTextFieldHasFocus(), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: nameField, matching: find.byType(EditableText)),
+      );
+      expect(editable.controller.text, 'ab');
+      expect(gateway.createCalls, 0);
+    },
+  );
+
   testWidgets('new project asks for a name and opens the created workspace', (
     tester,
   ) async {

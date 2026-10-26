@@ -104,6 +104,87 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+/// Shortcuts that are safe while a text field owns the keyboard.
+///
+/// Anything that types a character, moves the caret, deletes text or is a
+/// standard text-editing command (undo, copy, paste) must stay out of this map:
+/// a [Shortcuts] layer consumes a matched key before the focused field sees it,
+/// so an action that merely no-ops is not enough.
+const Map<ShortcutActivator, Intent> _alwaysShortcuts = {
+  OrCommandActivator(LogicalKeyboardKey.keyK): OpenCommandPaletteIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyS): SaveProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyE): ExportProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyA, shift: true):
+      ShowAssistantIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyI): ImportMediaIntent(),
+};
+
+/// Editing verbs. They are installed only while no text field has focus.
+const Map<ShortcutActivator, Intent> _editingShortcuts = {
+  OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true):
+      RedoProjectIntent(),
+  SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
+  SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(-1),
+  SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(1),
+  SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+      StepPreviewFrameIntent(true),
+  SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+      StepPreviewFrameIntent(false),
+  SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(true),
+  SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(false),
+  SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
+  SingleActivator(LogicalKeyboardKey.numpadAdd): ZoomTimelineIntent(1.25),
+  SingleActivator(LogicalKeyboardKey.minus): ZoomTimelineIntent(0.8),
+  SingleActivator(LogicalKeyboardKey.numpadSubtract): ZoomTimelineIntent(0.8),
+  SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
+  SingleActivator(LogicalKeyboardKey.keyI, shift: true): ImportFolderIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyD): DuplicateTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.delete): DeleteTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.backspace): DeleteTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.escape): ClearTimelineSelectionIntent(),
+  // Editing verbs. `S` and the command form of `B` both split, so a
+  // CapCut-style single key and the broadcast-editor shortcut agree.
+  SingleActivator(LogicalKeyboardKey.keyS): SplitClipIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyB): SplitClipIntent(),
+  // Blade mode is a mode, not a one-shot command: `C` arms the pointer and
+  // `V` puts it back. Both are plain letters, so they stop at a focused text
+  // field like the rest of the editing verbs.
+  OrCommandActivator(LogicalKeyboardKey.keyC): CopyClipIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyV): PasteClipIntent(),
+  SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
+  SingleActivator(LogicalKeyboardKey.keyV): SetBladeModeIntent(false),
+  SingleActivator(LogicalKeyboardKey.delete, shift: true):
+      RippleDeleteClipIntent(),
+  SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
+  SingleActivator(LogicalKeyboardKey.digit1): SelectToolIntent('Media'),
+  SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
+  SingleActivator(LogicalKeyboardKey.digit3): SelectToolIntent('Audio'),
+  SingleActivator(LogicalKeyboardKey.digit4): SelectToolIntent('Motion'),
+  // Alt + arrows nudge the selected clip inside the frame. Plain arrows stay
+  // on the playhead, which is the more frequent verb.
+  SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
+      NudgeSelectedClipIntent(-10, 0),
+  SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
+      NudgeSelectedClipIntent(10, 0),
+  SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
+      NudgeSelectedClipIntent(0, 10),
+  SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+      NudgeSelectedClipIntent(0, -10),
+};
+
+/// The shell's key map for the current focus owner.
+///
+/// The split exists because [Shortcuts] resolves before the focused text field:
+/// an editor verb that merely checks focus inside its action still swallows the
+/// keystroke, which broke typing, Backspace, Space and copy/paste.
+@visibleForTesting
+Map<ShortcutActivator, Intent> orShellShortcuts({
+  required bool textInputFocused,
+}) => textInputFocused
+    ? _alwaysShortcuts
+    : {..._alwaysShortcuts, ..._editingShortcuts};
+
 /// The macOS menu bar. Every item routes to the same callback the on-screen
 /// control uses, so the menu can never drift from the visible surface.
 /// Non-Apple platforms get the child unchanged: a menu bar that only exists on
@@ -111,6 +192,7 @@ class AppShell extends StatefulWidget {
 class _PlatformMenus extends StatelessWidget {
   const _PlatformMenus({
     required this.isEditor,
+    required this.textInputFocused,
     required this.canExport,
     required this.canEditProject,
     required this.onNewProject,
@@ -141,6 +223,7 @@ class _PlatformMenus extends StatelessWidget {
   });
 
   final bool isEditor;
+  final bool textInputFocused;
   final bool canExport;
   final bool canEditProject;
   final VoidCallback onNewProject;
@@ -170,16 +253,6 @@ class _PlatformMenus extends StatelessWidget {
   final VoidCallback? onImportMedia;
   final VoidCallback? onImportFolder;
   final Widget child;
-
-  static const _command = SingleActivator(
-    LogicalKeyboardKey.keyZ,
-    meta: true,
-  );
-  static const _shiftCommand = SingleActivator(
-    LogicalKeyboardKey.keyZ,
-    meta: true,
-    shift: true,
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -285,55 +358,56 @@ class _PlatformMenus extends StatelessWidget {
         PlatformMenu(
           label: 'Edit',
           menus: [
+            // Editing verbs carry no native key equivalent. macOS routes a
+            // menu equivalent before the focused text field, so ⌘Z/⌘C/⌘V in a
+            // menu would steal text editing. The Flutter shortcut map owns
+            // these keys and disables them while a field is focused.
             PlatformMenuItem(
               label: 'Undo',
-              shortcut: _command,
-              onSelected: canEditProject ? onUndo : null,
+              onSelected: !textInputFocused && canEditProject ? onUndo : null,
             ),
             PlatformMenuItem(
               label: 'Redo',
-              shortcut: _shiftCommand,
-              onSelected: canEditProject ? onRedo : null,
+              onSelected: !textInputFocused && canEditProject ? onRedo : null,
             ),
             PlatformMenuItemGroup(
               members: [
                 PlatformMenuItem(
                   label: 'Split at Playhead',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.keyB, meta: true),
-                  onSelected: isEditor ? onSplit : null,
+                  onSelected: !textInputFocused && isEditor ? onSplit : null,
                 ),
                 PlatformMenuItem(
                   label: 'Duplicate Clip',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.keyD, meta: true),
-                  onSelected: isEditor ? onDuplicate : null,
+                  onSelected: !textInputFocused && isEditor ? onDuplicate : null,
                 ),
                 PlatformMenuItem(
                   label: 'Copy Clip',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.keyC, meta: true),
-                  onSelected: isEditor ? onCopy : null,
+                  onSelected: !textInputFocused && isEditor ? onCopy : null,
                 ),
                 PlatformMenuItem(
                   label: 'Paste Clip',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.keyV, meta: true),
-                  onSelected: isEditor ? onPaste : null,
+                  onSelected: !textInputFocused && isEditor ? onPaste : null,
                 ),
+                // No key equivalent: macOS treats a modifier-less menu
+                // equivalent as a typing key (Delete is Backspace, M is "m"),
+                // so the menu would steal text editing from every field. The
+                // Flutter shortcut map owns these verbs and is disabled while a
+                // text field is focused.
                 PlatformMenuItem(
                   label: 'Delete Clip',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.delete),
-                  onSelected: isEditor ? onDelete : null,
+                  onSelected: !textInputFocused && isEditor ? onDelete : null,
                 ),
                 PlatformMenuItem(
                   label: 'Ripple Delete Clip',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.delete,
-                    shift: true,
-                  ),
-                  onSelected: isEditor ? onRippleDelete : null,
+                  onSelected: !textInputFocused && isEditor
+                      ? onRippleDelete
+                      : null,
                 ),
                 PlatformMenuItem(
                   label: 'Add Marker',
-                  shortcut: const SingleActivator(LogicalKeyboardKey.keyM),
-                  onSelected: isEditor ? onAddMarker : null,
+                  onSelected: !textInputFocused && isEditor
+                      ? onAddMarker
+                      : null,
                 ),
                 PlatformMenuItem(
                   label: 'Toggle Snapping',
@@ -432,6 +506,7 @@ class _AppShellState extends State<AppShell> {
   String? _timelineLoadError;
   int _timelineRefreshGeneration = 0;
   late final AppLifecycleListener _lifecycleListener;
+  bool _textInputFocused = false;
 
   bool get _hasProjectWorkspace =>
       _destination == AppDestination.editorPreview && _activeSession != null;
@@ -440,6 +515,7 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _ownsAssistant = widget.assistantController == null;
+    FocusManager.instance.addListener(_handleFocusChange);
     _autosaveTimer = Timer.periodic(
       _autosaveInterval,
       (_) => unawaited(_autosaveProject()),
@@ -452,6 +528,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_handleFocusChange);
     _autosaveTimer?.cancel();
     _exportPollTimer?.cancel();
     _lifecycleListener.dispose();
@@ -493,84 +570,9 @@ class _AppShellState extends State<AppShell> {
             : _destination.label;
 
         return Shortcuts(
-          shortcuts: const {
-            OrCommandActivator(LogicalKeyboardKey.keyK):
-                OpenCommandPaletteIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyS): SaveProjectIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true):
-                RedoProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(
-              -1,
-            ),
-            SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(
-              1,
-            ),
-            SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
-                StepPreviewFrameIntent(true),
-            SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
-                StepPreviewFrameIntent(false),
-            SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(
-              true,
-            ),
-            SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(
-              false,
-            ),
-            SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
-            SingleActivator(LogicalKeyboardKey.numpadAdd): ZoomTimelineIntent(
-              1.25,
-            ),
-            SingleActivator(LogicalKeyboardKey.minus): ZoomTimelineIntent(0.8),
-            SingleActivator(LogicalKeyboardKey.numpadSubtract):
-                ZoomTimelineIntent(0.8),
-            SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyA, shift: true):
-                ShowAssistantIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyI): ImportMediaIntent(),
-            SingleActivator(LogicalKeyboardKey.keyI, shift: true):
-                ImportFolderIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyD):
-                DuplicateTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.delete):
-                DeleteTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.backspace):
-                DeleteTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.escape):
-                ClearTimelineSelectionIntent(),
-            // Editing verbs. `S` and the command form of `B` both split, so a
-            // CapCut-style single key and the broadcast-editor shortcut agree.
-            SingleActivator(LogicalKeyboardKey.keyS): SplitClipIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyB): SplitClipIntent(),
-            // Blade mode is a mode, not a one-shot command: `C` arms the
-            // pointer and `V` puts it back. Both are plain letters, so they
-            // stop at a focused text field like the rest of the editing verbs.
-            OrCommandActivator(LogicalKeyboardKey.keyC): CopyClipIntent(),
-        OrCommandActivator(LogicalKeyboardKey.keyV): PasteClipIntent(),
-        SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
-            SingleActivator(LogicalKeyboardKey.keyV): SetBladeModeIntent(false),
-            SingleActivator(LogicalKeyboardKey.delete, shift: true):
-                RippleDeleteClipIntent(),
-            SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyE): ExportProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.digit1):
-                SelectToolIntent('Media'),
-            SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
-            SingleActivator(LogicalKeyboardKey.digit3):
-                SelectToolIntent('Audio'),
-            SingleActivator(LogicalKeyboardKey.digit4):
-                SelectToolIntent('Motion'),
-            // Alt + arrows nudge the selected clip inside the frame. Plain
-            // arrows stay on the playhead, which is the more frequent verb.
-            SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
-                NudgeSelectedClipIntent(-10, 0),
-            SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
-                NudgeSelectedClipIntent(10, 0),
-            SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
-                NudgeSelectedClipIntent(0, 10),
-            SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
-                NudgeSelectedClipIntent(0, -10),
-          },
+          shortcuts: orShellShortcuts(
+            textInputFocused: _textInputFocused,
+          ),
           child: Actions(
             actions: {
               OpenCommandPaletteIntent:
@@ -779,6 +781,7 @@ class _AppShellState extends State<AppShell> {
               autofocus: true,
               child: _PlatformMenus(
                 isEditor: editor,
+                textInputFocused: _textInputFocused,
                 canExport:
                     editor &&
                     _activeSession != null &&
@@ -912,7 +915,15 @@ class _AppShellState extends State<AppShell> {
     debugLabel: 'editor shell preview',
   );
 
-  bool get _textInputFocused => orTextFieldHasFocus();
+  /// Tracks whether a text field owns the keyboard. The shell rebuilds its key
+  /// map when this changes, because a matching shortcut would otherwise consume
+  /// typing keys before the field receives them.
+  void _handleFocusChange() {
+    if (!mounted) return;
+    final focused = orTextFieldHasFocus();
+    if (focused == _textInputFocused) return;
+    setState(() => _textInputFocused = focused);
+  }
 
   /// The last MotionScene this session rendered, if any.
   MotionSceneSnapshot? _motionScene;

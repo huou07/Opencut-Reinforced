@@ -37,6 +37,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 - The editor's right rail exposes Inspector and Assistant as two tabs over one
   project state; switching tabs is presentation only, and the assistant never
   writes project state outside the shared command path.
+- A shell shortcut never consumes a key a focused text field needs: the key map
+  is split by focus, and native menu items carry no modifier-less equivalents.
 
 ## Proven interaction surfaces
 

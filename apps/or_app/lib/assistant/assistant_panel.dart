@@ -436,8 +436,16 @@ class _AssistantPanelState extends State<AssistantPanel> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
                   onKeyEvent: (node, event) {
                     if (event is! KeyDownEvent) return KeyEventResult.ignored;
+                    // An IME uses Enter to commit a composition (Vietnamese
+                    // Telex/VNI input does this); sending here would split the
+                    // word and dispatch a half-written prompt.
+                    if (_input.value.composing.isValid) {
+                      return KeyEventResult.ignored;
+                    }
                     final isEnter =
                         event.logicalKey == LogicalKeyboardKey.enter;
                     final shift = HardwareKeyboard.instance.isShiftPressed;

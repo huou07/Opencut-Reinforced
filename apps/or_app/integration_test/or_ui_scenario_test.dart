@@ -487,6 +487,13 @@ class _Runner {
         });
         if (step['settle'] != false) await _settle();
         return;
+      case 'focus':
+        // Focus an editable without tapping it: a tap also moves the caret to
+        // the touched offset, which would make a Backspace assertion depend on
+        // geometry instead of the shortcut layer.
+        await tester.showKeyboard(_requireFinder(step));
+        await _settle();
+        return;
       case 'enter_text':
         final finder = _requireFinder(step);
         await _scrollIntoView(finder);
@@ -522,6 +529,31 @@ class _Runner {
         if (find.text('${step['text']}').evaluate().isEmpty) {
           throw _StepFailure('not_found', 'no visible text "${step['text']}"');
         }
+        return;
+      case 'expect_value':
+        // Read the live controller of a text field. Typing behaviour (IME,
+        // Backspace, copy/paste) cannot be asserted through a rendered label,
+        // because a text field's value lives in its editor state.
+        final finder = _requireFinder(step);
+        final editable = find.descendant(
+          of: finder.first,
+          matching: find.byType(EditableText),
+        );
+        if (editable.evaluate().isEmpty) {
+          throw _StepFailure('not_found', 'no text field matched ${_selector(step)}');
+        }
+        final actual = tester
+            .widget<EditableText>(editable.first)
+            .controller
+            .text;
+        final expected = '${step['value']}';
+        if (actual != expected) {
+          throw _StepFailure(
+            'wrong_value',
+            'expected "$expected" but the field holds "$actual"',
+          );
+        }
+        result.detail = 'value="$actual"';
         return;
       case 'expect_absent':
         if (_anyFinder(step).evaluate().isNotEmpty) {

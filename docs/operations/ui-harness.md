@@ -44,6 +44,15 @@ Right-click a clip by its own label rather than a key regex with
 `report.json`, and `artifacts/` with the transcript, screenshots and semantics
 JSON. These are gitignored runtime state, not evidence records.
 
+## Trap: injected keys do not drive text editing
+
+`tester.sendKeyEvent` reaches the shell's `Shortcuts`/`Focus` layer, but in the
+integration binding it does not run `EditableText`'s text-editing actions:
+Backspace and paste appear to do nothing even when the app is correct. Assert
+typing, Backspace, IME composition and clipboard behaviour in a widget test
+against the real shell instead (see `test/assistant_input_test.dart` and the
+"Backspace edits a dialog text field" test in `test/widget_test.dart`).
+
 ## Trap: the harness overwrites the Debug app bundle
 
 `or_ui.py` builds through `flutter test -d macos`, so
