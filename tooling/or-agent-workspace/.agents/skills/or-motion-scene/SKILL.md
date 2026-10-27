@@ -1,6 +1,6 @@
 ---
 name: or-motion-scene
-description: Author, validate and materialise a deterministic MotionScene in the open OR project through mcp__or__motion_insert_scene — code-to-illustration, animated titles, diagrams and reusable scene JSON. Use when the user asks for an illustration, motion graphic or scene from code. Do NOT use for ordinary edits (or-timeline-edit) or for changing OR's own MotionScene implementation.
+description: Author, validate and materialise a deterministic MotionScene in the open OR project — code-to-illustration, animated titles, diagrams and reusable scene JSON. Use when the user asks for an illustration, motion graphic or scene from code. Do NOT use for ordinary edits (or-timeline-edit) or for changing OR's own MotionScene implementation.
 ---
 
 # Motion scene
@@ -15,13 +15,14 @@ Workspace guide: `docs/motion-scenes.md`.
    --out scenes/title.ormotion.json`, then edit nodes, text, colours, sizes and
    keyframes.
 3. Validate with `tools/or motion validate --file scenes/title.ormotion.json
-   --json` when the CLI exists. Fix every diagnostic; do not render a scene that
-   fails validation.
-4. Place it with `mcp__or__motion_insert_scene {scene_path}` or `{source_path}`.
-   Materialisation encodes every frame: wait for the result and never run two at
-   once.
-5. Verify the clip appears with `timeline_overview`, then `save` unless the user
-   asked to review first.
+   --json`. Fix every diagnostic; do not render a scene that fails validation.
+4. Place it with `mcp__or__motion_insert_scene {scene_path}` or `{source_path}`,
+   using absolute paths. This is the one insert the CLI cannot do: `tools/or
+   motion materialize` only writes a file. Materialisation encodes every frame:
+   wait for the result and never run two at once.
+5. Verify the clip appears with `tools/or timeline clips --track TRACK_ID
+   --attach project.json --json`, then `tools/or project save --attach
+   project.json --json` unless the user asked to review first.
 
 ## Rules
 

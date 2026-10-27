@@ -65,12 +65,15 @@ the MCP pointer, not the session folder.
 
 ## Project binding
 
-The workspace never holds canonical project state. `project.json` is a marker so
-the agent can name the project without a tool call; the session pointer in the
-assistant directory is what `or mcp` reads. Project edits happen only through
-`mcp__or__*` tools, and every guide repeats the rule that a `.orproj` file or the
-project directory is never edited directly. Importing an absolute path is the
-one file read outside the workspace, and it is a project command.
+The workspace never holds canonical project state. `project.json` is the marker
+the agent names the project by and attaches the CLI through: it carries
+`descriptor_path`, and `--attach project.json` follows it to the running app on
+every call. The session pointer in the assistant directory is what `or mcp`
+reads. Reads and edits go through the `or` CLI by default; the `mcp__or__*` tools
+remain for motion insertion, the motion library and a CLI failure, and every
+guide repeats the rule that a `.orproj` file or the project directory is never
+edited directly. Importing an absolute path is the one file read outside the
+workspace, and it is a project command.
 
 ## Bounds
 
@@ -79,8 +82,8 @@ one file read outside the workspace, and it is a project command.
 - No secret is written into the workspace. `project.json` and `or-cli.json`
   contain paths, not credentials; `or mcp` resolves the descriptor and the
   harness resolves its own credentials.
-- The workspace adds no tool surface: the agent's `or` MCP server and the harness
-  skill catalog are the same ones the assistant already had.
+- The workspace adds no tool surface: the `or` CLI, the agent's `or` MCP server
+  and the harness skill catalog are the ones the assistant already had.
 - Android has no assistant, so it has no installed workspace.
 
 ## Verification
@@ -93,6 +96,9 @@ one file read outside the workspace, and it is a project command.
   test/assistant_workspace_test.dart test/assistant_settings_test.dart` — path
   safety, versioned installation, runtime files, default resolution and settings
   migration.
+- With a project open, `tools/or project summary --attach project.json --json`
+  run from the installed workspace resolves the pointer and reads the live
+  revision (`crates/or_cli/tests/semantic_cli.rs` covers the pointer form).
 - The real-app journey: open the assistant in a packaged build, confirm the
   session workspace is the installed folder, and confirm the harness reports the
   workspace `AGENTS.md` and the three skills.
@@ -107,6 +113,9 @@ one file read outside the workspace, and it is a project command.
   user-invocable workspace command list.
 - No per-project workspace or per-project library; the workspace is shared by
   every project this app opens.
+- A project-folder or chosen-folder workspace has no `project.json` pointer, so
+  the CLI attach guidance only applies to the default agent workspace; those
+  sessions fall back to the `mcp__or__*` tools.
 
 ## Where
 

@@ -19,9 +19,10 @@ product still needs.
 
 - **Assistant panel**: a right-rail tab connects to a locally installed
   DeepSeek Harness over ACP, lets the user pick the workspace and model, streams
-  replies and tool calls, and renders permission prompts. The harness edits the
-  open project through `or mcp`, which attaches to the same local IPC descriptor
-  and validated command path as the CLI.
+  replies and tool calls, and renders permission prompts. The harness reads and
+  edits the open project through the `or` CLI attached to the live session, with
+  the `or mcp` tools as the fallback for motion insertion and the motion library;
+  both use the same local IPC descriptor and validated command path.
 - **`or mcp`**: an MCP stdio bridge with project, timeline, media, text, marker,
   save/undo and motion-insertion tools; `or motion materialize` renders a code
   file or scene through the app's MotionScene/FFmpeg runtime. The assistant turns
@@ -29,8 +30,22 @@ product still needs.
 - An `or_core` application request and IPC route for MotionScene
   materialisation, plus focused contract, MCP and UI tests.
 - Two real-app journeys: `scripts/ui_scenarios/assistant-edit.json` and
-  `assistant-motion.json`.
+  `assistant-motion.json`, plus `scripts/ui_scenarios/motion-scene-edit.json` for
+  the scene-editing journey (resize, rotate, marquee, multi-delete, undo/redo).
 
+- **Scene editing on the Motion canvas**: the composed draft is editable in place
+  — select one or many objects (click, shift-click, marquee), drag a selection,
+  resize a shape from its corner grips, rotate it from the rotate grip, retitle,
+  recolour, outline, change type size, add text, append library objects, delete,
+  and undo/redo the draft — inline in the panel or in an expanded editor. Every
+  gesture is a typed operation applied in Rust and re-validated as an ordinary
+  MotionScene, so an edit can never produce a scene the renderer refuses; geometry
+  is written against the evaluated frame, so an animated object lands where the
+  pointer is instead of jumping by its track offset. The bridge returns the edited
+  scene, its first frame and the node boxes in one call, and the draft keeps a
+  32-step history that never touches project undo.
+- **Motion library multi-selection**: rows can be ticked (or selected with the
+  list's select-all) and added to the composition or deleted together.
 - Empty new projects present a working **Import Media** action that reaches the
   existing platform picker and permission path, on desktop and compact layouts.
 - **Folder import**: selecting a folder imports the selected files plus files in
@@ -44,6 +59,14 @@ product still needs.
 
 ### Changed
 
+- **Assistant edits the project through the `or` CLI by default.** The installed
+  workspace and persona attach `tools/or` through the workspace `project.json`
+  pointer, and the `or mcp` tools stay as the documented fallback for motion
+  insertion and the motion library.
+- **`or --attach` accepts a session pointer.** The descriptor may be named by a
+  pointer file such as `project.json`; the CLI follows its `descriptor_path` on
+  every call, so a command line survives a project switch. `timeline trim-clip`
+  also takes `--ripple` as a boolean flag.
 - **macOS Developer Preview runs unsandboxed** so the assistant can start the
   local harness and its bridge; App Sandbox cannot grant that process boundary
   (ADR 0009). Packaging now asserts the entitlement stays absent.

@@ -1,6 +1,6 @@
 # System Architecture Overview
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: the shape of the running system — clients, planes, crates, and the data
 flow between them. It states what exists and what is only planned. Subsystem
@@ -17,7 +17,7 @@ document.
 Flutter UI ──typed bridge──┐
 CLI ─────────local IPC─────┼──> command/query dispatch ──> Rust domain core
 Agents ──────local IPC─────┘         │
-Assistant panel ──ACP──> dsh ──MCP──> or mcp ──local IPC──┘
+Assistant panel ──ACP──> dsh ──> or CLI ──local IPC─────┘
                                      ├─> ProjectDocument + history + persistence
                                      └─> evaluated RenderSnapshot
                                               │
@@ -31,8 +31,10 @@ and bounded read-model caches. It never keeps a second editable project model,
 and it never writes project state directly.
 
 The in-editor assistant follows the same rule. DeepSeek Harness runs out of
-process; its `or mcp` tools attach to the running app and use the typed command
-path. Provider credentials stay with the harness (ADR 0009).
+process and runs the `or` CLI attached to the running app by default; its
+`or mcp` server is the fallback for motion insertion and the motion library. Both
+use the typed command path, and provider credentials stay with the harness
+(ADR 0009).
 
 ## Two planes
 

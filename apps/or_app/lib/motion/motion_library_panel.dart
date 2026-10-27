@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:or_app_bridge/or_app_bridge.dart';
@@ -11,6 +12,7 @@ import '../design/or_typography.dart';
 import '../widgets/or_widgets.dart';
 import 'motion_library_controller.dart';
 import 'motion_library_models.dart';
+import 'motion_scene_editor.dart';
 
 const List<String> motionAssetCategories = [
   'background',
@@ -193,52 +195,84 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
     return ColoredBox(
       key: const ValueKey('motion-library-panel'),
       color: OrColors.backgroundRaised,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _header(),
-          if (controller.busy || _working)
-            const LinearProgressIndicator(minHeight: 2),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                OrSpacing.x3,
-                OrSpacing.x2,
-                OrSpacing.x3,
-                OrSpacing.x4,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // The scene editor sits between the list and the pinned actions. Its
+          // height is derived from the panel, so a short rail scrolls its controls
+          // instead of overflowing, and the insert action never scrolls away.
+          final available = math.max(0.0, constraints.maxHeight - 38 - 60);
+          final editing = math
+              .min(320.0, constraints.maxHeight * 0.55)
+              .clamp(0.0, available);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _header(),
+              if (controller.busy || _working)
+                const LinearProgressIndicator(minHeight: 2),
+              // Messages live above the list, not inside it: an error that scrolls
+              // away is an error the user never reads.
+              if (controller.error != null || controller.notice != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    OrSpacing.x3,
+                    OrSpacing.x1,
+                    OrSpacing.x3,
+                    0,
+                  ),
+                  child: _messages(),
+                ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    OrSpacing.x3,
+                    OrSpacing.x2,
+                    OrSpacing.x3,
+                    OrSpacing.x2,
+                  ),
+                  children: [
+                    _searchRow(),
+                    const SizedBox(height: OrSpacing.x2),
+                    _categoryFilters(),
+                    if (controller.selected != null) ...[
+                      const SizedBox(height: OrSpacing.x2),
+                      _selectedDetail(controller.selected!),
+                    ],
+                    const SizedBox(height: OrSpacing.x2),
+                    if (controller.selectedAssetIds.isNotEmpty) ...[
+                      _bulkBar(),
+                      const SizedBox(height: OrSpacing.x2),
+                    ],
+                    if (entries.isEmpty)
+                      _emptyLibrary()
+                    else
+                      for (final entry in entries) _entryTile(entry),
+                    const SizedBox(height: OrSpacing.x2),
+                  ],
+                ),
               ),
-              children: [
-                _searchRow(),
-                const SizedBox(height: OrSpacing.x2),
-                _categoryFilters(),
-                if (controller.error != null || controller.notice != null) ...[
-                  const SizedBox(height: OrSpacing.x2),
-                  _messages(),
-                ],
-                if (controller.selected != null) ...[
-                  const SizedBox(height: OrSpacing.x2),
-                  _selectedDetail(controller.selected!),
-                ],
-                const SizedBox(height: OrSpacing.x2),
-                if (entries.isEmpty)
-                  _emptyLibrary()
-                else
-                  for (final entry in entries) _entryTile(entry),
-                const SizedBox(height: OrSpacing.x3),
-              ],
-            ),
-          ),
-          if (controller.hasDraft)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                OrSpacing.x3,
-                0,
-                OrSpacing.x3,
-                OrSpacing.x3,
+              if (controller.hasDraft)
+                SizedBox(
+                  height: editing,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: OrSpacing.x3,
+                    ),
+                    child: _sceneEditor(),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  OrSpacing.x3,
+                  OrSpacing.x1,
+                  OrSpacing.x3,
+                  OrSpacing.x2,
+                ),
+                child: _sceneActions(),
               ),
-              child: _composer(),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -290,16 +324,34 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
   }
 
   Widget _searchRow() {
-    return TextField(
-      key: const ValueKey('motion-library-search'),
-      controller: _search,
-      onChanged: controller.setSearch,
-      style: const TextStyle(color: OrColors.text, fontSize: OrType.tinySize),
-      decoration: const InputDecoration(
-        isDense: true,
-        hintText: 'Search assets',
-        prefixIcon: Icon(Icons.search, size: 16),
-      ),
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            key: const ValueKey('motion-library-search'),
+            controller: _search,
+            onChanged: controller.setSearch,
+            style: const TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.tinySize,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: 'Search assets',
+              prefixIcon: Icon(Icons.search, size: 16),
+            ),
+          ),
+        ),
+        IconButton(
+          key: const ValueKey('motion-library-select-all'),
+          iconSize: 16,
+          tooltip: 'Select every asset shown',
+          onPressed: controller.visibleEntries.isEmpty
+              ? null
+              : controller.selectAllVisibleAssets,
+          icon: const Icon(Icons.select_all),
+        ),
+      ],
     );
   }
 
@@ -405,6 +457,7 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
 
   Widget _entryTile(MotionAssetEntryView entry) {
     final selected = controller.selected?.assetId == entry.assetId;
+    final marked = controller.isAssetSelected(entry.assetId);
     final valuesJson = selected ? jsonEncode(controller.values) : '{}';
     final tile = Material(
       color: selected ? OrColors.surfaceSelected : OrColors.surface,
@@ -417,6 +470,18 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
           padding: const EdgeInsets.all(OrSpacing.x2),
           child: Row(
             children: [
+              InkWell(
+                key: ValueKey('motion-asset-select-${entry.assetId}'),
+                onTap: () => controller.toggleAssetSelection(entry.assetId),
+                child: Icon(
+                  marked
+                      ? Icons.check_box_outlined
+                      : Icons.check_box_outline_blank,
+                  size: 16,
+                  color: marked ? OrColors.selection : OrColors.textMuted,
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x1),
               _thumbnail(entry.previewPath, 44, 44),
               const SizedBox(width: OrSpacing.x2),
               Expanded(
@@ -484,6 +549,81 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
         ),
         childWhenDragging: Opacity(opacity: 0.35, child: tile),
         child: tile,
+      ),
+    );
+  }
+
+  /// The actions a multi-selection of library assets offers: add them all to the
+  /// composition, or remove them in one go.
+  Widget _bulkBar() {
+    final count = controller.selectedAssetIds.length;
+    return Container(
+      key: const ValueKey('motion-library-bulk'),
+      padding: const EdgeInsets.all(OrSpacing.x2),
+      decoration: BoxDecoration(
+        color: OrColors.surfaceSelected,
+        borderRadius: BorderRadius.circular(OrRadii.card),
+        border: Border.all(color: OrColors.borderStrong),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.check_box_outlined,
+                size: 14,
+                color: OrColors.selection,
+              ),
+              const SizedBox(width: OrSpacing.x1),
+              Expanded(
+                child: Text(
+                  '$count selected',
+                  key: const ValueKey('motion-library-bulk-count'),
+                  style: const TextStyle(
+                    color: OrColors.text,
+                    fontSize: OrType.metadataCompactSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              IconButton(
+                key: const ValueKey('motion-library-bulk-clear'),
+                iconSize: 14,
+                visualDensity: VisualDensity.compact,
+                tooltip: 'Clear selection',
+                onPressed: controller.clearAssetSelection,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: OrSpacing.x1),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('motion-library-bulk-add'),
+                  onPressed: controller.busy
+                      ? null
+                      : () => unawaited(controller.addSelectedAssetsToScene()),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('To scene'),
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('motion-library-bulk-delete'),
+                  onPressed: controller.busy
+                      ? null
+                      : () => unawaited(controller.deleteSelectedAssets()),
+                  icon: const Icon(Icons.delete_outline, size: 14),
+                  label: const Text('Delete'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -775,134 +915,190 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
     }
   }
 
-  Widget _composer() {
-    final hasDraft = controller.hasDraft;
-    return OrPanel(
-      title: 'Scene',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// The composition editor: only while a draft exists, so browsing the library
+  /// keeps the full height of the rail until the user starts composing.
+  Widget _sceneEditor() {
+    final canvas = controller.canvasSize;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                controller.sceneNodes.length == 1
+                    ? '1 object'
+                    : '${controller.sceneNodes.length} objects',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: OrColors.textMuted,
+                  fontSize: OrType.tinySize,
+                ),
+              ),
+            ),
+            IconButton(
+              key: const ValueKey('motion-undo'),
+              iconSize: 16,
+              tooltip: 'Undo scene edit',
+              onPressed: controller.canUndo ? controller.undoScene : null,
+              icon: const Icon(Icons.undo),
+            ),
+            IconButton(
+              key: const ValueKey('motion-redo'),
+              iconSize: 16,
+              tooltip: 'Redo scene edit',
+              onPressed: controller.canRedo ? controller.redoScene : null,
+              icon: const Icon(Icons.redo),
+            ),
+            IconButton(
+              key: const ValueKey('motion-scene-expand'),
+              iconSize: 16,
+              tooltip: 'Open the scene editor',
+              onPressed: () =>
+                  unawaited(showMotionSceneEditor(context, controller)),
+              icon: const Icon(Icons.open_in_full),
+            ),
+            IconButton(
+              key: const ValueKey('motion-scene-clear'),
+              iconSize: 16,
+              tooltip: 'Clear scene',
+              onPressed: controller.clearScene,
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        DragTarget<MotionAssetDragData>(
+          key: const ValueKey('motion-scene-drop'),
+          onAcceptWithDetails: (details) {
+            final box =
+                _sceneKey.currentContext?.findRenderObject() as RenderBox?;
+            var offsetX = 0.0;
+            var offsetY = 0.0;
+            if (box != null && box.hasSize && box.size.width > 0) {
+              final local = box.globalToLocal(details.offset);
+              offsetX = (local.dx / box.size.width * canvas.width).clamp(
+                0,
+                canvas.width,
+              );
+              offsetY = (local.dy / box.size.height * canvas.height).clamp(
+                0,
+                canvas.height,
+              );
+            }
+            unawaited(
+              controller.addDragToScene(
+                details.data,
+                offsetX: offsetX,
+                offsetY: offsetY,
+              ),
+            );
+          },
+          builder: (context, candidates, rejected) {
+            final highlighted = candidates.isNotEmpty;
+            return Container(
+              key: _sceneKey,
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(OrRadii.card),
+                border: highlighted
+                    ? Border.all(color: OrColors.focus, width: 1.5)
+                    : null,
+              ),
+              child: MotionSceneCanvas(
+                controller: controller,
+                emptyLabel: highlighted
+                    ? 'Drop to add'
+                    : 'Preview appears here',
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: OrSpacing.x2),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const ValueKey('motion-add-text'),
+                onPressed: controller.busy
+                    ? null
+                    : () => unawaited(controller.addTextNode()),
+                icon: const Icon(Icons.title, size: 16),
+                label: const Text('Add text'),
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const ValueKey('motion-add-asset'),
+                onPressed: controller.busy
+                    ? null
+                    : () => unawaited(showAddAssetSheet(context, controller)),
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                label: const Text('Add asset'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: OrSpacing.x2),
+        MotionSceneInspector(controller: controller, compact: true),
+      ],
+    );
+  }
+
+  Widget _sceneActions() {
+    if (!controller.hasDraft) {
+      // No composition yet: the first gesture starts one, so a user who wants a
+      // title does not have to add an asset first.
+      return Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  hasDraft
-                      ? '${controller.draftLayerCount} layers'
-                      : 'Drop an asset below to start a composition',
-                  style: const TextStyle(
-                    color: OrColors.textMuted,
-                    fontSize: OrType.tinySize,
-                  ),
-                ),
-              ),
-              if (hasDraft)
-                IconButton(
-                  key: const ValueKey('motion-scene-clear'),
-                  iconSize: 16,
-                  tooltip: 'Clear scene',
-                  onPressed: controller.clearScene,
-                  icon: const Icon(Icons.close),
-                ),
-            ],
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('motion-add-text'),
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(controller.addTextNode()),
+              icon: const Icon(Icons.title, size: 16),
+              label: const Text('Add text'),
+            ),
           ),
-          const SizedBox(height: OrSpacing.x1),
-          DragTarget<MotionAssetDragData>(
-            key: const ValueKey('motion-scene-drop'),
-            onAcceptWithDetails: (details) {
-              final box =
-                  _sceneKey.currentContext?.findRenderObject() as RenderBox?;
-              var offsetX = 0.0;
-              var offsetY = 0.0;
-              if (box != null && box.hasSize && box.size.width > 0) {
-                final local = box.globalToLocal(details.offset);
-                offsetX = (local.dx / box.size.width * 1920).clamp(0, 1920);
-                offsetY = (local.dy / box.size.height * 1080).clamp(0, 1080);
-              }
-              unawaited(
-                controller.addDragToScene(
-                  details.data,
-                  offsetX: offsetX,
-                  offsetY: offsetY,
-                ),
-              );
-            },
-            builder: (context, candidates, rejected) {
-              final highlighted = candidates.isNotEmpty;
-              final bytes = controller.draftPreview ?? controller.assetPreview;
-              return Container(
-                key: _sceneKey,
-                decoration: BoxDecoration(
-                  color: OrColors.backgroundRecessed,
-                  borderRadius: BorderRadius.circular(OrRadii.card),
-                  border: Border.all(
-                    color: highlighted ? OrColors.focus : OrColors.border,
-                  ),
-                ),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: bytes == null
-                      ? Center(
-                          child: Text(
-                            highlighted
-                                ? 'Drop to add'
-                                : 'Preview appears here',
-                            style: const TextStyle(
-                              color: OrColors.textMuted,
-                              fontSize: OrType.tinySize,
-                            ),
-                          ),
-                        )
-                      : Image.memory(
-                          bytes,
-                          fit: BoxFit.contain,
-                          gaplessPlayback: true,
-                        ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: OrSpacing.x2),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  key: const ValueKey('motion-insert-draft'),
-                  onPressed: hasDraft && !controller.busy
-                      ? () => _insert(draft: true)
-                      : null,
-                  child: const Text('Add scene to timeline'),
-                ),
-              ),
-              const SizedBox(width: OrSpacing.x2),
-              Expanded(
-                child: OutlinedButton(
-                  key: const ValueKey('motion-save-scene'),
-                  onPressed: hasDraft && !controller.busy ? _saveScene : null,
-                  child: const Text('Save to library'),
-                ),
-              ),
-            ],
+          const SizedBox(width: OrSpacing.x2),
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('motion-add-asset'),
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(showAddAssetSheet(context, controller)),
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+              label: const Text('Add asset'),
+            ),
           ),
         ],
-      ),
+      );
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton(
+            key: const ValueKey('motion-insert-draft'),
+            onPressed: !controller.busy ? () => _insert(draft: true) : null,
+            child: const Text('Add to timeline'),
+          ),
+        ),
+        const SizedBox(width: OrSpacing.x2),
+        Expanded(
+          child: OutlinedButton(
+            key: const ValueKey('motion-save-scene'),
+            onPressed: !controller.busy ? _saveScene : null,
+            child: const Text('Save to library'),
+          ),
+        ),
+      ],
     );
   }
 }
 
-const List<Color> _swatches = [
-  Color(0xFFF5F5F5),
-  Color(0xFFA6A6AB),
-  Color(0xFF3FC7FF),
-  Color(0xFF47B881),
-  Color(0xFFD8A542),
-  Color(0xFFE05A5A),
-  Color(0xFF9B7CFF),
-  Color(0xFFF28C38),
-  Color(0xFF31C48D),
-  Color(0xFF2D9CDB),
-  Color(0xFFEB5757),
-  Color(0xFF090909),
-];
+const List<Color> _swatches = motionSceneSwatches;
 
 Color _colorFrom(Object? value) {
   if (value is Map) {

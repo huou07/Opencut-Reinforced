@@ -2,7 +2,9 @@
 
 This is the operating workspace the Opencut Reinforced assistant uses by default.
 It is not the OR source checkout. The open project is recorded in `project.json`,
-and the `mcp__or__*` tools are the only way to read or change that project.
+and the `or` CLI attached through that pointer is the default way to read or
+change it. An `mcp__or__*` tool is a fallback for the few operations the CLI
+cannot express.
 
 ## Rule
 
@@ -22,11 +24,11 @@ each line below names the situation that makes it the right thing to read.
 - **Motion scenes** — code-to-video scenes, `.ormotion.json`, validation and materialisation.
   When: the user asks for an illustration, motion graphic, animated title or scene from code.
   Path: `docs/motion-scenes.md`
-- **Project safety** — revisions, save, undo/redo and refused operations.
-  When: deciding whether to save, undoing a change, or recovering from a failed tool call.
+- **Project safety** — revisions, save, undo/redo and refused commands.
+  When: deciding whether to save, undoing a change, or recovering from a failed command.
   Path: `docs/project-safety.md`
 - **Troubleshooting** — missing tools, no open project, slow or failed renders.
-  When: a tool call fails and the error is not self-explanatory.
+  When: a command fails and the error is not self-explanatory.
   Path: `docs/troubleshooting.md`
 
 ### Skills
@@ -39,26 +41,30 @@ The session catalog carries these. Load one only when its task matches.
 
 ### Tools
 
-- `tools/or` — the OR CLI bound to the app build. Use it for
-  `motion validate`, `inspect`, `from-code` and `render` when a scene must be
-  checked without starting a materialisation. If it is missing, see
-  `docs/troubleshooting.md`.
+- `tools/or` — the OR CLI bound to this app build and the default project surface.
+  Run it from this workspace: `tools/or <verb> --attach project.json --json`.
+  `project.json` is the app-written session pointer; the CLI follows its
+  `descriptor_path`, so the same command line keeps working when another project
+  opens. `tools/or commands` and `tools/or queries` print the exact verb surface.
 - `tools/motion-scaffold.mjs` — writes a valid V1 `.ormotion.json` skeleton:
   `node tools/motion-scaffold.mjs --name "Title" --out scenes/title.ormotion.json`.
-- `tools/or motion asset ...` — validate, save, list or instantiate a reusable
-  motion asset against a library folder the user names. The app does not expose
-  an asset MCP tool yet; prefer `mcp__or__*` for anything on the timeline.
+- `mcp__or__motion_insert_scene`, `mcp__or__motion_asset_list`,
+  `mcp__or__motion_asset_insert`, `mcp__or__motion_asset_save` — the app's MCP
+  fallback. Use them only for motion insertion and the motion library, where the
+  CLI can render a file but cannot import or place a clip. A CLI failure whose
+  error does not explain itself is the other fallback; report it before switching.
 
 ## Working files
 
 - `scenes/` — scene sources you author. `mcp__or__motion_insert_scene` reads them.
 - `work/` — scratch files, notes and copies. Nothing here is project state.
-- `project.json`, `or-cli.json` and `tools/or` are written by the app; leave them alone.
+- `project.json`, `or-cli.json` and `tools/or` are written by the app; leave them
+  alone. `project.json` names the live descriptor the CLI attaches through.
 
 ## Bounds
 
 - Never edit a `.orproj` file, the project directory, or any path listed in `project.json`.
-- Project mutations happen only through `mcp__or__*` calls; imports read local files,
-  so a file you copy into `work/` can be imported from there.
-- Make one requested change at a time, confirm it with `timeline_overview`, then save
+- Project mutations go through `tools/or ... --attach project.json`; the app applies
+  them and owns history. The motion MCP tools are the only other write path.
+- Make one requested change at a time, confirm it with a timeline read, then save
   unless the user asked to review first.

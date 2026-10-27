@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -754328948;
+  int get rustContentHash => 376188785;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -802,6 +802,12 @@ abstract class RustLibApi extends BaseApi {
     required List<String> valuesJson,
     required List<double> offsetX,
     required List<double> offsetY,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneEdit({
+    required String root,
+    required String sceneJson,
+    required String editJson,
   });
 
   Future<MotionMaterializationView>
@@ -5580,6 +5586,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneEdit({
+    required String root,
+    required String sceneJson,
+    required String editJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(editJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 94,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneEditConstMeta,
+        argValues: [root, sceneJson, editJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneEditConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_edit",
+        argNames: ["root", "sceneJson", "editJson"],
+      );
+
+  @override
   Future<MotionMaterializationView>
   crateApiMotionLibraryMotionSceneMaterialize({
     required String root,
@@ -5604,7 +5647,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 95,
             port: port_,
           );
         },
@@ -5659,7 +5702,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 96,
             port: port_,
           );
         },
@@ -5696,7 +5739,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 97,
             port: port_,
           );
         },
@@ -5735,7 +5778,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 98,
             port: port_,
           );
         },
@@ -5766,7 +5809,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 99,
             port: port_,
           );
         },
@@ -6056,6 +6099,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MotionSceneNodeView> dco_decode_list_motion_scene_node_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_scene_node_view)
+        .toList();
+  }
+
+  @protected
   List<double> dco_decode_list_prim_f_64_loose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as List<double>;
@@ -6337,6 +6390,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionSceneNodeView dco_decode_motion_scene_node_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 25)
+      throw Exception('unexpected arr length: expect 25 but see ${arr.length}');
+    return MotionSceneNodeView(
+      nodeId: dco_decode_String(arr[0]),
+      kind: dco_decode_String(arr[1]),
+      text: dco_decode_String(arr[2]),
+      x: dco_decode_f_64(arr[3]),
+      y: dco_decode_f_64(arr[4]),
+      width: dco_decode_f_64(arr[5]),
+      height: dco_decode_f_64(arr[6]),
+      fontSize: dco_decode_f_64(arr[7]),
+      opacity: dco_decode_f_64(arr[8]),
+      hasFill: dco_decode_bool(arr[9]),
+      fillRed: dco_decode_u_32(arr[10]),
+      fillGreen: dco_decode_u_32(arr[11]),
+      fillBlue: dco_decode_u_32(arr[12]),
+      fillAlpha: dco_decode_u_32(arr[13]),
+      hasStroke: dco_decode_bool(arr[14]),
+      strokeRed: dco_decode_u_32(arr[15]),
+      strokeGreen: dco_decode_u_32(arr[16]),
+      strokeBlue: dco_decode_u_32(arr[17]),
+      strokeAlpha: dco_decode_u_32(arr[18]),
+      strokeWidth: dco_decode_f_64(arr[19]),
+      rotationDegrees: dco_decode_f_64(arr[20]),
+      resizable: dco_decode_bool(arr[21]),
+      strokeable: dco_decode_bool(arr[22]),
+      depth: dco_decode_u_32(arr[23]),
+      animated: dco_decode_bool(arr[24]),
+    );
+  }
+
+  @protected
   MotionScenePreviewView dco_decode_motion_scene_preview_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -6356,8 +6444,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   MotionSceneView dco_decode_motion_scene_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return MotionSceneView(
       ok: dco_decode_bool(arr[0]),
       code: dco_decode_String(arr[1]),
@@ -6369,6 +6457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       height: dco_decode_u_32(arr[7]),
       durationMilliseconds: dco_decode_i_64(arr[8]),
       previewPng: dco_decode_list_prim_u_8_strict(arr[9]),
+      nodes: dco_decode_list_motion_scene_node_view(arr[10]),
     );
   }
 
@@ -7436,6 +7525,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MotionSceneNodeView> sse_decode_list_motion_scene_node_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionSceneNodeView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_scene_node_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -7816,6 +7919,65 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionSceneNodeView sse_decode_motion_scene_node_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_width = sse_decode_f_64(deserializer);
+    var var_height = sse_decode_f_64(deserializer);
+    var var_fontSize = sse_decode_f_64(deserializer);
+    var var_opacity = sse_decode_f_64(deserializer);
+    var var_hasFill = sse_decode_bool(deserializer);
+    var var_fillRed = sse_decode_u_32(deserializer);
+    var var_fillGreen = sse_decode_u_32(deserializer);
+    var var_fillBlue = sse_decode_u_32(deserializer);
+    var var_fillAlpha = sse_decode_u_32(deserializer);
+    var var_hasStroke = sse_decode_bool(deserializer);
+    var var_strokeRed = sse_decode_u_32(deserializer);
+    var var_strokeGreen = sse_decode_u_32(deserializer);
+    var var_strokeBlue = sse_decode_u_32(deserializer);
+    var var_strokeAlpha = sse_decode_u_32(deserializer);
+    var var_strokeWidth = sse_decode_f_64(deserializer);
+    var var_rotationDegrees = sse_decode_f_64(deserializer);
+    var var_resizable = sse_decode_bool(deserializer);
+    var var_strokeable = sse_decode_bool(deserializer);
+    var var_depth = sse_decode_u_32(deserializer);
+    var var_animated = sse_decode_bool(deserializer);
+    return MotionSceneNodeView(
+      nodeId: var_nodeId,
+      kind: var_kind,
+      text: var_text,
+      x: var_x,
+      y: var_y,
+      width: var_width,
+      height: var_height,
+      fontSize: var_fontSize,
+      opacity: var_opacity,
+      hasFill: var_hasFill,
+      fillRed: var_fillRed,
+      fillGreen: var_fillGreen,
+      fillBlue: var_fillBlue,
+      fillAlpha: var_fillAlpha,
+      hasStroke: var_hasStroke,
+      strokeRed: var_strokeRed,
+      strokeGreen: var_strokeGreen,
+      strokeBlue: var_strokeBlue,
+      strokeAlpha: var_strokeAlpha,
+      strokeWidth: var_strokeWidth,
+      rotationDegrees: var_rotationDegrees,
+      resizable: var_resizable,
+      strokeable: var_strokeable,
+      depth: var_depth,
+      animated: var_animated,
+    );
+  }
+
+  @protected
   MotionScenePreviewView sse_decode_motion_scene_preview_view(
     SseDeserializer deserializer,
   ) {
@@ -7849,6 +8011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_height = sse_decode_u_32(deserializer);
     var var_durationMilliseconds = sse_decode_i_64(deserializer);
     var var_previewPng = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_nodes = sse_decode_list_motion_scene_node_view(deserializer);
     return MotionSceneView(
       ok: var_ok,
       code: var_code,
@@ -7860,6 +8023,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       height: var_height,
       durationMilliseconds: var_durationMilliseconds,
       previewPng: var_previewPng,
+      nodes: var_nodes,
     );
   }
 
@@ -9189,6 +9353,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_motion_scene_node_view(
+    List<MotionSceneNodeView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_scene_node_view(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_f_64_loose(
     List<double> self,
     SseSerializer serializer,
@@ -9480,6 +9656,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_motion_scene_node_view(
+    MotionSceneNodeView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.nodeId, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.width, serializer);
+    sse_encode_f_64(self.height, serializer);
+    sse_encode_f_64(self.fontSize, serializer);
+    sse_encode_f_64(self.opacity, serializer);
+    sse_encode_bool(self.hasFill, serializer);
+    sse_encode_u_32(self.fillRed, serializer);
+    sse_encode_u_32(self.fillGreen, serializer);
+    sse_encode_u_32(self.fillBlue, serializer);
+    sse_encode_u_32(self.fillAlpha, serializer);
+    sse_encode_bool(self.hasStroke, serializer);
+    sse_encode_u_32(self.strokeRed, serializer);
+    sse_encode_u_32(self.strokeGreen, serializer);
+    sse_encode_u_32(self.strokeBlue, serializer);
+    sse_encode_u_32(self.strokeAlpha, serializer);
+    sse_encode_f_64(self.strokeWidth, serializer);
+    sse_encode_f_64(self.rotationDegrees, serializer);
+    sse_encode_bool(self.resizable, serializer);
+    sse_encode_bool(self.strokeable, serializer);
+    sse_encode_u_32(self.depth, serializer);
+    sse_encode_bool(self.animated, serializer);
+  }
+
+  @protected
   void sse_encode_motion_scene_preview_view(
     MotionScenePreviewView self,
     SseSerializer serializer,
@@ -9509,6 +9718,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.height, serializer);
     sse_encode_i_64(self.durationMilliseconds, serializer);
     sse_encode_list_prim_u_8_strict(self.previewPng, serializer);
+    sse_encode_list_motion_scene_node_view(self.nodes, serializer);
   }
 
   @protected

@@ -34,12 +34,15 @@ generated EditPlan passes the same permission and domain validation. Agents
 cannot read arbitrary paths through IPC, run shell commands through it, or
 retrieve stored credentials.
 
-The in-editor assistant adds two hops, not a new trust path: an external
-DeepSeek Harness process speaks ACP to the app, and its `or mcp` server attaches
-to the same local IPC descriptor. The MCP tools expose project commands only;
-they cannot read project files directly, execute a shell, or receive the
-descriptor token. Provider credentials stay in the harness's credential service,
-and the generated `--patch` overlay contains no secret.
+The in-editor assistant adds hops, not a new trust path: an external DeepSeek
+Harness process speaks ACP to the app, and the `or` CLI it runs attaches to the
+same local IPC descriptor (the `or mcp` server is the fallback and does the
+same). Neither exposes project files over IPC: both speak project commands and queries,
+and the MCP server cannot execute a shell. The workspace `project.json` pointer
+names the descriptor but never carries its token; the CLI reads the descriptor
+itself under the user's own file permissions. Provider credentials stay in the
+harness's credential service, and the generated `--patch` overlay contains no
+secret.
 
 The assistant's installed agent workspace is content, not a new authority. The
 app packs it (`tooling/or-agent-workspace`), validates every bundle path against

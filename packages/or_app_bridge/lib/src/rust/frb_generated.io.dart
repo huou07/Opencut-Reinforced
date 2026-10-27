@@ -163,6 +163,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<MotionSceneNodeView> dco_decode_list_motion_scene_node_view(dynamic raw);
+
+  @protected
   List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
 
   @protected
@@ -242,6 +245,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MotionMaterializationView dco_decode_motion_materialization_view(dynamic raw);
+
+  @protected
+  MotionSceneNodeView dco_decode_motion_scene_node_view(dynamic raw);
 
   @protected
   MotionScenePreviewView dco_decode_motion_scene_preview_view(dynamic raw);
@@ -622,6 +628,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<MotionSceneNodeView> sse_decode_list_motion_scene_node_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
 
   @protected
@@ -719,6 +730,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MotionMaterializationView sse_decode_motion_materialization_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionSceneNodeView sse_decode_motion_scene_node_view(
     SseDeserializer deserializer,
   );
 
@@ -1178,6 +1194,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_motion_scene_node_view(
+    List<MotionSceneNodeView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_f_64_loose(
     List<double> self,
     SseSerializer serializer,
@@ -1306,6 +1328,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_motion_materialization_view(
     MotionMaterializationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_scene_node_view(
+    MotionSceneNodeView self,
     SseSerializer serializer,
   );
 

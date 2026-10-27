@@ -1,60 +1,77 @@
 # Timeline editing
 
-Scope: the exact-time timeline commands the assistant may call. Project state is
-Rust-owned; read [project-safety.md](project-safety.md) before saving or undoing.
+Scope: the exact-time timeline commands the assistant runs against the live
+project. Project state is Rust-owned; read [project-safety.md](project-safety.md)
+before saving or undoing.
 
 ## Order of operations
 
-1. `mcp__or__project_status` — confirm a project is open and read its revision.
-2. `mcp__or__timeline_overview` — read the sequence rate, tracks, clips and markers.
-3. Use only the ids and times that call returned. Never invent a `clip_id`,
+1. `tools/or project summary --attach project.json --json` — confirm a project is
+   open and read its revision and dirty state.
+2. `tools/or timeline tracks --attach project.json --json` and
+   `tools/or timeline settings --attach project.json --json` — read the track ids
+   and the sequence rate.
+3. `tools/or timeline clips --track TRACK_ID --attach project.json --json` — read
+   the clips with their start, source range and duration. Page with `--offset`
+   and `--limit` when the page reports more.
+4. Use only the ids and times those calls returned. Never invent a `clip_id`,
    `track_id` or media id.
-4. Make the smallest command the request needs.
-5. `mcp__or__timeline_overview` again when the placement matters.
-6. `mcp__or__save` unless the user asked to review first.
+5. Make the smallest command the request needs.
+6. Re-read the affected track when placement matters.
+7. `tools/or project save --attach project.json --json` unless the user asked to
+   review first.
 
 ## Time form
 
-- Times are exact `NUM/DEN` seconds or decimal seconds (`"2.5"`, `"1.25s"`).
-- Durations default to the media's full length when omitted.
-- A clip's `at` is its timeline start; `source_start` addresses the media in-point.
+- Times are exact `NUM/DEN` seconds or decimal seconds (`2.5`).
+- A clip's `--at` is its timeline start; `--source-start` addresses the media
+  in-point.
+- `insert-clip` has no default duration: pass `--duration` taken from the media
+  metadata in [media-and-import.md](media-and-import.md).
 - Do not guess a position from the prompt. The panel sends the selected clip and
   playhead as context when they exist; otherwise ask or append after the last clip.
 
 ## Commands
 
-| Tool | Use |
+Every command below takes `--attach project.json --json` plus the flags shown.
+
+| Command | Use |
 |---|---|
-| `add_track` | Add an empty `video`, `audio`, `text` or `caption` track. |
-| `insert_clip` | Place imported media at an exact time. Default mode `insert` moves later clips right; `overwrite` clears the range. |
-| `insert_text` | Add a `text` or `caption` clip on a text/caption track. |
-| `move_clip` | Move a clip in time, optionally to another track. |
-| `trim_clip` | Trim the `start` or `end` edge to an exact timeline time. |
-| `split_clip` | Split a clip at a time; the right-hand part starts there. |
-| `delete_clip` | Delete a clip; `ripple: true` closes the gap on that track. |
-| `set_frame_rate` | Set the sequence rate from `NUM/DEN`. |
-| `add_marker` | Add a labelled marker at a time. |
+| `timeline add-track --kind video\|audio\|text\|caption` | Add an empty track. |
+| `timeline insert-clip --track --media --at --source-start --duration` | Place imported media at an exact time. `--mode insert` (the default) moves later clips right; `--mode overwrite` clears the range. |
+| `timeline insert-text --track --at --duration --text` | Add a text clip; `insert-caption` adds a caption clip instead. |
+| `timeline move-clip --clip --track --at` | Move a clip in time, possibly to another track. |
+| `timeline trim-clip --clip --edge start\|end --to` | Trim one edge to an exact timeline time; `--ripple` closes the gap. |
+| `timeline split-clip --clip --at` | Split a clip; the right-hand part starts there. |
+| `timeline delete-clip --clip` | Delete a clip and leave the gap. |
+| `timeline ripple-delete-clip --clip` | Delete a clip and close the gap on that track. |
+| `timeline set-frame-rate --rate NUM/DEN` | Set the sequence rate; `clear-frame-rate` unsets it. |
+| `timeline add-marker --at --label` | Add a labelled marker. |
+
+`tools/or commands` lists every mutating verb and `tools/or queries` lists every
+read, with their schema versions, when the exact surface is not obvious.
 
 ## Track and clip rules
 
 - Visual tracks (`video`, `text`, `caption`) carry visual clips; `audio` tracks
   carry audio clips. A text clip on a video track is refused.
-- `insert_text` requires a text or caption track; create one with `add_track` if
-  the timeline has none.
+- Text and caption clips need a text or caption track; create one with `add-track`
+  when the timeline has none.
 - Clips cannot overlap on one track. `insert` makes room, `overwrite` replaces it.
-- Track order on screen is the order `timeline_overview` returns.
+- Track order on screen is the order `timeline tracks` returns.
 
 ## Examples
 
-Append a five-second clip to the end of the first video track:
+Append a clip to the end of the first video track:
 
-1. `media_list` → choose `media_id`; `timeline_overview` → read the track's last
-   clip end.
-2. `insert_clip {track_id, media_id, at: "<end>"}` (duration defaults to full).
-3. `timeline_overview`, then `save`.
+1. `media list` → choose the media id; `timeline clips --track TRACK_ID` → read
+   the track's last clip end.
+2. `timeline insert-clip --track TRACK_ID --media MEDIA_ID --at "<end>"
+   --source-start 0 --duration "<media duration>"`.
+3. `timeline clips --track TRACK_ID`, then `project save`.
 
 Trim the selected clip to end at 4 s:
 
 1. The panel context names the clip and its track.
-2. `trim_clip {clip_id, edge: "end", at: "4"}`.
+2. `timeline trim-clip --clip CLIP_ID --edge end --to 4`.
 3. Verify the duration is positive; a trim that would invert the clip is refused.

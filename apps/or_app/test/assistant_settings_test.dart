@@ -83,7 +83,10 @@ void main() {
       expect(patch, contains('provider: opencode-go'));
       expect(patch, contains('model: deepseek-v4.1-flash'));
       expect(patch, contains('- id: system-prompt'));
-      expect(patch, contains('mcp__or__project_status'));
+      expect(patch, contains('tools/or <verb> --attach project.json --json'));
+      expect(patch, contains('tools/or project summary'));
+      expect(patch, contains('mcp__or__motion_insert_scene'));
+      expect(patch, isNot(contains('Use only the mcp__or__* tools')));
       expect(patch, contains('- id: llm-pi-ai'));
       expect(patch, isNot(contains('searchProvider')));
     },

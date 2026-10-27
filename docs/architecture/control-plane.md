@@ -1,6 +1,6 @@
 # Control Plane — Commands, Queries, Persistence, Sessions
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: how project state changes, how it is read, how it is saved, and how
 clients share one live session. Every editing feature goes through this path.
@@ -85,10 +85,13 @@ running as the same user.
 ## CLI parity
 
 The CLI is a first-class semantic client, not UI automation. It supports
-headless operation and attachment through an explicit descriptor to either the
-Flutter host or a headless host, using the same command/query dispatch. Parity
-tests launch the real CLI against a real live host and compare IDs, revisions,
-undo/redo, dirty state, save and event order.
+headless operation and attachment to either the Flutter host or a headless host,
+using the same command/query dispatch. `--attach` takes the endpoint descriptor
+or a session pointer that names it in `descriptor_path` — the workspace
+`project.json` and the assistant `session-pointer.json` are both pointers — and
+re-reads the pointer on every call, so one command line survives a project switch
+without going stale. Parity tests launch the real CLI against a real live host
+and compare IDs, revisions, undo/redo, dirty state, save and event order.
 
 ## Where this lives
 

@@ -8,16 +8,19 @@ provider or network call happens here.
 
 | Input | Use |
 |---|---|
-| A source file | `mcp__or__motion_insert_scene {source_path: "work/sample.rs"}` turns the code into a highlighted illustration. |
-| A scene file | `mcp__or__motion_insert_scene {scene_path: "scenes/title.ormotion.json"}` renders an authored scene. |
+| A source file | `mcp__or__motion_insert_scene {source_path: "<absolute path>/work/sample.rs"}` turns the code into a highlighted illustration. |
+| A scene file | `mcp__or__motion_insert_scene {scene_path: "<absolute path>/scenes/title.ormotion.json"}` renders an authored scene. |
 
-Pass exactly one of `source_path` and `scene_path`. The call materialises video
-frames through the app, imports the result and inserts an ordinary clip. It is
-slow because every frame is encoded; do not start a second render while one is
-running and do not retry after a timeout without checking the timeline.
+Pass exactly one of `source_path` and `scene_path`, as absolute paths. The call
+materialises video frames through the app, imports the result and inserts an
+ordinary clip. It is the one project operation the CLI cannot do: `tools/or
+motion materialize` only writes a file. It is slow because every frame is
+encoded; do not start a second render while one is running and do not retry after
+a timeout without checking the timeline.
 
 Useful optional arguments: `title`, `at`, `track_id`, `width`, `height`,
-`frame_rate` (`30/1`), `output_path`.
+`frame_rate` (`30/1`), `output_path`. When `at` is omitted the clip is appended
+after the target track; when `track_id` is omitted the first video track is used.
 
 ## Authoring a scene
 
@@ -34,9 +37,15 @@ tools/or motion validate --file scenes/title.ormotion.json --json
 ```
 
 `tools/or motion inspect` summarises nodes and animation counts;
-`tools/or motion render` rasterises one frame to a PNG when a still is enough.
-`tools/or motion from-code` writes a scene from a source file without
-materialising it, so the agent can adjust the generated scene first.
+`tools/or motion evaluate --file ... --at 1/2` shows the resolved instructions at
+one exact time and touches neither a project nor the encoder. `tools/or motion
+render` rasterises one frame to a PNG when a still is enough. `tools/or motion
+from-code` writes a scene from a source file without materialising it, so the
+agent can adjust the generated scene first.
+
+`tools/or motion materialize --attach project.json --source PATH --output
+<absolute .mkv>` renders to disk through the live app but does not import or
+insert the result; use it only when a file is wanted, never as an insertion path.
 
 ## Envelope
 
@@ -76,8 +85,9 @@ clip only if the user asks.
 ## Reusable assets
 
 The app has an asset library (ADR 0010): reusable scenes, fragments and image
-cutouts with typed parameters for text, colour, size, opacity and rotation.
-Use the MCP tools, not the file system:
+cutouts with typed parameters for text, colour, size, opacity and rotation. This
+is the second fallback surface; the CLI asset verbs need a library folder path
+this workspace does not expose, so use the app's MCP tools, not the file system:
 
 - `mcp__or__motion_asset_list` — ids, names, categories, kinds and durations.
 - `mcp__or__motion_asset_insert` — instantiate one asset with a `values` object
@@ -87,9 +97,8 @@ Use the MCP tools, not the file system:
 - `mcp__or__motion_asset_save` — save an authored `.ormotion.json` scene as a
   reusable, classified library asset with a preview.
 
-The CLI mirrors the library for inspection when the user names a folder:
-`tools/or motion asset list --library PATH --json`. It is not needed for
-insertion, and the app owns the library the MCP tools read.
+When the user names a library folder and only wants inspection, the CLI can read
+it: `tools/or motion asset list --library PATH --json`.
 
 ## Bounds
 

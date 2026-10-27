@@ -18,9 +18,11 @@
 
 mod asset;
 mod code;
+mod edit;
 mod library;
 
 pub use asset::*;
+pub use edit::*;
 pub use library::*;
 
 pub use code::{

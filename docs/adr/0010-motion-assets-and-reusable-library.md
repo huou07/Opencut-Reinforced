@@ -1,6 +1,6 @@
 # ADR 0010 — Motion assets, parameterised scenes and a reusable library
 
-- Status: Implemented — P1–P3 core landed 2026-10-27; live MotionClip deferred
+- Status: Implemented — P1–P4 core landed 2026-10-27; live MotionClip deferred
 - Date: 2026-10-27
 
 This record is architecture intent. The asset document, parameters, classifier,
@@ -114,6 +114,7 @@ built on the existing materialise-first path first.
 | P1 | `or_motion` asset document, validation, parameter binding and scene/fragment instantiation; classifier with recorded rule; library store; `or motion asset validate/save/list/instantiate/remove`; tests | schema and bounds proven without UI; no project file change. **Landed 2026-10-27** |
 | P2 | Library browse/search/preview and parameter editing in the Motion surface; drag to timeline through materialisation; save-to-library | real macOS journey: save an asset, reopen the app, find it, adjust text and colour, insert it. **Landed 2026-10-27** |
 | P3 | Composition preview with drag from the library, fragment and image kinds, category override, MCP tools | composition served through the evaluator; export unchanged. **Landed 2026-10-27**; motion presets apply to a node in a later phase |
+| P4 | Direct editing of a composed scene: drag an object, retitle, recolour, resize text, add text, add a library object, delete — inline and in an expanded editor. One typed operation set applied in `or_motion::edit` and re-validated as an ordinary MotionScene; the bridge returns the edited scene, its first frame and the node boxes | every gesture passes `validate_scene` before the UI sees a frame; real macOS journey `scripts/ui_scenarios/motion-scene-edit.json`. **Landed 2026-10-27** |
 
 A shipped phase updates its feature document and the roadmap; only then does any
 document describe that phase as current. P1's actual behaviour, bounds and gaps

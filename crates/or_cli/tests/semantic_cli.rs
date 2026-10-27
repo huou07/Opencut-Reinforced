@@ -1141,6 +1141,61 @@ fn attached_cli_uses_live_session_and_saves_only_on_request() {
     assert!(!descriptor.exists());
 }
 
+/// The agent workspace keeps a `project.json` pointer rather than a descriptor
+/// path, so `--attach` must follow it on every call.
+#[test]
+fn attach_follows_a_session_pointer_and_picks_up_a_new_descriptor() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let descriptor = directory.0.join("session.json");
+    create_project(&path, "Pointer project");
+    let (mut server, token) = start_server(&path, &descriptor);
+
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::json!({
+            "version": 1,
+            "project_name": "Pointer project",
+            "project_path": path.display().to_string(),
+            "descriptor_path": descriptor.display().to_string(),
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let (summary, output) =
+        json_success(attach_args(&["project", "summary"], &pointer, &["--json"]));
+    assert_no_token(&output, &token);
+    assert_eq!(summary["name"], "Pointer project");
+
+    // A relative `descriptor_path` resolves beside the pointer, so a workspace
+    // keeps working when the app records the descriptor relatively.
+    let relative = directory.0.join("workspace");
+    fs::create_dir(&relative).unwrap();
+    let relative_pointer = relative.join("project.json");
+    fs::write(
+        &relative_pointer,
+        serde_json::json!({
+            "version": 1,
+            "descriptor_path": "../session.json",
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let (relative_summary, output) = json_success(attach_args(
+        &["project", "summary"],
+        &relative_pointer,
+        &["--json"],
+    ));
+    assert_no_token(&output, &token);
+    assert_eq!(relative_summary["name"], "Pointer project");
+
+    let (shutdown, _) = json_success(attach_args(&["session", "shutdown"], &pointer, &["--json"]));
+    assert_eq!(shutdown["status"], "shutdown");
+    server.wait();
+}
+
 #[test]
 fn attached_cli_and_direct_live_host_access_share_one_session() {
     let directory = TestDirectory::new();
@@ -2209,11 +2264,16 @@ fn attached_advanced_timeline_cli_dispatches_shared_commands_until_explicit_save
         host.describe().unwrap().summary.project_revision,
         ProjectRevision::new(3)
     );
-    json_success(attach_args(
+    // `--ripple` is a boolean flag: it must parse without a value.
+    let trimmed = json_success(attach_args(
         &["timeline", "trim-clip"],
         &descriptor,
-        &["--clip", clip_id, "--edge", "end", "--to", "3/4", "--json"],
-    ));
+        &[
+            "--clip", clip_id, "--edge", "end", "--to", "3/4", "--ripple", "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(trimmed["command"]["after_revision"], 4);
     json_success(attach_args(
         &["timeline", "split-clip"],
         &descriptor,

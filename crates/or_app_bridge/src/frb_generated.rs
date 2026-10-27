@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -754328948;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 376188785;
 
 // Section: executor
 
@@ -5133,6 +5133,45 @@ fn wire__crate__api__motion_library__motion_scene_compose_impl(
         },
     )
 }
+fn wire__crate__api__motion_library__motion_scene_edit_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "motion_scene_edit",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_root = <String>::sse_decode(&mut deserializer);
+            let api_scene_json = <String>::sse_decode(&mut deserializer);
+            let api_edit_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(crate::api::motion_library::motion_scene_edit(
+                        api_root,
+                        api_scene_json,
+                        api_edit_json,
+                    ))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__motion_library__motion_scene_materialize_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5556,6 +5595,18 @@ impl SseDecode for Vec<crate::api::motion_library::MotionAssetParameterView> {
     }
 }
 
+impl SseDecode for Vec<crate::api::motion_library::MotionSceneNodeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::motion_library::MotionSceneNodeView>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<f64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5949,6 +6000,64 @@ impl SseDecode for crate::api::motion::MotionMaterializationView {
     }
 }
 
+impl SseDecode for crate::api::motion_library::MotionSceneNodeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_nodeId = <String>::sse_decode(deserializer);
+        let mut var_kind = <String>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_x = <f64>::sse_decode(deserializer);
+        let mut var_y = <f64>::sse_decode(deserializer);
+        let mut var_width = <f64>::sse_decode(deserializer);
+        let mut var_height = <f64>::sse_decode(deserializer);
+        let mut var_fontSize = <f64>::sse_decode(deserializer);
+        let mut var_opacity = <f64>::sse_decode(deserializer);
+        let mut var_hasFill = <bool>::sse_decode(deserializer);
+        let mut var_fillRed = <u32>::sse_decode(deserializer);
+        let mut var_fillGreen = <u32>::sse_decode(deserializer);
+        let mut var_fillBlue = <u32>::sse_decode(deserializer);
+        let mut var_fillAlpha = <u32>::sse_decode(deserializer);
+        let mut var_hasStroke = <bool>::sse_decode(deserializer);
+        let mut var_strokeRed = <u32>::sse_decode(deserializer);
+        let mut var_strokeGreen = <u32>::sse_decode(deserializer);
+        let mut var_strokeBlue = <u32>::sse_decode(deserializer);
+        let mut var_strokeAlpha = <u32>::sse_decode(deserializer);
+        let mut var_strokeWidth = <f64>::sse_decode(deserializer);
+        let mut var_rotationDegrees = <f64>::sse_decode(deserializer);
+        let mut var_resizable = <bool>::sse_decode(deserializer);
+        let mut var_strokeable = <bool>::sse_decode(deserializer);
+        let mut var_depth = <u32>::sse_decode(deserializer);
+        let mut var_animated = <bool>::sse_decode(deserializer);
+        return crate::api::motion_library::MotionSceneNodeView {
+            node_id: var_nodeId,
+            kind: var_kind,
+            text: var_text,
+            x: var_x,
+            y: var_y,
+            width: var_width,
+            height: var_height,
+            font_size: var_fontSize,
+            opacity: var_opacity,
+            has_fill: var_hasFill,
+            fill_red: var_fillRed,
+            fill_green: var_fillGreen,
+            fill_blue: var_fillBlue,
+            fill_alpha: var_fillAlpha,
+            has_stroke: var_hasStroke,
+            stroke_red: var_strokeRed,
+            stroke_green: var_strokeGreen,
+            stroke_blue: var_strokeBlue,
+            stroke_alpha: var_strokeAlpha,
+            stroke_width: var_strokeWidth,
+            rotation_degrees: var_rotationDegrees,
+            resizable: var_resizable,
+            strokeable: var_strokeable,
+            depth: var_depth,
+            animated: var_animated,
+        };
+    }
+}
+
 impl SseDecode for crate::api::motion_library::MotionScenePreviewView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5982,6 +6091,8 @@ impl SseDecode for crate::api::motion_library::MotionSceneView {
         let mut var_height = <u32>::sse_decode(deserializer);
         let mut var_durationMilliseconds = <i64>::sse_decode(deserializer);
         let mut var_previewPng = <Vec<u8>>::sse_decode(deserializer);
+        let mut var_nodes =
+            <Vec<crate::api::motion_library::MotionSceneNodeView>>::sse_decode(deserializer);
         return crate::api::motion_library::MotionSceneView {
             ok: var_ok,
             code: var_code,
@@ -5993,6 +6104,7 @@ impl SseDecode for crate::api::motion_library::MotionSceneView {
             height: var_height,
             duration_milliseconds: var_durationMilliseconds,
             preview_png: var_previewPng,
+            nodes: var_nodes,
         };
     }
 }
@@ -7557,31 +7669,37 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__motion_library__motion_scene_materialize_impl(
+        94 => wire__crate__api__motion_library__motion_scene_edit_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__motion_library__motion_scene_new_impl(
+        95 => wire__crate__api__motion_library__motion_scene_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__motion_library__motion_scene_preview_impl(
+        96 => wire__crate__api__motion_library__motion_scene_new_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__motion_library__motion_scene_save_impl(
+        97 => wire__crate__api__motion_library__motion_scene_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__motion_library__motion_scene_save_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        99 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8039,6 +8157,50 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::motion::MotionMaterialization
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::motion_library::MotionSceneNodeView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.node_id.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+            self.x.into_into_dart().into_dart(),
+            self.y.into_into_dart().into_dart(),
+            self.width.into_into_dart().into_dart(),
+            self.height.into_into_dart().into_dart(),
+            self.font_size.into_into_dart().into_dart(),
+            self.opacity.into_into_dart().into_dart(),
+            self.has_fill.into_into_dart().into_dart(),
+            self.fill_red.into_into_dart().into_dart(),
+            self.fill_green.into_into_dart().into_dart(),
+            self.fill_blue.into_into_dart().into_dart(),
+            self.fill_alpha.into_into_dart().into_dart(),
+            self.has_stroke.into_into_dart().into_dart(),
+            self.stroke_red.into_into_dart().into_dart(),
+            self.stroke_green.into_into_dart().into_dart(),
+            self.stroke_blue.into_into_dart().into_dart(),
+            self.stroke_alpha.into_into_dart().into_dart(),
+            self.stroke_width.into_into_dart().into_dart(),
+            self.rotation_degrees.into_into_dart().into_dart(),
+            self.resizable.into_into_dart().into_dart(),
+            self.strokeable.into_into_dart().into_dart(),
+            self.depth.into_into_dart().into_dart(),
+            self.animated.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::motion_library::MotionSceneNodeView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::motion_library::MotionSceneNodeView>
+    for crate::api::motion_library::MotionSceneNodeView
+{
+    fn into_into_dart(self) -> crate::api::motion_library::MotionSceneNodeView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::motion_library::MotionScenePreviewView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -8077,6 +8239,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::motion_library::MotionSceneVi
             self.height.into_into_dart().into_dart(),
             self.duration_milliseconds.into_into_dart().into_dart(),
             self.preview_png.into_into_dart().into_dart(),
+            self.nodes.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -9348,6 +9511,16 @@ impl SseEncode for Vec<crate::api::motion_library::MotionAssetParameterView> {
     }
 }
 
+impl SseEncode for Vec<crate::api::motion_library::MotionSceneNodeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::motion_library::MotionSceneNodeView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<f64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -9626,6 +9799,37 @@ impl SseEncode for crate::api::motion::MotionMaterializationView {
     }
 }
 
+impl SseEncode for crate::api::motion_library::MotionSceneNodeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.node_id, serializer);
+        <String>::sse_encode(self.kind, serializer);
+        <String>::sse_encode(self.text, serializer);
+        <f64>::sse_encode(self.x, serializer);
+        <f64>::sse_encode(self.y, serializer);
+        <f64>::sse_encode(self.width, serializer);
+        <f64>::sse_encode(self.height, serializer);
+        <f64>::sse_encode(self.font_size, serializer);
+        <f64>::sse_encode(self.opacity, serializer);
+        <bool>::sse_encode(self.has_fill, serializer);
+        <u32>::sse_encode(self.fill_red, serializer);
+        <u32>::sse_encode(self.fill_green, serializer);
+        <u32>::sse_encode(self.fill_blue, serializer);
+        <u32>::sse_encode(self.fill_alpha, serializer);
+        <bool>::sse_encode(self.has_stroke, serializer);
+        <u32>::sse_encode(self.stroke_red, serializer);
+        <u32>::sse_encode(self.stroke_green, serializer);
+        <u32>::sse_encode(self.stroke_blue, serializer);
+        <u32>::sse_encode(self.stroke_alpha, serializer);
+        <f64>::sse_encode(self.stroke_width, serializer);
+        <f64>::sse_encode(self.rotation_degrees, serializer);
+        <bool>::sse_encode(self.resizable, serializer);
+        <bool>::sse_encode(self.strokeable, serializer);
+        <u32>::sse_encode(self.depth, serializer);
+        <bool>::sse_encode(self.animated, serializer);
+    }
+}
+
 impl SseEncode for crate::api::motion_library::MotionScenePreviewView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -9651,6 +9855,7 @@ impl SseEncode for crate::api::motion_library::MotionSceneView {
         <u32>::sse_encode(self.height, serializer);
         <i64>::sse_encode(self.duration_milliseconds, serializer);
         <Vec<u8>>::sse_encode(self.preview_png, serializer);
+        <Vec<crate::api::motion_library::MotionSceneNodeView>>::sse_encode(self.nodes, serializer);
     }
 }
 

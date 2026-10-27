@@ -43,7 +43,10 @@ timeline-referenced materialised asset is not cache-only.
 
 ## Producers and surfaces
 
-- Authored in the app's Motion panel (render facts, insert, render again).
+- Authored in the app's Motion panel (render facts, insert, render again). A
+  composed draft is editable on the canvas — move, text, colour, size, add and
+  delete — through the typed operation set in `or_motion::edit`; see
+  [motion-assets.md](motion-assets.md#editing-a-composed-scene).
 - External agents and templates are first-class producers. `or mcp` exposes
   `motion_insert_scene` to the assistant; it materialises through the app
   runtime, then imports and inserts through ordinary commands. CLI verbs are

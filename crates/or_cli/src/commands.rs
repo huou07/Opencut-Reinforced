@@ -376,7 +376,7 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
         "save" => {
             let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
             let path = required_path(&options, "--attach", json)?;
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             let saved = client.save().map_err(|error| CliError::ipc(error, json))?;
             Ok(if json {
                 json_string(serde_json::to_value(saved).expect("save response is serializable"))
@@ -559,8 +559,7 @@ fn run_motion_materialize(args: &[OsString], json: bool) -> Result<String, CliEr
         .value("--title")
         .map(|value| value.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let client =
-        LocalIpcClient::open(&descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(&descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -1804,15 +1803,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         "trim-clip" => {
             let options = Options::parse(
                 action_args,
-                &[
-                    "--project",
-                    "--attach",
-                    "--clip",
-                    "--edge",
-                    "--to",
-                    "--ripple",
-                ],
-                &[],
+                &["--project", "--attach", "--clip", "--edge", "--to"],
+                &["--ripple"],
                 json,
             )?;
             let (path, attached) = media_project_path(&options, json)?;
@@ -1832,7 +1824,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "edge": edge,
                     "timeline_time": rational_value(timeline_time),
                     // Opt-in: absent means the plain trim meaning, unchanged.
-                    "ripple": options.value("--ripple").is_some(),
+                    "ripple": options.has_flag("--ripple"),
                 }),
                 json,
             )?;
@@ -2012,7 +2004,7 @@ fn timeline_query(
     json: bool,
 ) -> Result<QueryResult, CliError> {
     if attached {
-        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let client = attached_client(path, json)?;
         let description = client
             .describe()
             .map_err(|error| CliError::ipc(error, json))?;
@@ -2054,7 +2046,7 @@ fn timeline_mutation(
     json: bool,
 ) -> Result<CommandResult, CliError> {
     if attached {
-        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let client = attached_client(path, json)?;
         let description = client
             .describe()
             .map_err(|error| CliError::ipc(error, json))?;
@@ -2439,7 +2431,7 @@ fn attached_media_list(
     limit: usize,
     json: bool,
 ) -> Result<QueryResult, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2484,8 +2476,7 @@ fn attached_media_add(
     source_path: &Path,
     json: bool,
 ) -> Result<(MediaItem, CommandResult), CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2541,8 +2532,7 @@ fn attached_media_relink(
     source_path: &Path,
     json: bool,
 ) -> Result<(MediaItem, CommandResult), CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2616,8 +2606,7 @@ fn attached_media_remove(
     id: MediaId,
     json: bool,
 ) -> Result<CommandResult, CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2884,7 +2873,7 @@ fn run_history(args: &[OsString], json: bool) -> Result<String, CliError> {
     }
     let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
     let path = required_path(&options, "--attach", json)?;
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2984,7 +2973,7 @@ fn run_session(args: &[OsString], json: bool) -> Result<CommandOutput, CliError>
         "describe" => {
             let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
             let path = required_path(&options, "--attach", json)?;
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             let description = client
                 .describe()
                 .map_err(|error| CliError::ipc(error, json))?;
@@ -3000,7 +2989,7 @@ fn run_session(args: &[OsString], json: bool) -> Result<CommandOutput, CliError>
             let options = Options::parse(&args[1..], &["--attach"], &["--discard-unsaved"], json)?;
             let path = required_path(&options, "--attach", json)?;
             let discard_unsaved = options.has_flag("--discard-unsaved");
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             client
                 .shutdown(discard_unsaved)
                 .map_err(|error| CliError::ipc(error, json))?;
@@ -3065,7 +3054,7 @@ fn headless_rename(path: &Path, name: String, json: bool) -> Result<String, CliE
 }
 
 fn attached_summary(path: &Path, json: bool) -> Result<String, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -3084,7 +3073,7 @@ fn attached_summary(path: &Path, json: bool) -> Result<String, CliError> {
 }
 
 fn attached_rename(path: &Path, name: String, json: bool) -> Result<String, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -3359,6 +3348,35 @@ fn project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliErr
             json,
             "one of --file or --attach is required",
         )),
+    }
+}
+
+/// Opens the live session behind an `--attach` operand.
+///
+/// The operand may be the endpoint descriptor itself or a session pointer the
+/// app keeps current: the workspace `project.json` and the assistant
+/// `session-pointer.json` both name the descriptor in `descriptor_path`. The
+/// pointer is followed on every call, so one command line survives a project
+/// switch and never attaches to a stale descriptor.
+fn attached_client(path: impl AsRef<Path>, json: bool) -> Result<LocalIpcClient, CliError> {
+    let path = path.as_ref();
+    let target = pointer_descriptor(path).unwrap_or_else(|| path.to_path_buf());
+    LocalIpcClient::open(target).map_err(|error| CliError::ipc(error, json))
+}
+
+/// Reads `descriptor_path` from a session pointer; `None` when `path` is not one.
+fn pointer_descriptor(path: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    let descriptor = value.get("descriptor_path")?.as_str()?;
+    if descriptor.is_empty() {
+        return None;
+    }
+    let descriptor = PathBuf::from(descriptor);
+    if descriptor.is_absolute() {
+        Some(descriptor)
+    } else {
+        Some(path.parent().unwrap_or(Path::new("")).join(descriptor))
     }
 }
 

@@ -196,7 +196,7 @@ Future<String?> resolveHarnessPath({
   return _findOnPath('dsh', env);
 }
 
-/// Locates the `or` CLI, which carries the MCP bridge.
+/// Locates the `or` CLI: the assistant's project surface and MCP bridge.
 Future<String?> resolveOrCliPath({
   required AssistantSettings settings,
   Map<String, String>? environment,
@@ -346,9 +346,9 @@ String buildHarnessPatch({
   }
   buffer.writeln('    personaSuffix: |-');
   buffer.writeln(
-    '      Read and write files only inside the session workspace. The or tools '
-    'own the project; import an external file by absolute path only when the user '
-    'names it.',
+    '      Read and write files only inside the session workspace. The running app '
+    'owns the project and the or CLI reaches it; import an external file by '
+    'absolute path only when the user names it.',
   );
   if (overlay != null) {
     buffer.writeln(overlay.patchBlock);
@@ -366,15 +366,19 @@ The open project is "$projectName". The session workspace is $workspace.
 
 The workspace AGENTS.md is the routing index for this session. Read the one guide that matches the current task; do not preload every guide.
 
-Use only the mcp__or__* tools to read or change the project. The running application owns the project; never edit a .orproj file directly. Use tools/or and tools/motion-scaffold.mjs from the workspace when a scene needs validating or scaffolding.
+Read and change the project with the or CLI in this workspace, not with the MCP tools. The CLI is the default project surface: `tools/or <verb> --attach project.json --json`. project.json is the app-written session pointer, and the CLI follows it to the running app on every call, so the app and the CLI always share one project and one history. Run every command from the workspace root. The running application owns the project; never edit a .orproj file or the project directory directly.
+
+Use an mcp__or__* tool only where the CLI cannot act:
+- mcp__or__motion_insert_scene: renders a source file or scene through the app, imports the video and inserts the clip in one call. `tools/or motion materialize` only writes a file; it cannot insert.
+- mcp__or__motion_asset_list, mcp__or__motion_asset_insert, mcp__or__motion_asset_save: read and use the app's motion library. The CLI asset verbs need a library folder path that the workspace does not expose.
+- A CLI call failed for a reason its error does not explain: report it, then use the matching MCP tool once instead of guessing.
 
 Work in this order:
-1. Call mcp__or__project_status, then mcp__or__timeline_overview or mcp__or__media_list when you need ids, tracks, clips or durations. Use the real ids and exact times those calls return.
-2. Make the smallest edit the user asked for with mcp__or__insert_clip, mcp__or__insert_text, mcp__or__move_clip, mcp__or__trim_clip, mcp__or__split_clip, mcp__or__delete_clip, mcp__or__set_frame_rate or mcp__or__add_marker.
-3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). Durations default to the media's full length when omitted.
-4. For an illustration or motion graphic, write a small source file in the workspace (or use an existing one) and call mcp__or__motion_insert_scene. It renders through the app's MotionScene renderer and inserts an ordinary, editable clip. For an authored scene, start with tools/motion-scaffold.mjs and validate it with tools/or motion validate before rendering.
-5. Reusable scenes and cutouts live in the motion library. Call mcp__or__motion_asset_list to find an asset and its parameter ids, then mcp__or__motion_asset_insert with asset_id and an optional values object (text/choice strings, numbers, colours as {red,green,blue,alpha}). It renders and inserts an ordinary clip.
-6. After finishing an edit, call mcp__or__save unless the user asked to review first.
+1. Read state first, adding `--attach project.json --json` to each call: `tools/or project summary`, `tools/or timeline tracks|settings|markers`, and `tools/or timeline clips --track TRACK_ID` or `tools/or media list` for ids, durations and exact times. Use only the ids and times those calls return.
+2. Make the smallest edit the user asked for with `tools/or media add`, `tools/or timeline add-track|insert-clip|insert-text|move-clip|trim-clip|split-clip|delete-clip|ripple-delete-clip|set-frame-rate|add-marker`, or `tools/or history undo|redo`. `tools/or commands` and `tools/or queries` list the exact verbs and their flags.
+3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). insert-clip requires --source-start and --duration; take the duration from media list.
+4. Verify the result with a CLI read, then save once with `tools/or project save --attach project.json --json` unless the user asked to review first. An attached edit is live but unsaved until that call.
+5. For an illustration or motion graphic, write a scene in the workspace, validate it with `tools/or motion validate --file ... --json`, then insert it with mcp__or__motion_insert_scene using its absolute path.
 
 Never claim a change you did not make. If a tool fails, report the error and the next concrete step. Keep replies short: say what changed, on which track, at what time.''';
 

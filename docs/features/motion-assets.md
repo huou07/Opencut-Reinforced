@@ -13,8 +13,9 @@ scene clip.
 | Surface | What it does |
 |---|---|
 | Motion tool panel | Browse/search/filter the library, import a PNG cutout, adjust parameters, set the category, delete, add to the composition, add to the timeline, save the composition to the library |
+| Composition canvas | Select (click, shift-click, marquee), drag, resize, rotate, retitle, recolour, outline, resize text, nudge, add text, add a library object, delete, and undo/redo the draft — inline or in the expanded editor |
 | Timeline | Accepts a dragged asset card and appends the materialised clip at the end of the first unlocked video track |
-| `or mcp` | `motion_asset_list`, `motion_asset_insert` for the assistant |
+| `or mcp` | `motion_asset_list`, `motion_asset_insert` for the assistant — the fallback the CLI cannot replace |
 | `or motion asset` | `validate`, `save`, `list`, `instantiate`, `remove`, `import` for people and scripts |
 
 ## Asset document
@@ -86,6 +87,69 @@ choice always wins and is stored as `explicit`.
 - `write_preview` stores a generated PNG preview; the panel shows it as the card
   thumbnail.
 
+## Editing a composed scene
+
+The composition draft is editable in place, through one closed operation set that
+is applied in Rust and re-validated before the UI sees a frame:
+
+| Operation | Effect |
+|---|---|
+| `move` | puts one node where the picture shows it, at a canvas position |
+| `move_many` | puts a whole selection at its target positions in one step |
+| `resize` | sets a shape's evaluated box (top-left corner and size) |
+| `rotate` | sets a node's evaluated rotation in degrees |
+| `set_text` | replaces a text node's literal content and drops stale highlight spans |
+| `set_fill` / `set_fill_many` | sets one node's, or a selection's, fill colour |
+| `set_stroke` | sets or clears a shape's outline (`color: null` removes it) |
+| `set_font_size` | sets a text node's type size |
+| `delete` / `delete_many` | removes nodes, their children and the animations that targeted them |
+| `add_text` | appends a new text node with a caller-chosen unique id |
+
+`motion_scene_edit` takes the scene JSON and one edit document, applies it,
+validates the result as an ordinary MotionScene and returns the edited scene, a
+still of its first frame and the node boxes that still shows — one round trip per
+gesture. `MOTION_EDIT_*` codes name every refusal (unknown node, wrong kind,
+duplicate id, unusable value, invalid result, animated size, oversized selection).
+
+### Coordinates are evaluated, not raw
+
+A node under a translation track sits at its anchor **plus** the track's value at
+time zero. Every geometry operation therefore takes the position where the picture
+shows the node and subtracts that track offset before writing the anchor: dropping
+an object where the pointer is does not make it jump by the track's first keyframe.
+`resize` divides out a scale track the same way, and refuses with
+`MOTION_EDIT_ANIMATED_SIZE` when a width or height track owns the size — a static
+value cannot win against a keyframed one, and pretending otherwise would be a
+silent no-op.
+
+### Selection, handles and history
+
+- A click selects, shift-click toggles, and a drag on empty canvas draws a marquee
+  that selects every box it touches. A group draws nothing, so it is reachable from
+  the layer list rather than the canvas.
+- Dragging any selected handle moves the whole selection in one edit; the canvas
+  shows the pending offset before the commit.
+- One selected shape gets four corner grips and a rotate grip. The grips ride the
+  rotated box, and a corner keeps the opposite corner still by shifting the centre
+  the renderer rotates around.
+- The draft keeps its own 32-step undo/redo stack. It is **not** project history:
+  undoing a scene gesture never touches the project revision, and the project's
+  undo never rewinds a draft gesture. One gesture is one step, even when it is a
+  bulk colour or a set of outlines that needs several bridge calls.
+- The motion library's list has its own multi-selection: tick rows, then add them
+  all to the composition or remove them together.
+
+The node boxes are pointer targets, not glyph measurements: a text node's box is
+an estimate of its advance at `MOTION_TEXT_HIT_ADVANCE` per character, while the
+renderer still shapes real text with `cosmic-text`. They are read from the
+evaluated first frame, so a track's translation and rotation are reflected where
+the picture puts a node, while the edit still writes the static anchor they apply
+to.
+
+A drag is committed once, on release; a text edit is debounced. Neither can write
+a scene the validator refuses, because the op set is typed and every result is
+validated before the bridge returns it.
+
 ## Rendering and composition
 
 - `or_render` decodes PNG assets to straight-alpha RGBA (16 MiB encoded,
@@ -114,14 +178,19 @@ takes `asset_id`, an optional `values` object keyed by parameter id, and the
 usual `at`, `track_id`, `width`, `height`, `frame_rate`, `output_path`. It
 instantiates, prepares the image files, materialises through the app, imports and
 inserts. `mcp__or__motion_asset_save` wraps an authored scene file into a scene
-asset with a preview. The assistant workspace guide and persona route to these
-tools.
+asset with a preview.
+
+These are fallback tools: the assistant reads and edits the project through the
+`or` CLI by default, and the library operations stay on MCP because the CLI asset
+verbs need a library folder path the session workspace does not expose. The
+workspace guide and persona route to them for that reason.
 
 ## Bounds
 
 4 MiB per asset, 64 parameters, 16 tags of 64 bytes, 128-byte name, 4096
 nodes/animations, 16-deep groups, 64 KiB per text value, 32 choices per
-parameter, 4096 entries, 16 MiB per image, 64 megapixels decoded, 200,000
+parameter, 4096 entries, 16 MiB per image, 64 megapixels decoded, 256 KiB per
+edit document, 1024 nodes per selection edit, 32 draft undo steps, 200,000
 materialised frames.
 
 ## Gaps
@@ -134,21 +203,27 @@ materialised frames.
 - Motion presets (`kind: motion`) are validated and catalogued but cannot be
   applied to a node yet.
 - Image import accepts PNG only; no JPEG/WebP and no alpha trimming.
-- No canvas manipulation (move/resize/rotate handles) in the composition
-  preview; offsets come from the drop position or the append button.
+- The canvas edits fill, outline, size, rotation and text; it has no per-corner
+  radius, no gradient, no layer reordering and no grouping inside the draft.
+- Resizing a shape whose width or height is animated is refused rather than
+  rewritten track-by-track; a rotation track is compensated instead.
+- The draft history is per session and per draft: closing the panel or clearing
+  the scene does not persist an undo stack, and two windows editing the same draft
+  are not merged.
 - No per-project library, no download/marketplace, no tag editor.
 - Previews render one frame at time 0; animation timing is not previewed.
 
 ## Where
 
 - `crates/or_motion/src/asset.rs` — document, validation, classifier, instantiation, composition
+- `crates/or_motion/src/edit.rs` — the closed scene-edit operation set and node boxes
 - `crates/or_motion/src/library.rs` — catalog, image import, previews, scene asset preparation
 - `crates/or_render/src/motion_image.rs` — PNG decode and image drawing
 - `crates/or_app_bridge/src/api/motion_library.rs` — bridge surface
 - `crates/or_cli/src/commands.rs`, `crates/or_cli/src/mcp.rs` — CLI and agent tools
-- `apps/or_app/lib/motion/` — controller, panel and drag model
+- `apps/or_app/lib/motion/` — controller, panel, canvas editor and drag model
 - `apps/or_app/lib/screens/editor_shell_preview_screen.dart` — panel and timeline drop
-- `scripts/ui_scenarios/motion-library.json` — real-app journey
+- `scripts/ui_scenarios/motion-library.json`, `scripts/ui_scenarios/motion-scene-edit.json` — real-app journeys
 
 ## Related
 

@@ -14,8 +14,9 @@ filesystem roots — so every session in this repository receives them.
 
 These are **development** skills: they carry how to change OR. The assistant's
 installed agent workspace ships a separate, narrower set for **operating** OR
-through `or mcp` (see [agent-workspace.md](../features/agent-workspace.md)); do
-not merge the two catalogues.
+through the `or` CLI, with the `or mcp` tools as the fallback (see
+[agent-workspace.md](../features/agent-workspace.md)); do not merge the two
+catalogues.
 
 | Skill | Contract it carries |
 |---|---|

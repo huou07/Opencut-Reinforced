@@ -3,8 +3,9 @@
 Last reviewed: 2026-10-27
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
-ACP, the MCP tools that edit the open project, and the states the panel must
-show. Architecture rationale is [ADR 0009](../adr/0009-assistant-panel-and-harness-boundary.md).
+ACP, the `or` CLI surface and MCP fallback that edit the open project, and the
+states the panel must show. Architecture rationale is
+[ADR 0009](../adr/0009-assistant-panel-and-harness-boundary.md).
 
 ## Surface
 
@@ -39,30 +40,39 @@ show. Architecture rationale is [ADR 0009](../adr/0009-assistant-panel-and-harne
 
 ## Editing
 
-The harness receives one MCP server named `or`. Its tools appear to the model as
-`mcp__or__<tool>` and every call attaches to the running app over local IPC:
+The agent's default editing surface is the `or` CLI bound to this build
+(`tools/or` in the workspace). Every command attaches to the running app through
+the workspace `project.json` pointer; the CLI follows its `descriptor_path` on
+each call, so the app, the CLI and the assistant share one session, one project
+and one history. The persona and the workspace guides route reads and mutations
+through the CLI and treat the MCP tools as a fallback.
 
-| Tool | Effect |
-|---|---|
-| `project_status` | project name, revision, dirty state, project file |
-| `timeline_overview` | frame rate, tracks with clips, markers |
-| `media_list` | media ids, sources, duration metadata (paged) |
-| `save` | explicit project save |
-| `undo`, `redo` | canonical history |
-| `add_media` | import a local file into the media library |
-| `add_track` | add a video/audio/text/caption track |
-| `insert_clip` | place media at an exact time; duration defaults to the media length |
-| `insert_text` | add a text or caption clip |
-| `move_clip`, `trim_clip`, `split_clip`, `delete_clip` | ordinary timeline edits; delete can ripple |
-| `set_frame_rate`, `add_marker` | sequence and marker edits |
-| `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
-| `motion_asset_list` | page the reusable motion library with ids, categories and durations |
-| `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
-| `motion_asset_save` | save an authored scene file as a classified library asset with a preview |
+The harness still receives one MCP server named `or`; its tools appear to the
+model as `mcp__or__<tool>` and attach over the same local IPC. It exists for the
+operations the CLI cannot express — motion scene insertion, the motion asset
+library, and a CLI failure its error does not explain:
 
-Times accept exact `NUM/DEN` seconds or decimal seconds. The tool set is the
-agent's whole editing surface: it cannot write project files directly, read
-arbitrary paths through IPC, or run shell commands through the MCP server.
+| CLI verb (`tools/or ...`) | MCP fallback | Effect |
+|---|---|---|
+| `project summary` | `project_status` | project name, revision, dirty state, project file |
+| `timeline tracks`, `timeline settings`, `timeline clips`, `timeline markers` | `timeline_overview` | frame rate, tracks with clips, markers (clips page by track) |
+| `media list` | `media_list` | media ids, sources, duration metadata (paged) |
+| `project save` | `save` | explicit project save |
+| `history undo`, `history redo` | `undo`, `redo` | canonical history |
+| `media add` | `add_media` | import a local file into the media library |
+| `timeline add-track` | `add_track` | add a video/audio/text/caption track |
+| `timeline insert-clip` | `insert_clip` | place media at an exact time; the CLI requires the source range and duration |
+| `timeline insert-text`, `timeline insert-caption` | `insert_text` | add a text or caption clip |
+| `timeline move-clip`, `trim-clip`, `split-clip`, `delete-clip`, `ripple-delete-clip` | `move_clip`, `trim_clip`, `split_clip`, `delete_clip` | ordinary timeline edits; delete can ripple |
+| `timeline set-frame-rate`, `timeline add-marker` | `set_frame_rate`, `add_marker` | sequence and marker edits |
+| — (renders a file only) | `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
+| — (needs a library path) | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
+| — (needs a library path) | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
+| `motion asset save` (needs a library path) | `motion_asset_save` | save an authored scene file as a classified library asset with a preview |
+
+Times accept exact `NUM/DEN` seconds or decimal seconds. Neither surface can
+write project files directly, read arbitrary paths through IPC, or run shell
+commands through the IPC boundary.
 
 ## MotionScene from chat
 
@@ -71,9 +81,11 @@ source file in the workspace, the app materialises it with the deterministic
 MotionScene renderer and its own FFmpeg encoder, then the same call imports the
 video and inserts an ordinary, editable clip. No provider or network call
 happens during rendering. The clip behaves like any other media clip: trim,
-split, move, export, and save/reopen. The workspace Motion guide also documents
-`tools/or motion validate|inspect|from-code` and the scene scaffold, so an agent
-can check a scene before paying for a full materialisation.
+split, move, export, and save/reopen. The workspace Motion guide documents
+`tools/or motion validate|inspect|evaluate|from-code|render` and the scene
+scaffold, so an agent checks a scene with the CLI before paying for a full
+materialisation; insertion stays on the MCP tool because `or motion materialize`
+only writes a file.
 
 ## Transcript and permissions
 
@@ -98,8 +110,11 @@ them. Android has no assistant: the desktop process boundary is explicit.
 ## Bounds
 
 - Prompt text is capped at 16,000 characters; transcripts are in-memory only.
-- MCP pages are bounded (100 items); the agent must page rather than load an
-  unbounded timeline.
+- CLI and MCP pages are bounded (100 items); the agent must page rather than load
+  an unbounded timeline.
+- `--attach` accepts the endpoint descriptor or a session pointer such as the
+  workspace `project.json`; a pointer is re-read on every call, so a project
+  switch never leaves a stale descriptor behind.
 - Materialisation keeps the MotionScene frame bound (200,000 frames) and writes
   one persistent file; the caller chooses or inherits a project-adjacent
   `generated/` path.
@@ -115,13 +130,16 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - The agent can call `undo`, but there is no grouped "revert this turn".
 - No in-panel model catalog editing; it reflects the harness configuration.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
+- The MCP server still exposes every CLI verb as a fallback; a smaller fallback
+  surface (motion insertion and the library only) is not yet enforced.
 
 ## Where
 
 - `apps/or_app/lib/assistant/` — ACP client, controller, settings, panel
 - `apps/or_app/lib/assistant/agent_workspace.dart` — installed workspace and its runtime files
 - `apps/or_app/lib/screens/editor_shell_preview_screen.dart` — right-rail tabs
-- `crates/or_cli/src/mcp.rs` — `or mcp` tools
+- `crates/or_cli/src/commands.rs` — CLI verbs and session-pointer attach
+- `crates/or_cli/src/mcp.rs` — `or mcp` fallback tools
 - `crates/or_core/src/application.rs` — `MotionMaterialize` runtime request
 - `crates/or_app_bridge/src/preview.rs` — materialisation handler
 

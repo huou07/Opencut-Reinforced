@@ -8,8 +8,8 @@ import 'motion.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `asset_failure`, `asset_view`, `entry_view`, `library_view`, `load_view`, `materialize_failure`, `open_library`, `parameter_view`, `parse_category`, `parse_scene`, `parse_values`, `render_preview`, `scene_failure`, `scene_view`, `scratch_directory`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `asset_failure`, `asset_view`, `entry_view`, `library_view`, `load_view`, `materialize_failure`, `node_kind_name`, `node_views`, `open_library`, `parameter_view`, `parse_category`, `parse_scene`, `parse_values`, `render_preview`, `scene_failure`, `scene_view`, `scratch_directory`, `sha256_hex`, `write_provenance`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<MotionAssetLibraryView> motionLibrary({required String root}) =>
     RustLib.instance.api.crateApiMotionLibraryMotionLibrary(root: root);
@@ -142,6 +142,21 @@ Future<MotionScenePreviewView> motionScenePreview({
   root: root,
   sceneJson: sceneJson,
   atMilliseconds: atMilliseconds,
+);
+
+/// Applies one GUI edit (move, retitle, recolour, add text, delete) to a scene.
+///
+/// The operation set is closed and every result is validated before it is returned,
+/// so a gesture can never hand the timeline a scene the renderer refuses. The reply
+/// carries the edited scene, its preview and the fresh node boxes in one call.
+Future<MotionSceneView> motionSceneEdit({
+  required String root,
+  required String sceneJson,
+  required String editJson,
+}) => RustLib.instance.api.crateApiMotionLibraryMotionSceneEdit(
+  root: root,
+  sceneJson: sceneJson,
+  editJson: editJson,
 );
 
 /// Materialises a composed scene into a video file.
@@ -457,6 +472,142 @@ class MotionAssetView {
           parameters == other.parameters;
 }
 
+/// One node of a composed scene, as the editor draws it at time zero.
+///
+/// The box is a pointer target, not glyph measurement: text width is an estimate at
+/// [`or_motion::MOTION_TEXT_HIT_ADVANCE`] per character. Edits still address the node
+/// by id and are validated in Rust.
+class MotionSceneNodeView {
+  final String nodeId;
+
+  /// `group`, `text`, `rectangle`, `ellipse`, `arrow` or `image`.
+  final String kind;
+
+  /// The literal string of a text node, empty otherwise.
+  final String text;
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+  final double fontSize;
+  final double opacity;
+  final bool hasFill;
+  final int fillRed;
+  final int fillGreen;
+  final int fillBlue;
+  final int fillAlpha;
+
+  /// Whether the node draws an outline, and what it looks like.
+  final bool hasStroke;
+  final int strokeRed;
+  final int strokeGreen;
+  final int strokeBlue;
+  final int strokeAlpha;
+  final double strokeWidth;
+
+  /// Degrees counter-clockwise, as the first frame evaluates it.
+  final double rotationDegrees;
+
+  /// Whether the editor can drag a resize handle on this node.
+  final bool resizable;
+
+  /// Whether the editor can offer an outline for this node.
+  final bool strokeable;
+
+  /// Nesting depth, 0 for a top-level node.
+  final int depth;
+
+  /// Whether an animation targets this node.
+  final bool animated;
+
+  const MotionSceneNodeView({
+    required this.nodeId,
+    required this.kind,
+    required this.text,
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.fontSize,
+    required this.opacity,
+    required this.hasFill,
+    required this.fillRed,
+    required this.fillGreen,
+    required this.fillBlue,
+    required this.fillAlpha,
+    required this.hasStroke,
+    required this.strokeRed,
+    required this.strokeGreen,
+    required this.strokeBlue,
+    required this.strokeAlpha,
+    required this.strokeWidth,
+    required this.rotationDegrees,
+    required this.resizable,
+    required this.strokeable,
+    required this.depth,
+    required this.animated,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      kind.hashCode ^
+      text.hashCode ^
+      x.hashCode ^
+      y.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      fontSize.hashCode ^
+      opacity.hashCode ^
+      hasFill.hashCode ^
+      fillRed.hashCode ^
+      fillGreen.hashCode ^
+      fillBlue.hashCode ^
+      fillAlpha.hashCode ^
+      hasStroke.hashCode ^
+      strokeRed.hashCode ^
+      strokeGreen.hashCode ^
+      strokeBlue.hashCode ^
+      strokeAlpha.hashCode ^
+      strokeWidth.hashCode ^
+      rotationDegrees.hashCode ^
+      resizable.hashCode ^
+      strokeable.hashCode ^
+      depth.hashCode ^
+      animated.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MotionSceneNodeView &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          kind == other.kind &&
+          text == other.text &&
+          x == other.x &&
+          y == other.y &&
+          width == other.width &&
+          height == other.height &&
+          fontSize == other.fontSize &&
+          opacity == other.opacity &&
+          hasFill == other.hasFill &&
+          fillRed == other.fillRed &&
+          fillGreen == other.fillGreen &&
+          fillBlue == other.fillBlue &&
+          fillAlpha == other.fillAlpha &&
+          hasStroke == other.hasStroke &&
+          strokeRed == other.strokeRed &&
+          strokeGreen == other.strokeGreen &&
+          strokeBlue == other.strokeBlue &&
+          strokeAlpha == other.strokeAlpha &&
+          strokeWidth == other.strokeWidth &&
+          rotationDegrees == other.rotationDegrees &&
+          resizable == other.resizable &&
+          strokeable == other.strokeable &&
+          depth == other.depth &&
+          animated == other.animated;
+}
+
 /// A rendered still.
 class MotionScenePreviewView {
   final bool ok;
@@ -497,7 +648,8 @@ class MotionScenePreviewView {
           height == other.height;
 }
 
-/// A composed or instantiated scene, with a PNG preview of its first frame.
+/// A composed or instantiated scene, with a PNG preview of its first frame and the
+/// node boxes that preview shows.
 class MotionSceneView {
   final bool ok;
   final String code;
@@ -509,6 +661,7 @@ class MotionSceneView {
   final int height;
   final PlatformInt64 durationMilliseconds;
   final Uint8List previewPng;
+  final List<MotionSceneNodeView> nodes;
 
   const MotionSceneView({
     required this.ok,
@@ -521,6 +674,7 @@ class MotionSceneView {
     required this.height,
     required this.durationMilliseconds,
     required this.previewPng,
+    required this.nodes,
   });
 
   @override
@@ -534,7 +688,8 @@ class MotionSceneView {
       width.hashCode ^
       height.hashCode ^
       durationMilliseconds.hashCode ^
-      previewPng.hashCode;
+      previewPng.hashCode ^
+      nodes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -550,5 +705,6 @@ class MotionSceneView {
           width == other.width &&
           height == other.height &&
           durationMilliseconds == other.durationMilliseconds &&
-          previewPng == other.previewPng;
+          previewPng == other.previewPng &&
+          nodes == other.nodes;
 }
