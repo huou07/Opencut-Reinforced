@@ -1031,6 +1031,10 @@ abstract interface class ProjectGateway {
     ProjectSessionHandle session,
     String modelId,
   );
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  );
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
     String modelId,
@@ -1211,6 +1215,16 @@ abstract interface class ProjectGateway {
     ProjectReadModel current, {
     required String clipId,
     required ProjectRationalTime timelineTime,
+  });
+  /// Lowers one music clip under every clip on [voiceTrackId] as one command
+  /// and one undo entry. The clip is split at voice boundaries in Rust.
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
   });
   Future<ProjectActionResult> rippleDeleteTimelineClip(
     ProjectSessionHandle session,

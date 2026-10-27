@@ -3001,62 +3001,160 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('No local speech model catalog is available.');
       return null;
     }
-    var choice = models.firstWhere(
+    var catalog = [...models];
+    var choice = catalog.firstWhere(
       (candidate) => candidate.active,
-      orElse: () => models.first,
+      orElse: () => catalog.first,
     );
+    var errorText = '';
     final selected = await showDialog<ProjectTranscriptionModel>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Speech model'),
-          content: SizedBox(
-            width: 560,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Choose the local model used for captions. Larger models take '
-                  'longer to download and run, and are more accurate — '
-                  'especially for Vietnamese.',
-                ),
-                const SizedBox(height: 12),
-                for (final model in models)
-                  ListTile(
-                    key: ValueKey('speech-model-${model.modelId}'),
-                    selected: model.modelId == choice.modelId,
-                    leading: Icon(
-                      model.modelId == choice.modelId
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_unchecked,
-                      size: 20,
-                    ),
-                    title: Text(
-                      model.label.isEmpty ? model.modelId : model.label,
-                    ),
-                    subtitle: Text(
-                      '${_speechModelSize(model)} · '
-                      '${model.installed ? 'Installed' : 'Download needed'} · '
-                      '${model.license}',
-                    ),
-                    onTap: () =>
-                        setDialogState(() => choice = model),
+        builder: (dialogContext, setDialogState) {
+          final installed = catalog.where((model) => model.installed).toList();
+          final installedBytes = installed.fold<BigInt>(
+            BigInt.zero,
+            (sum, model) => sum + model.sizeBytes,
+          );
+          return AlertDialog(
+            title: const Text('Speech model'),
+            content: SizedBox(
+              width: 600,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Choose the local model used for captions. Larger models take '
+                    'longer to download and run, and are more accurate — '
+                    'especially for Vietnamese. '
+                    '${installed.isEmpty ? 'No model is installed yet.' : 'Installed: ${_speechModelBytes(installedBytes)} across ${installed.length} ${installed.length == 1 ? 'model' : 'models'}.'}',
                   ),
-              ],
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final model in catalog)
+                            ListTile(
+                              key: ValueKey('speech-model-${model.modelId}'),
+                              selected: model.modelId == choice.modelId,
+                              leading: Icon(
+                                model.modelId == choice.modelId
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                size: 20,
+                              ),
+                              title: Text(
+                                model.label.isEmpty ? model.modelId : model.label,
+                              ),
+                              subtitle: Text(
+                                '${_speechModelSize(model)} · '
+                                '${model.installed ? 'Installed' : 'Download needed'} · '
+                                '${model.license}',
+                              ),
+                              trailing: model.installed
+                                  ? IconButton(
+                                      key: ValueKey(
+                                        'speech-model-remove-${model.modelId}',
+                                      ),
+                                      tooltip: 'Remove downloaded model',
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                      ),
+                                      onPressed: () async {
+                                        final confirmed = await showDialog<bool>(
+                                          context: dialogContext,
+                                          builder: (confirmContext) => AlertDialog(
+                                            title: const Text('Remove speech model?'),
+                                            content: Text(
+                                              'Remove ${model.label.isEmpty ? model.modelId : model.label} '
+                                              'and free ${_speechModelSize(model)}? '
+                                              'Captions that need it will offer the '
+                                              'download again.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(confirmContext).pop(false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.of(confirmContext).pop(true),
+                                                child: const Text('Remove'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true) return;
+                                        try {
+                                          await widget.projectGateway
+                                              .removeTranscriptionModel(
+                                                session,
+                                                model.modelId,
+                                              );
+                                          final refreshed = await widget
+                                              .projectGateway
+                                              .transcriptionModels(session);
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(() {
+                                            catalog = refreshed;
+                                            choice = catalog.firstWhere(
+                                              (candidate) => candidate.active,
+                                              orElse: () => catalog.first,
+                                            );
+                                            errorText = '';
+                                          });
+                                        } on ProjectGatewayException catch (error) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText = error.message,
+                                          );
+                                        } catch (_) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText =
+                                                'The speech model could not be removed.',
+                                          );
+                                        }
+                                      },
+                                    )
+                                  : null,
+                              onTap: () => setDialogState(() => choice = model),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (errorText.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      errorText,
+                      key: const ValueKey('speech-model-error'),
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(choice),
-              child: const Text('Use model'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(choice),
+                child: const Text('Use model'),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (selected == null) return null;
@@ -3071,12 +3169,15 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  String _speechModelSize(ProjectTranscriptionModel model) {
-    final mib = (model.sizeBytes ~/ BigInt.from(1024 * 1024)).toInt();
+  String _speechModelBytes(BigInt bytes) {
+    final mib = (bytes ~/ BigInt.from(1024 * 1024)).toInt();
     return mib >= 1024
         ? '${(mib / 1024).toStringAsFixed(1)} GiB'
         : '$mib MiB';
   }
+
+  String _speechModelSize(ProjectTranscriptionModel model) =>
+      _speechModelBytes(model.sizeBytes);
 
   /// Lets the user switch or install a speech model without starting a
   /// transcription first.

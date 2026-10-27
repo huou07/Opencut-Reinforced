@@ -67,6 +67,7 @@ library, and a CLI failure its error does not explain:
 | `timeline set-frame-rate`, `timeline add-marker` | `set_frame_rate`, `add_marker` | sequence and marker edits |
 | `captions transcribe` | `captions_transcribe` | local multilingual transcript proposal; review before applying |
 | `timeline import-captions` | — | apply a reviewed SRT/WebVTT file as a new caption track |
+| `timeline duck-clip` | `duck_music` | lower a music clip under a voice track as one undoable command |
 | — (renders a file only) | `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
 | — (needs a library path) | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
 | — (needs a library path) | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |

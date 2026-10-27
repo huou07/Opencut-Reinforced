@@ -163,6 +163,29 @@ impl TranscriptionService {
             .collect()
     }
 
+    /// Removes one installed artifact and falls back to the catalog default
+    /// when the removed model was active. The model store lock makes this safe
+    /// against a concurrent download or another project host.
+    pub fn remove_model(
+        &self,
+        model_id: &str,
+    ) -> Result<TranscriptionModelInfo, TranscriptionServiceError> {
+        let manifest =
+            or_ai::whisper_model(model_id).ok_or(TranscriptionServiceError::ModelNotFound)?;
+        if !or_ai::model_artifact_present(&self.model_root, &manifest) {
+            return Err(TranscriptionServiceError::ModelNotInstalled);
+        }
+        or_ai::remove_installed_model(&self.model_root, &manifest)
+            .map_err(|_| TranscriptionServiceError::StorageUnavailable)?;
+        if *lock(&self.active_model) == manifest.model_id {
+            let default = or_ai::default_whisper_model();
+            write_active_model(&self.model_root, &default.model_id)
+                .map_err(|_| TranscriptionServiceError::PreferenceUnavailable)?;
+            *lock(&self.active_model) = default.model_id;
+        }
+        Ok(self.model_info())
+    }
+
     /// Selects the model later transcriptions use and persists the choice.
     pub fn select_model(
         &self,
@@ -341,6 +364,7 @@ pub enum TranscriptionServiceError {
     ModelAlreadyInstalled,
     ModelUnavailable,
     ModelNotFound,
+    ModelNotInstalled,
     ProviderUnavailable,
     StorageUnavailable,
     PreferenceUnavailable,
@@ -360,6 +384,7 @@ impl std::fmt::Display for TranscriptionServiceError {
             Self::ModelAlreadyInstalled => "The transcription model is already installed.",
             Self::ModelUnavailable => "Download the selected local transcription model first.",
             Self::ModelNotFound => "The selected transcription model is not in the catalog.",
+            Self::ModelNotInstalled => "That transcription model is not installed.",
             Self::PreferenceUnavailable => "The selected transcription model could not be saved.",
             Self::ProviderUnavailable => "The packaged local transcription runtime is unavailable.",
             Self::StorageUnavailable => "The model could not be safely installed.",
@@ -1027,6 +1052,21 @@ mod tests {
         assert!(matches!(
             service.select_model("not-a-model"),
             Err(TranscriptionServiceError::ModelNotFound)
+        ));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn removing_an_uninstalled_or_unknown_model_is_refused() {
+        let root = temporary_model_root();
+        let service = TranscriptionService::for_test(root.clone());
+        assert!(matches!(
+            service.remove_model("not-a-model"),
+            Err(TranscriptionServiceError::ModelNotFound)
+        ));
+        assert!(matches!(
+            service.remove_model("whisper-base-multilingual"),
+            Err(TranscriptionServiceError::ModelNotInstalled)
         ));
         fs::remove_dir_all(root).ok();
     }

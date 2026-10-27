@@ -55,9 +55,9 @@ justification and review.
   availability, command IDs, panel, inspector sections, shortcut metadata); do
   not build a plugin framework for it.
 - Every visible action must work or be visibly unavailable — no silent dead ends.
-- A production batch (voiceover, music + ducking) is several validated commands,
-  so it is several undo steps; the notice says so. Grouping a batch into one
-  undo entry is not implemented yet.
+- A voiceover batch is several validated commands (one per imported line and one
+  caption import), so it is several undo steps; the notice says what was added.
+  Music ducking is one `timeline.clip.duck` command and therefore one undo step.
 
 ## Where
 

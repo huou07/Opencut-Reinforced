@@ -138,6 +138,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.clip.roll",
             "timeline.clip.slide",
             "timeline.clip.split",
+            "timeline.clip.duck",
             "timeline.clip.ripple_delete",
             "timeline.marker.add",
             "timeline.marker.move",

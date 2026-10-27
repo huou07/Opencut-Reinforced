@@ -797,6 +797,14 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) async => _transcriptionModel(
+    await _host(session).removeTranscriptionModel(modelId: modelId),
+  );
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
     String modelId,
@@ -1192,6 +1200,26 @@ class RustProjectGateway implements ProjectGateway {
       clipId: clipId,
       timelineTimeNumerator: timelineTime.numerator.toInt(),
       timelineTimeDenominator: timelineTime.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) async => _action(
+    await _host(session).duckTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      voiceTrackId: voiceTrackId,
+      duckMillidecibels: duckDecibels * 1000,
     ),
   );
 

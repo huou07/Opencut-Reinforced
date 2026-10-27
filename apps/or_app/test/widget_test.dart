@@ -7264,6 +7264,12 @@ class _FakeProjectGateway implements ProjectGateway {
   ) => transcriptionModel(session);
 
   @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => transcriptionModel(session);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
     String modelId,
@@ -7834,6 +7840,16 @@ class _FakeProjectGateway implements ProjectGateway {
     }
     return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
   }
+
+  @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) async => const ProjectActionResult(succeeded: true);
 
   @override
   Future<ProjectActionResult> rippleDeleteTimelineClip(

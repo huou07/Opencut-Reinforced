@@ -26,12 +26,12 @@ tagged BT.709 limited-range SDR. HDR remains deferred.
 
 ## Audio
 
-Automatic ducking is not a project field yet. The app implements it with
-ordinary split and gain commands: a music clip is split at every overlapping
-voice boundary and the overlapping segments are set to the chosen duck level
-(−12 dB by default). The result is editable clip state, but it costs one undo
-step per split and per changed segment; a single grouped duck command remains
-future work.
+Automatic ducking is not a project field yet. `timeline.clip.duck` computes the
+edit in Rust: the music clip is split at every overlapping voice boundary and the
+overlapping segments are set to the chosen duck level (−12 dB by default). It is
+one revision, one history entry and one undo step even when it creates many
+segments; the result is ordinary editable clip gain. The app uses the same
+command from its music dialog, and the CLI exposes it as `timeline duck-clip`.
 
 Clip gain and mute are canonical clip state; gain, pan, fades and later DSP belong
 to the audio engine (`or_audio`), never to Flutter widgets. Desktop audio output

@@ -192,7 +192,7 @@ class _MusicDialogState extends State<MusicDialog> {
         voiceTrackId: voiceTrack,
         duckDecibels: -12,
       );
-      ducked = result.changedCount > 0;
+      ducked = result.changed;
       undoSteps = result.undoSteps;
     }
     return MusicApplied(

@@ -30,6 +30,7 @@ const TIMELINE_CLIP_UPDATE_ID: &str = "timeline.clip.update";
 const TIMELINE_CLIP_DELETE_ID: &str = "timeline.clip.delete";
 const TIMELINE_CLIP_TRIM_ID: &str = "timeline.clip.trim";
 const TIMELINE_CLIP_SPLIT_ID: &str = "timeline.clip.split";
+const TIMELINE_CLIP_DUCK_ID: &str = "timeline.clip.duck";
 const TIMELINE_CLIP_SLIP_ID: &str = "timeline.clip.slip";
 const TIMELINE_CLIP_ROLL_ID: &str = "timeline.clip.roll";
 const TIMELINE_CLIP_SLIDE_ID: &str = "timeline.clip.slide";
@@ -66,7 +67,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-const COMMANDS: [CommandDescriptor; 28] = [
+const COMMANDS: [CommandDescriptor; 29] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -195,6 +196,12 @@ const COMMANDS: [CommandDescriptor; 28] = [
     },
     CommandDescriptor {
         id: TIMELINE_CLIP_SPLIT_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_CLIP_DUCK_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -755,6 +762,31 @@ impl CommandEnvelope {
                 "clip_id": clip_id,
                 "new_clip_id": new_clip_id,
                 "timeline_time": timeline_time,
+            }),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn duck_timeline_clip(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        track_id: TrackId,
+        clip_id: ClipId,
+        voice_track_id: TrackId,
+        duck_millidecibels: i32,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_CLIP_DUCK_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({
+                "track_id": track_id,
+                "clip_id": clip_id,
+                "voice_track_id": voice_track_id,
+                "duck_millidecibels": duck_millidecibels,
             }),
         }
     }
@@ -2098,6 +2130,8 @@ pub enum OperationErrorCode {
     TimelineLimitExceeded,
     TimelineMarkerIdAlreadyExists,
     TimelineMarkerNotFound,
+    /// No voice clip on the selected track overlaps the music clip.
+    TimelineNothingToDuck,
 }
 
 /// A safe structured operation error with a stable code and optional context.
@@ -2172,6 +2206,9 @@ impl fmt::Display for OperationError {
                 "timeline clip ID already exists in the project"
             }
             OperationErrorCode::TimelineClipNotFound => "timeline clip was not found",
+            OperationErrorCode::TimelineNothingToDuck => {
+                "no voice clip overlaps the music clip"
+            }
             OperationErrorCode::TimelineMediaIncompatible => {
                 "media has no stream compatible with the timeline track"
             }
@@ -2848,6 +2885,7 @@ impl ProjectSession {
             TIMELINE_CLIP_DELETE_ID => self.apply_timeline_clip_delete(envelope.arguments)?,
             TIMELINE_CLIP_TRIM_ID => self.apply_timeline_clip_trim(envelope.arguments)?,
             TIMELINE_CLIP_SPLIT_ID => self.apply_timeline_clip_split(envelope.arguments)?,
+            TIMELINE_CLIP_DUCK_ID => self.apply_timeline_clip_duck(envelope.arguments)?,
             TIMELINE_CLIP_SLIP_ID => self.apply_timeline_clip_slip(envelope.arguments)?,
             TIMELINE_CLIP_ROLL_ID => self.apply_timeline_clip_roll(envelope.arguments)?,
             TIMELINE_CLIP_SLIDE_ID => self.apply_timeline_clip_slide(envelope.arguments)?,
@@ -4153,6 +4191,153 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    /// Lowers one audio clip wherever another track's voice clips overlap it.
+    ///
+    /// The project model has static clip gain, so the edit is expressed as a
+    /// whole-track replacement: the music clip is split at every overlapping
+    /// voice boundary and the overlapping segments get the duck gain. Reusing
+    /// `TimelineClipsOverwritten` keeps this one history entry and one undo step,
+    /// unlike a client issuing split and update commands one by one.
+    fn apply_timeline_clip_duck(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineClipDuckArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if !(-96_000..=-1_000).contains(&arguments.duck_millidecibels) {
+            return Err(OperationError::new(OperationErrorCode::InvalidArguments));
+        }
+        let Some((track_index, index)) = find_timeline_clip(&self.project, arguments.clip_id)
+        else {
+            return Err(OperationError::new(OperationErrorCode::TimelineClipNotFound));
+        };
+        let track = &self.project.timeline().tracks()[track_index];
+        let track_id = track.id();
+        if track_id != arguments.track_id {
+            return Err(OperationError::new(OperationErrorCode::TimelineClipNotFound));
+        }
+        if track.state().locked() {
+            return Err(OperationError::new(OperationErrorCode::TimelineTrackLocked));
+        }
+        if track.kind() != TrackKind::Audio {
+            return Err(OperationError::new(OperationErrorCode::TimelineMediaIncompatible));
+        }
+        let Some(voice_index) =
+            find_timeline_track_index(&self.project, arguments.voice_track_id)
+        else {
+            return Err(OperationError::new(OperationErrorCode::TimelineTrackNotFound));
+        };
+        if self.project.timeline().tracks()[voice_index].kind() != TrackKind::Audio {
+            return Err(OperationError::new(OperationErrorCode::TimelineMediaIncompatible));
+        }
+        let before = track_states(&self.project, track_index)?;
+        let music = before
+            .get(index)
+            .cloned()
+            .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineClipNotFound))?;
+        let music_end = timeline_clip_end(&music)?;
+        let voice_states = track_states(&self.project, voice_index)?;
+        let mut intervals: Vec<(RationalTime, RationalTime)> = Vec::new();
+        for voice in &voice_states {
+            let voice_end = timeline_clip_end(voice)?;
+            let start = voice.timeline_start.max(music.timeline_start);
+            let end = voice_end.min(music_end);
+            if start < end {
+                intervals.push((start, end));
+            }
+        }
+        if intervals.is_empty() {
+            return Err(OperationError::new(OperationErrorCode::TimelineNothingToDuck));
+        }
+        intervals.sort_by(|left, right| left.0.cmp(&right.0));
+        let mut merged: Vec<(RationalTime, RationalTime)> = Vec::new();
+        for (start, end) in intervals {
+            if let Some(last) = merged.last_mut() {
+                if start <= last.1 {
+                    if end > last.1 {
+                        last.1 = end;
+                    }
+                    continue;
+                }
+            }
+            merged.push((start, end));
+        }
+        let mut boundaries: Vec<RationalTime> = Vec::new();
+        for (start, end) in &merged {
+            if *start > music.timeline_start && *start < music_end {
+                boundaries.push(*start);
+            }
+            if *end > music.timeline_start && *end < music_end {
+                boundaries.push(*end);
+            }
+        }
+        boundaries.sort();
+        boundaries.dedup();
+        let mut segments: Vec<TimelineClipState> = Vec::new();
+        let mut current = music.clone();
+        for boundary in boundaries {
+            let left_duration = boundary
+                .checked_sub(current.timeline_start)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            let right_duration = current
+                .timeline_duration
+                .checked_sub(left_duration)
+                .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+            let (left_content, right_content) =
+                split_content(&current.content, left_duration, right_duration)?;
+            segments.push(TimelineClipState {
+                timeline_duration: left_duration,
+                content: left_content,
+                ..current.clone()
+            });
+            current = TimelineClipState {
+                clip_id: ClipId::generate(),
+                timeline_start: boundary,
+                timeline_duration: right_duration,
+                content: right_content,
+                ..current.clone()
+            };
+        }
+        segments.push(current);
+        for segment in &mut segments {
+            let segment_end = timeline_clip_end(segment)?;
+            let overlaps = merged
+                .iter()
+                .any(|(start, end)| segment.timeline_start < *end && segment_end > *start);
+            if overlaps
+                && let ClipSettings::Audio(audio) = &mut segment.settings
+            {
+                audio.gain_millidecibels = arguments.duck_millidecibels;
+            }
+        }
+        let mut after = Vec::with_capacity(before.len().saturating_sub(1) + segments.len());
+        after.extend_from_slice(&before[..index]);
+        after.extend(segments);
+        after.extend_from_slice(&before[index + 1..]);
+        validate_track_states(&self.project, TrackKind::Audio, &after)?;
+        let clips = states_into_domain(after.clone())?;
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let (_, history_entry) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+            track_id,
+            before: before.clone(),
+            after: after.clone(),
+        })?;
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+        self.project
+            .replace_timeline_track_clips_for_command(track_index, clips, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        let (change_set, _) = timeline_change_sets(ProjectChange::TimelineClipsOverwritten {
+            track_id,
+            before,
+            after,
+        })?;
+        Ok(change_set)
+    }
+
     fn apply_timeline_clip_split(&mut self, arguments: Value) -> Result<ChangeSet, OperationError> {
         let arguments: TimelineClipSplitArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
@@ -5209,6 +5394,15 @@ struct TimelineCaptionsImportArguments {
     track_id: TrackId,
     #[serde(deserialize_with = "deserialize_caption_clips")]
     clips: Vec<TimelineClipState>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineClipDuckArguments {
+    track_id: TrackId,
+    clip_id: ClipId,
+    voice_track_id: TrackId,
+    duck_millidecibels: i32,
 }
 
 #[derive(Deserialize)]
@@ -8726,7 +8920,7 @@ mod tests {
             ]
         );
         assert_eq!(command_catalog(), command_catalog());
-        assert_eq!(COMMANDS.len(), 28);
+        assert_eq!(COMMANDS.len(), 29);
         assert_eq!(QUERIES.len(), 8);
     }
 
@@ -14019,4 +14213,155 @@ mod tests {
             RationalTime::new(2, 1).unwrap()
         );
     }
+    #[test]
+    fn ducking_splits_and_lowers_overlapping_segments_in_one_undo_entry() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                audio_media_item(MEDIA_A, "file:///missing/music.wav"),
+                0,
+            ))
+            .unwrap();
+        session
+            .execute_command(media_add(
+                audio_media_item(MEDIA_B, "file:///missing/voice.wav"),
+                1,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "audio").unwrap();
+        add_track(&mut session, TRACK_B, "audio").unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_A,
+            TRACK_A,
+            MEDIA_A,
+            (0, 1),
+            (0, 1),
+            (60, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_B,
+            TRACK_B,
+            MEDIA_B,
+            (10, 1),
+            (0, 1),
+            (10, 1),
+        )
+        .unwrap();
+        insert_clip(
+            &mut session,
+            CLIP_C,
+            TRACK_B,
+            MEDIA_B,
+            (30, 1),
+            (0, 1),
+            (5, 1),
+        )
+        .unwrap();
+
+        let undo_before = session.history.undo.len();
+        let result = execute(
+            &mut session,
+            "timeline.clip.duck",
+            json!({
+                "track_id": TRACK_A,
+                "clip_id": CLIP_A,
+                "voice_track_id": TRACK_B,
+                "duck_millidecibels": -12_000,
+            }),
+        )
+        .unwrap();
+        assert!(result.changed);
+        assert_eq!(session.history.undo.len(), undo_before + 1);
+        assert!(matches!(
+            result.change_set.changes(),
+            [ProjectChange::TimelineClipsOverwritten { track_id, before, after }]
+                if *track_id == TrackId::from_str(TRACK_A).unwrap()
+                    && before.len() == 1
+                    && after.len() == 5
+        ));
+        let music = session
+            .project()
+            .timeline()
+            .tracks()
+            .iter()
+            .find(|track| track.id() == TrackId::from_str(TRACK_A).unwrap())
+            .unwrap();
+        let clips = music.clips();
+        assert_eq!(clips.len(), 5);
+        let spans: Vec<(i64, i64)> = clips
+            .iter()
+            .map(|clip| {
+                (
+                    clip.timeline_start().numerator(),
+                    clip.timeline_duration().numerator(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            spans,
+            [(0, 10), (10, 10), (20, 10), (30, 5), (35, 25)]
+        );
+        let gains: Vec<i32> = clips
+            .iter()
+            .map(|clip| match clip.settings() {
+                ClipSettings::Audio(audio) => audio.gain_millidecibels,
+                ClipSettings::Visual(_) => panic!("the music clip stays audio"),
+            })
+            .collect();
+        assert_eq!(gains, [0, -12_000, 0, -12_000, 0]);
+
+        session
+            .execute_command(undo(session.project_revision().value()))
+            .unwrap();
+        let restored = session
+            .project()
+            .timeline()
+            .tracks()
+            .iter()
+            .find(|track| track.id() == TrackId::from_str(TRACK_A).unwrap())
+            .unwrap();
+        assert_eq!(restored.clips().len(), 1);
+        assert_eq!(restored.clips()[0].timeline_duration().numerator(), 60);
+        assert!(matches!(
+            restored.clips()[0].settings(),
+            ClipSettings::Audio(audio) if audio.gain_millidecibels == 0
+        ));
+    }
+
+    #[test]
+    fn ducking_refuses_a_voice_track_that_does_not_overlap() {
+        let mut session = fixed_session();
+        session
+            .execute_command(media_add(
+                audio_media_item(MEDIA_A, "file:///missing/music.wav"),
+                0,
+            ))
+            .unwrap();
+        session
+            .execute_command(media_add(
+                audio_media_item(MEDIA_B, "file:///missing/voice.wav"),
+                1,
+            ))
+            .unwrap();
+        add_track(&mut session, TRACK_A, "audio").unwrap();
+        add_track(&mut session, TRACK_B, "audio").unwrap();
+        insert_clip(&mut session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (0, 1), (10, 1)).unwrap();
+        insert_clip(&mut session, CLIP_B, TRACK_B, MEDIA_B, (20, 1), (0, 1), (5, 1)).unwrap();
+        let error = execute(
+            &mut session,
+            "timeline.clip.duck",
+            json!({
+                "track_id": TRACK_A,
+                "clip_id": CLIP_A,
+                "voice_track_id": TRACK_B,
+                "duck_millidecibels": -12_000,
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, OperationErrorCode::TimelineNothingToDuck);
+    }
+
 }

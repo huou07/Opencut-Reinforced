@@ -3161,3 +3161,144 @@ fn attached_captions_cli_transcribes_reviews_and_imports_a_subtitle_file() {
     );
     host.shutdown(true).unwrap();
 }
+
+#[test]
+fn headless_timeline_duck_cli_lowers_music_in_one_command() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Duck CLI");
+    let probe_stub = directory.probe_stub();
+    let music = directory.media_path("cli sample café.mkv");
+    let voice = directory.media_path("path with spaces-媒体.mkv");
+
+    let mut music_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    music_args.extend(words(&["--source"]));
+    music_args.push(music.as_os_str().to_owned());
+    music_args.push("--json".into());
+    let (music_media, _) = json_success_with_probe(music_args, &probe_stub);
+    let music_media_id = music_media["media"]["id"].as_str().unwrap().to_owned();
+
+    let mut voice_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    voice_args.extend(words(&["--source"]));
+    voice_args.push(voice.as_os_str().to_owned());
+    voice_args.push("--json".into());
+    let (voice_media, _) = json_success_with_probe(voice_args, &probe_stub);
+    let voice_media_id = voice_media["media"]["id"].as_str().unwrap().to_owned();
+
+    let music_track = "22222222-2222-4222-8222-222222222222";
+    let voice_track = "33333333-3333-4333-8333-333333333333";
+    let music_clip = "44444444-4444-4444-8444-444444444444";
+    let voice_clip_a = "55555555-5555-4555-8555-555555555555";
+    let voice_clip_b = "66666666-6666-4666-8666-666666666666";
+    for (track, kind) in [(music_track, "audio"), (voice_track, "audio")] {
+        json_success(path_args(
+            &["timeline", "add-track"],
+            "--project",
+            &project_path,
+            &["--kind", kind, "--id", track, "--json"],
+        ));
+    }
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            music_track,
+            "--media",
+            &music_media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "3/2",
+            "--id",
+            music_clip,
+            "--json",
+        ],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            voice_track,
+            "--media",
+            &voice_media_id,
+            "--at",
+            "1/4",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/4",
+            "--id",
+            voice_clip_a,
+            "--json",
+        ],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            voice_track,
+            "--media",
+            &voice_media_id,
+            "--at",
+            "3/4",
+            "--source-start",
+            "1/4",
+            "--duration",
+            "1/4",
+            "--id",
+            voice_clip_b,
+            "--json",
+        ],
+    ));
+
+    let ducked = json_success(path_args(
+        &["timeline", "duck-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            music_track,
+            "--clip",
+            music_clip,
+            "--voice-track",
+            voice_track,
+            "--duck-db",
+            "-12",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(ducked["command"]["changed"], true);
+    assert_eq!(
+        ducked["command"]["change_set"]["changes"][0]["kind"],
+        "timeline_clips_overwritten"
+    );
+
+    let clips = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", music_track, "--json"],
+    ))
+    .0;
+    let items = clips["timeline_clip_page_v2"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 5);
+    let gains: Vec<i64> = items
+        .iter()
+        .map(|clip| {
+            clip["settings"]["value"]["gain_millidecibels"]
+                .as_i64()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(gains, [0, -12_000, 0, -12_000, 0]);
+
+}

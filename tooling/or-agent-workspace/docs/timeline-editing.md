@@ -75,3 +75,12 @@ Trim the selected clip to end at 4 s:
 1. The panel context names the clip and its track.
 2. `timeline trim-clip --clip CLIP_ID --edge end --to 4`.
 3. Verify the duration is positive; a trim that would invert the clip is refused.
+
+## Ducking music under narration
+
+`tools/or timeline duck-clip --attach project.json --track MUSIC_TRACK --clip
+MUSIC_CLIP --voice-track VOICE_TRACK [--duck-db -12] --json` lowers the music
+clip wherever the voice track has clips. It is one command and one undo entry;
+the music clip is split at the voice boundaries and the overlapping segments get
+the gain. The app's Music dialog applies the same command automatically when a
+voice track is selected.

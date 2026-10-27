@@ -2255,6 +2255,49 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
         }
+        "duck-clip" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--clip",
+                    "--voice-track",
+                    "--duck-db",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let voice_track_id =
+                parse_track_id(&required_name(&options, "--voice-track", json)?, json)?;
+            let duck_db = match options.value("--duck-db") {
+                Some(value) => value
+                    .to_str()
+                    .and_then(|text| text.parse::<i32>().ok())
+                    .ok_or_else(|| CliError::usage(json, "--duck-db must be a whole dB value"))?,
+                None => -12,
+            };
+            if !(-40..=-1).contains(&duck_db) {
+                return Err(CliError::usage(json, "--duck-db must be between -40 and -1"));
+            }
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.duck",
+                json!({
+                    "track_id": track_id,
+                    "clip_id": clip_id,
+                    "voice_track_id": voice_track_id,
+                    "duck_millidecibels": duck_db * 1000,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "delete-clip" => {
             let options =
                 Options::parse(action_args, &["--project", "--attach", "--clip"], &[], json)?;
@@ -2271,7 +2314,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, import-captions, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, import-captions, move-clip, trim-clip, split-clip, duck-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }

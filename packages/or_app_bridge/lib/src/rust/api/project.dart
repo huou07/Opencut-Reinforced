@@ -97,6 +97,16 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String markerId,
   });
 
+  Future<ProjectActionResult> duckTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckMillidecibels,
+  });
+
   Future<ProjectExportJobView> exportStatus({
     required String projectId,
     required String projectInstanceId,
@@ -311,6 +321,10 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String trackId,
+  });
+
+  Future<ProjectTranscriptionModelView> removeTranscriptionModel({
+    required String modelId,
   });
 
   Future<ProjectActionResult> rename({

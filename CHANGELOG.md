@@ -57,6 +57,13 @@ product still needs.
   chosen macOS voice, imports the WAVs, places them on a new audio track and
   imports exact captions. The music dialog synthesises a quiet royalty-free bed,
   places it, and can duck it −12 dB under a selected voice track.
+- **One-step music ducking**: `timeline.clip.duck` splits a music clip at voice
+  boundaries and lowers the overlapping segments in one Rust command, so the app
+  and `timeline duck-clip` (and `duck_music` over MCP) produce one revision and
+  one undo entry.
+- **Speech-model management**: the picker shows total installed size and can
+  remove a downloaded model to free disk; removing the active model falls back
+  to Small.
 - **Selectable speech models**: Base, Small, Medium, Large v3 Turbo q5 and
   Large v3 Turbo are listed in the app with their real sizes and licences; the
   user picks one, downloads it once, and the app and `or captions transcribe`

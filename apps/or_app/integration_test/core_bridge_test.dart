@@ -2035,6 +2035,12 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.selectTranscriptionModel(session, modelId);
 
   @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => _gateway.removeTranscriptionModel(session, modelId);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
     String modelId,
@@ -2298,6 +2304,23 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     current,
     clipId: clipId,
     timelineTime: timelineTime,
+  );
+
+  @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) => _gateway.duckTimelineClip(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    voiceTrackId: voiceTrackId,
+    duckDecibels: duckDecibels,
   );
 
   @override

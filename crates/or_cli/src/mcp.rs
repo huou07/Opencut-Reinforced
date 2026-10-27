@@ -202,6 +202,7 @@ impl Server {
             "move_clip" => self.move_clip(arguments),
             "trim_clip" => self.trim_clip(arguments),
             "split_clip" => self.split_clip(arguments),
+            "duck_music" => self.duck_music(arguments),
             "delete_clip" => self.delete_clip(arguments),
             "set_frame_rate" => self.set_frame_rate(arguments),
             "add_marker" => self.add_marker(arguments),
@@ -449,6 +450,32 @@ impl Server {
             args.push(new_clip_id);
         }
         self.run_or(&args).and_then(pretty)
+    }
+
+    fn duck_music(&self, arguments: &Value) -> Result<String, String> {
+        let track_id = required_str(arguments, "track_id")?;
+        let clip_id = required_str(arguments, "clip_id")?;
+        let voice_track_id = required_str(arguments, "voice_track_id")?;
+        let duck_db = arguments
+            .get("duck_db")
+            .and_then(Value::as_i64)
+            .unwrap_or(-12);
+        if !(-40..=-1).contains(&duck_db) {
+            return Err("duck_db must be between -40 and -1".to_owned());
+        }
+        self.run_or(&[
+            "timeline",
+            "duck-clip",
+            "--track",
+            &track_id,
+            "--clip",
+            &clip_id,
+            "--voice-track",
+            &voice_track_id,
+            "--duck-db",
+            &duck_db.to_string(),
+        ])
+        .and_then(pretty)
     }
 
     fn delete_clip(&self, arguments: &Value) -> Result<String, String> {
@@ -1182,6 +1209,16 @@ fn tool_definitions() -> Value {
                 "label": {"type": "string"},
                 "marker_id": {"type": "string"}
             }), &["at", "label"]),
+        },
+        {
+            "name": "duck_music",
+            "description": "Lower one music clip wherever clips on a chosen voice track overlap it, as one undoable command. The music clip is split at each voice boundary and the overlapping segments get the duck gain; nothing else on the track changes. Use media/timeline reads first to obtain the track and clip ids.",
+            "inputSchema": object_schema(json!({
+                "track_id": {"type": "string", "description": "The audio track that holds the music clip."},
+                "clip_id": {"type": "string", "description": "The music clip id on that track."},
+                "voice_track_id": {"type": "string", "description": "The audio track whose clips define where to duck."},
+                "duck_db": {"type": "integer", "minimum": -40, "maximum": -1, "description": "Duck level; defaults to -12 dB."}
+            }), &["track_id", "clip_id", "voice_track_id"]),
         },
         {
             "name": "captions_transcribe",

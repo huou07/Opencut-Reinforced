@@ -37,7 +37,9 @@ rather than adding a second text engine.
   `or captions transcribe` use. A picker changes it; only the installed models
   need disk space. Listing a model checks its presence and size, and the
   transcription job still verifies the full digest before running, so a large
-  model does not have to be hashed on every dialog open.
+  model does not have to be hashed on every dialog open. The picker shows the
+  total installed size and can remove one downloaded model to free space; the
+  service falls back to the catalog default when the active model is removed.
 - A plain local debug build does not ship the whisper runtime. `scripts/
   install_local_transcription_helpers.sh` copies a pinned `whisper-cli` and the
   rebuilt provider into the app bundle, re-signs it ad hoc, and can install a

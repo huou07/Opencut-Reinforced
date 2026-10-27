@@ -938,6 +938,9 @@ fn transcription_service_failure(
         crate::transcription::TranscriptionServiceError::ModelNotFound => {
             "TRANSCRIPTION_MODEL_UNKNOWN"
         }
+        crate::transcription::TranscriptionServiceError::ModelNotInstalled => {
+            "TRANSCRIPTION_MODEL_NOT_INSTALLED"
+        }
         crate::transcription::TranscriptionServiceError::PreferenceUnavailable => {
             "TRANSCRIPTION_PREFERENCE_UNAVAILABLE"
         }
@@ -1152,6 +1155,17 @@ impl ProjectHostHandle {
         let info = self
             .transcription_service()?
             .select_model(&model_id)
+            .map_err(transcription_error)?;
+        Ok(transcription_model_view(info))
+    }
+
+    pub fn remove_transcription_model(
+        &self,
+        model_id: String,
+    ) -> Result<ProjectTranscriptionModelView, ProjectBridgeError> {
+        let info = self
+            .transcription_service()?
+            .remove_model(&model_id)
             .map_err(transcription_error)?;
         Ok(transcription_model_view(info))
     }
@@ -2890,6 +2904,47 @@ impl ProjectHostHandle {
                     clip_id,
                     new_clip_id,
                     timeline_time,
+                )
+            },
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn duck_timeline_clip(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        track_id: String,
+        clip_id: String,
+        voice_track_id: String,
+        duck_millidecibels: i32,
+    ) -> ProjectActionResult {
+        let track_id = match TrackId::from_str(&track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        let clip_id = match ClipId::from_str(&clip_id) {
+            Ok(clip_id) => clip_id,
+            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
+        };
+        let voice_track_id = match TrackId::from_str(&voice_track_id) {
+            Ok(track_id) => track_id,
+            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::duck_timeline_clip(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    track_id,
+                    clip_id,
+                    voice_track_id,
+                    duck_millidecibels,
                 )
             },
         )
@@ -4799,6 +4854,7 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
         OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
+        OperationErrorCode::TimelineNothingToDuck => "TIMELINE_NOTHING_TO_DUCK",
         OperationErrorCode::TimelineOverwriteSplitRequiresClipId => {
             "TIMELINE_OVERWRITE_SPLIT_REQUIRES_CLIP_ID"
         }
