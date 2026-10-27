@@ -125,6 +125,12 @@ never changes the project. Review the cues (the JSON carries `start_ms`,
 command creates a new caption track and one editable caption clip per cue. Edit
 the SRT first if timing or wording needs correcting.
 
+The model and the `whisper-cli`/provider binaries are part of the packaged app,
+not the CLI. Install the model once by choosing **Generate Captions** on any
+media item in the app and accepting the download; `captions transcribe` then
+reuses that install. If it reports `TRANSCRIPTION_MODEL_UNAVAILABLE`, do not try
+to download the model from the workspace — send the user to that app action.
+
 ## Music
 
 ```sh

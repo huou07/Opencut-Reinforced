@@ -64,6 +64,9 @@ If the user already has audio or video and wants subtitles, use
 `tools/or captions transcribe --media MEDIA_ID --srt-out PATH`, review the cues,
 then `tools/or timeline import-captions --file PATH`. This is the only path that
 is "from audio"; the script path derives captions from the narration it wrote.
+The multilingual model is installed from the app's Generate Captions action, not
+from the workspace; if the command reports `TRANSCRIPTION_MODEL_UNAVAILABLE`,
+ask the user to run that action once instead of downloading a model yourself.
 
 ## Checks
 
