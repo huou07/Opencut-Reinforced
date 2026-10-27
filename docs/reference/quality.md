@@ -155,8 +155,9 @@ their own increments with their own evidence.
 
 1. No presented-frame (vsync/compositor) budget; pacing is read from the app's own
    log, not a dedicated gate.
-2. Hardware decode/encode, shared GPU surfaces and Android audio are not
-   implemented.
+2. Hardware encode exists for the MP4 profile and its colour conversion runs on
+   the GPU (ADR 0011); hardware decode, shared GPU surfaces, a hardware path for
+   VP9 and Android audio are not implemented.
 3. Native/packaged claims for Windows, Linux and Android remain hosted-CI
    authority; a local result never becomes acceptance for them.
 4. Representative camera-media compatibility, large libraries and
