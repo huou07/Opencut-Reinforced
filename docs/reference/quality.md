@@ -76,6 +76,21 @@ change:
 - `or_render`'s own 640×360 row is 1.4 ms p50 including readback on the same
   Metal adapter, so the bridge adds little per frame.
 
+### MotionScene preview stills (2026-10-27)
+
+- Workload: a 24-line Rust code scene, one frame rasterised, then
+  `encode_png`, at both the panel default and 1080p.
+- Source/build: `or_render` the commit that moved PNG encoding onto the `png`
+  crate, release profile.
+- Machine: MacBook Air M5.
+- Result: the hand-rolled stored-deflate writer produced 0.92 MB in 3.77 ms at
+  640×360 and 8.3 MB in 34.4 ms at 1920×1080. Fast deflate through the bundled
+  `png` crate produces 26 KB in 0.17 ms and 67 KB in 0.74 ms. A flat vector scene
+  compresses exceptionally well; a scene carrying photographic image nodes will
+  compress far less, and there the encode gets slower than a stored block in
+  exchange for a smaller payload, which is the right trade for a still that
+  crosses the bridge into the panel.
+
 ### Hardware export from GPU NV12 planes (2026-10-27)
 
 - Workload: the ignored `a_hardware_export_writes_from_gpu_nv12_planes` — a blank

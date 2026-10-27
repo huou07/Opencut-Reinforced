@@ -834,98 +834,26 @@ pub fn encode_png(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, Mot
         return Err(MotionRasterError::InvalidCanvas);
     }
 
-    // One filter byte per row, always 0 (None): the rasteriser's output is already
-    // what it is, and a filter would only make the bytes harder to reason about.
-    let mut raw = Vec::with_capacity(expected + height as usize);
-    for row in 0..height as usize {
-        raw.push(0);
-        let start = row * width as usize * 4;
-        raw.extend_from_slice(&pixels[start..start + width as usize * 4]);
+    // Straight RGBA, eight bits, fast deflate. The preview is a still that travels
+    // to the panel as bytes, so the compressed size matters more than the last few
+    // percent of ratio: a stored block would ship the whole canvas.
+    let mut bytes = Vec::new();
+    {
+        let mut encoder = png::Encoder::new(&mut bytes, width, height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(png::Compression::Fast);
+        let mut writer = encoder
+            .write_header()
+            .map_err(|_| MotionRasterError::InvalidCanvas)?;
+        writer
+            .write_image_data(pixels)
+            .map_err(|_| MotionRasterError::InvalidCanvas)?;
+        writer
+            .finish()
+            .map_err(|_| MotionRasterError::InvalidCanvas)?;
     }
-
-    let mut zlib = Vec::with_capacity(raw.len() + raw.len() / 65_535 * 5 + 16);
-    zlib.extend_from_slice(&[0x78, 0x01]);
-    let mut offset = 0;
-    while offset < raw.len() {
-        let block = (raw.len() - offset).min(65_535);
-        let final_block = offset + block == raw.len();
-        zlib.push(u8::from(final_block));
-        let length = block as u16;
-        zlib.extend_from_slice(&length.to_le_bytes());
-        zlib.extend_from_slice(&(!length).to_le_bytes());
-        zlib.extend_from_slice(&raw[offset..offset + block]);
-        offset += block;
-    }
-    zlib.extend_from_slice(&adler32(&raw).to_be_bytes());
-
-    let mut png = Vec::with_capacity(zlib.len() + 64);
-    png.extend_from_slice(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]);
-    let mut header = Vec::with_capacity(13);
-    header.extend_from_slice(&width.to_be_bytes());
-    header.extend_from_slice(&height.to_be_bytes());
-    header.extend_from_slice(&[8, 6, 0, 0, 0]);
-    write_chunk(&mut png, b"IHDR", &header);
-    write_chunk(&mut png, b"IDAT", &zlib);
-    write_chunk(&mut png, b"IEND", &[]);
-    Ok(png)
-}
-
-fn write_chunk(png: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-    png.extend_from_slice(&(data.len() as u32).to_be_bytes());
-    png.extend_from_slice(kind);
-    png.extend_from_slice(data);
-    let mut crc = Crc32::new();
-    crc.update(kind);
-    crc.update(data);
-    png.extend_from_slice(&crc.finish().to_be_bytes());
-}
-
-fn adler32(bytes: &[u8]) -> u32 {
-    let mut a: u32 = 1;
-    let mut b: u32 = 0;
-    for byte in bytes {
-        a = (a + *byte as u32) % 65_521;
-        b = (b + a) % 65_521;
-    }
-    (b << 16) | a
-}
-
-/// CRC-32 (IEEE 802.3), which is what PNG chunks carry.
-struct Crc32 {
-    value: u32,
-    table: [u32; 256],
-}
-
-impl Crc32 {
-    fn new() -> Self {
-        let mut table = [0_u32; 256];
-        for (index, entry) in table.iter_mut().enumerate() {
-            let mut value = index as u32;
-            for _ in 0..8 {
-                value = if value & 1 == 1 {
-                    0xedb8_8320 ^ (value >> 1)
-                } else {
-                    value >> 1
-                };
-            }
-            *entry = value;
-        }
-        Self {
-            value: 0xffff_ffff,
-            table,
-        }
-    }
-
-    fn update(&mut self, bytes: &[u8]) {
-        for byte in bytes {
-            let index = ((self.value ^ *byte as u32) & 0xff) as usize;
-            self.value = self.table[index] ^ (self.value >> 8);
-        }
-    }
-
-    fn finish(self) -> u32 {
-        self.value ^ 0xffff_ffff
-    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
