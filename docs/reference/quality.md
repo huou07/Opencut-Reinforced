@@ -62,6 +62,48 @@ cannot overlap with itself.
 These are measurements of one workload, not a budget row: they are not enforced
 by `scripts/bench_quality.py` and must be re-measured before being quoted again.
 
+### Where an exported frame's time actually goes (2026-10-27)
+
+Instrumented on the same blank 1920×1080 export, per frame, after the render-ahead
+change:
+
+- render (decode, GPU composite, readback): 2.8–3.6 ms per frame.
+- delivery encode (VP9, BGRA→YUV plus libvpx): 22–25 ms per frame, so a WebM
+  export is encoder-bound, not render-bound.
+- the first frame carries a one-off 2.5 s render-device initialisation. In the
+  app this is paid by the first preview, not by an export started afterwards; in
+  a fresh test process it dominates a short export.
+- `or_render`'s own 640×360 row is 1.4 ms p50 including readback on the same
+  Metal adapter, so the bridge adds little per frame.
+
+### Measured dead ends (2026-10-27)
+
+Four candidates were measured on the same host and refused; recording them stops
+the next attempt from repeating the work:
+
+- **Assembly.** A local FFmpeg 8.1.3 built without `--disable-asm` decoded the
+  same 1080p H.264 clip at 310.9 fps against 308.8 fps for the shipped
+  `--disable-asm` build, and `yuv420p`→BGRA conversion came out within noise of a
+  NEON build. The cost of that conversion is memory traffic, not missing SIMD, so
+  the flag buys nothing at this size.
+- **VideoToolbox decode.** Software 1080p H.264 decode already runs at 309 fps
+  and spends 0.97 CPU-seconds on ten seconds of video — about a tenth of one
+  core. VideoToolbox would remove most of that tenth, and the vendored build does
+  not ship a hardware decoder; the plumbing needs raw `AVCodecContext` handling
+  outside the safe binding. Not worth it at 1080p; revisit at 4K or HEVC.
+- **Encoder thread count.** VP9 exports at 0, 4, 8 and 10 explicit threads land
+  within 3.44–3.56 s of each other on the same 90-frame workload, because
+  libvpx's own threading already scales through the frame budget. Setting a
+  thread count changed nothing worth keeping.
+- **Higher VP9 quality.** `deadline=good, cpu-used=4, crf=32` raises SSIM from
+  0.9778 to 0.9811 on a 1080p clip but costs 4.6× the encode time (355 → 76.5
+  frames/s) and about 10% of end-to-end wall time. The delivery defaults stay as
+  they are until an export-quality decision asks for that trade.
+
+What is left for the GPU is MotionScene rasterisation, which is still a CPU
+rasteriser, and zero-copy surfaces between the renderer and the encoder. Both are
+their own increments with their own evidence.
+
 ## Known gaps
 
 1. No presented-frame (vsync/compositor) budget; pacing is read from the app's own
