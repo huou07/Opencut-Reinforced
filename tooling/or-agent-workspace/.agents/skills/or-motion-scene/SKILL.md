@@ -31,9 +31,10 @@ Workspace guide: `docs/motion-scenes.md`.
 - A re-render never replaces the existing clip. Insert the new render and remove
   the old clip only when the user asks.
 - Keep scenes short; a long scene is slow to encode and hard to revise.
-- A reusable asset is listed with `mcp__or__motion_asset_list` and inserted with
-  `mcp__or__motion_asset_insert`; pass parameter values by id. Do not copy or
-  edit library files yourself.
+- A reusable asset is listed with `mcp__or__motion_asset_list`, inserted with
+  `mcp__or__motion_asset_insert` (pass parameter values by id) and saved with
+  `mcp__or__motion_asset_save` from an authored scene file. Do not copy or edit
+  library files yourself.
 
 ## Report
 

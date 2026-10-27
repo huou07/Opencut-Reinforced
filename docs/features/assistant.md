@@ -58,6 +58,7 @@ The harness receives one MCP server named `or`. Its tools appear to the model as
 | `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
 | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
 | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
+| `motion_asset_save` | save an authored scene file as a classified library asset with a preview |
 
 Times accept exact `NUM/DEN` seconds or decimal seconds. The tool set is the
 agent's whole editing surface: it cannot write project files directly, read

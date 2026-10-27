@@ -164,6 +164,7 @@ fn mcp_lists_tools_and_edits_the_live_project() {
     assert!(names.contains(&"motion_insert_scene"));
     assert!(names.contains(&"motion_asset_list"));
     assert!(names.contains(&"motion_asset_insert"));
+    assert!(names.contains(&"motion_asset_save"));
     for tool in tools["result"]["tools"].as_array().unwrap() {
         assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
     }
@@ -290,5 +291,50 @@ fn mcp_lists_motion_assets_and_refuses_an_unknown_insert() {
         )
         .unwrap_err();
     assert!(error.contains("MOTION_LIBRARY_NOT_FOUND"), "{error}");
+
+    let scene_path = directory.0.join("saved.ormotion.json");
+    fs::write(
+        &scene_path,
+        serde_json::to_vec_pretty(&json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "name": "Authored title",
+            "duration": {"numerator": 4, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "title",
+                    "kind": "text",
+                    "text": "Hello from MCP",
+                    "position": {"x": 80, "y": 120},
+                    "font_size": 64
+                }
+            ],
+            "animations": []
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let saved: Value = serde_json::from_str(
+        &mcp.call(
+            "motion_asset_save",
+            json!({"scene_path": scene_path.display().to_string(), "category": "text"}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved["motion_asset"]["category"], "text");
+    assert_eq!(saved["motion_asset"]["name"], "Authored title");
+    assert!(
+        saved["motion_asset"]["preview"]
+            .as_str()
+            .is_some_and(|preview| preview.starts_with("previews/"))
+    );
+    let listed: Value =
+        serde_json::from_str(&mcp.call("motion_asset_list", json!({})).unwrap()).unwrap();
+    assert_eq!(listed["total"], 2);
+
     drop(host);
 }

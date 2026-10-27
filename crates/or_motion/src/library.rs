@@ -497,10 +497,12 @@ impl MotionLibrary {
         scene: &MotionScene,
         directory: &Path,
     ) -> Result<MotionScene, MotionLibraryError> {
+        // The caller writes the prepared scene into this directory, so it must
+        // exist even when the scene names no images.
+        fs::create_dir_all(directory).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
         if scene.assets.is_empty() {
             return Ok(scene.clone());
         }
-        fs::create_dir_all(directory).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
         let mut prepared = scene.clone();
         for (index, asset) in prepared.assets.iter_mut().enumerate() {
             if !is_safe_relative_path(&asset.path) {

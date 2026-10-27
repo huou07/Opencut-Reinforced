@@ -876,6 +876,9 @@ fn materialize_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use or_core::MediaSourceRef;
+    use or_media::SoftwareMediaDecoder;
+    use or_runtime::{BudgetLimits, CancellationToken, RuntimeBudgets};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -899,6 +902,22 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    fn first_frame_pixels(path: &Path) -> Vec<u8> {
+        let source =
+            MediaSourceRef::local_file(&format!("file://{}", path.to_string_lossy())).unwrap();
+        let budgets = RuntimeBudgets::new(
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+        );
+        let decoder = SoftwareMediaDecoder::new(&source, budgets).unwrap();
+        let frame = decoder
+            .decode_video_frame_at(or_core::RationalTime::ZERO, &CancellationToken::new())
+            .unwrap()
+            .unwrap();
+        frame.pixels().to_vec()
     }
 
     fn png(width: u32, height: u32) -> Vec<u8> {
@@ -976,6 +995,11 @@ mod tests {
             50.0,
         );
         assert!(appended.ok, "{} {}", appended.code, appended.message);
+        let preview = or_render::decode_motion_image(&appended.preview_png).unwrap();
+        assert!(
+            preview.pixels().chunks(4).any(|pixel| pixel[3] > 0),
+            "the composed preview is transparent"
+        );
         let scene: or_motion::MotionScene = serde_json::from_str(&appended.scene_json).unwrap();
         let image = scene
             .nodes
@@ -1008,15 +1032,15 @@ mod tests {
         let directory = TempDirectory::new();
         let root = directory.0.join("library").display().to_string();
         let source = directory.0.join("cutout.png");
-        fs::write(&source, png(32, 32)).unwrap();
+        fs::write(&source, png(320, 180)).unwrap();
         let imported = motion_asset_import_image(
             root.clone(),
             source.display().to_string(),
             "Cutout".to_owned(),
             None,
             Vec::new(),
-            32,
-            32,
+            1920,
+            1080,
             1,
         );
         assert!(imported.ok, "{} {}", imported.code, imported.message);
@@ -1029,8 +1053,8 @@ mod tests {
             output.display().to_string(),
             2,
             1,
-            32,
-            32,
+            1920,
+            1080,
         );
         assert!(
             materialized.succeeded,
@@ -1040,6 +1064,13 @@ mod tests {
         assert!(output.exists());
         assert!(fs::metadata(&output).unwrap().len() > 0);
         assert!(materialized.frame_count >= 1);
+        let pixels = first_frame_pixels(&output);
+        assert!(
+            pixels
+                .chunks(4)
+                .any(|pixel| pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0),
+            "the materialised image frame is black"
+        );
     }
 
     #[test]
@@ -1060,5 +1091,108 @@ mod tests {
         let bad_category = motion_asset_save(root, "{}".to_owned(), Some("nope".to_owned()));
         assert!(!bad_category.ok);
         assert_eq!(bad_category.code, "MOTION_ASSET_INVALID_JSON");
+    }
+
+    #[test]
+    fn a_materialized_scene_is_not_black() {
+        let directory = TempDirectory::new();
+        let root = directory.0.join("library").display().to_string();
+        let output = directory.0.join("red.mkv");
+        let scene = r#"{
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "name": "Red",
+            "duration": {"numerator": 1, "denominator": 1},
+            "canvas": {"width": 64, "height": 64},
+            "assets": [],
+            "nodes": [
+                {"node_id": "bg", "kind": "rectangle", "position": {"x": 0, "y": 0},
+                 "size": {"width": 64, "height": 64},
+                 "fill": {"red": 255, "green": 0, "blue": 0, "alpha": 255}}
+            ],
+            "animations": []
+        }"#;
+        let view = motion_scene_materialize(
+            root,
+            scene.to_owned(),
+            output.display().to_string(),
+            2,
+            1,
+            64,
+            64,
+        );
+        assert!(view.succeeded, "{} {}", view.code, view.message);
+        let source =
+            MediaSourceRef::local_file(&format!("file://{}", output.to_string_lossy())).unwrap();
+        let budgets = RuntimeBudgets::new(
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+            BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
+        );
+        let decoder = SoftwareMediaDecoder::new(&source, budgets).unwrap();
+        let frame = decoder
+            .decode_video_frame_at(or_core::RationalTime::ZERO, &CancellationToken::new())
+            .unwrap()
+            .unwrap();
+        let pixels = frame.pixels();
+        assert_eq!(frame.descriptor().width(), 64);
+        assert!(
+            pixels.chunks(4).any(|pixel| pixel[0] > 0),
+            "the frame is black"
+        );
+    }
+
+    #[test]
+    fn a_composed_image_scene_materializes_visibly() {
+        let directory = TempDirectory::new();
+        let root = directory.0.join("library").display().to_string();
+        let source = directory.0.join("mountain.png");
+        fs::write(&source, png(320, 180)).unwrap();
+        let imported = motion_asset_import_image(
+            root.clone(),
+            source.display().to_string(),
+            "Mountain".to_owned(),
+            None,
+            Vec::new(),
+            1920,
+            1080,
+            1,
+        );
+        assert!(imported.ok, "{} {}", imported.code, imported.message);
+        let draft = motion_scene_new("Composition".to_owned(), 1920, 1080, 1);
+        assert!(draft.ok, "{}", draft.message);
+        let appended = motion_scene_append(
+            root.clone(),
+            draft.scene_json,
+            imported.asset_id,
+            r#"{"opacity":1.0,"width":1920.0,"height":1080.0,"rotation":0.0}"#.to_owned(),
+            "a0".to_owned(),
+            0.0,
+            0.0,
+        );
+        assert!(appended.ok, "{} {}", appended.code, appended.message);
+        let output = directory.0.join("composed.mkv");
+        let materialized = motion_scene_materialize(
+            root,
+            appended.scene_json,
+            output.display().to_string(),
+            2,
+            1,
+            1920,
+            1080,
+        );
+        assert!(
+            materialized.succeeded,
+            "{} {}",
+            materialized.code, materialized.message
+        );
+        let pixels = first_frame_pixels(&output);
+        assert!(
+            pixels
+                .chunks(4)
+                .any(|pixel| pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0),
+            "the composed scene is black"
+        );
     }
 }

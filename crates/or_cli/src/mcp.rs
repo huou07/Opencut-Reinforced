@@ -208,6 +208,7 @@ impl Server {
             "motion_insert_scene" => self.motion_insert_scene(arguments),
             "motion_asset_list" => self.motion_asset_list(arguments),
             "motion_asset_insert" => self.motion_asset_insert(arguments),
+            "motion_asset_save" => self.motion_asset_save(arguments),
             other => Err(format!(
                 "unknown tool: {other}. Call tools/list to see the supported tools."
             )),
@@ -733,6 +734,104 @@ impl Server {
         pretty(value)
     }
 
+    /// Saves an authored scene file as a library scene asset.
+    fn motion_asset_save(&self, arguments: &Value) -> Result<String, String> {
+        let root = self.motion_library_root()?;
+        let library = or_motion::MotionLibrary::open(&root)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let scene_path = required_str(arguments, "scene_path")?;
+        let bytes = std::fs::read(&scene_path)
+            .map_err(|error| format!("the scene could not be read: {error}"))?;
+        let scene = or_motion::parse_motion_scene(&bytes)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let validation = or_motion::validate_scene(&scene);
+        if !validation.ok {
+            return Err(format!(
+                "the scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|error| error.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !scene.assets.is_empty() {
+            return Err(
+                "a scene with external image assets cannot be saved through MCP yet; save it from the app"
+                    .to_owned(),
+            );
+        }
+        let name = optional_str(arguments, "name")?.unwrap_or_else(|| scene.name.clone());
+        let category = match optional_str(arguments, "category")? {
+            Some(value) => Some(
+                or_motion::MotionAssetCategory::parse(value.trim())
+                    .ok_or_else(|| format!("unknown category: {value}"))?,
+            ),
+            None => None,
+        };
+        let tags: Vec<String> = arguments
+            .get("tags")
+            .and_then(Value::as_array)
+            .map(|values| {
+                values
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let asset_id = or_motion::new_motion_asset_id();
+        let preview = (|| {
+            let frame =
+                or_motion::evaluate_scene(&scene, RationalTime::ZERO).map_err(|error| {
+                    format!("{}: the preview frame did not evaluate", error.code())
+                })?;
+            let canvas = or_render::rasterize_motion_frame(&frame)
+                .map_err(|error| format!("{}: the preview did not rasterise", error.code()))?;
+            let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
+                .map_err(|error| format!("{}: the preview did not encode", error.code()))?;
+            library
+                .write_preview(&asset_id, &png)
+                .map_err(|error| format!("{}: the preview was not stored", error.code()))
+        })()
+        .ok();
+        let classification = or_motion::classify_motion_asset(
+            &name,
+            &tags,
+            or_motion::MotionAssetKind::Scene,
+            category,
+        );
+        let document = or_motion::MotionAssetDocument {
+            format: or_motion::MOTION_ASSET_FORMAT.to_owned(),
+            schema_version: or_motion::MOTION_ASSET_SCHEMA_VERSION,
+            asset_id,
+            name: name.clone(),
+            category: classification.category,
+            category_source: classification.source,
+            tags,
+            kind: or_motion::MotionAssetKind::Scene,
+            canvas: scene.canvas,
+            duration: scene.duration,
+            parameters: Vec::new(),
+            scene: Some(or_motion::MotionAssetPayload {
+                assets: Vec::new(),
+                nodes: scene.nodes.clone(),
+                animations: scene.animations.clone(),
+            }),
+            preset: None,
+            image: None,
+            preview,
+        };
+        let entry = library
+            .save(&document, category)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        pretty(json!({
+            "library": library.root().display().to_string(),
+            "motion_asset": entry,
+        }))
+    }
+
     fn first_video_track(&self) -> Result<String, String> {
         let tracks = self.run_or(&["timeline", "tracks"])?;
         let items = tracks
@@ -1101,6 +1200,16 @@ fn tool_definitions() -> Value {
                 "frame_rate": {"type": "string", "description": "e.g. 30/1"},
                 "output_path": {"type": "string", "description": "Optional absolute .mkv destination; defaults beside the project file."}
             }), &["asset_id"]),
+        },
+        {
+            "name": "motion_asset_save",
+            "description": "Save an authored .ormotion.json scene as a reusable, classified library asset with a generated preview. The scene must not reference external image assets yet; save those from the app. Returns the catalogue entry.",
+            "inputSchema": object_schema(json!({
+                "scene_path": {"type": "string", "description": "Absolute path to a valid .ormotion.json scene."},
+                "name": {"type": "string", "description": "Asset name; defaults to the scene name."},
+                "category": {"type": "string", "description": "Optional manual category such as background, people, nature, animal, vehicle, object, text, shape, icon, chart, effect or motion."},
+                "tags": {"type": "array", "items": {"type": "string"}}
+            }), &["scene_path"]),
         }
     ])
 }

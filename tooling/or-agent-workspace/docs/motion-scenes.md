@@ -84,6 +84,8 @@ Use the MCP tools, not the file system:
   keyed by parameter id, render it through the app, and insert an ordinary clip.
   Text and choice values are strings, numbers are numbers, and colours are
   `{red,green,blue,alpha}`.
+- `mcp__or__motion_asset_save` — save an authored `.ormotion.json` scene as a
+  reusable, classified library asset with a preview.
 
 The CLI mirrors the library for inspection when the user names a folder:
 `tools/or motion asset list --library PATH --json`. It is not needed for

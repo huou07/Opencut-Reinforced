@@ -108,7 +108,9 @@ choice always wins and is stored as `explicit`.
 takes `asset_id`, an optional `values` object keyed by parameter id, and the
 usual `at`, `track_id`, `width`, `height`, `frame_rate`, `output_path`. It
 instantiates, prepares the image files, materialises through the app, imports and
-inserts. The assistant workspace guide and persona route to these tools.
+inserts. `mcp__or__motion_asset_save` wraps an authored scene file into a scene
+asset with a preview. The assistant workspace guide and persona route to these
+tools.
 
 ## Bounds
 
