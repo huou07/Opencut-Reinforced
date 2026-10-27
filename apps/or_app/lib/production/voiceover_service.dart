@@ -11,7 +11,15 @@ class VoiceOption {
   final String name;
   final String locale;
 
-  String get label => '$name ($locale)';
+  /// The display name without the locale explanation `say` appends, so
+  /// "Linh (Vietnamese (Vietnam))" becomes "Linh".
+  String get displayName {
+    final match = RegExp(r'^(.*?)\s*\(.*\)$').firstMatch(name);
+    final short = match?.group(1)?.trim();
+    return short == null || short.isEmpty ? name : short;
+  }
+
+  String get label => '$displayName ($locale)';
 }
 
 /// One synthesised narration line and its exact timeline span.
@@ -83,15 +91,18 @@ class VoiceoverService {
       );
     }
     final voices = <VoiceOption>[];
-    final pattern = RegExp(r'^(.+?)\s{2,}([a-z]{2}_[A-Z]{2})\s*(?:#.*)?$');
+    final seen = <String>{};
+    final pattern = RegExp(r'^(.+?)\s+([a-z]{2,3}_[A-Z]{2})(?:\s+#.*)?$');
     for (final raw in result.stdout.toString().split('\n')) {
       final line = raw.trimRight();
       if (line.isEmpty) continue;
       final match = pattern.firstMatch(line);
       if (match == null) continue;
-      voices.add(
-        VoiceOption(name: match.group(1)!.trim(), locale: match.group(2)!),
-      );
+      final name = match.group(1)!.trim();
+      final locale = match.group(2)!;
+      // macOS can list the same installed voice twice (system and download).
+      if (!seen.add('$name\u0000$locale')) continue;
+      voices.add(VoiceOption(name: name, locale: locale));
     }
     return voices;
   }

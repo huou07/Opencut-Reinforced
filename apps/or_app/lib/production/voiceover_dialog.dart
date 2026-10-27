@@ -189,7 +189,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                 )
               else
                 DropdownButtonFormField<String>(
-                  key: const ValueKey('voiceover-voice'),
+                  key: ValueKey('voiceover-voice-${_voice ?? 'none'}'),
                   initialValue: _voice,
                   isExpanded: true,
                   decoration: const InputDecoration(

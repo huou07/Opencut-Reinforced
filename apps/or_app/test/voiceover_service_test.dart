@@ -48,6 +48,18 @@ void main() {
   });
 
   test(
+    'lists the Vietnamese voice with a short display label',
+    () async {
+      final voices = await VoiceoverService().listVoices();
+      final vietnamese = voices.where((voice) => voice.locale == 'vi_VN');
+      expect(vietnamese, isNotEmpty);
+      expect(vietnamese.first.displayName, 'Linh');
+      expect(vietnamese.first.label, 'Linh (vi_VN)');
+    },
+    skip: !Platform.isMacOS,
+  );
+
+  test(
     'the system voice produces a real WAV whose duration is measured',
     () async {
       final directory = await Directory.systemTemp.createTemp('or-voiceover-');

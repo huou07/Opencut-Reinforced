@@ -1,0 +1,135 @@
+{
+  "name": "production-voice-music",
+  "harness": "or_ui",
+  "description": "Create a project, generate an offline voiceover with exact captions, then generate a music bed ducked under the narration track, through the real Audio-tool dialogs.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Voice and music journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-generate-voiceover"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Generate voiceover",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tree",
+      "name": "voiceover-dialog"
+    },
+    {
+      "op": "wait",
+      "text": "Linh (vi_VN)",
+      "budget_ms": 20000
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "voiceover-script"
+      },
+      "value": "Xin chào, đây là Opencut Reinforced.\nBạn có thể dựng phim ngay trên máy."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-generate"
+      }
+    },
+    {
+      "op": "wait_absent",
+      "text": "Generate voiceover",
+      "budget_ms": 180000
+    },
+    {
+      "op": "wait",
+      "text": "Added 2 narration lines and 2 captions.",
+      "budget_ms": 60000
+    },
+    {
+      "op": "shot",
+      "name": "voiceover-done"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-generate-music"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Generate background music",
+      "budget_ms": 10000
+    },
+    {
+      "op": "wait",
+      "text": "Lower music under",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "music-generate"
+      }
+    },
+    {
+      "op": "wait_absent",
+      "text": "Generate background music",
+      "budget_ms": 180000
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Ducked -12 dB",
+      "budget_ms": 60000
+    },
+    {
+      "op": "shot",
+      "name": "music-ducked"
+    },
+    {
+      "op": "tree",
+      "name": "final"
+    }
+  ]
+}

@@ -310,7 +310,7 @@ class _MusicDialogState extends State<MusicDialog> {
                 )
               else ...[
                 DropdownButtonFormField<String?>(
-                  key: const ValueKey('music-voice-track'),
+                  key: ValueKey('music-voice-track-${_voiceTrackId ?? 'none'}'),
                   initialValue: _voiceTrackId,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
