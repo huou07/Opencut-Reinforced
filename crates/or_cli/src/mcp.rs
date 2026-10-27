@@ -731,6 +731,20 @@ impl Server {
             object.insert("asset_id".to_owned(), json!(asset.asset_id));
             object.insert("asset_name".to_owned(), json!(asset.name));
         }
+        if let Some(output) = value.get("output_path").and_then(Value::as_str) {
+            let provenance = json!({
+                "version": 1,
+                "kind": "motion-asset",
+                "asset_id": asset.asset_id,
+                "asset_name": asset.name,
+                "values": arguments.get("values").cloned().unwrap_or_else(|| json!({})),
+                "library": library.root().display().to_string(),
+                "scene_id": scene_id,
+            });
+            if let Ok(encoded) = serde_json::to_vec_pretty(&provenance) {
+                let _ = std::fs::write(format!("{output}.provenance.json"), encoded);
+            }
+        }
         pretty(value)
     }
 
@@ -783,10 +797,8 @@ impl Server {
             .unwrap_or_default();
         let asset_id = or_motion::new_motion_asset_id();
         let preview = (|| {
-            let frame =
-                or_motion::evaluate_scene(&scene, RationalTime::ZERO).map_err(|error| {
-                    format!("{}: the preview frame did not evaluate", error.code())
-                })?;
+            let frame = or_motion::evaluate_scene(&scene, RationalTime::ZERO)
+                .map_err(|error| format!("{}: the preview frame did not evaluate", error.code()))?;
             let canvas = or_render::rasterize_motion_frame(&frame)
                 .map_err(|error| format!("{}: the preview did not rasterise", error.code()))?;
             let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())

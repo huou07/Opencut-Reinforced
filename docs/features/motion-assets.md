@@ -101,6 +101,11 @@ choice always wins and is stored as `explicit`.
   the ordinary media and timeline commands.
 - Re-rendering never silently replaces a clip: inserting a new render is an
   explicit action.
+- A successful materialisation writes `<output>.provenance.json` beside the
+  video: kind (`motion-scene` or `motion-asset`), scene id and name, asset ids,
+  parameter values, canvas, frame rate and a scene digest. It is a sidecar, not
+  project state; a later editor can find the library assets without a schema
+  change.
 
 ## Agents
 
@@ -121,8 +126,9 @@ materialised frames.
 
 ## Gaps
 
-- No live timeline MotionClip; an inserted asset is video with provenance in the
-  materialised file, not an editable scene object.
+- No live timeline MotionClip; an inserted asset is video plus a provenance
+  sidecar, not an editable scene object, and the app does not surface the sidecar
+  in its inspector yet.
 - A dragged card appends at the track end; it does not place at the drop time or
   the playhead.
 - Motion presets (`kind: motion`) are validated and catalogued but cannot be

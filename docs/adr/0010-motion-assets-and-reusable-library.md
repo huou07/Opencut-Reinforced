@@ -94,8 +94,11 @@ built on the existing materialise-first path first.
    scene merges its nodes and animations. The placed clip records its asset id,
    parameter values and scene digest, so "Edit asset" reopens the same
    parameters and re-renders an **explicit** replacement. A re-render never
-   silently swaps a live `MediaId`. Saving a selection, a whole scene or a single
-   animation captures it into the library with a preview and a category.
+   silently swaps a live `MediaId`. A successful materialisation writes a
+   `<output>.provenance.json` sidecar (kind, scene id, asset ids, values, canvas,
+   frame rate, scene digest) so the source assets stay discoverable without a
+   project schema change. Saving a selection or a whole scene captures it into
+   the library with a preview and a category.
 
 7. **Agents get the library through the existing MCP boundary.** `or mcp` adds
    `motion_asset_list`, `motion_asset_save` and `motion_asset_insert`, and

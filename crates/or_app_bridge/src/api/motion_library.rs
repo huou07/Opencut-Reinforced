@@ -11,6 +11,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde_json::json;
+
 use or_motion::{
     MotionAssetCategory, MotionAssetDocument, MotionAssetKind, MotionAssetParameter,
     MotionAssetPayload, MotionCanvas, MotionLibrary, MotionLibraryEntry, MotionLibraryError,
@@ -521,7 +523,29 @@ pub fn motion_scene_materialize(
     })();
     let _ = std::fs::remove_dir_all(&scratch);
     match result {
-        Ok(view) => view,
+        Ok(view) => {
+            if view.succeeded {
+                write_provenance(
+                    &output_path,
+                    &json!({
+                        "version": 1,
+                        "kind": "motion-scene",
+                        "scene_id": scene.scene_id,
+                        "scene_name": scene.name,
+                        "scene_sha256": sha256_hex(scene_json.as_bytes()),
+                        "width": width,
+                        "height": height,
+                        "frame_rate": format!("{frame_rate_numerator}/{frame_rate_denominator}"),
+                        "library": root,
+                        "assets": scene.assets.iter().map(|asset| json!({
+                            "asset_id": asset.asset_id,
+                            "path": asset.path,
+                        })).collect::<Vec<_>>(),
+                    }),
+                );
+            }
+            view
+        }
         Err((code, message)) => materialize_failure(&code, message, &output_path),
     }
 }
@@ -563,15 +587,35 @@ pub fn motion_asset_materialize(
             return materialize_failure("MOTION_INVALID_SCENE", error.to_string(), &output_path);
         }
     };
-    motion_scene_materialize(
-        root,
+    let view = motion_scene_materialize(
+        root.clone(),
         scene_json,
-        output_path,
+        output_path.clone(),
         frame_rate_numerator,
         frame_rate_denominator,
         width,
         height,
-    )
+    );
+    if view.succeeded {
+        let values =
+            serde_json::from_str::<serde_json::Value>(&values_json).unwrap_or_else(|_| json!({}));
+        write_provenance(
+            &output_path,
+            &json!({
+                "version": 1,
+                "kind": "motion-asset",
+                "asset_id": asset.asset_id,
+                "asset_name": asset.name,
+                "values": values,
+                "library": root,
+                "scene_id": view.scene_id,
+                "width": width,
+                "height": height,
+                "frame_rate": format!("{frame_rate_numerator}/{frame_rate_denominator}"),
+            }),
+        );
+    }
+    view
 }
 
 /// Saves a composed scene as a reusable scene asset, generating its preview.
@@ -805,6 +849,26 @@ fn parse_scene(scene_json: &str) -> Result<MotionScene, (String, String)> {
         return Err(first);
     }
     Ok(scene)
+}
+
+/// Writes a small sidecar beside a materialised clip. Provenance is not project
+/// state and never changes a command or a revision; it lets a later editor find
+/// which library assets produced the file. A failure is not fatal.
+fn write_provenance(output_path: &str, value: &serde_json::Value) {
+    if let Ok(encoded) = serde_json::to_vec_pretty(value) {
+        let _ = std::fs::write(format!("{output_path}.provenance.json"), encoded);
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    output
 }
 
 fn open_library(root: &str) -> Result<MotionLibrary, MotionLibraryError> {
@@ -1046,9 +1110,10 @@ mod tests {
         assert!(imported.ok, "{} {}", imported.code, imported.message);
 
         let output = directory.0.join("cutout.mkv");
+        let asset_id = imported.asset_id.clone();
         let materialized = motion_asset_materialize(
             root,
-            imported.asset_id,
+            asset_id.clone(),
             "{}".to_owned(),
             output.display().to_string(),
             2,
