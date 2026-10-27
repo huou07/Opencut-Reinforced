@@ -1,12 +1,14 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
-    CommandResult, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId,
-    MediaItem, MotionMaterializeRequest, OperationError, ProjectFileMediaImportError,
-    ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
-    QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, TextFormatting, TrackId, TrackKind, TrackState, VisualSettings,
-    apply_project_recovery, command_catalog, discard_project_recovery, inspect_project_recovery,
-    prepare_media_import, query_catalog,
+    ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipContent, ClipId, ClipSettings,
+    CommandEnvelope, CommandResult, ImportedCaption, JobState, MAX_TIMELINE_CLIP_PAGE_SIZE,
+    MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem, MotionMaterializeRequest,
+    OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError, ProjectFileSession,
+    ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
+    TimelineClipState, TrackId, TrackKind, TrackState, TranscriptionRequest, TranscriptionResponse,
+    VisualSettings, apply_project_recovery, command_catalog, discard_project_recovery,
+    encode_caption_file, inspect_project_recovery, parse_caption_file, prepare_media_import,
+    query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -17,6 +19,8 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
+    thread,
+    time::{Duration, Instant},
 };
 
 pub(super) enum CommandOutput {
@@ -340,6 +344,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "media" => run_media(&args[1..], json)?,
         "motion" => run_motion(&args[1..], json)?,
         "timeline" => run_timeline(&args[1..], json)?,
+        "captions" => run_captions(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
     };
@@ -1273,6 +1278,224 @@ fn run_media_relink(args: &[OsString], json: bool) -> Result<String, CliError> {
     Ok(render_media_relink(&item, &result, attached, json))
 }
 
+fn run_captions(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(json, "expected captions transcribe"));
+    };
+    match action {
+        "transcribe" => run_captions_transcribe(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown captions action; expected transcribe",
+        )),
+    }
+}
+
+/// Starts a host-owned local transcription job, polls it, and returns the
+/// bounded transcript proposal. The project is never changed here; the caller
+/// reviews the cues and imports them with `timeline import-captions`.
+fn run_captions_transcribe(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--project", "--attach", "--media", "--srt-out"],
+        &[],
+        json,
+    )?;
+    let (path, attached) = media_project_path(&options, json)?;
+    if !attached {
+        return Err(CliError::usage(
+            json,
+            "local transcription needs the running app; pass --attach project.json",
+        ));
+    }
+    let media_id = parse_media_id(&required_name(&options, "--media", json)?, json)?;
+    let srt_out = options.optional_path("--srt-out");
+    let client = attached_client(&path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+
+    if !json {
+        eprintln!("Transcribing locally in the running app…");
+    }
+    let started = Instant::now();
+    let mut job = match request_transcription(
+        &client,
+        TranscriptionRequest::Start {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            expected_project_revision: description.project_revision,
+            media_id,
+        },
+        json,
+    )? {
+        TranscriptionResponse::Job(job) => job,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the host did not start a transcription job",
+            ));
+        }
+    };
+    loop {
+        match job.state {
+            JobState::Succeeded => break,
+            JobState::Failed => {
+                return Err(CliError::application_failure(
+                    json,
+                    "TRANSCRIPTION_FAILED",
+                    job.failure_message
+                        .unwrap_or_else(|| "Local transcription did not complete.".to_owned()),
+                    None,
+                ));
+            }
+            JobState::Cancelled => {
+                return Err(CliError::application_failure(
+                    json,
+                    "TRANSCRIPTION_CANCELLED",
+                    "Local transcription was cancelled.",
+                    None,
+                ));
+            }
+            JobState::Queued | JobState::Running => {}
+        }
+        if started.elapsed() >= Duration::from_secs(4 * 60 * 60) {
+            return Err(CliError::application_failure(
+                json,
+                "TRANSCRIPTION_TIMEOUT",
+                "Local transcription exceeded its four-hour time limit.",
+                None,
+            ));
+        }
+        thread::sleep(Duration::from_millis(500));
+        job = match request_transcription(
+            &client,
+            TranscriptionRequest::Status {
+                project_id: description.project_id,
+                project_instance_id: description.project_instance_id,
+                job_id: job.job_id,
+            },
+            json,
+        )? {
+            TranscriptionResponse::Job(job) => job,
+            _ => {
+                return Err(CliError::ipc_message(
+                    json,
+                    "the host did not return a transcription job",
+                ));
+            }
+        };
+    }
+    let proposal = match request_transcription(
+        &client,
+        TranscriptionRequest::Proposal {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            job_id: job.job_id,
+        },
+        json,
+    )? {
+        TranscriptionResponse::Proposal(proposal) => proposal,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the host did not return a transcript proposal",
+            ));
+        }
+    };
+    if let Some(srt_out) = srt_out {
+        let format = match srt_out.extension().and_then(OsStr::to_str) {
+            Some("srt") => CaptionFileFormat::Srt,
+            Some("vtt") => CaptionFileFormat::WebVtt,
+            _ => {
+                return Err(CliError::usage(json, "--srt-out must end in .srt or .vtt"));
+            }
+        };
+        let captions = proposal
+            .segments
+            .iter()
+            .map(|segment| {
+                if segment.end_ms <= segment.start_ms {
+                    return Err(CliError::usage(
+                        json,
+                        "a transcript cue ends before it starts",
+                    ));
+                }
+                let start = RationalTime::new(segment.start_ms as i64, 1000).map_err(|_| {
+                    CliError::usage(json, "a transcript cue has an invalid start time")
+                })?;
+                let duration = RationalTime::new((segment.end_ms - segment.start_ms) as i64, 1000)
+                    .map_err(|_| {
+                        CliError::usage(json, "a transcript cue has an invalid duration")
+                    })?;
+                Ok(ImportedCaption {
+                    start,
+                    duration,
+                    text: segment.text.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, CliError>>()?;
+        let bytes = encode_caption_file(format, &captions).map_err(|error| {
+            CliError::new(3, json, "application", error.code(), error.to_string())
+        })?;
+        std::fs::write(&srt_out, bytes).map_err(|error| {
+            CliError::new(
+                3,
+                json,
+                "application",
+                "CAPTION_FILE_UNWRITABLE",
+                format!("The subtitle file could not be written: {error}"),
+            )
+        })?;
+    }
+    if json {
+        Ok(json_string(json!({"transcription": proposal, "job": job})))
+    } else {
+        let mut output = format!(
+            "Local {} transcript ({} cues, model {}):",
+            proposal.language.to_uppercase(),
+            proposal.segments.len(),
+            proposal.model_id
+        );
+        for segment in &proposal.segments {
+            output.push_str(&format!(
+                "\n{} – {}  {}",
+                format_caption_time(segment.start_ms),
+                format_caption_time(segment.end_ms),
+                segment.text.trim()
+            ));
+        }
+        Ok(output)
+    }
+}
+
+fn request_transcription(
+    client: &LocalIpcClient,
+    request: TranscriptionRequest,
+    json: bool,
+) -> Result<TranscriptionResponse, CliError> {
+    match client
+        .application(ApplicationRequest::Transcription(request))
+        .map_err(|error| CliError::ipc(error, json))?
+    {
+        ApplicationSuccess::Transcription(TranscriptionResponse::Failure(failure)) => Err(
+            CliError::application_failure(json, failure.code, failure.message, None),
+        ),
+        ApplicationSuccess::Transcription(response) => Ok(response),
+        _ => Err(CliError::ipc_message(
+            json,
+            "server returned an unexpected application response",
+        )),
+    }
+}
+
+fn format_caption_time(milliseconds: u64) -> String {
+    let minutes = milliseconds / 60_000;
+    let seconds = (milliseconds / 1_000) % 60;
+    let millis = milliseconds % 1_000;
+    format!("{minutes:02}:{seconds:02}.{millis:03}")
+}
+
 fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
         return Err(CliError::usage(json, "expected a timeline action"));
@@ -1709,6 +1932,63 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "import-captions" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--file"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let file = options
+                .optional_path("--file")
+                .ok_or_else(|| CliError::usage(json, "--file requires a subtitle path"))?;
+            let bytes = std::fs::read(&file).map_err(|error| {
+                CliError::new(
+                    3,
+                    json,
+                    "application",
+                    "CAPTION_FILE_UNREADABLE",
+                    format!("The subtitle file could not be read: {error}"),
+                )
+            })?;
+            let plan = parse_caption_file(&bytes).map_err(|error| {
+                CliError::new(3, json, "application", error.code(), error.to_string())
+            })?;
+            let track_id = TrackId::generate();
+            let imported = plan.captions.len();
+            let clips = plan
+                .captions
+                .into_iter()
+                .map(|caption| TimelineClipState {
+                    clip_id: ClipId::generate(),
+                    timeline_start: caption.start,
+                    timeline_duration: caption.duration,
+                    content: ClipContent::Caption {
+                        text: caption.text,
+                        formatting: TextFormatting::default(),
+                    },
+                    settings: ClipSettings::Visual(VisualSettings::default()),
+                })
+                .collect::<Vec<_>>();
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.captions.import",
+                json!({"track_id": track_id, "clips": clips}),
+                json,
+            )?;
+            if json {
+                Ok(json_string(json!({
+                    "imported": imported,
+                    "track_id": track_id,
+                    "cues_with_formatting_loss": plan.cues_with_formatting_loss,
+                    "empty_cues_skipped": plan.empty_cues_skipped,
+                    "command": result,
+                })))
+            } else {
+                Ok(format!(
+                    "Imported {imported} captions into a new caption track at revision {}.",
+                    result.after_revision
+                ))
+            }
+        }
         "insert-text" | "insert-caption" => {
             let options = Options::parse(
                 action_args,
@@ -1991,7 +2271,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, import-captions, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -2319,6 +2599,12 @@ fn render_timeline_command(
             result.after_revision
         ),
     }
+}
+
+fn parse_media_id(value: &str, json: bool) -> Result<MediaId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "media ID must be a canonical lowercase UUIDv4"))
 }
 
 fn parse_track_id(value: &str, json: bool) -> Result<TrackId, CliError> {

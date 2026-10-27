@@ -65,6 +65,8 @@ library, and a CLI failure its error does not explain:
 | `timeline insert-text`, `timeline insert-caption` | `insert_text` | add a text or caption clip |
 | `timeline move-clip`, `trim-clip`, `split-clip`, `delete-clip`, `ripple-delete-clip` | `move_clip`, `trim_clip`, `split_clip`, `delete_clip` | ordinary timeline edits; delete can ripple |
 | `timeline set-frame-rate`, `timeline add-marker` | `set_frame_rate`, `add_marker` | sequence and marker edits |
+| `captions transcribe` | `captions_transcribe` | local multilingual transcript proposal; review before applying |
+| `timeline import-captions` | — | apply a reviewed SRT/WebVTT file as a new caption track |
 | — (renders a file only) | `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
 | — (needs a library path) | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
 | — (needs a library path) | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
@@ -86,6 +88,28 @@ split, move, export, and save/reopen. The workspace Motion guide documents
 scaffold, so an agent checks a scene with the CLI before paying for a full
 materialisation; insertion stays on the MCP tool because `or motion materialize`
 only writes a file.
+
+## Script, narration, captions and music from chat
+
+The installed workspace carries the production tools, and its `AGENTS.md`
+routes them through `docs/script-and-voice.md`:
+
+- `tools/voiceover.mjs` validates an `or-assistant-script`, speaks each scene
+  with the macOS `say` voice, measures the real WAV duration, writes a timing
+  manifest and SRT, and with `--apply` imports the WAVs, places them on an audio
+  track and applies the captions. This is the offline narration path; nothing
+  leaves the machine and no model is downloaded.
+- `tools/music.mjs` synthesises a quiet, royalty-free background bed from a mood,
+  tempo and duration. It is deterministic per seed and has no network path.
+- `tools/or captions transcribe --media <id>` runs the app's local multilingual
+  whisper model (Vietnamese and English are detected automatically) and returns
+  bounded cues; `tools/or timeline import-captions` applies a reviewed SRT/WebVTT
+  as an editable caption track. This is the "captions from existing audio" path.
+
+Narration derived from a written script and captions derived from transcription
+are different claims: the agent must say which one produced the result. Every
+project write still goes through a validated command, and `--apply` leaves the
+project unsaved for review.
 
 ## Transcript and permissions
 
@@ -120,6 +144,9 @@ them. Android has no assistant: the desktop process boundary is explicit.
   `generated/` path.
 - The descriptor grants owner-only local access; the session pointer contains
   paths, never the auth token.
+- The transcription request is a runtime proposal, not an edit: it never bumps
+  the project revision, is bounded to four hours of audio and 10,000 cues, and
+  the model is downloaded only after consent.
 
 ## Gaps
 
@@ -132,6 +159,12 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
 - The MCP server still exposes every CLI verb as a fallback; a smaller fallback
   surface (motion insertion and the library only) is not yet enforced.
+- Narration quality is the system `say` voice; no cloud or neural voice is
+  selectable from the panel.
+- The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
+  user adjusts clip gain by hand.
+- `--apply` reports a placed track and caption count but has no per-step undo
+  group; review before saving.
 
 ## Where
 
@@ -140,8 +173,13 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - `apps/or_app/lib/screens/editor_shell_preview_screen.dart` — right-rail tabs
 - `crates/or_cli/src/commands.rs` — CLI verbs and session-pointer attach
 - `crates/or_cli/src/mcp.rs` — `or mcp` fallback tools
-- `crates/or_core/src/application.rs` — `MotionMaterialize` runtime request
+- `crates/or_core/src/application.rs` — `MotionMaterialize` and `Transcription`
+  runtime requests
+- `crates/or_ipc/src/live_host.rs` — runtime handler traits and routing
 - `crates/or_app_bridge/src/preview.rs` — materialisation handler
+- `crates/or_app_bridge/src/transcription.rs` — local transcription job and model store
+- `tooling/or-agent-workspace/tools/voiceover.mjs` — offline narration, timing and captions
+- `tooling/or-agent-workspace/tools/music.mjs` — generated background bed
 
 ## Related
 

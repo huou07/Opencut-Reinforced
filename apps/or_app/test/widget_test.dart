@@ -7192,11 +7192,11 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectTranscriptionModel> transcriptionModel(
     ProjectSessionHandle session,
   ) async => ProjectTranscriptionModel(
-    modelId: 'whisper-tiny-en',
+    modelId: 'whisper-small-multilingual',
     version: '1.0',
     license: 'MIT',
-    language: 'English',
-    sizeBytes: BigInt.from(77704715),
+    language: 'Vietnamese and English',
+    sizeBytes: BigInt.from(487601967),
     source: 'https://example.invalid/model',
     installed: false,
     providerAvailable: false,

@@ -48,12 +48,12 @@ pub struct TranscriptionModelInfo {
 
 impl TranscriptionModelInfo {
     pub fn unavailable() -> Self {
-        let manifest = or_ai::whisper_tiny_en_manifest();
+        let manifest = or_ai::whisper_multilingual_manifest();
         Self {
             model_id: manifest.model_id,
             version: manifest.version,
             license: manifest.license,
-            language: "English".to_owned(),
+            language: "Vietnamese and English".to_owned(),
             size_bytes: manifest.size_bytes,
             source: manifest.source,
             installed: false,
@@ -107,13 +107,13 @@ impl TranscriptionService {
     }
 
     pub fn model_info(&self) -> TranscriptionModelInfo {
-        let manifest = or_ai::whisper_tiny_en_manifest();
+        let manifest = or_ai::whisper_multilingual_manifest();
         let installed = or_ai::verify_installed_model(&self.model_root, &manifest).is_ok();
         TranscriptionModelInfo {
             model_id: manifest.model_id,
             version: manifest.version,
             license: manifest.license,
-            language: "English".to_owned(),
+            language: "Vietnamese and English".to_owned(),
             size_bytes: manifest.size_bytes,
             source: manifest.source,
             installed,
@@ -122,7 +122,7 @@ impl TranscriptionService {
     }
 
     pub fn begin_model_download(&self) -> Result<ModelDownload, TranscriptionServiceError> {
-        let manifest = or_ai::whisper_tiny_en_manifest();
+        let manifest = or_ai::whisper_multilingual_manifest();
         if or_ai::verify_installed_model(&self.model_root, &manifest).is_ok() {
             return Err(TranscriptionServiceError::ModelAlreadyInstalled);
         }
@@ -150,7 +150,11 @@ impl TranscriptionService {
         let file = lock(&self.downloads)
             .remove(&id)
             .ok_or(TranscriptionServiceError::DownloadNotFound)?;
-        let result = install_download(&self.model_root, &or_ai::whisper_tiny_en_manifest(), &file);
+        let result = install_download(
+            &self.model_root,
+            &or_ai::whisper_multilingual_manifest(),
+            &file,
+        );
         drop(file);
         result?;
         Ok(self.model_info())
@@ -203,7 +207,7 @@ impl TranscriptionService {
         drop(state);
 
         let model_root = self.model_root.clone();
-        let model = or_ai::whisper_tiny_en_manifest();
+        let model = or_ai::whisper_multilingual_manifest();
         let provider_binary = self.provider_binary.clone();
         let whisper_cli = self.whisper_cli.clone();
         let state = Arc::clone(&self.state);
@@ -546,7 +550,7 @@ fn run_provider(
             request: TranscribeRequest {
                 input: request.input,
                 identity: request.identity.clone(),
-                language: Some("en".to_owned()),
+                language: None,
                 max_duration_ms: request.duration_ms,
             },
         },

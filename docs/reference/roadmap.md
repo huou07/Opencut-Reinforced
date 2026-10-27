@@ -36,15 +36,23 @@ One near-term delivery mission for the local macOS app, in this order:
    ([motion-assets.md](../features/motion-assets.md),
    [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)). A live
    timeline MotionClip remains deferred.
+6. **Assistant production workflow (owner request, 2026-10-27).** Let the
+   assistant write a script, narrate it offline, derive exact captions, generate
+   a background bed, and caption existing audio with the local multilingual
+   model. Delivered as the workspace tools `voiceover.mjs` and `music.mjs`, the
+   host-owned `or captions transcribe` runtime request, and the reviewed
+   `timeline import-captions` command. Follow-up: dogfood the Vietnamese path on
+   a real project and measure transcription time and caption quality.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.
 
 ## Deferred by the owner
 
-Transcription, cloud or generative AI, community/templates catalog, advanced
-effects, animation-heavy showcase surfaces, Android/Windows packaging work,
-hosted CI claims, release publication, and cross-platform parity work.
+Cloud or generative AI providers (including neural voices and music), translation,
+dubbing, community/templates catalog, advanced effects, animation-heavy showcase
+surfaces, Android/Windows packaging work, hosted CI claims, release publication,
+and cross-platform parity work.
 
 ## Acceptance target
 

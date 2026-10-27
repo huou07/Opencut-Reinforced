@@ -15,9 +15,9 @@ write, organised like this repository's own routing:
 | Path | Holds |
 |---|---|
 | `AGENTS.md` | the index: one routing entry per guide, skill and tool, with the task trigger and the exact path |
-| `docs/` | one guide per operating concern: timeline, media, motion scenes, project safety, troubleshooting |
-| `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`) |
-| `tools/` | `or`, the app's CLI bound to this build, and `motion-scaffold.mjs` |
+| `docs/` | one guide per operating concern: timeline, media, motion scenes, project safety, script/narration/music, troubleshooting |
+| `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`) |
+| `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs` |
 | `scenes/` | scene sources the agent authors |
 | `work/` | scratch files and imported copies |
 | `project.json` | app-written marker: project name, project file, session descriptor |
@@ -88,10 +88,11 @@ workspace, and it is a project command.
 
 ## Verification
 
-- `cd tooling/or-agent-workspace && node --test test/bundle.test.mjs` — the
-  checked-in bundle matches the source, every guide and skill is routed, skill
-  frontmatter matches its directory, and the scaffold emits a scene the real
-  validator accepts.
+- `cd tooling/or-agent-workspace && node --test test/bundle.test.mjs test/tools.test.mjs`
+  — the checked-in bundle matches the source, every guide and skill is routed,
+  skill frontmatter matches its directory, the scaffold emits a scene the real
+  validator accepts, `music.mjs` writes a valid PCM WAV, `voiceover.mjs --plan`
+  is side-effect free, and a macOS `say` run derives exact caption timings.
 - `cd apps/or_app && flutter test test/agent_workspace_test.dart
   test/assistant_workspace_test.dart test/assistant_settings_test.dart` — path
   safety, versioned installation, runtime files, default resolution and settings
@@ -113,13 +114,18 @@ workspace, and it is a project command.
   user-invocable workspace command list.
 - No per-project workspace or per-project library; the workspace is shared by
   every project this app opens.
+- The production tools are model-free except for transcription; narration uses
+  the system `say` voice and music is synthesised, so quality is bounded by
+  those local providers.
 - A project-folder or chosen-folder workspace has no `project.json` pointer, so
   the CLI attach guidance only applies to the default agent workspace; those
   sessions fall back to the `mcp__or__*` tools.
 
 ## Where
 
-- `tooling/or-agent-workspace/` — source tree, bundle build and tests
+- `tooling/or-agent-workspace/` — source tree, bundle build, production tools and tests
+- `tooling/or-agent-workspace/tools/voiceover.mjs` — script narration, timing and captions
+- `tooling/or-agent-workspace/tools/music.mjs` — procedural background bed
 - `apps/or_app/assets/agent_workspace/bundle.json` — packed bundle
 - `apps/or_app/lib/assistant/agent_workspace.dart` — parse, install, runtime files
 - `apps/or_app/lib/assistant/assistant_controller.dart` — default and mode resolution

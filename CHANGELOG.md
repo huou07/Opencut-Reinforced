@@ -46,6 +46,18 @@ product still needs.
   32-step history that never touches project undo.
 - **Motion library multi-selection**: rows can be ticked (or selected with the
   list's select-all) and added to the composition or deleted together.
+- **Local multilingual captions from audio**: Generate Captions now downloads a
+  multilingual whisper model once and detects Vietnamese or English
+  automatically. The host-owned transcription job is also exposed to the CLI and
+  agents as `or captions transcribe`, with `or timeline import-captions` applying
+  a reviewed SRT/WebVTT as a new caption track. The transcript stays a proposal
+  until the user applies it.
+- **Assistant production workflow**: the installed workspace carries
+  `tools/voiceover.mjs` — an offline `or-assistant-script` narrator using the
+  macOS `say` voice that measures real durations, writes a timing manifest and
+  SRT, and can import, place and caption the result — and `tools/music.mjs`, a
+  deterministic, royalty-free background-music generator. Both are documented by
+  a new workspace guide and the `or-script-production` skill.
 - Empty new projects present a working **Import Media** action that reaches the
   existing platform picker and permission path, on desktop and compact layouts.
 - **Folder import**: selecting a folder imports the selected files plus files in
@@ -70,6 +82,11 @@ product still needs.
 - **macOS Developer Preview runs unsandboxed** so the assistant can start the
   local harness and its bridge; App Sandbox cannot grant that process boundary
   (ADR 0009). Packaging now asserts the entitlement stays absent.
+- **The transcription model is multilingual.** The previous English-only
+  `whisper-tiny-en` checkpoint is replaced by `whisper-small-multilingual`
+  (about 465 MiB, MIT, downloaded only after consent and verified by SHA-256), so
+  the same local install serves Vietnamese and English with automatic language
+  detection. Existing English-only installs download the new model once.
 - **Documentation restructured around task routing.** `AGENTS.md` is now a pure
   index: one project sentence, one rule, and a name / when-to-use / exact-path
   entry for every document, tool and skill. The former monolithic documents are

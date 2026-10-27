@@ -29,12 +29,15 @@ whole-document snapshots.
 
 ## Runtime-only requests
 
-Two requests run on the same application and IPC path without touching the
-project revision: export (`ExportRequest`) and MotionScene materialisation
-(`MotionMaterializeRequest`). Both are handled by an application runtime that the
-headless host does not have; without one they return an explicit unavailable
-error. Materialisation writes a persistent file, and the caller registers it
-through ordinary media and timeline commands.
+Three requests run on the same application and IPC path without touching the
+project revision: export (`ExportRequest`), MotionScene materialisation
+(`MotionMaterializeRequest`) and local transcription (`TranscriptionRequest`).
+They are handled by an application runtime that the headless host does not
+have; without one they return an explicit unavailable error. Materialisation
+writes a persistent file, transcription returns a bounded proposal, and the
+caller registers either result through ordinary media, timeline and caption
+commands. Transcription is a start/status/proposal/cancel job so the host lock
+is never held while the model runs.
 
 `or mcp` is an MCP stdio server that exposes these commands and queries to an
 external agent. It holds no project state: every tool call attaches through the
@@ -76,7 +79,9 @@ Protocol v1 (local only):
   are owner-only; the Windows runtime directory, descriptor and pipe use
   protected owner-only DACLs and reject remote clients.
 - The server exposes describe, shared application requests, explicit save and
-  guarded shutdown. It accepts no arbitrary paths and no shell commands.
+  guarded shutdown. It accepts no arbitrary paths and no shell commands. Runtime
+  requests (export, motion materialisation, transcription) are served by
+  handlers attached to the same host and return typed failures when absent.
 - No TCP, HTTP, WebSocket or network fallback exists.
 
 This transport isolates against other OS users, not against malicious code

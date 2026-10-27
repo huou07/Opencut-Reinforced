@@ -205,6 +205,7 @@ impl Server {
             "delete_clip" => self.delete_clip(arguments),
             "set_frame_rate" => self.set_frame_rate(arguments),
             "add_marker" => self.add_marker(arguments),
+            "captions_transcribe" => self.captions_transcribe(arguments),
             "motion_insert_scene" => self.motion_insert_scene(arguments),
             "motion_asset_list" => self.motion_asset_list(arguments),
             "motion_asset_insert" => self.motion_asset_insert(arguments),
@@ -459,6 +460,12 @@ impl Server {
             "delete-clip"
         };
         self.run_or(&["timeline", verb, "--clip", &clip_id])
+            .and_then(pretty)
+    }
+
+    fn captions_transcribe(&self, arguments: &Value) -> Result<String, String> {
+        let media_id = required_str(arguments, "media_id")?;
+        self.run_or(&["captions", "transcribe", "--media", &media_id])
             .and_then(pretty)
     }
 
@@ -1175,6 +1182,13 @@ fn tool_definitions() -> Value {
                 "label": {"type": "string"},
                 "marker_id": {"type": "string"}
             }), &["at", "label"]),
+        },
+        {
+            "name": "captions_transcribe",
+            "description": "Transcribe one media item's audio locally with the installed multilingual model and return bounded cues with millisecond timing. Language is detected automatically (Vietnamese and English are the supported targets). WAIT: local transcription can take a while; poll-free, this call returns only when the job finishes. This never changes the project: review the cues, then apply them with the `or timeline import-captions --file` CLI verb or edit them by hand.",
+            "inputSchema": object_schema(json!({
+                "media_id": {"type": "string", "description": "The media id from media_list."}
+            }), &["media_id"]),
         },
         {
             "name": "motion_insert_scene",

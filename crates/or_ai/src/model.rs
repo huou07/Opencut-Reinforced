@@ -33,23 +33,27 @@ pub struct ModelManifest {
     pub languages: Vec<String>,
 }
 
-/// The first supported optional model for local English caption proposals.
-/// Runtime and model licenses remain independently verified and presented.
-pub fn whisper_tiny_en_manifest() -> ModelManifest {
+/// The supported optional model for local multilingual caption proposals.
+///
+/// The multilingual small checkpoint is the first model that transcribes both
+/// Vietnamese and English audio with usable punctuation. Language is detected
+/// by the provider, so one installed artifact serves both languages. Runtime
+/// and model licenses remain independently verified and presented.
+pub fn whisper_multilingual_manifest() -> ModelManifest {
     ModelManifest {
         schema_version: 1,
-        model_id: "whisper-tiny-en".to_owned(),
+        model_id: "whisper-small-multilingual".to_owned(),
         version: "1.0".to_owned(),
         tasks: vec![AiTask::Transcribe],
         provider_id: "whisper.cpp".to_owned(),
         runtime: "whisper.cpp/1.9.4".to_owned(),
-        source: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin".to_owned(),
-        sha256: "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f".to_owned(),
-        size_bytes: 77_704_715,
+        source: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin".to_owned(),
+        sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b".to_owned(),
+        size_bytes: 487_601_967,
         license: "MIT".to_owned(),
         provenance: "ggerganov/whisper.cpp revision 5359861c739e955e79d9a303bcbc70fb988958b1".to_owned(),
         hardware_requirements: vec!["CPU".to_owned()],
-        languages: vec!["en".to_owned()],
+        languages: vec!["vi".to_owned(), "en".to_owned()],
     }
 }
 
@@ -389,17 +393,17 @@ mod tests {
 
     #[test]
     fn shipped_transcription_manifest_matches_the_reviewed_artifact_identity() {
-        let manifest = whisper_tiny_en_manifest();
+        let manifest = whisper_multilingual_manifest();
         manifest.validate().unwrap();
-        assert_eq!(manifest.model_id, "whisper-tiny-en");
+        assert_eq!(manifest.model_id, "whisper-small-multilingual");
         assert_eq!(manifest.runtime, "whisper.cpp/1.9.4");
-        assert_eq!(manifest.size_bytes, 77_704_715);
+        assert_eq!(manifest.size_bytes, 487_601_967);
         assert_eq!(
             manifest.sha256,
-            "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f"
+            "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"
         );
         assert_eq!(manifest.license, "MIT");
-        assert_eq!(manifest.languages, ["en"]);
+        assert_eq!(manifest.languages, ["vi", "en"]);
     }
 
     fn directory() -> PathBuf {

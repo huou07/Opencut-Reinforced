@@ -22,7 +22,7 @@ const MAX_AUDIO_DURATION_MS: u64 = 4 * 60 * 60 * 1_000;
 const MAX_PROVIDER_RUNTIME: Duration = Duration::from_secs(4 * 60 * 60);
 const FILE_CHUNK_BYTES: usize = 64 * 1024;
 const PROVIDER_ID: &str = "whisper.cpp";
-const MODEL_ID: &str = "whisper-tiny-en";
+const MODEL_ID: &str = "whisper-small-multilingual";
 const MODEL_VERSION: &str = "1.0";
 const MODEL_LICENSE: &str = "MIT";
 
@@ -163,10 +163,12 @@ fn handle_transcription(
         || request.identity.model_id != MODEL_ID
         || request.identity.model_version != MODEL_VERSION
         || request.identity.model_license != MODEL_LICENSE
-        || request
-            .language
-            .as_deref()
-            .is_some_and(|language| language != "en")
+        || request.language.as_deref().is_some_and(|language| {
+            language != "auto"
+                && (language.len() < 2
+                    || language.len() > 8
+                    || !language.bytes().all(|byte| byte.is_ascii_alphabetic()))
+        })
         || request.max_duration_ms == 0
         || request.max_duration_ms > MAX_AUDIO_DURATION_MS
     {
@@ -174,9 +176,10 @@ fn handle_transcription(
             output,
             request_id,
             ProviderErrorCode::InvalidRequest,
-            "This provider accepts English transcription requests up to four hours.",
+            "This provider accepts Vietnamese, English or auto-detected transcription requests up to four hours.",
         );
     }
+    let language = request.language.as_deref().unwrap_or("auto").to_owned();
     let input_path =
         match verified_input(&config.managed_root, &request.input, request_id, receiver) {
             Ok(path) => path,
@@ -215,7 +218,7 @@ fn handle_transcription(
         .arg("--output-file")
         .arg(&json_prefix)
         .arg("--language")
-        .arg("en")
+        .arg(&language)
         .arg("--threads")
         .arg("4")
         .arg("--no-gpu")

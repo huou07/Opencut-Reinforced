@@ -3,6 +3,7 @@ use or_core::{
     ApplicationRequest, ApplicationResponse, ExportRequest, ExportResponse,
     MotionMaterializeRequest, MotionMaterializeResponse, ProjectFileSession,
     ProjectFileSessionError, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
+    TranscriptionRequest, TranscriptionResponse,
 };
 
 /// Runtime extension for application operations that need desktop media services.
@@ -24,6 +25,20 @@ pub trait MotionMaterializeHandler: Send + Sync {
         session: &ProjectSession,
         request: MotionMaterializeRequest,
     ) -> MotionMaterializeResponse;
+}
+
+/// Runtime extension for local transcription jobs.
+///
+/// The handler starts, polls and cancels a background job owned by the
+/// application runtime. It returns immediately; the caller polls `Status` until
+/// the job is terminal and then asks for the proposal. The host holds the
+/// project lock only for the duration of one request, never for the model run.
+pub trait TranscriptionRequestHandler: Send + Sync {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse;
 }
 use std::{
     error::Error,
@@ -104,7 +119,7 @@ impl LiveProjectHost {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, LiveProjectHostError> {
-        Self::start_with_handlers(session, descriptor_path, None, None)
+        Self::start_with_runtimes(session, descriptor_path, None, None, None)
     }
 
     /// Starts IPC with one shared export handler for direct and remote requests.
@@ -113,7 +128,7 @@ impl LiveProjectHost {
         descriptor_path: Option<&Path>,
         handler: Arc<dyn ExportRequestHandler>,
     ) -> Result<Self, LiveProjectHostError> {
-        Self::start_with_handlers(session, descriptor_path, Some(handler), None)
+        Self::start_with_runtimes(session, descriptor_path, Some(handler), None, None)
     }
 
     /// Starts IPC with the export and motion-materialisation runtimes attached.
@@ -123,7 +138,29 @@ impl LiveProjectHost {
         export_handler: Option<Arc<dyn ExportRequestHandler>>,
         motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
     ) -> Result<Self, LiveProjectHostError> {
-        let mut host = Self::in_process_with_handlers(session, export_handler, motion_handler);
+        Self::start_with_runtimes(
+            session,
+            descriptor_path,
+            export_handler,
+            motion_handler,
+            None,
+        )
+    }
+
+    /// Starts IPC with every runtime the application process owns attached.
+    pub fn start_with_runtimes(
+        session: ProjectFileSession,
+        descriptor_path: Option<&Path>,
+        export_handler: Option<Arc<dyn ExportRequestHandler>>,
+        motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+        transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
+    ) -> Result<Self, LiveProjectHostError> {
+        let mut host = Self::in_process_with_runtimes(
+            session,
+            export_handler,
+            motion_handler,
+            transcription_handler,
+        );
         host.server = Some(LocalIpcServer::start_shared(
             Arc::clone(&host.shared),
             descriptor_path,
@@ -136,16 +173,23 @@ impl LiveProjectHost {
         session: ProjectFileSession,
         handler: Arc<dyn ExportRequestHandler>,
     ) -> Self {
-        Self::in_process_with_handlers(session, Some(handler), None)
+        Self::in_process_with_runtimes(session, Some(handler), None, None)
     }
 
-    fn in_process_with_handlers(
+    /// Creates the same host without IPC, with every runtime attached.
+    pub fn in_process_with_runtimes(
         session: ProjectFileSession,
         export_handler: Option<Arc<dyn ExportRequestHandler>>,
         motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+        transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
     ) -> Self {
         Self {
-            shared: shared_host_state(session, export_handler, motion_handler),
+            shared: shared_host_state(
+                session,
+                export_handler,
+                motion_handler,
+                transcription_handler,
+            ),
             server: None,
         }
     }
@@ -263,6 +307,7 @@ pub(crate) struct LiveProjectHostState {
     pub(crate) session: ProjectFileSession,
     export_handler: Option<Arc<dyn ExportRequestHandler>>,
     motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+    transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
     pub(crate) closing: bool,
     sequence: u64,
     subscribers: Vec<mpsc::Sender<ProjectHostEvent>>,
@@ -283,6 +328,21 @@ impl LiveProjectHostState {
                     ApplicationResponse::Export(ExportResponse::failure(
                         "EXPORT_RUNTIME_UNAVAILABLE",
                         "the project host has no export runtime",
+                    ))
+                }
+            }
+            ApplicationRequest::Transcription(transcription_request) => {
+                if let Some(handler) = &self.transcription_handler {
+                    ApplicationResponse::Transcription(handler.handle_transcription_request(
+                        self.session.session(),
+                        transcription_request,
+                    ))
+                } else {
+                    ApplicationResponse::Transcription(TranscriptionResponse::Failure(
+                        or_core::TranscriptionFailure::new(
+                            "TRANSCRIPTION_RUNTIME_UNAVAILABLE",
+                            "the project host has no transcription runtime",
+                        ),
                     ))
                 }
             }
@@ -329,11 +389,13 @@ pub(crate) fn shared_host_state(
     session: ProjectFileSession,
     export_handler: Option<Arc<dyn ExportRequestHandler>>,
     motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+    transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
 ) -> Arc<Mutex<LiveProjectHostState>> {
     Arc::new(Mutex::new(LiveProjectHostState {
         session,
         export_handler,
         motion_handler,
+        transcription_handler,
         closing: false,
         sequence: 0,
         subscribers: Vec::new(),

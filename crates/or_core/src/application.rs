@@ -2214,6 +2214,7 @@ pub enum ApplicationRequest {
     Transaction(TransactionEnvelope),
     Export(ExportRequest),
     MotionMaterialize(MotionMaterializeRequest),
+    Transcription(TranscriptionRequest),
 }
 
 /// A bounded request to turn a code file or an existing scene into a video.
@@ -2370,6 +2371,65 @@ mod export_profile_tests {
     }
 
     #[test]
+    fn transcription_round_trips_on_the_application_contract() {
+        use super::{
+            ApplicationRequest, ApplicationResponse, TranscriptionJobView,
+            TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+            TranscriptionSegmentView,
+        };
+        use crate::{MediaId, ProjectRevision};
+        let project_id = ProjectId::generate();
+        let project_instance_id = ProjectInstanceId::generate();
+        let media_id = MediaId::generate();
+        let job_id = crate::JobId::generate();
+        let request = ApplicationRequest::Transcription(TranscriptionRequest::Start {
+            project_id,
+            project_instance_id,
+            expected_project_revision: ProjectRevision::new(3),
+            media_id,
+        });
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["kind"], "transcription");
+        assert_eq!(value["request"]["operation"], "start");
+        let decoded: ApplicationRequest = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, request);
+
+        let response = ApplicationResponse::Transcription(TranscriptionResponse::Proposal(
+            TranscriptionProposalView {
+                project_id,
+                project_revision: ProjectRevision::new(3),
+                media_id,
+                provider_id: "whisper.cpp".to_owned(),
+                model_id: "whisper-small-multilingual".to_owned(),
+                model_version: "1.0".to_owned(),
+                model_license: "MIT".to_owned(),
+                language: "vi".to_owned(),
+                segments: vec![TranscriptionSegmentView {
+                    start_ms: 0,
+                    end_ms: 1200,
+                    text: "Xin chào".to_owned(),
+                }],
+            },
+        ));
+        let value = serde_json::to_value(&response).unwrap();
+        assert_eq!(value["kind"], "transcription");
+        assert_eq!(value["result"]["status"], "proposal");
+        let decoded: ApplicationResponse = serde_json::from_value(value).unwrap();
+        assert_eq!(decoded, response);
+
+        let job =
+            ApplicationResponse::Transcription(TranscriptionResponse::Job(TranscriptionJobView {
+                job_id,
+                state: crate::JobState::Running,
+                failure_message: None,
+            }));
+        assert_eq!(
+            serde_json::to_value(&job).unwrap()["result"]["body"]["state"],
+            "running"
+        );
+    }
+
+    #[test]
     fn webm_profile_has_a_stable_wire_name() {
         assert_eq!(
             serde_json::to_value(ExportProfile::WebmVp9Opus).unwrap(),
@@ -2422,6 +2482,7 @@ pub enum ApplicationResponse {
     Transaction(TransactionResult),
     Export(ExportResponse),
     MotionMaterialize(MotionMaterializeResponse),
+    Transcription(TranscriptionResponse),
     Error(OperationError),
 }
 
@@ -2460,6 +2521,110 @@ impl MotionMaterializeResponse {
             frame_count: 0,
             duration: RationalTime::ZERO,
             bytes_written: 0,
+        }
+    }
+}
+
+/// A runtime-only local transcription request routed through the same
+/// application and IPC path as edits.
+///
+/// Only the application runtime links the media decoder and the local model, so
+/// the CLI and agents ask the host to transcribe instead of linking a second
+/// pipeline. A transcription never changes the project; the reviewed cues are
+/// applied later through the ordinary caption import command.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "operation",
+    content = "request",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum TranscriptionRequest {
+    Start {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        media_id: MediaId,
+    },
+    Status {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        job_id: crate::JobId,
+    },
+    Proposal {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        job_id: crate::JobId,
+    },
+    Cancel {
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        job_id: crate::JobId,
+    },
+}
+
+/// One background transcription job as the host reports it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TranscriptionJobView {
+    pub job_id: crate::JobId,
+    pub state: crate::JobState,
+    pub failure_message: Option<String>,
+}
+
+/// One reviewed transcript cue. Confidence is intentionally not part of this
+/// transport contract: the UI shows it from its own bounded view, and no
+/// command consumes it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TranscriptionSegmentView {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
+}
+
+/// A provider-independent transcript proposal bound to the exact project,
+/// revision and media the host asked about.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TranscriptionProposalView {
+    pub project_id: ProjectId,
+    pub project_revision: ProjectRevision,
+    pub media_id: MediaId,
+    pub provider_id: String,
+    pub model_id: String,
+    pub model_version: String,
+    pub model_license: String,
+    pub language: String,
+    pub segments: Vec<TranscriptionSegmentView>,
+}
+
+/// Outcome of one transcription request. It never carries executable edits.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    content = "body",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum TranscriptionResponse {
+    Job(TranscriptionJobView),
+    Proposal(TranscriptionProposalView),
+    Failure(TranscriptionFailure),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TranscriptionFailure {
+    pub code: String,
+    pub message: String,
+}
+
+impl TranscriptionFailure {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
         }
     }
 }
@@ -2541,6 +2706,12 @@ impl ProjectSession {
                     "the project host has no motion materialisation runtime",
                 ))
             }
+            ApplicationRequest::Transcription(_) => ApplicationResponse::Transcription(
+                TranscriptionResponse::Failure(TranscriptionFailure::new(
+                    "TRANSCRIPTION_RUNTIME_UNAVAILABLE",
+                    "the project host has no transcription runtime",
+                )),
+            ),
         }
     }
 

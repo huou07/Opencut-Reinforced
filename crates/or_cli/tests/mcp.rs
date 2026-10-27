@@ -1,15 +1,22 @@
 //! End-to-end coverage for `or mcp`: a real live host, a real child process,
 //! and edits that must be visible in the saved project file.
 
-use or_core::{ProjectFileSession, TrackKind};
-use or_ipc::LiveProjectHost;
+use or_core::{
+    JobId, JobState, MediaId, ProjectFileSession, ProjectSession, TrackKind, TranscriptionJobView,
+    TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView,
+};
+use or_ipc::{LiveProjectHost, TranscriptionRequestHandler};
 use serde_json::{Value, json};
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -165,6 +172,7 @@ fn mcp_lists_tools_and_edits_the_live_project() {
     assert!(names.contains(&"motion_asset_list"));
     assert!(names.contains(&"motion_asset_insert"));
     assert!(names.contains(&"motion_asset_save"));
+    assert!(names.contains(&"captions_transcribe"));
     for tool in tools["result"]["tools"].as_array().unwrap() {
         assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
     }
@@ -336,5 +344,104 @@ fn mcp_lists_motion_assets_and_refuses_an_unknown_insert() {
         serde_json::from_str(&mcp.call("motion_asset_list", json!({})).unwrap()).unwrap();
     assert_eq!(listed["total"], 2);
 
+    drop(host);
+}
+
+struct FakeTranscriptionHandler {
+    job_id: JobId,
+}
+
+impl TranscriptionRequestHandler for FakeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        match request {
+            TranscriptionRequest::Start { .. } => {
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Status { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id: session.project_id(),
+                    project_revision: session.project_revision(),
+                    media_id: MediaId::generate(),
+                    provider_id: "whisper.cpp".to_owned(),
+                    model_id: "whisper-small-multilingual".to_owned(),
+                    model_version: "1.0".to_owned(),
+                    model_license: "MIT".to_owned(),
+                    language: "vi".to_owned(),
+                    segments: vec![TranscriptionSegmentView {
+                        start_ms: 0,
+                        end_ms: 1_200,
+                        text: "Xin chào".to_owned(),
+                    }],
+                })
+            }
+            TranscriptionRequest::Cancel { .. } => {
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Cancelled,
+                    failure_message: None,
+                })
+            }
+        }
+    }
+}
+
+#[test]
+fn mcp_captions_transcribe_returns_a_proposal_without_changing_the_project() {
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let handler = Arc::new(FakeTranscriptionHandler {
+        job_id: JobId::generate(),
+    });
+    let host = LiveProjectHost::start_with_runtimes(
+        session,
+        Some(directory.descriptor_path().as_path()),
+        None,
+        None,
+        Some(handler),
+    )
+    .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+    mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+
+    let transcript: Value = serde_json::from_str(
+        &mcp.call(
+            "captions_transcribe",
+            json!({"media_id": "22222222-2222-4222-8222-222222222222"}),
+        )
+        .expect("transcribe"),
+    )
+    .unwrap();
+    assert_eq!(transcript["transcription"]["language"], "vi");
+    assert_eq!(
+        transcript["transcription"]["segments"][0]["text"],
+        "Xin chào"
+    );
+    assert_eq!(host.describe().unwrap().summary.project_revision.value(), 0);
     drop(host);
 }

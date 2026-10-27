@@ -28,7 +28,9 @@ pub use application::{
     TimelineClipPageV2, TimelineClipState, TimelineEditMode, TimelineMarkerPage,
     TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
     TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrackSummaryV2,
-    TimelineTrimEdge, TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
+    TimelineTrimEdge, TransactionEnvelope, TransactionResult, TranscriptionFailure,
+    TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView, command_catalog, query_catalog,
 };
 pub use audio_cleanup::{
     AudioCleanupError, AudioCleanupErrorCode, AudioCleanupRequest, AudioCleanupResult,

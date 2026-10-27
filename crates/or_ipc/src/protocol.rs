@@ -157,6 +157,7 @@ pub enum ApplicationSuccess {
     Transaction(TransactionResult),
     Export(ExportResponse),
     MotionMaterialize(MotionMaterializeResponse),
+    Transcription(or_core::TranscriptionResponse),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

@@ -12,21 +12,22 @@ use or_core::{
     MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
     MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, Opacity, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
-    RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
-    TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
-    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
-    TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
-    TrackState, Transform, TransitionKind, TransitionReference, VisualSettings,
-    apply_project_recovery, discard_project_recovery, encode_caption_file,
-    ffmpeg_executable_from_environment, inspect_project_recovery, parse_caption_file,
-    prepare_media_import,
+    ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor,
+    TextFormatting, TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState,
+    TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation,
+    TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId,
+    TrackKind, TrackState, TranscriptionFailure, TranscriptionJobView, TranscriptionProposalView,
+    TranscriptionRequest, TranscriptionResponse, TranscriptionSegmentView, Transform,
+    TransitionKind, TransitionReference, VisualSettings, apply_project_recovery,
+    discard_project_recovery, encode_caption_file, ffmpeg_executable_from_environment,
+    inspect_project_recovery, parse_caption_file, prepare_media_import,
 };
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
 use or_ipc::{
     ExportRequestHandler, LiveProjectHost, LiveProjectHostError, MotionMaterializeHandler,
-    ProjectHostEvent, ProjectHostEventKind,
+    ProjectHostEvent, ProjectHostEventKind, TranscriptionRequestHandler,
 };
 use std::{
     fs::{self, File, OpenOptions},
@@ -642,7 +643,7 @@ impl std::error::Error for ProjectBridgeError {}
 pub struct ProjectHostHandle {
     host: LiveProjectHost,
     media_artifact_service: Option<MediaArtifactService>,
-    transcription_service: Option<TranscriptionService>,
+    transcription_service: Option<Arc<TranscriptionService>>,
     preview_runtime: Arc<PreviewRuntime>,
 }
 
@@ -662,25 +663,251 @@ fn start_project_host(
 ) -> Result<ProjectHostHandle, ProjectBridgeError> {
     let preview_runtime = Arc::new(PreviewRuntime::new());
     let export_handler: Arc<dyn ExportRequestHandler> = preview_runtime.clone();
+    let transcription_service = TranscriptionService::new().map(Arc::new);
+    let transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>> =
+        transcription_service.as_ref().map(|service| {
+            Arc::new(BridgeTranscriptionHandler {
+                service: Arc::clone(service),
+            }) as Arc<dyn TranscriptionRequestHandler>
+        });
     #[cfg(target_os = "android")]
-    let host = LiveProjectHost::in_process_with_export_handler(session, export_handler);
+    let host = LiveProjectHost::in_process_with_runtimes(
+        session,
+        Some(export_handler),
+        None,
+        transcription_handler,
+    );
     #[cfg(not(target_os = "android"))]
     let host = {
         let motion_handler: Arc<dyn MotionMaterializeHandler> = preview_runtime.clone();
-        LiveProjectHost::start_with_handlers(
+        LiveProjectHost::start_with_runtimes(
             session,
             None,
             Some(export_handler),
             Some(motion_handler),
+            transcription_handler,
         )
         .map_err(host_error)?
     };
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
-        transcription_service: TranscriptionService::new(),
+        transcription_service,
         preview_runtime,
     })
+}
+
+/// Bridges the runtime transcription service onto the IPC application contract.
+///
+/// The host holds the project lock while this runs, so every branch returns
+/// immediately: the model runs in the service's own background job.
+struct BridgeTranscriptionHandler {
+    service: Arc<TranscriptionService>,
+}
+
+impl TranscriptionRequestHandler for BridgeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        let (project_id, project_instance_id) = match request_identity(&request) {
+            Some(identity) => identity,
+            None => {
+                return transcription_failure(
+                    "TRANSCRIPTION_REQUEST_INVALID",
+                    "The transcription request is incomplete.",
+                );
+            }
+        };
+        if session.project_id() != project_id
+            || session.project_instance_id() != project_instance_id
+        {
+            return transcription_failure(
+                "PROJECT_SESSION_MISMATCH",
+                "The transcription request belongs to another project session.",
+            );
+        }
+        match request {
+            TranscriptionRequest::Start {
+                expected_project_revision,
+                media_id,
+                ..
+            } => {
+                if session.project_revision() != expected_project_revision {
+                    return transcription_failure(
+                        "PROJECT_REVISION_CONFLICT",
+                        "The project changed before transcription started.",
+                    );
+                }
+                let Some(media) = session
+                    .project()
+                    .media_items()
+                    .iter()
+                    .find(|item| item.id() == media_id)
+                    .cloned()
+                else {
+                    return transcription_failure(
+                        "MEDIA_NOT_FOUND",
+                        "The media item is not part of this project.",
+                    );
+                };
+                let project_uuid = match uuid::Uuid::parse_str(&project_id.to_string()) {
+                    Ok(uuid) => uuid,
+                    Err(_) => {
+                        return transcription_failure(
+                            "TRANSCRIPTION_REQUEST_INVALID",
+                            "The project identity is invalid.",
+                        );
+                    }
+                };
+                match self
+                    .service
+                    .start(project_uuid, expected_project_revision.value(), media)
+                {
+                    Ok(job) => transcription_job(job),
+                    Err(error) => transcription_service_failure(error),
+                }
+            }
+            TranscriptionRequest::Status { job_id, .. } => match self.service.snapshot(job_id) {
+                Some(job) => transcription_job(job),
+                None => transcription_failure(
+                    "JOB_NOT_FOUND",
+                    "The transcription job is no longer available.",
+                ),
+            },
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                let Some(proposal) = self.service.proposal(job_id) else {
+                    return transcription_failure(
+                        "PROPOSAL_UNAVAILABLE",
+                        "The transcript proposal is no longer available.",
+                    );
+                };
+                if proposal.project_id.to_string() != project_id.to_string() {
+                    return transcription_failure(
+                        "PROJECT_SESSION_MISMATCH",
+                        "The transcript proposal belongs to another project.",
+                    );
+                }
+                let media_id = match MediaId::from_str(&proposal.media_id.to_string()) {
+                    Ok(media_id) => media_id,
+                    Err(_) => {
+                        return transcription_failure(
+                            "PROPOSAL_UNAVAILABLE",
+                            "The transcript proposal media identity is invalid.",
+                        );
+                    }
+                };
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id,
+                    project_revision: ProjectRevision::new(proposal.project_revision),
+                    media_id,
+                    provider_id: proposal.provider_id,
+                    model_id: proposal.model_id,
+                    model_version: proposal.model_version,
+                    model_license: proposal.model_license,
+                    language: proposal.language,
+                    segments: proposal
+                        .segments
+                        .into_iter()
+                        .map(|segment| TranscriptionSegmentView {
+                            start_ms: segment.start_ms,
+                            end_ms: segment.end_ms,
+                            text: segment.text,
+                        })
+                        .collect(),
+                })
+            }
+            TranscriptionRequest::Cancel { job_id, .. } => match self.service.cancel(job_id) {
+                Ok(_) => match self.service.snapshot(job_id) {
+                    Some(job) => transcription_job(job),
+                    None => transcription_failure(
+                        "JOB_NOT_FOUND",
+                        "The transcription job is no longer available.",
+                    ),
+                },
+                Err(_) => transcription_failure(
+                    "JOB_NOT_FOUND",
+                    "The transcription job is no longer available.",
+                ),
+            },
+        }
+    }
+}
+
+fn request_identity(request: &TranscriptionRequest) -> Option<(ProjectId, ProjectInstanceId)> {
+    match request {
+        TranscriptionRequest::Start {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Status {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Proposal {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Cancel {
+            project_id,
+            project_instance_id,
+            ..
+        } => Some((*project_id, *project_instance_id)),
+    }
+}
+
+fn transcription_job(job: JobSnapshot) -> TranscriptionResponse {
+    TranscriptionResponse::Job(TranscriptionJobView {
+        job_id: job.id,
+        state: job.state,
+        failure_message: job.failure_message,
+    })
+}
+
+fn transcription_failure(code: &str, message: &str) -> TranscriptionResponse {
+    TranscriptionResponse::Failure(TranscriptionFailure::new(code, message))
+}
+
+fn transcription_service_failure(
+    error: crate::transcription::TranscriptionServiceError,
+) -> TranscriptionResponse {
+    let code = match error {
+        crate::transcription::TranscriptionServiceError::AudioRequired => {
+            "TRANSCRIPTION_AUDIO_REQUIRED"
+        }
+        crate::transcription::TranscriptionServiceError::DownloadBusy => "MODEL_DOWNLOAD_BUSY",
+        crate::transcription::TranscriptionServiceError::DownloadNotFound => {
+            "MODEL_DOWNLOAD_NOT_FOUND"
+        }
+        crate::transcription::TranscriptionServiceError::InvalidId => {
+            "TRANSCRIPTION_REQUEST_INVALID"
+        }
+        crate::transcription::TranscriptionServiceError::JobBusy => "TRANSCRIPTION_BUSY",
+        crate::transcription::TranscriptionServiceError::JobUnavailable => "JOB_NOT_FOUND",
+        crate::transcription::TranscriptionServiceError::LocalFileRequired => {
+            "TRANSCRIPTION_LOCAL_FILE_REQUIRED"
+        }
+        crate::transcription::TranscriptionServiceError::ModelAlreadyInstalled => {
+            "MODEL_ALREADY_INSTALLED"
+        }
+        crate::transcription::TranscriptionServiceError::ModelUnavailable => {
+            "TRANSCRIPTION_MODEL_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::ProviderUnavailable => {
+            "TRANSCRIPTION_RUNTIME_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::StorageUnavailable => {
+            "TRANSCRIPTION_STORAGE_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::JobSubmit => {
+            "TRANSCRIPTION_QUEUE_UNAVAILABLE"
+        }
+    };
+    TranscriptionResponse::Failure(TranscriptionFailure::new(code, error.to_string()))
 }
 
 fn create_media_artifact_service() -> Option<MediaArtifactService> {
@@ -858,7 +1085,7 @@ impl ProjectHostHandle {
     pub fn transcription_model(&self) -> ProjectTranscriptionModelView {
         let info = self
             .transcription_service
-            .as_ref()
+            .as_deref()
             .map(TranscriptionService::model_info)
             .unwrap_or_else(TranscriptionModelInfo::unavailable);
         transcription_model_view(info)
@@ -1004,7 +1231,7 @@ impl ProjectHostHandle {
     }
 
     fn transcription_service(&self) -> Result<&TranscriptionService, ProjectBridgeError> {
-        self.transcription_service.as_ref().ok_or_else(|| {
+        self.transcription_service.as_deref().ok_or_else(|| {
             transcription_error(
                 crate::transcription::TranscriptionServiceError::ProviderUnavailable,
             )
@@ -1641,7 +1868,9 @@ impl ProjectHostHandle {
         }
         let mut content = clip.content;
         match &mut content {
-            ClipContent::Media { frozen: current, .. } => *current = frozen,
+            ClipContent::Media {
+                frozen: current, ..
+            } => *current = frozen,
             ClipContent::Text { .. } | ClipContent::Caption { .. } => {
                 return action_error(ProjectBridgeError {
                     code: "UNSUPPORTED_CLIP_CONTENT".to_owned(),
@@ -3915,8 +4144,8 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
             media_id,
             source_range,
             playback_rate: _,
-                reversed: _,
-                frozen: _,
+            reversed: _,
+            frozen: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -4518,6 +4747,7 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use super::BridgeTranscriptionHandler;
     use super::{
         CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectCaptionCueView,
         ProjectHostHandle, audio_settings_view, configured_media_artifact_cache_root,
@@ -4525,8 +4755,12 @@ mod tests {
         rational_time_view, timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
         timeline_track_view, visual_settings_view,
     };
-    use or_core::{ExportRequest, ExportResponse, ProjectFileSession};
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use crate::transcription::TranscriptionService;
+    use or_core::{
+        ExportRequest, ExportResponse, ProjectFileSession, TranscriptionRequest,
+        TranscriptionResponse,
+    };
+    use or_ipc::{ExportRequestHandler, LiveProjectHost, TranscriptionRequestHandler};
     use std::sync::Arc;
 
     struct TestHostDirectory(PathBuf);
@@ -5132,5 +5366,59 @@ mod tests {
                 expected
             );
         }
+    }
+    #[test]
+    fn bridge_transcription_rejects_another_session_a_stale_revision_and_an_unknown_job() {
+        let directory = TestHostDirectory::new();
+        let session =
+            ProjectFileSession::create_new(directory.0.join("captions.orproj"), "B").unwrap();
+        let Some(service) = TranscriptionService::new() else {
+            return;
+        };
+        let handler = BridgeTranscriptionHandler {
+            service: Arc::new(service),
+        };
+        let project_id = session.session().project_id();
+        let project_instance_id = session.session().project_instance_id();
+
+        let other_session = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Status {
+                project_id: ProjectId::generate(),
+                project_instance_id,
+                job_id: JobId::generate(),
+            },
+        );
+        assert!(matches!(
+            other_session,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROJECT_SESSION_MISMATCH"
+        ));
+
+        let stale = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Start {
+                project_id,
+                project_instance_id,
+                expected_project_revision: ProjectRevision::new(99),
+                media_id: MediaId::generate(),
+            },
+        );
+        assert!(matches!(
+            stale,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROJECT_REVISION_CONFLICT"
+        ));
+
+        let unknown = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Proposal {
+                project_id,
+                project_instance_id,
+                job_id: JobId::generate(),
+            },
+        );
+        assert!(matches!(
+            unknown,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROPOSAL_UNAVAILABLE"
+        ));
     }
 }

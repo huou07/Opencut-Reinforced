@@ -131,6 +131,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.captions.import",
             "timeline.clip.update",
             "timeline.clip.move",
+            "timeline.clips.move",
             "timeline.clip.delete",
             "timeline.clip.trim",
             "timeline.clip.slip",

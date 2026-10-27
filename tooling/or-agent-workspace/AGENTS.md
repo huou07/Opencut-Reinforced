@@ -27,6 +27,12 @@ each line below names the situation that makes it the right thing to read.
 - **Project safety** — revisions, save, undo/redo and refused commands.
   When: deciding whether to save, undoing a change, or recovering from a failed command.
   Path: `docs/project-safety.md`
+- **Script, narration and music** — an `or-assistant-script`, offline macOS
+  voiceover, exact caption clips, generated background music, and local
+  transcription of existing audio.
+  When: the user asks for a script, voiceover/dubbing, subtitles from audio, or
+  background music.
+  Path: `docs/script-and-voice.md`
 - **Troubleshooting** — missing tools, no open project, slow or failed renders.
   When: a command fails and the error is not self-explanatory.
   Path: `docs/troubleshooting.md`
@@ -38,6 +44,8 @@ The session catalog carries these. Load one only when its task matches.
 - `or-timeline-edit` — orient, act, verify and save one timeline change.
 - `or-motion-scene` — author, validate and materialise a deterministic scene.
 - `or-project-safety` — protect revisions and report edits honestly.
+- `or-script-production` — plan a script, narrate it offline, derive exact
+  captions and add a generated music bed.
 
 ### Tools
 
@@ -48,6 +56,15 @@ The session catalog carries these. Load one only when its task matches.
   opens. `tools/or commands` and `tools/or queries` print the exact verb surface.
 - `tools/motion-scaffold.mjs` — writes a valid V1 `.ormotion.json` skeleton:
   `node tools/motion-scaffold.mjs --name "Title" --out scenes/title.ormotion.json`.
+- `tools/voiceover.mjs` — validates an `or-assistant-script`, speaks it with the
+  macOS voice, writes a timing manifest and SRT, and can import/place/caption the
+  result with `--apply`:
+  `node tools/voiceover.mjs --script work/scripts/demo.json --plan --json`.
+- `tools/music.mjs` — synthesises a quiet, royalty-free background bed offline:
+  `node tools/music.mjs --out work/music/bed.wav --duration 60 --mood calm --json`.
+- `tools/or captions transcribe` / `tools/or timeline import-captions` — local
+  multilingual transcription of existing audio, and applying reviewed cues as a
+  caption track. This is the "subtitles from audio" path.
 - `mcp__or__motion_insert_scene`, `mcp__or__motion_asset_list`,
   `mcp__or__motion_asset_insert`, `mcp__or__motion_asset_save` — the app's MCP
   fallback. Use them only for motion insertion and the motion library, where the

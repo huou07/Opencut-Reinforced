@@ -36,12 +36,16 @@ test('the bundle carries the index, guides, skills and tools', async () => {
     'docs/media-and-import.md',
     'docs/motion-scenes.md',
     'docs/project-safety.md',
+    'docs/script-and-voice.md',
     'docs/troubleshooting.md',
     'tools/README.md',
     'tools/motion-scaffold.mjs',
+    'tools/voiceover.mjs',
+    'tools/music.mjs',
     '.agents/skills/or-timeline-edit/SKILL.md',
     '.agents/skills/or-motion-scene/SKILL.md',
     '.agents/skills/or-project-safety/SKILL.md',
+    '.agents/skills/or-script-production/SKILL.md',
   ]) {
     assert.ok(bundle.files[required], `${required} is missing`);
   }

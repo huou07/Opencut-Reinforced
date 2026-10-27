@@ -8,7 +8,7 @@ mod windows;
 pub use client::{IpcClientError, LocalIpcClient};
 pub use live_host::{
     ExportRequestHandler, LiveProjectHost, LiveProjectHostError, MotionMaterializeHandler,
-    ProjectHostEvent, ProjectHostEventKind,
+    ProjectHostEvent, ProjectHostEventKind, TranscriptionRequestHandler,
 };
 pub use protocol::{
     ApplicationSuccess, DescribeResponse, EndpointDescriptor, IpcCommandDescriptor, IpcErrorCode,

@@ -8,6 +8,10 @@ motion insertion and the motion library.
 |---|---|
 | `tools/or <verb> --attach project.json --json` | The OR CLI bound to the running app build. Reads and edits the live project through the app-written pointer. `tools/or commands` and `tools/or queries` list the verbs. |
 | `node tools/motion-scaffold.mjs` | Write a valid V1 `.ormotion.json` skeleton into `scenes/`. |
+| `node tools/voiceover.mjs` | Speak an `or-assistant-script` with the macOS voice, write exact timings and SRT, optionally import and place the result. |
+| `node tools/music.mjs` | Synthesise a quiet, royalty-free background music bed offline. |
+| `tools/or captions transcribe` | Transcribe one media item locally (Vietnamese/English auto-detected). |
+| `tools/or timeline import-captions` | Apply a reviewed SRT/WebVTT file as a new caption track. |
 | `tools/or motion ...` | Validate, inspect, evaluate, render or write a scene file; none of these inserts a clip. |
 | `tools/or motion asset ...` | Inspect a motion library folder the user names. |
 
@@ -25,6 +29,11 @@ tools/or motion evaluate --file scenes/title.ormotion.json --at 1/2 --json
 tools/or motion from-code --source work/sample.rs --output scenes/sample.ormotion.json
 tools/or motion render --file scenes/title.ormotion.json --at 1/2 --output work/title.png
 tools/or motion asset list --library work/motion-library --json
+node tools/voiceover.mjs --script work/scripts/demo.json --plan --json
+node tools/voiceover.mjs --script work/scripts/demo.json --out work/voiceover/demo --apply --attach project.json --json
+node tools/music.mjs --out work/music/bed.wav --duration 60 --mood calm --json
+tools/or captions transcribe --attach project.json --media MEDIA_ID --srt-out work/captions/clip.srt --json
+tools/or timeline import-captions --attach project.json --file work/captions/clip.srt --json
 ```
 
 `motion materialize` needs a live app but only writes the output file. To place a

@@ -1,9 +1,11 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MarkerId, ProjectDocument,
-    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, TrackKind,
-    load_project_file, save_project_file_atomic, write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, JobId, JobState, MarkerId,
+    MediaId, ProjectDocument, ProjectFileSession, ProjectRevision, ProjectSession, QueryResult,
+    TrackId, TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
+    TranscriptionResponse, TranscriptionSegmentView, load_project_file, save_project_file_atomic,
+    write_recovery_checkpoint,
 };
-use or_ipc::{LiveProjectHost, ProjectHostEventKind};
+use or_ipc::{LiveProjectHost, ProjectHostEventKind, TranscriptionRequestHandler};
 use serde_json::Value;
 use std::{
     ffi::OsString,
@@ -11,7 +13,10 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -1942,7 +1947,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v7_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v8_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -2083,7 +2088,7 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v7_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        7
+        8
     );
 }
 
@@ -2651,8 +2656,8 @@ fn motion_from_code_builds_a_highlighted_scene_from_a_sample() {
     let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(summary["language"], "rust");
     assert_eq!(summary["validation_ok"], true);
-    // Background, title and five source lines.
-    assert_eq!(summary["node_count"], 7);
+    // Background, title and the progressive reveal steps for five source lines.
+    assert_eq!(summary["node_count"], 35);
 
     // The scene it wrote validates through the ordinary validator, and it is the same
     // file a hand-authored scene would be.
@@ -3025,4 +3030,134 @@ fn motion_asset_imports_an_image_and_instantiates_it_with_parameters() {
         &["--json"],
     ));
     assert!(validated.status.success(), "{validated:?}");
+}
+
+struct FakeTranscriptionHandler {
+    job_id: JobId,
+    media_id: Mutex<Option<MediaId>>,
+}
+
+impl TranscriptionRequestHandler for FakeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        match request {
+            TranscriptionRequest::Start {
+                project_id,
+                project_instance_id,
+                expected_project_revision,
+                media_id,
+            } => {
+                assert_eq!(project_id, session.project_id());
+                assert_eq!(project_instance_id, session.project_instance_id());
+                assert_eq!(expected_project_revision, session.project_revision());
+                *self.media_id.lock().unwrap() = Some(media_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Status { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                let media_id = self
+                    .media_id
+                    .lock()
+                    .unwrap()
+                    .expect("started transcription");
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id: session.project_id(),
+                    project_revision: session.project_revision(),
+                    media_id,
+                    provider_id: "whisper.cpp".to_owned(),
+                    model_id: "whisper-small-multilingual".to_owned(),
+                    model_version: "1.0".to_owned(),
+                    model_license: "MIT".to_owned(),
+                    language: "vi".to_owned(),
+                    segments: vec![TranscriptionSegmentView {
+                        start_ms: 0,
+                        end_ms: 1_500,
+                        text: "Xin chào".to_owned(),
+                    }],
+                })
+            }
+            TranscriptionRequest::Cancel { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Cancelled,
+                    failure_message: None,
+                })
+            }
+        }
+    }
+}
+
+#[test]
+fn attached_captions_cli_transcribes_reviews_and_imports_a_subtitle_file() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Captions CLI");
+    let handler = Arc::new(FakeTranscriptionHandler {
+        job_id: JobId::generate(),
+        media_id: Mutex::new(None),
+    });
+    let mut host = LiveProjectHost::start_with_runtimes(
+        ProjectFileSession::open(&project_path).unwrap(),
+        None,
+        None,
+        None,
+        Some(handler),
+    )
+    .unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let media_id = "22222222-2222-4222-8222-222222222222";
+
+    let (transcript, _) = json_success(attach_args(
+        &["captions", "transcribe"],
+        &descriptor,
+        &["--media", media_id, "--json"],
+    ));
+    assert_eq!(transcript["transcription"]["language"], "vi");
+    assert_eq!(
+        transcript["transcription"]["segments"][0]["text"],
+        "Xin chào"
+    );
+    assert_eq!(transcript["job"]["state"], "succeeded");
+
+    let srt_path = directory.0.join("reviewed.srt");
+    fs::write(
+        &srt_path,
+        "1\n00:00:00,000 --> 00:00:01,000\nXin chào\n\n2\n00:00:01,000 --> 00:00:02,000\nTạm biệt\n",
+    )
+    .unwrap();
+    let (imported, _) = json_success(attach_args(
+        &["timeline", "import-captions"],
+        &descriptor,
+        &["--file", srt_path.to_str().unwrap(), "--json"],
+    ));
+    assert_eq!(imported["imported"], 2);
+    assert_eq!(imported["command"]["changed"], true);
+
+    let (tracks, _) = json_success(attach_args(
+        &["timeline", "tracks"],
+        &descriptor,
+        &["--json"],
+    ));
+    let tracks = tracks["timeline_tracks_v2"].as_array().unwrap();
+    assert!(
+        tracks.iter().any(|track| track["kind"] == "caption"),
+        "captions import created a caption track"
+    );
+    host.shutdown(true).unwrap();
 }

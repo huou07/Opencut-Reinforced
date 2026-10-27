@@ -77,12 +77,21 @@ workspace whose `AGENTS.md` routes it to one task guide, skill or tool
 ([agent-workspace.md](../features/agent-workspace.md)). OR stores no provider
 credentials; the harness keeps them.
 
-**PLANNED/FUTURE:** transcripts and caption proposals, translation, scene/silence
-analysis, selected generative assets, dubbing, local models and optional cloud
-providers inside OR. Requirements: provider-independent tasks returning
-proposals/assets, review before apply, credentials outside project/CLI, explicit
-consent and cost, no bundled model weights by default, no network call in
-deterministic rendering.
+**MVP FOUNDATION (delivered):** local multilingual transcription of one media
+item (Vietnamese and English auto-detected) with a reviewed, editable caption
+track, through the app's Generate Captions action and the host-owned
+`or captions transcribe` runtime request
+([text-captions.md](../features/text-captions.md)). The installed assistant
+workspace also carries an offline production workflow: an `or-assistant-script`,
+macOS `say` narration with exact caption timing, reviewed SRT import, and a
+generated royalty-free music bed
+([assistant.md](../features/assistant.md)).
+
+**PLANNED/FUTURE:** translation, dubbing, scene/silence analysis, selected
+generative assets, neural/cloud voices and music, and optional cloud providers
+inside OR. Requirements: provider-independent tasks returning proposals/assets,
+review before apply, credentials outside project/CLI, explicit consent and cost,
+no bundled model weights by default, no network call in deterministic rendering.
 
 ## Motion assets
 

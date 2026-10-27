@@ -11,7 +11,7 @@ mod transcription;
 pub use model::{
     InstalledModel, MAX_MODEL_ARTIFACT_BYTES, ModelManifest, ModelValidationError,
     cleanup_abandoned_model_staging, install_verified_model, remove_installed_model,
-    verify_installed_model, whisper_tiny_en_manifest,
+    verify_installed_model, whisper_multilingual_manifest,
 };
 pub use protocol::{
     AiTask, MAX_CONTROL_MESSAGE_BYTES, ManagedFileRef, ProtocolEnvelope, ProtocolError,

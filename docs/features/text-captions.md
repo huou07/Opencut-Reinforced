@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -20,6 +20,17 @@ rather than adding a second text engine.
   explicit diagnostics; cue/style loss must be understood before relying on a
   round trip.
 - Imported captions become normal editable clips, not a hidden overlay.
+- **Local transcription** turns one media item's audio into a bounded transcript
+  proposal: the app decodes a managed 16 kHz mono WAV, runs the pinned
+  whisper.cpp runtime with the downloaded multilingual model, and detects
+  Vietnamese or English automatically. The Flutter surface is **Generate
+  Captions** on a media item; the same host service is exposed to the CLI and
+  agents as `or captions transcribe`. Both paths require review before apply and
+  apply through the ordinary `timeline.captions.import` command, so an accepted
+  proposal is an editable caption track, never a hidden layer.
+- Model weights are not bundled. A 465 MiB multilingual model is downloaded
+  only after explicit consent, verified by size and SHA-256, and stored in the
+  app's private model folder; the licence and source are shown before download.
 
 ## Rules
 
@@ -30,15 +41,17 @@ rather than adding a second text engine.
 
 ## Deferred
 
-ASS, styled subtitle round-trip guarantees, transcript-driven auto-captions as a
-product workflow (local transcription is deferred by the owner), translation, and
-dubbing.
+ASS, styled subtitle round-trip guarantees, translation, dubbing, speaker
+diarisation, and word-level karaoke timing.
 
 ## Where
 
 - `crates/or_core/src/` — caption codec, text/caption clip content
 - `crates/or_render/` — text shaping and rasterisation
-- `apps/or_app/lib/` — text/caption panels and inspector
+- `crates/or_ai/` — model manifest, validation and transcript proposals
+- `crates/or_whisper_provider/` — the out-of-process local whisper adapter
+- `crates/or_app_bridge/src/transcription.rs` — decode, job and review service
+- `apps/or_app/lib/` — text/caption panels, inspector and the Generate Captions action
 
 ## Related
 
