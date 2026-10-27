@@ -64,10 +64,10 @@ mod desktop {
         EffectReference, ExportProfile, ExportRequest, ExportResponse, JobCancelOutcome,
         JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
         MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
-        MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId,
-        ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
-        RationalRate, RationalTime, TextFormatting, TimeRange, TimelineClipState,
-        TimelineTrackSummaryV2, TrackKind, Transform, TransitionReference,
+        MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+        TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
+        TransitionReference,
     };
     use or_ipc::{ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler};
     use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
@@ -104,6 +104,10 @@ mod desktop {
     const AUDIO_SAMPLE_RATE: u32 = 48_000;
     const AUDIO_BUFFER_FRAMES: usize = 12_000;
     const AUDIO_DECODE_QUEUE_CAPACITY: usize = 256;
+    /// How many rendered frames may wait for the writer during an export. Two is
+    /// enough to keep the GPU and the encoder busy at once without holding a long
+    /// run of full-size frames in memory.
+    const EXPORT_RENDER_AHEAD: usize = 2;
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
@@ -1620,52 +1624,51 @@ mod desktop {
     }
 
     /// Source time for a timeline offset inside one clip.
-///
-/// A forward clip walks its source from `source_start`; a reversed clip walks the
-/// same span from its end, so the offset mirrors inside the span the clip covers
-/// rather than inside the source file.
-fn clip_source_time(
-    clip: &VideoClip,
-    offset: RationalTime,
-) -> Result<RationalTime, PreviewError> {
-    mapped_source_time(
-        clip.source_start,
-        clip.duration,
-        clip.playback_rate,
-        offset,
-        clip.reversed,
-        clip.frozen,
-    )
-}
-
-/// The mapping itself, separated from `VideoClip` so it can be exercised without a
-/// whole clip: frozen holds the first frame, reversed mirrors inside the clip span.
-pub(crate) fn mapped_source_time(
-    source_start: RationalTime,
-    duration: RationalTime,
-    playback_rate: RationalRate,
-    offset: RationalTime,
-    reversed: bool,
-    frozen: bool,
-) -> Result<RationalTime, PreviewError> {
-    let invalid = |error: or_core::TimeError| {
-        PreviewError::new("INVALID_SOURCE_TIME", error.to_string())
-    };
-    if frozen {
-        // A frozen clip shows the frame at its source start for the whole duration.
-        return Ok(source_start);
+    ///
+    /// A forward clip walks its source from `source_start`; a reversed clip walks the
+    /// same span from its end, so the offset mirrors inside the span the clip covers
+    /// rather than inside the source file.
+    fn clip_source_time(
+        clip: &VideoClip,
+        offset: RationalTime,
+    ) -> Result<RationalTime, PreviewError> {
+        mapped_source_time(
+            clip.source_start,
+            clip.duration,
+            clip.playback_rate,
+            offset,
+            clip.reversed,
+            clip.frozen,
+        )
     }
-    let scaled = playback_rate.apply(offset).map_err(invalid)?;
-    let span = playback_rate.apply(duration).map_err(invalid)?;
-    let walked = if reversed {
-        span.checked_sub(scaled).map_err(invalid)?
-    } else {
-        scaled
-    };
-    source_start.checked_add(walked).map_err(invalid)
-}
 
-fn direct_video_clip_at(
+    /// The mapping itself, separated from `VideoClip` so it can be exercised without a
+    /// whole clip: frozen holds the first frame, reversed mirrors inside the clip span.
+    pub(crate) fn mapped_source_time(
+        source_start: RationalTime,
+        duration: RationalTime,
+        playback_rate: RationalRate,
+        offset: RationalTime,
+        reversed: bool,
+        frozen: bool,
+    ) -> Result<RationalTime, PreviewError> {
+        let invalid =
+            |error: or_core::TimeError| PreviewError::new("INVALID_SOURCE_TIME", error.to_string());
+        if frozen {
+            // A frozen clip shows the frame at its source start for the whole duration.
+            return Ok(source_start);
+        }
+        let scaled = playback_rate.apply(offset).map_err(invalid)?;
+        let span = playback_rate.apply(duration).map_err(invalid)?;
+        let walked = if reversed {
+            span.checked_sub(scaled).map_err(invalid)?
+        } else {
+            scaled
+        };
+        source_start.checked_add(walked).map_err(invalid)
+    }
+
+    fn direct_video_clip_at(
         program: &PreviewProgram,
         time: RationalTime,
         output_size: (u32, u32),
@@ -2338,54 +2341,115 @@ fn direct_video_clip_at(
         .map_err(|error| error.to_string())?;
         let mut audio_cursor = 0_u64;
         job.report_progress(0, frame_count);
-        for frame_index in 0..frame_count {
-            if job.is_cancelled() || cancellation.is_cancelled() {
-                return Err("export was cancelled".to_owned());
+
+        // Rendering a frame — decode, GPU composite, readback — and writing one —
+        // colour conversion, encode, mux — share no state, so the renderer runs a
+        // bounded number of frames ahead of the writer. The GPU and the decoder work
+        // while the CPU converts and encodes, instead of each waiting out the other.
+        // Frames still reach the writer in order, and audio blocks are still written
+        // by this thread between them, so the file is the one a frame-at-a-time loop
+        // produces.
+        let channel = std::sync::mpsc::sync_channel(EXPORT_RENDER_AHEAD);
+        let written = std::thread::scope(|scope| -> Result<(), String> {
+            let (sender, receiver) = channel;
+            let render_program = Arc::clone(&program);
+            let render_resources_for_render = Arc::clone(&render_resources);
+            let render_rate = frame_rate;
+            let render_sender = sender.clone();
+            scope.spawn(move || {
+                for frame_index in 0..frame_count {
+                    if job.is_cancelled() || cancellation.is_cancelled() {
+                        return;
+                    }
+                    let produced = render_rate
+                        .frame_time(frame_index)
+                        .map_err(|error| error.to_string())
+                        .and_then(|time| {
+                            render_resources_for_render
+                                .render_with_size(
+                                    &render_program,
+                                    time,
+                                    Some(output_size),
+                                    None,
+                                    true,
+                                    cancellation,
+                                )
+                                .map(ExportFrame::from)
+                                .map_err(|error| error.to_string())
+                        });
+                    // A closed channel means the writer stopped; there is no one left
+                    // to hand this frame to.
+                    if render_sender.send(produced).is_err() {
+                        return;
+                    }
+                }
+            });
+            drop(sender);
+
+            for frame_index in 0..frame_count {
+                if job.is_cancelled() || cancellation.is_cancelled() {
+                    return Err("export was cancelled".to_owned());
+                }
+                let frame = match receiver.recv() {
+                    Ok(produced) => produced?,
+                    Err(_) => {
+                        return Err("the renderer stopped before the last frame".to_owned());
+                    }
+                };
+                writer
+                    .write_video_frame(&frame.pixels, frame.width, frame.height, frame_index)
+                    .map_err(|error| error.to_string())?;
+                let next_time = frame_rate
+                    .frame_time(frame_index.saturating_add(1))
+                    .map_err(|error| error.to_string())?;
+                let audio_until = audio_frames_floor(next_time)
+                    .map_err(|_| "audio output time exceeds the sample clock".to_owned())?
+                    .max(0) as u64;
+                write_export_audio_until(
+                    &mut writer,
+                    &program,
+                    &render_resources.budgets,
+                    &mut audio_cursor,
+                    audio_until.min(total_audio_frames),
+                    job,
+                    cancellation,
+                )?;
+                job.report_progress(frame_index + 1, frame_count);
             }
-            let time = frame_rate
-                .frame_time(frame_index)
-                .map_err(|error| error.to_string())?;
-            let presentation = render_resources
-                .render_with_size(&program, time, Some(output_size), None, true, cancellation)
-                .map_err(|error| error.to_string())?;
-            writer
-                .write_video_frame(
-                    &presentation.pixels,
-                    presentation.width,
-                    presentation.height,
-                    frame_index,
-                )
-                .map_err(|error| error.to_string())?;
-            let next_time = frame_rate
-                .frame_time(frame_index.saturating_add(1))
-                .map_err(|error| error.to_string())?;
-            let audio_until = audio_frames_floor(next_time)
-                .map_err(|_| "audio output time exceeds the sample clock".to_owned())?
-                .max(0) as u64;
             write_export_audio_until(
                 &mut writer,
                 &program,
                 &render_resources.budgets,
                 &mut audio_cursor,
-                audio_until.min(total_audio_frames),
+                total_audio_frames,
                 job,
                 cancellation,
             )?;
-            job.report_progress(frame_index + 1, frame_count);
-        }
-        write_export_audio_until(
-            &mut writer,
-            &program,
-            &render_resources.budgets,
-            &mut audio_cursor,
-            total_audio_frames,
-            job,
-            cancellation,
-        )?;
+            Ok(())
+        });
+        written?;
         if job.is_cancelled() || cancellation.is_cancelled() {
             return Err("export was cancelled".to_owned());
         }
         writer.finish().map_err(|error| error.to_string())
+    }
+
+    /// One finished export frame: the pixels the writer encodes, without a render
+    /// handle, so it can cross the render thread's boundary.
+    struct ExportFrame {
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+    }
+
+    impl From<Presentation> for ExportFrame {
+        fn from(presentation: Presentation) -> Self {
+            Self {
+                width: presentation.width,
+                height: presentation.height,
+                pixels: presentation.pixels,
+            }
+        }
     }
 
     fn write_export_audio_until(
@@ -3431,6 +3495,95 @@ fn direct_video_clip_at(
             host.shutdown(false).unwrap();
         }
     }
+    #[cfg(test)]
+    mod export_pipeline_tests {
+        use super::*;
+
+        /// Exports a blank 1080p30 three-second timeline through the render-ahead
+        /// loop, probes nothing itself, and prints the throughput so the lane records
+        /// the pipeline cost of one real export. It leaves the file behind so an
+        /// independent probe can read the container, codec, frame count and duration.
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_render_ahead_export_writes_a_probeable_file() {
+            const FRAMES: u64 = 90;
+            let directory =
+                std::env::temp_dir().join(format!("or-export-pipeline-{}", std::process::id()));
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            let destination = directory.join("pipeline.mkv");
+            let _ = std::fs::remove_file(&destination);
+
+            let project = or_core::ProjectDocument::new("export pipeline");
+            let rate = RationalRate::new(30, 1).expect("rate");
+            let program = Arc::new(PreviewProgram {
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(rate),
+                content_end: Some(RationalTime::new(3, 1).expect("duration")),
+                video_clips: Vec::new(),
+                text_clips: Vec::new(),
+                audio_clips: Vec::new(),
+            });
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    ExportProfile::MatroskaFfv1PcmS16le,
+                    (1920, 1080),
+                    FRAMES,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+
+            // The manager owns the worker thread; wait for the body to publish its
+            // result instead of keeping a handle to it.
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(10));
+            }
+            let result = lock(&outcome).take().expect("the export ran");
+            result.expect("the export succeeded");
+            jobs.shutdown();
+
+            let elapsed = started.elapsed().as_secs_f64();
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            assert!(bytes > 0, "the export produced no bytes");
+            println!(
+                "OR_EXPORT_PIPELINE path={} bytes={bytes} frames={FRAMES} size=1920x1080 rate=30/1 seconds={elapsed:.3} fps={:.1}",
+                destination.display(),
+                FRAMES as f64 / elapsed.max(f64::EPSILON)
+            );
+        }
+    }
 }
 
 #[cfg(not(any(
@@ -3552,16 +3705,13 @@ mod source_time_tests {
     fn a_frozen_clip_holds_its_first_frame() {
         let start = seconds(3);
         for offset in [seconds(0), seconds(1), seconds(5)] {
-            let mapped = mapped_source_time(
-                start,
-                seconds(4),
-                RationalRate::ONE,
-                offset,
-                false,
-                true,
-            )
-            .expect("frozen mapping");
-            assert_eq!(mapped, start, "a frozen clip must not advance at {offset:?}");
+            let mapped =
+                mapped_source_time(start, seconds(4), RationalRate::ONE, offset, false, true)
+                    .expect("frozen mapping");
+            assert_eq!(
+                mapped, start,
+                "a frozen clip must not advance at {offset:?}"
+            );
         }
     }
 

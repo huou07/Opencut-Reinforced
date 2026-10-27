@@ -39,6 +39,26 @@ those fields.
   change (1.124 s) — 4.5× — with an identical 2,104,841-byte output. The
   raster-only sweep at 1920×1080 went from 33 to 166 frames/s in the same run.
 
+### Export through the render-ahead pipeline (2026-10-27)
+
+- Workload: the ignored `a_render_ahead_export_writes_a_probeable_file` — a blank
+  1920×1080, 30 fps, 3 s timeline (90 frames), no source media, so the row measures
+  the export loop itself: GPU composite, readback, colour conversion, FFV1 encode,
+  mux.
+- Source/build: `or_app_bridge` the commit that pipelined the export loop, debug
+  test profile.
+- Codec/backend: FFV1 in Matroska, software encode, wgpu Metal for the composite.
+- Machine: MacBook Air M5 (Mac17,3), 10 CPU cores, 8 GPU cores, 16 GB unified
+  memory, idle host.
+- Result: 21.6 frames/s (4.166 s) against 13.7 frames/s (6.569 s) for the
+  frame-at-a-time loop — 1.58× — with both runs writing 947,529 bytes. The file
+  probes as Matroska, `ffv1` 1920×1080 at 30 fps plus `pcm_s16le` 48 kHz stereo,
+  duration 3.000 s on both streams.
+
+This row has no source decode in it: a project with camera media will show a
+smaller multiple, because decode adds work to the render side that pipelining
+cannot overlap with itself.
+
 These are measurements of one workload, not a budget row: they are not enforced
 by `scripts/bench_quality.py` and must be re-measured before being quoted again.
 

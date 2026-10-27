@@ -23,6 +23,12 @@ the selected profile's muxer and encoders.
 - Preview and export share the same timeline evaluation, renderer, text
   rasteriser and transform/effect path; resolution, quality and scheduling may
   differ.
+- Rendering and writing are pipelined: a render thread keeps at most two frames
+  ahead of the writer, so decode, GPU composite and readback overlap colour
+  conversion and encoding instead of alternating with them. Frames still reach
+  the writer in index order and audio blocks are still written between them, so
+  the file is the one a frame-at-a-time loop produces — same bytes, less wall
+  time.
 - Output is staged beside the destination and published only after streams and
   trailer complete. Cancellation, offline media or encode failure cleans staging,
   preserves an existing destination, and leaves a new destination absent.
