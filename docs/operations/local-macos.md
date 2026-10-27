@@ -34,6 +34,23 @@ scripts/build_macos_release.sh --package io.github.huou07.orApp.local
 Use an isolated profile/bundle identifier for destructive or repeatable runs, and
 close the app when a run ends.
 
+## Local transcription helpers
+
+A local debug build does not ship `whisper-cli` or `or-whisper-provider`. Install
+them into the app bundle (and re-sign it ad hoc) with:
+
+```sh
+scripts/install_local_transcription_helpers.sh
+# or with a verified small model:
+scripts/install_local_transcription_helpers.sh path/to/or_app.app --model-file /tmp/ggml-small.bin
+```
+
+The whisper CLI is taken from `OR_WHISPER_CLI_PATH`, a packaged local app, or
+`PATH`; the provider is rebuilt from this checkout. The optional model file is
+verified against the small model's SHA-256 before it is placed in the app's
+private model folder. The script never builds whisper.cpp itself, so a missing
+CLI is a setup error rather than a silent fallback.
+
 ## FFmpeg library path
 
 Crates that link FFmpeg need the cached prefix on the loader path:
