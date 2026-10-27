@@ -19,10 +19,20 @@ use or_motion::{
     MotionColor, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene, evaluate_scene,
 };
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc;
 
 /// The largest canvas this rasterises, in pixels. The text layer bound is the same
 /// order of magnitude; a scene is authored content, not media.
 pub const MAX_MOTION_CANVAS_PIXELS: u32 = 16_384 * 16_384;
+
+/// The most worker threads one sequence uses, however many cores the host reports.
+/// Leaving headroom keeps the visiting thread — the encoder — and the UI responsive.
+const MAX_RASTER_WORKERS: usize = 8;
+
+/// The most finished-canvas bytes that may wait ahead of the visitor. Bounded so a
+/// large canvas cannot stack gigabytes of frames between the workers and the encode.
+const MAX_IN_FLIGHT_BYTES: usize = 192 * 1024 * 1024;
 
 /// The default stroke width for an arrow that names none.
 const DEFAULT_ARROW_WIDTH: f64 = 2.0;
@@ -95,6 +105,21 @@ pub fn rasterize_motion_frame_with_images(
     frame: &MotionFrame,
     images: &BTreeMap<String, MotionImage>,
 ) -> Result<RasterizedMotionFrame, MotionRasterError> {
+    let mut text = TextRasterizer::new();
+    rasterize_with(frame, images, &mut text)
+}
+
+/// Rasterises one frame with a caller-owned text engine.
+///
+/// A sequence keeps one engine per worker, so the bundled font database is loaded
+/// once per worker instead of once per frame. The pixels do not depend on which
+/// engine drew them: shaping and glyph coverage come from the bundled faces and the
+/// scene, and the engine carries no cross-frame state beyond its glyph cache.
+fn rasterize_with(
+    frame: &MotionFrame,
+    images: &BTreeMap<String, MotionImage>,
+    text: &mut TextRasterizer,
+) -> Result<RasterizedMotionFrame, MotionRasterError> {
     let width = frame.canvas.width;
     let height = frame.canvas.height;
     if width == 0 || height == 0 || width.saturating_mul(height) > MAX_MOTION_CANVAS_PIXELS {
@@ -106,9 +131,8 @@ pub fn rasterize_motion_frame_with_images(
         height,
         pixels: vec![0; byte_len],
     };
-    let mut text = TextRasterizer::new();
     for instruction in &frame.instructions {
-        draw_instruction(&mut canvas, &mut text, instruction, images)?;
+        draw_instruction(&mut canvas, text, instruction, images)?;
     }
     Ok(RasterizedMotionFrame {
         width,
@@ -505,6 +529,17 @@ where
 }
 
 /// Produces every frame with decoded image assets available to the rasteriser.
+///
+/// Frames are independent — each is evaluated at its own exact time and rasterised
+/// into its own canvas — so the sweep runs on a bounded pool of workers and this
+/// thread still hands every canvas to `visitor` in index order. The pixels are the
+/// sequential sweep's pixels: same times, same evaluator, same rasteriser, same
+/// fonts. What changes is the wall time, and that the visiting thread (the encoder)
+/// runs concurrently with production instead of being interleaved with it.
+///
+/// Work is bounded three ways: [`MAX_RASTER_WORKERS`] threads, a
+/// [`MAX_IN_FLIGHT_BYTES`] budget of finished canvases waiting ahead of the visitor,
+/// and the same frame-count limit the sequential sweep had.
 pub fn for_each_motion_frame_with_images<F>(
     scene: &MotionScene,
     frame_rate_numerator: u32,
@@ -515,6 +550,70 @@ pub fn for_each_motion_frame_with_images<F>(
 where
     F: FnMut(u64, &RasterizedMotionFrame) -> Result<(), MotionRasterError>,
 {
+    let frames = sequence_frame_count(scene, frame_rate_numerator, frame_rate_denominator)?;
+    if frames == 0 {
+        return Ok(0);
+    }
+    let workers = raster_worker_count(frames, scene.canvas.width, scene.canvas.height);
+    if workers <= 1 {
+        return sweep_on_one_thread(
+            scene,
+            frame_rate_numerator,
+            frame_rate_denominator,
+            images,
+            frames,
+            visitor,
+        );
+    }
+
+    let capacity = in_flight_capacity(workers, scene.canvas.width, scene.canvas.height, frames);
+    let (sender, receiver) = mpsc::sync_channel(capacity);
+    let next = AtomicU64::new(0);
+    let cancelled = AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let sender = sender.clone();
+            let next = &next;
+            let cancelled = &cancelled;
+            scope.spawn(move || {
+                // One engine per worker: the bundled font database is parsed once for
+                // the whole sequence rather than once per frame.
+                let mut text = TextRasterizer::new();
+                loop {
+                    if cancelled.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= frames {
+                        break;
+                    }
+                    let produced = produce_frame(
+                        scene,
+                        frame_rate_numerator,
+                        frame_rate_denominator,
+                        images,
+                        &mut text,
+                        index,
+                    );
+                    // A closed channel means the visitor stopped; there is no one left
+                    // to consume this frame.
+                    if sender.send((index, produced)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(sender);
+        visit_in_order(receiver, frames, &cancelled, &mut visitor)
+    })
+}
+
+/// The number of frames `[0, duration)` produces at an exact rate.
+fn sequence_frame_count(
+    scene: &MotionScene,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+) -> Result<u64, MotionSequenceError> {
     if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
         return Err(MotionSequenceError::InvalidFrameRate);
     }
@@ -536,21 +635,142 @@ where
     if frames > MAX_MOTION_FRAMES {
         return Err(MotionSequenceError::InvalidFrameRate);
     }
+    Ok(frames)
+}
 
+/// How many threads this sequence may use.
+///
+/// One core is left to the visiting thread, because for a materialisation that thread
+/// is the encoder and it must keep up; the ceiling stops a 64-core host from turning
+/// one scene into a memory-bandwidth stampede. A canvas too large to hold one
+/// finished frame inside the in-flight budget is rasterised on one thread.
+fn raster_worker_count(frames: u64, width: u32, height: u32) -> usize {
+    let cores = std::thread::available_parallelism().map_or(1, |count| count.get());
+    let by_cores = cores.saturating_sub(1).clamp(1, MAX_RASTER_WORKERS);
+    let frame_bytes = canvas_bytes(width, height);
+    let budget = MAX_IN_FLIGHT_BYTES / frame_bytes.max(1);
+    by_cores
+        .min(budget)
+        .min(usize::try_from(frames).unwrap_or(usize::MAX))
+        .max(1)
+}
+
+/// How many finished canvases may wait ahead of the visitor.
+///
+/// Twice the workers lets a slow visitor (an encoder, a disk) fall one frame behind
+/// without stalling production, and the byte budget keeps that from becoming an
+/// unbounded buffer on a large canvas.
+fn in_flight_capacity(workers: usize, width: u32, height: u32, frames: u64) -> usize {
+    let frame_bytes = canvas_bytes(width, height);
+    let by_memory = (MAX_IN_FLIGHT_BYTES / frame_bytes.max(1)).max(1);
+    by_memory
+        .min(workers.saturating_mul(2).max(1))
+        .min(usize::try_from(frames).unwrap_or(usize::MAX))
+        .max(1)
+}
+
+fn canvas_bytes(width: u32, height: u32) -> usize {
+    (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(4)
+}
+
+/// Evaluates and rasterises one frame index with a worker-owned text engine.
+fn produce_frame(
+    scene: &MotionScene,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    images: &BTreeMap<String, MotionImage>,
+    text: &mut TextRasterizer,
+    index: u64,
+) -> Result<RasterizedMotionFrame, MotionSequenceError> {
+    let time = frame_time(
+        index,
+        frame_rate_numerator,
+        frame_rate_denominator,
+        scene.duration,
+    )?;
+    let frame = evaluate_scene(scene, time)
+        .map_err(|_| MotionSequenceError::Frame(MotionRasterError::InvalidCanvas))?;
+    rasterize_with(&frame, images, text).map_err(MotionSequenceError::Frame)
+}
+
+/// The one-thread path, used for a single frame or a canvas too large to buffer.
+fn sweep_on_one_thread<F>(
+    scene: &MotionScene,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    images: &BTreeMap<String, MotionImage>,
+    frames: u64,
+    mut visitor: F,
+) -> Result<u64, MotionSequenceError>
+where
+    F: FnMut(u64, &RasterizedMotionFrame) -> Result<(), MotionRasterError>,
+{
+    let mut text = TextRasterizer::new();
     for index in 0..frames {
-        let time = frame_time(
-            index,
+        let canvas = produce_frame(
+            scene,
             frame_rate_numerator,
             frame_rate_denominator,
-            scene.duration,
+            images,
+            &mut text,
+            index,
         )?;
-        let frame = evaluate_scene(scene, time)
-            .map_err(|_| MotionSequenceError::Frame(MotionRasterError::InvalidCanvas))?;
-        let canvas = rasterize_motion_frame_with_images(&frame, images)
-            .map_err(MotionSequenceError::Frame)?;
         visitor(index, &canvas).map_err(MotionSequenceError::Frame)?;
     }
     Ok(frames)
+}
+
+/// Hands out-of-order frames to the visitor in index order.
+///
+/// A frame that failed is reported when its index comes up, so the error the caller
+/// sees is the earliest failing frame — the same one a sequential sweep would stop
+/// at — however the workers happened to finish. A visitor error, or a worker that
+/// stopped delivering, cancels the rest of the sequence.
+fn visit_in_order<F>(
+    receiver: mpsc::Receiver<(u64, Result<RasterizedMotionFrame, MotionSequenceError>)>,
+    frames: u64,
+    cancelled: &AtomicBool,
+    visitor: &mut F,
+) -> Result<u64, MotionSequenceError>
+where
+    F: FnMut(u64, &RasterizedMotionFrame) -> Result<(), MotionRasterError>,
+{
+    let mut pending: BTreeMap<u64, Result<RasterizedMotionFrame, MotionSequenceError>> =
+        BTreeMap::new();
+    let mut expected = 0_u64;
+    while expected < frames {
+        if let Some(produced) = pending.remove(&expected) {
+            let canvas = match produced {
+                Ok(canvas) => canvas,
+                Err(error) => {
+                    cancelled.store(true, Ordering::Relaxed);
+                    return Err(error);
+                }
+            };
+            if let Err(error) = visitor(expected, &canvas) {
+                cancelled.store(true, Ordering::Relaxed);
+                return Err(MotionSequenceError::Frame(error));
+            }
+            expected = expected.saturating_add(1);
+            continue;
+        }
+        match receiver.recv() {
+            Ok((index, produced)) => {
+                pending.insert(index, produced);
+            }
+            // Every worker stopped without delivering this index. That cannot happen
+            // while they are merely slow, so refuse to report a short sequence as a
+            // finished one.
+            Err(_) => break,
+        }
+    }
+    if expected < frames {
+        cancelled.store(true, Ordering::Relaxed);
+        return Err(MotionSequenceError::Frame(MotionRasterError::InvalidCanvas));
+    }
+    Ok(expected)
 }
 
 /// The exact time of one frame index: `index * denominator / numerator` seconds.
@@ -982,6 +1202,82 @@ mod tests {
             MotionSequenceError::Frame(MotionRasterError::InvalidCanvas)
         );
         assert_eq!(visited, 3);
+    }
+
+    #[test]
+    fn a_parallel_sweep_produces_the_same_pixels_as_one_thread() {
+        // An animated scene, so a frame delivered under the wrong index would show:
+        // every frame here paints the same node at a different opacity.
+        let mut value = serde_json::to_value(scene()).unwrap();
+        value["animations"] = serde_json::json!([{
+            "node_id": "under",
+            "property": "opacity",
+            "keyframes": [
+                {"at": {"numerator": 0, "denominator": 1}, "value": 0.0},
+                {"at": {"numerator": 4, "denominator": 1}, "value": 1.0},
+            ],
+            "easing": "ease_in_out",
+        }]);
+        let scene = parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap();
+
+        let mut produced = Vec::new();
+        let frames = for_each_motion_frame(&scene, 6, 1, |index, canvas| {
+            produced.push((index, canvas.pixels().to_vec()));
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(frames, 24);
+        assert_eq!(
+            produced.iter().map(|(index, _)| *index).collect::<Vec<_>>(),
+            (0..24).collect::<Vec<_>>()
+        );
+
+        for (index, pixels) in &produced {
+            let time = frame_time(*index, 6, 1, scene.duration).unwrap();
+            let frame = evaluate_scene(&scene, time).unwrap();
+            let expected = rasterize_motion_frame(&frame).unwrap();
+            assert_eq!(pixels.as_slice(), expected.pixels(), "frame {index}");
+        }
+    }
+
+    #[test]
+    fn a_worker_count_is_bounded_and_leaves_the_visitor_a_core() {
+        let cores = std::thread::available_parallelism().map_or(1, |count| count.get());
+        let workers = raster_worker_count(10_000, 64, 64);
+        assert!(workers >= 1);
+        assert!(workers <= MAX_RASTER_WORKERS);
+        assert!(workers <= cores.saturating_sub(1).max(1));
+        // A single frame cannot be split, and a canvas that alone exceeds the in-flight
+        // budget stays on one thread rather than stacking canvases.
+        assert_eq!(raster_worker_count(1, 1920, 1080), 1);
+        assert_eq!(raster_worker_count(1_000, 16_384, 16_384), 1);
+        // The queue ahead of the visitor never holds more than twice the workers.
+        assert!(in_flight_capacity(4, 64, 64, 1_000) <= 8);
+        assert!(in_flight_capacity(4, 64, 64, 3) <= 3);
+    }
+
+    #[test]
+    fn a_visitor_error_releases_workers_parked_ahead_of_it() {
+        // 512x512 canvases with an in-flight budget of twice the workers: the workers
+        // are certainly blocked in `send` when the visitor gives up, so this test hangs
+        // if cancellation does not release them.
+        let mut value = serde_json::to_value(scene()).unwrap();
+        value["canvas"] = serde_json::json!({"width": 512, "height": 512});
+        let scene = parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let mut visited = 0;
+        let error = for_each_motion_frame(&scene, 30, 1, |_, _| {
+            visited += 1;
+            if visited == 2 {
+                return Err(MotionRasterError::InvalidTextSize);
+            }
+            Ok(())
+        })
+        .unwrap_err();
+        assert_eq!(
+            error,
+            MotionSequenceError::Frame(MotionRasterError::InvalidTextSize)
+        );
+        assert_eq!(visited, 2);
     }
 
     #[test]

@@ -31,9 +31,25 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
 ## Canonical path
 
 ```
-MotionScene → validate → evaluate exact time → RenderSnapshot
-            → or_render/wgpu → preview or materialisation/export
+MotionScene → parse → validate → evaluate exact time → RGBA layer
+            (CPU rasteriser) → PNG still (panel preview)
+                             → shared encode path (materialisation/export)
 ```
+
+Rasterisation is the `or_render::motion` CPU pass: the scene's vector
+instructions are painted into one RGBA layer, which then takes an ordinary path —
+a PNG still for the Motion panel, or the shared encoder for a materialised file.
+ADR 0007's `or_render/wgpu` step is the compositor that carries decoded media and
+timeline overlays; a motion scene reaches it only after materialisation, as an
+ordinary video clip. Rasterising scenes on the GPU is a separate, measured change,
+not something the current path claims.
+
+A frame sequence is produced by a bounded worker pool rather than one thread per
+sequence: one core is left to the visiting writer, the pool is capped at eight
+threads, and the finished canvases waiting ahead of the writer are bounded at
+192 MiB, so a long scene is limited by the encoder rather than by memory. Frames
+still reach the writer in index order and are byte-identical to a one-thread
+sweep; parallelising only changes wall time.
 
 Preview and materialisation share the evaluator. The materialisation-first rule
 means: render persistent generated media, preserve source/asset provenance,
