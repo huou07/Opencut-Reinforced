@@ -32,6 +32,11 @@ the selected profile's muxer and encoders.
 - Output is staged beside the destination and published only after streams and
   trailer complete. Cancellation, offline media or encode failure cleans staging,
   preserves an existing destination, and leaves a new destination absent.
+- A lossy profile takes a quality preference: `quality` (the default) spends
+  encoding time and bytes on a cleaner picture, `speed` takes the cheapest
+  setting. The lossless profile ignores it because it has no rate control. The
+  preference travels on `ExportRequest::Start` and defaults when an older client
+  omits it.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.

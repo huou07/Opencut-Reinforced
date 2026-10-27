@@ -3396,6 +3396,7 @@ impl ProjectHostHandle {
             expected_project_revision,
             destination,
             profile,
+            quality: or_core::ExportQuality::Quality,
         })
     }
 

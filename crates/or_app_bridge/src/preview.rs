@@ -61,8 +61,8 @@ mod desktop {
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
-        EffectReference, ExportProfile, ExportRequest, ExportResponse, JobCancelOutcome,
-        JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
+        EffectReference, ExportProfile, ExportQuality, ExportRequest, ExportResponse,
+        JobCancelOutcome, JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
         MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
         MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId, ProjectInstanceId,
         ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
@@ -203,6 +203,7 @@ mod desktop {
                     expected_project_revision,
                     destination,
                     profile,
+                    quality,
                 } => {
                     if project_id != session.project_id()
                         || project_instance_id != session.project_instance_id()
@@ -306,6 +307,7 @@ mod desktop {
                             program,
                             destination,
                             profile,
+                            quality,
                             output_size,
                             frame_count,
                             frame_rate,
@@ -2306,10 +2308,12 @@ mod desktop {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn export_program(
         program: Arc<PreviewProgram>,
         destination: std::path::PathBuf,
         profile: ExportProfile,
+        quality: ExportQuality,
         output_size: (u32, u32),
         frame_count: u64,
         frame_rate: RationalRate,
@@ -2330,9 +2334,10 @@ mod desktop {
             ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
             ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
         };
-        let mut writer = or_media::FfmpegExportWriter::create_with_profile(
+        let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
             destination,
             media_profile,
+            quality,
             output_size.0,
             output_size.1,
             frame_rate.numerator(),
@@ -3503,6 +3508,99 @@ mod desktop {
         /// loop, probes nothing itself, and prints the throughput so the lane records
         /// the pipeline cost of one real export. It leaves the file behind so an
         /// independent probe can read the container, codec, frame count and duration.
+        /// Exports the same blank timeline at both delivery qualities and prints the
+        /// sizes, so the preference is proven by two files rather than by the option
+        /// mapping alone. A blank frame is the hardest case for a size difference; the
+        /// assertion is that both exports succeed and that the quality pass is not
+        /// smaller, which is what a rate-control setting that never reached the encoder
+        /// would produce.
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_delivery_export_honours_the_quality_preference() {
+            let mut sizes = Vec::new();
+            for quality in [ExportQuality::Speed, ExportQuality::Quality] {
+                let directory = std::env::temp_dir().join(format!(
+                    "or-export-quality-{}-{quality:?}",
+                    std::process::id()
+                ));
+                std::fs::create_dir_all(&directory).expect("scratch directory");
+                let destination = directory.join("quality.webm");
+                let _ = std::fs::remove_file(&destination);
+
+                let project = or_core::ProjectDocument::new("export quality");
+                let rate = RationalRate::new(30, 1).expect("rate");
+                let program = Arc::new(PreviewProgram {
+                    key: ProgramKey {
+                        project_id: project.id(),
+                        project_instance_id: ProjectInstanceId::generate(),
+                        revision: project.revision(),
+                    },
+                    frame_rate: Some(rate),
+                    content_end: Some(RationalTime::new(2, 1).expect("duration")),
+                    video_clips: Vec::new(),
+                    text_clips: Vec::new(),
+                    audio_clips: Vec::new(),
+                });
+                let render_resources = Arc::new(RenderResources {
+                    budgets: RuntimeBudgets::new(
+                        BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                        BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                            .expect("audio budget"),
+                        BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                    ),
+                    text_rasterizer: Mutex::new(TextRasterizer::new()),
+                    video_sessions: Mutex::new(VecDeque::new()),
+                });
+
+                let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+                let cancellation = CancellationToken::new();
+                let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+                let slot = Arc::clone(&outcome);
+                let target = destination.clone();
+                jobs.submit(JobKind::Export, move |job| {
+                    let result = export_program(
+                        program,
+                        target,
+                        ExportProfile::WebmVp9Opus,
+                        quality,
+                        (640, 360),
+                        60,
+                        rate,
+                        render_resources,
+                        job,
+                        &cancellation,
+                    );
+                    *lock(&slot) = Some(result);
+                    Ok(())
+                })
+                .expect("export job submits");
+
+                let deadline = Instant::now() + Duration::from_secs(120);
+                while lock(&outcome).is_none() {
+                    assert!(Instant::now() < deadline, "the export did not finish");
+                    thread::sleep(Duration::from_millis(10));
+                }
+                lock(&outcome)
+                    .take()
+                    .expect("the export ran")
+                    .expect("the export succeeded");
+                jobs.shutdown();
+
+                let bytes = std::fs::metadata(&destination)
+                    .expect("output exists")
+                    .len();
+                println!(
+                    "OR_EXPORT_QUALITY quality={quality:?} bytes={bytes} path={}",
+                    destination.display()
+                );
+                sizes.push((quality, bytes));
+            }
+            assert!(
+                sizes[1].1 >= sizes[0].1,
+                "the quality export produced fewer bytes than the speed export"
+            );
+        }
+
         #[test]
         #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
         fn a_render_ahead_export_writes_a_probeable_file() {
@@ -3549,6 +3647,7 @@ mod desktop {
                     program,
                     target,
                     ExportProfile::MatroskaFfv1PcmS16le,
+                    ExportQuality::Quality,
                     (1920, 1080),
                     FRAMES,
                     rate,

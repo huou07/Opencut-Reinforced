@@ -10,6 +10,7 @@ use ffmpeg::{
     util::format::sample::Type,
 };
 use ffmpeg_the_third as ffmpeg;
+use or_core::ExportQuality;
 use std::{
     collections::VecDeque,
     fs,
@@ -104,6 +105,32 @@ impl FfmpegExportWriter {
     pub fn create_with_profile(
         destination: impl AsRef<Path>,
         profile: FfmpegExportProfile,
+        width: u32,
+        height: u32,
+        frame_rate_numerator: u32,
+        frame_rate_denominator: u32,
+    ) -> Result<Self, ExportEncodeError> {
+        Self::create_with_profile_and_quality(
+            destination,
+            profile,
+            ExportQuality::Quality,
+            width,
+            height,
+            frame_rate_numerator,
+            frame_rate_denominator,
+        )
+    }
+
+    /// Opens a destination with an explicit quality preference.
+    ///
+    /// `Quality` spends encoding time and bytes on a cleaner picture; `Speed`
+    /// spends as little as possible. A lossless profile ignores the preference
+    /// because it has no rate control to trade.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_with_profile_and_quality(
+        destination: impl AsRef<Path>,
+        profile: FfmpegExportProfile,
+        quality: ExportQuality,
         width: u32,
         height: u32,
         frame_rate_numerator: u32,
@@ -212,14 +239,14 @@ impl FfmpegExportWriter {
             }
             let mut options = Dictionary::new();
             if profile == FfmpegExportProfile::WebmVp9Opus {
-                options.set("deadline", "realtime");
-                options.set("cpu-used", "8");
-                options.set("crf", "36");
+                let (deadline, cpu_used, crf) = vp9_settings(quality);
+                options.set("deadline", deadline);
+                options.set("cpu-used", cpu_used);
+                options.set("crf", crf);
                 options.set("b", "0");
                 options.set("row-mt", "1");
             } else {
-                let bitrate = (u64::from(width) * u64::from(height) * 3).clamp(500_000, 12_000_000);
-                options.set("b", &bitrate.to_string());
+                options.set("b", &video_bitrate(width, height, quality).to_string());
             }
             video_context
                 .open_as_with(video_codec, options)
@@ -613,6 +640,30 @@ impl FfmpegExportWriter {
     }
 }
 
+/// VP9 rate control for a quality preference: `(deadline, cpu-used, crf)`.
+///
+/// `cpu-used` 8 with `deadline=realtime` is libvpx's cheapest mode and visibly
+/// softer; `cpu-used` 4 with `deadline=good` costs several times the encoding
+/// time and measurably better pictures at a similar size.
+const fn vp9_settings(quality: ExportQuality) -> (&'static str, &'static str, &'static str) {
+    match quality {
+        ExportQuality::Quality => ("good", "4", "32"),
+        ExportQuality::Speed => ("realtime", "8", "36"),
+    }
+}
+
+/// Video bitrate for the hardware H.264 profile, scaled by the quality preference.
+///
+/// The base rate stays inside the bounds the profile always had; `Quality` spends
+/// half again as much on the picture without leaving those bounds.
+fn video_bitrate(width: u32, height: u32, quality: ExportQuality) -> u64 {
+    let base = (u64::from(width) * u64::from(height) * 3).clamp(500_000, 12_000_000);
+    match quality {
+        ExportQuality::Quality => (base + base / 2).clamp(500_000, 12_000_000),
+        ExportQuality::Speed => base,
+    }
+}
+
 fn yuv420p_scaler(width: u32, height: u32) -> Result<scaling::Context, ExportEncodeError> {
     let mut scaler = scaling::Context::get(
         format::Pixel::BGRA,
@@ -750,5 +801,36 @@ fn is_again(error: ffmpeg::Error) -> bool {
     #[cfg(not(windows))]
     {
         std::io::Error::from_raw_os_error(errno).kind() == ErrorKind::WouldBlock
+    }
+}
+
+#[cfg(test)]
+mod quality_tests {
+    use super::{ExportQuality, video_bitrate, vp9_settings};
+
+    #[test]
+    fn quality_spends_more_encoding_time_and_bytes_than_speed() {
+        let (deadline, cpu_used, crf) = vp9_settings(ExportQuality::Speed);
+        assert_eq!((deadline, cpu_used, crf), ("realtime", "8", "36"));
+        let (deadline, cpu_used, crf) = vp9_settings(ExportQuality::Quality);
+        assert_eq!((deadline, cpu_used, crf), ("good", "4", "32"));
+        // Lower `cpu-used` is slower and better; lower `crf` is better and larger.
+        assert!(cpu_used.parse::<u8>().unwrap() < "8".parse::<u8>().unwrap());
+        assert!(crf.parse::<u32>().unwrap() < "36".parse::<u32>().unwrap());
+    }
+
+    #[test]
+    fn the_hardware_profile_spends_half_again_as_much_on_quality() {
+        let speed = video_bitrate(1920, 1080, ExportQuality::Speed);
+        let quality = video_bitrate(1920, 1080, ExportQuality::Quality);
+        assert!(quality > speed);
+        assert_eq!(quality, (speed + speed / 2).min(12_000_000));
+        // The bounds the profile always had still hold at both extremes.
+        assert!((500_000..=12_000_000).contains(&video_bitrate(16, 16, ExportQuality::Speed)));
+        assert!((500_000..=12_000_000).contains(&video_bitrate(
+            7680,
+            4320,
+            ExportQuality::Quality
+        )));
     }
 }

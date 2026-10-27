@@ -20,12 +20,12 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportRequest,
-    ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
-    MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, MotionMaterializeRequest,
-    MotionMaterializeResponse, OperationError, OperationErrorCode, ProjectChange, ProjectSession,
-    ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult, TimelineClipPage,
-    TimelineClipPageV2, TimelineClipState, TimelineEditMode, TimelineMarkerPage,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportQuality,
+    ExportRequest, ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage,
+    MotionMaterializeRequest, MotionMaterializeResponse, OperationError, OperationErrorCode,
+    ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult,
+    TimelineClipPage, TimelineClipPageV2, TimelineClipState, TimelineEditMode, TimelineMarkerPage,
     TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
     TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrackSummaryV2,
     TimelineTrimEdge, TransactionEnvelope, TransactionResult, TranscriptionFailure,

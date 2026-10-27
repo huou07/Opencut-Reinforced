@@ -2271,6 +2271,9 @@ pub enum ExportRequest {
         destination: String,
         #[serde(default)]
         profile: ExportProfile,
+        /// How far a lossy profile may trade encoding time for quality.
+        #[serde(default)]
+        quality: ExportQuality,
     },
     Status {
         project_id: ProjectId,
@@ -2297,9 +2300,26 @@ pub enum ExportProfile {
     Mp4H264Aac,
 }
 
+/// What a lossy export may spend on quality.
+///
+/// A lossless profile ignores this: FFV1 has no rate control to trade. A lossy
+/// profile spends more encoding time and more bytes for a cleaner picture in
+/// `Quality`, and the fewest bytes per second in `Speed`. `Quality` is the
+/// default because an export is usually the last thing a project does, and the
+/// local host encodes far faster than it renders.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportQuality {
+    /// Spend the encoding time: slower encode, cleaner picture, larger file.
+    #[default]
+    Quality,
+    /// Spend the least time: fastest encode, smaller file, visible artefacts.
+    Speed,
+}
+
 #[cfg(test)]
 mod export_profile_tests {
-    use super::{ExportProfile, ExportRequest};
+    use super::{ExportProfile, ExportQuality, ExportRequest};
     use crate::{ProjectId, ProjectInstanceId};
 
     #[test]
@@ -2319,9 +2339,49 @@ mod export_profile_tests {
             request,
             ExportRequest::Start {
                 profile: ExportProfile::MatroskaFfv1PcmS16le,
+                quality: ExportQuality::Quality,
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn an_export_start_carries_a_quality_preference_and_defaults_to_quality() {
+        assert_eq!(ExportQuality::default(), ExportQuality::Quality);
+
+        let request: ExportRequest = serde_json::from_value(serde_json::json!({
+            "operation": "start",
+            "request": {
+                "project_id": ProjectId::generate(),
+                "project_instance_id": ProjectInstanceId::generate(),
+                "expected_project_revision": 3,
+                "destination": "/tmp/faster.webm",
+                "profile": "webm_vp9_opus",
+                "quality": "speed"
+            }
+        }))
+        .unwrap();
+        assert!(matches!(
+            request,
+            ExportRequest::Start {
+                profile: ExportProfile::WebmVp9Opus,
+                quality: ExportQuality::Speed,
+                ..
+            }
+        ));
+
+        // A request that names no quality keeps the default, which is the quality
+        // preference: an older client must not silently get the fastest mode.
+        let value = serde_json::to_value(ExportRequest::Start {
+            project_id: ProjectId::generate(),
+            project_instance_id: ProjectInstanceId::generate(),
+            expected_project_revision: crate::ProjectRevision::new(3),
+            destination: "/tmp/default.webm".to_owned(),
+            profile: ExportProfile::WebmVp9Opus,
+            quality: ExportQuality::default(),
+        })
+        .unwrap();
+        assert_eq!(value["request"]["quality"], "quality");
     }
 
     #[test]

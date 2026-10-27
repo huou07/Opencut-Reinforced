@@ -76,6 +76,20 @@ change:
 - `or_render`'s own 640×360 row is 1.4 ms p50 including readback on the same
   Metal adapter, so the bridge adds little per frame.
 
+### Delivery quality preference (2026-10-27)
+
+- Workload: the ignored `a_delivery_export_honours_the_quality_preference` — a
+  blank 640×360, 30 fps, 2 s timeline exported twice to WebM, once per quality.
+- Source/build: `or_app_bridge` the commit that added the preference, debug test
+  profile, software VP9.
+- Machine: MacBook Air M5, idle host.
+- Result: `speed` wrote 3,680 bytes and `quality` wrote 3,764 bytes. A blank
+  frame is the hardest case for a rate-control difference; the earlier 1080p clip
+  measurement (`good`/`cpu-used 4`/`crf 32` against `realtime`/`8`/`36`) was
+  SSIM 0.9811 against 0.9778 at 8.81 MB against 8.40 MB, for 4.6× the encoding
+  time. On a delivery export the render side is the slower half at 1080p, so most
+  of that encoding time is hidden.
+
 ### Measured dead ends (2026-10-27)
 
 Four candidates were measured on the same host and refused; recording them stops
