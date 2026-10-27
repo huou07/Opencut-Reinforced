@@ -1693,9 +1693,15 @@ mod tests {
     }
 }
 pub mod motion;
+mod motion_image;
 mod text;
 pub use motion::{
     MAX_MOTION_CANVAS_PIXELS, MAX_MOTION_FRAMES, MotionRasterError, MotionSequenceError,
-    RasterizedMotionFrame, encode_png, for_each_motion_frame, rasterize_motion_frame,
+    RasterizedMotionFrame, encode_png, for_each_motion_frame, for_each_motion_frame_with_images,
+    rasterize_motion_frame, rasterize_motion_frame_with_images,
+};
+pub use motion_image::{
+    MAX_MOTION_IMAGE_BYTES, MAX_MOTION_IMAGE_PIXELS, MotionImage, MotionImageError,
+    decode_motion_image, load_motion_scene_images,
 };
 pub use text::{TextRasterError, TextRasterizer};

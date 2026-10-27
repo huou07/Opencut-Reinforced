@@ -53,6 +53,8 @@ workspace; project changes still happen only through the `or` command path.
 MotionScene validation, preview, rendering and materialisation make zero
 provider or network calls, including no per-frame model call. A declarative
 scene cannot fetch remote assets, run scripts, or perform hidden font lookups.
+PNG assets are decoded with an encoded and pixel bound, and their paths must stay
+inside the scene directory or the app-owned library.
 
 ## Enforced boundaries
 

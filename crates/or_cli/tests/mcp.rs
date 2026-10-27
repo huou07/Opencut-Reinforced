@@ -9,8 +9,11 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
 };
+
+static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
 struct TestDirectory(PathBuf);
 
@@ -20,7 +23,9 @@ impl TestDirectory {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        let path = std::env::temp_dir().join(format!("or-mcp-{}-{stamp}", std::process::id()));
+        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("or-mcp-{}-{stamp}-{sequence}", std::process::id()));
         fs::create_dir(&path).unwrap();
         Self(path)
     }
@@ -119,6 +124,7 @@ fn write_pointer(directory: &TestDirectory) {
         "project_path": directory.project_path().display().to_string(),
         "project_name": "Assistant test",
         "workspace_path": directory.0.display().to_string(),
+        "motion_library_path": directory.0.join("library").display().to_string(),
     });
     fs::write(directory.pointer_path(), pointer.to_string()).unwrap();
 }
@@ -156,6 +162,8 @@ fn mcp_lists_tools_and_edits_the_live_project() {
     assert!(names.contains(&"timeline_overview"));
     assert!(names.contains(&"insert_text"));
     assert!(names.contains(&"motion_insert_scene"));
+    assert!(names.contains(&"motion_asset_list"));
+    assert!(names.contains(&"motion_asset_insert"));
     for tool in tools["result"]["tools"].as_array().unwrap() {
         assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
     }
@@ -228,5 +236,59 @@ fn motion_materialize_reports_when_the_host_has_no_runtime() {
     assert!(!result.status.success());
     let response: Value = serde_json::from_slice(&result.stdout).expect("JSON error on stdout");
     assert_eq!(response["error"]["code"], "MOTION_RUNTIME_UNAVAILABLE");
+    drop(host);
+}
+
+#[test]
+fn mcp_lists_motion_assets_and_refuses_an_unknown_insert() {
+    let directory = TestDirectory::new();
+    let library = directory.0.join("library");
+    fs::create_dir_all(library.join("assets")).unwrap();
+    let catalog = json!({
+        "format": "opencut-reinforced-motion-library",
+        "schema_version": 1,
+        "entries": [
+            {
+                "asset_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+                "name": "Explainer title",
+                "category": "text",
+                "category_source": "explicit",
+                "kind": "scene",
+                "tags": [],
+                "canvas": {"width": 1920, "height": 1080},
+                "duration_milliseconds": 4000
+            }
+        ]
+    });
+    fs::write(library.join("catalog.json"), catalog.to_string()).unwrap();
+
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let host = LiveProjectHost::start(session, Some(directory.descriptor_path().as_path()))
+        .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+    mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+
+    let listed: Value =
+        serde_json::from_str(&mcp.call("motion_asset_list", json!({})).unwrap()).unwrap();
+    assert_eq!(listed["total"], 1);
+    assert_eq!(listed["entries"][0]["name"], "Explainer title");
+    assert_eq!(listed["entries"][0]["category"], "text");
+
+    let error = mcp
+        .call(
+            "motion_asset_insert",
+            json!({"asset_id": "0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f"}),
+        )
+        .unwrap_err();
+    assert!(error.contains("MOTION_LIBRARY_NOT_FOUND"), "{error}");
     drop(host);
 }

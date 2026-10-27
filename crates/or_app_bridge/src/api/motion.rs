@@ -10,7 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
+use std::collections::BTreeMap;
+
 use or_motion::{parse_motion_scene, validate_scene};
+use or_render::MotionImage;
 
 /// A bounded request to materialise one scene.
 const MAX_MOTION_OUTPUT_FRAMES: u64 = 200_000;
@@ -84,6 +87,11 @@ pub fn materialize_motion_scene(
         Ok(scene) => scene,
         Err(error) => return failure(error.code(), error.code().to_owned(), &output),
     };
+    let base = output_directory_of(&scene_path);
+    let images = match or_render::load_motion_scene_images(&scene, &base) {
+        Ok(images) => images,
+        Err(error) => return failure(error.code(), error.to_string(), &output),
+    };
     materialize_parsed_scene(
         &scene,
         &output,
@@ -91,6 +99,7 @@ pub fn materialize_motion_scene(
         frame_rate_denominator,
         width,
         height,
+        &images,
     )
 }
 
@@ -144,7 +153,15 @@ pub fn materialize_motion_scene_from_code(
         frame_rate_denominator,
         width,
         height,
+        &BTreeMap::new(),
     )
+}
+
+fn output_directory_of(scene_path: &str) -> PathBuf {
+    Path::new(scene_path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// The shared materialiser: a validated scene, an output path and an explicit shape.
@@ -155,6 +172,7 @@ fn materialize_parsed_scene(
     frame_rate_denominator: u32,
     width: u32,
     height: u32,
+    images: &BTreeMap<String, MotionImage>,
 ) -> MotionMaterializationView {
     if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
         return failure(
@@ -223,10 +241,11 @@ fn materialize_parsed_scene(
     // type describes rasterisation only, so an encoder failure is carried out in a
     // local and reported as itself rather than being disguised as a canvas problem.
     let mut encoder_failure: Option<String> = None;
-    let encoded = or_render::for_each_motion_frame(
+    let encoded = or_render::for_each_motion_frame_with_images(
         scene,
         frame_rate_numerator,
         frame_rate_denominator,
+        images,
         |index, frame| {
             if encoder_failure.is_some() {
                 return Err(or_render::MotionRasterError::InvalidCanvas);

@@ -17,7 +17,6 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../core_gateway.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
-import '../project/motion_scene_snapshot.dart';
 import '../project/project_file_picker.dart';
 import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
@@ -925,10 +924,7 @@ class _AppShellState extends State<AppShell> {
     setState(() => _textInputFocused = focused);
   }
 
-  /// The last MotionScene this session rendered, if any.
-  MotionSceneSnapshot? _motionScene;
   TimelineClipClipboard? _clipboardClip;
-  bool _motionRerendering = false;
 
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
@@ -1021,11 +1017,9 @@ class _AppShellState extends State<AppShell> {
               onOpenMotion: () => unawaited(_openMotionMaterialize()),
               onCopyClip: _copyTimelineClip,
               onPasteClip: _pasteTimelineClip,
-              motionScene: _motionScene,
-              onInsertMotionScene: _insertMotionScene,
-              onRerenderMotionScene: _motionRerendering
-                  ? null
-                  : _rerenderMotionScene,
+              motionOutputDirectory: _motionOutputDirectory,
+              onInsertMotionClip: _addMaterializedIllustration,
+              pickMotionImage: _pickMotionImage,
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
@@ -1171,6 +1165,42 @@ class _AppShellState extends State<AppShell> {
     ],
   );
 
+  /// The project-adjacent folder for materialised motion clips. A project file
+  /// always has a directory, and `generated/` is the same convention `or mcp`
+  /// uses, so a rendered clip survives restarts like any imported media.
+  String? get _motionOutputDirectory {
+    final path = _activeProjectPath;
+    if (path == null || path.isEmpty) return null;
+    try {
+      final directory = Directory(
+        '${Directory(path).parent.path}${Platform.pathSeparator}generated',
+      );
+      directory.createSync(recursive: true);
+      return directory.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Picks one PNG cutout through the shared picker, so the same path works on
+  /// macOS and Android SAF and can be driven by the UI harness.
+  Future<String?> _pickMotionImage() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      for (final source in sources) {
+        if (source.toLowerCase().endsWith('.png')) return source;
+      }
+      _showUnavailable('Choose a PNG image to import.');
+      return null;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('An image could not be selected.');
+      return null;
+    }
+  }
+
   /// Turns a code file into a persistent, ordinary media item in the active project.
   Future<void> _openMotionMaterialize() async {
     if (_activeSession == null) return;
@@ -1188,25 +1218,9 @@ class _AppShellState extends State<AppShell> {
           height: request.height,
           title: request.title,
         );
-        if (outcome.succeeded && mounted) {
-          setState(() {
-            _motionScene = MotionSceneSnapshot(
-              title: request.title,
-              sourcePath: request.sourcePath,
-              destinationPath: outcome.destinationPath.isEmpty
-                  ? request.destinationPath
-                  : outcome.destinationPath,
-              frameRate: request.frameRate,
-              width: outcome.width == 0 ? request.width : outcome.width,
-              height: outcome.height == 0 ? request.height : outcome.height,
-              frameCount: outcome.frameCount,
-              bytesWritten: outcome.bytesWritten,
-            );
-          });
-        }
         return outcome;
       },
-      addToTimeline: _addMaterializedIllustrationToTimeline,
+      addToTimeline: _addMaterializedIllustration,
     );
   }
 
@@ -1251,71 +1265,6 @@ class _AppShellState extends State<AppShell> {
     } catch (_) {
       _showUnavailable('An output location could not be selected.');
       return null;
-    }
-  }
-
-  Future<bool> _addMaterializedIllustrationToTimeline(String path) async {
-    final added = await _addMaterializedIllustration(path);
-    if (added && mounted) {
-      setState(() => _motionScene = _motionScene?.copyWith(inserted: true));
-    }
-    return added;
-  }
-
-  Future<bool> _insertMotionScene() async {
-    final scene = _motionScene;
-    if (scene == null) return false;
-    return _addMaterializedIllustrationToTimeline(scene.destinationPath);
-  }
-
-  /// Renders the same scene again from the same source and settings. The file is
-  /// replaced, so a fix in the source lands in the asset the timeline already
-  /// points at instead of leaving a second, nearly identical clip behind.
-  Future<void> _rerenderMotionScene() async {
-    final scene = _motionScene;
-    if (scene == null) return;
-    setState(() => _motionRerendering = true);
-    try {
-      final outcome = await widget.projectGateway.materializeIllustration(
-        sourcePath: scene.sourcePath,
-        destinationPath: scene.destinationPath,
-        frameRateNumerator: scene.frameRate,
-        frameRateDenominator: 1,
-        width: scene.width,
-        height: scene.height,
-        title: scene.title,
-      );
-      if (!mounted) return;
-      setState(() {
-        _motionScene = MotionSceneSnapshot(
-          title: scene.title,
-          sourcePath: scene.sourcePath,
-          destinationPath: outcome.destinationPath.isEmpty
-              ? scene.destinationPath
-              : outcome.destinationPath,
-          frameRate: scene.frameRate,
-          width: outcome.width == 0 ? scene.width : outcome.width,
-          height: outcome.height == 0 ? scene.height : outcome.height,
-          frameCount: outcome.succeeded ? outcome.frameCount : scene.frameCount,
-          bytesWritten: outcome.succeeded
-              ? outcome.bytesWritten
-              : scene.bytesWritten,
-          inserted: scene.inserted,
-        );
-      });
-      if (!outcome.succeeded) {
-        OrSnackBar.show(context, outcome.message);
-      } else {
-        OrSnackBar.show(
-          context,
-          'Rendered ${outcome.frameCount} frames to '
-          '${scene.destinationPath.split(Platform.pathSeparator).last}',
-        );
-      }
-    } on ProjectSafStorageException catch (error) {
-      if (mounted) OrSnackBar.show(context, error.message);
-    } finally {
-      if (mounted) setState(() => _motionRerendering = false);
     }
   }
 

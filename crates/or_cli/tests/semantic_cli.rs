@@ -2905,3 +2905,64 @@ fn motion_asset_instantiate_refuses_an_unknown_parameter() {
     assert_eq!(error["error"]["category"], "motion_asset");
     assert_eq!(error["error"]["code"], "MOTION_ASSET_UNKNOWN_PARAMETER");
 }
+
+#[test]
+fn motion_asset_imports_an_image_and_instantiates_it_with_parameters() {
+    let directory = TestDirectory::new();
+    let source = directory.0.join("background.png");
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(b"a bounded test payload");
+    fs::write(&source, bytes).unwrap();
+    let library = directory.0.join("motion-library");
+
+    let (imported, _) = json_success(motion_asset_args(
+        &["motion", "asset", "import"],
+        &[("--library", &library), ("--source", &source)],
+        &["--name", "Mountain background", "--json"],
+    ));
+    let asset_id = imported["motion_asset"]["asset_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(imported["motion_asset"]["kind"], "image");
+    assert_eq!(imported["motion_asset"]["category"], "background");
+    assert_eq!(imported["motion_asset"]["category_source"], "filename");
+
+    let output = directory.0.join("image.ormotion.json");
+    let (instantiated, _) = json_success(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(&asset_id)),
+            ("--output", &output),
+        ],
+        &[
+            "--values",
+            r#"{"opacity":0.5,"width":960}"#,
+            "--scene-id",
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "--json",
+        ],
+    ));
+    assert_eq!(instantiated["validation_ok"], true);
+    let scene: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    let image = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["kind"] == "image")
+        .unwrap();
+    assert_eq!(image["opacity"], 0.5);
+    assert_eq!(image["size"]["width"], 960.0);
+    assert_eq!(
+        image["asset_id"], scene["assets"][0]["asset_id"],
+        "the node and the scene asset agree on identity"
+    );
+
+    let validated = cli(motion_asset_args(
+        &["motion", "validate"],
+        &[("--file", &output)],
+        &["--json"],
+    ));
+    assert!(validated.status.success(), "{validated:?}");
+}

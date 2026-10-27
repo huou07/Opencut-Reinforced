@@ -1,13 +1,13 @@
 # ADR 0010 — Motion assets, parameterised scenes and a reusable library
 
-- Status: Partially implemented — P1 landed 2026-10-27; P2/P3 proposed
+- Status: Implemented — P1–P3 core landed 2026-10-27; live MotionClip deferred
 - Date: 2026-10-27
 
-This record is architecture intent. P1 (document, parameters, classifier,
-library store and CLI) is implemented in `crates/or_motion/src/asset.rs`,
-`crates/or_motion/src/library.rs` and the `or motion asset` verbs, with its
-current contract in [motion-assets.md](../features/motion-assets.md). The Motion
-surface and agent tools are not implemented; do not describe them as current.
+This record is architecture intent. The asset document, parameters, classifier,
+library store, image rendering, Motion surface, timeline drag, bridge and agent
+tools are implemented, with their current behaviour and gaps in
+[motion-assets.md](../features/motion-assets.md). The live timeline `MotionClip`
+remains deferred behind its own schema/preview/export gate.
 
 ## Context
 
@@ -67,10 +67,11 @@ built on the existing materialise-first path first.
    ship a parameter that targets nothing.
 
 4. **The library is an app-level store, not project state and not a database.**
-   The store is a `library` module in `or_motion`; the CLI uses it now and the
-   application bridge will in P2. It lives under application support as
-   `motion-library/`: one bounded `catalog.json` index, one file per asset, one
-   preview image per asset. Writes are atomic and reads bounded. A project stores only an `asset_id` and a
+   The store is a `library` module in `or_motion`, used by the CLI, the bridge
+   and `or mcp`. It lives under application support as `motion-library/`: one
+   bounded `catalog.json` index, one file per asset, one preview image per
+   asset. Writes are atomic and reads bounded; the Dart layer passes the root and
+   the assistant pointer records it. A project stores only an `asset_id` and a
    content digest as provenance for a materialised clip; absolute asset paths
    never enter a project file, so moving a project cannot break an asset
    reference. Images are copied into the library with a size bound and a digest.
@@ -108,8 +109,8 @@ built on the existing materialise-first path first.
 | Phase | Deliverable | Gate |
 |---|---|---|
 | P1 | `or_motion` asset document, validation, parameter binding and scene/fragment instantiation; classifier with recorded rule; library store; `or motion asset validate/save/list/instantiate/remove`; tests | schema and bounds proven without UI; no project file change. **Landed 2026-10-27** |
-| P2 | Library browse/search/preview and parameter editing in the Motion surface; drag to timeline through materialisation with provenance; save-to-library | real macOS journey: save an asset, reopen the app, find it, adjust text and colour, insert it |
-| P3 | Scene composer canvas, drag from library into an open scene, fragment and motion kinds, category override UI, MCP tools | composition served through the evaluator; export unchanged |
+| P2 | Library browse/search/preview and parameter editing in the Motion surface; drag to timeline through materialisation; save-to-library | real macOS journey: save an asset, reopen the app, find it, adjust text and colour, insert it. **Landed 2026-10-27** |
+| P3 | Composition preview with drag from the library, fragment and image kinds, category override, MCP tools | composition served through the evaluator; export unchanged. **Landed 2026-10-27**; motion presets apply to a node in a later phase |
 
 A shipped phase updates its feature document and the roadmap; only then does any
 document describe that phase as current. P1's actual behaviour, bounds and gaps

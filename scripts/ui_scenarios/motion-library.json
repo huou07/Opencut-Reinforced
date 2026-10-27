@@ -1,0 +1,112 @@
+{
+  "name": "motion-library",
+  "harness": "or_ui",
+  "description": "Create a project, open the Motion library, import a real PNG cutout, adjust it, compose a scene and insert the materialised scene on the timeline.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:scripts/ui_scenarios/mountain.png"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Motion library journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-motion"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Motion library",
+      "budget_ms": 10000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-library-import-image"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "mountain",
+      "budget_ms": 30000
+    },
+    {
+      "op": "wait",
+      "text": "Opacity",
+      "budget_ms": 30000
+    },
+    {
+      "op": "shot",
+      "name": "motion-asset-selected"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-add-to-scene"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "after-add"
+    },
+    {
+      "op": "expect",
+      "key": "motion-insert-draft"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-insert-draft"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Motion clip added to the timeline.",
+      "budget_ms": 180000
+    },
+    {
+      "op": "shot",
+      "name": "motion-scene-inserted"
+    },
+    {
+      "op": "tree",
+      "name": "motion-scene-inserted"
+    }
+  ]
+}

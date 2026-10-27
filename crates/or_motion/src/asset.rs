@@ -717,11 +717,11 @@ pub fn validate_motion_asset(asset: &MotionAssetDocument) -> MotionValidation {
             }
         }
         MotionAssetKind::Image => {
-            if asset.scene.is_some() || asset.preset.is_some() {
+            if asset.preset.is_some() {
                 errors.push(diagnostic(
                     "MOTION_ASSET_UNEXPECTED_PAYLOAD",
-                    "/scene",
-                    "an image asset carries an image reference, not a scene or a preset",
+                    "/preset",
+                    "an image asset carries a scene body and an image reference, not a preset",
                 ));
             }
             match &asset.image {
@@ -749,7 +749,68 @@ pub fn validate_motion_asset(asset: &MotionAssetDocument) -> MotionValidation {
                     }
                 }
             }
+            match &asset.scene {
+                None => errors.push(diagnostic(
+                    "MOTION_ASSET_MISSING_PAYLOAD",
+                    "/scene",
+                    "an image asset needs a scene body with an image node",
+                )),
+                Some(payload) => {
+                    if payload.nodes.is_empty() {
+                        errors.push(diagnostic(
+                            "MOTION_ASSET_EMPTY_SCENE",
+                            "/scene/nodes",
+                            "an image asset needs at least one node",
+                        ));
+                    }
+                    validate_payload(asset, payload, &mut errors);
+                    collect_nodes(&payload.nodes, 0, &mut node_kinds);
+                    if !has_node_kind(&payload.nodes, MotionNodeKind::Image) {
+                        errors.push(diagnostic(
+                            "MOTION_ASSET_MISSING_IMAGE_NODE",
+                            "/scene/nodes",
+                            "an image asset needs at least one image node",
+                        ));
+                    }
+                    if let Some(image) = &asset.image {
+                        match payload
+                            .assets
+                            .iter()
+                            .find(|scene_asset| scene_asset.asset_id == asset.asset_id)
+                        {
+                            None => errors.push(diagnostic(
+                                "MOTION_ASSET_IMAGE_REFERENCE_MISSING",
+                                "/scene/assets",
+                                "the scene body must include the image asset_id",
+                            )),
+                            Some(scene_asset) if scene_asset.path != image.file => {
+                                errors.push(diagnostic(
+                                    "MOTION_ASSET_IMAGE_PATH_MISMATCH",
+                                    "/image/file",
+                                    "the image file must match the scene asset path",
+                                ));
+                            }
+                            Some(_) => {}
+                        }
+                        if !has_image_node(&payload.nodes, &asset.asset_id) {
+                            errors.push(diagnostic(
+                                "MOTION_ASSET_IMAGE_NODE_MISMATCH",
+                                "/scene/nodes",
+                                "an image node must reference the image asset_id",
+                            ));
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    if asset.kind == MotionAssetKind::Motion && !asset.parameters.is_empty() {
+        errors.push(diagnostic(
+            "MOTION_ASSET_PARAMETERS_UNSUPPORTED",
+            "/parameters",
+            "a motion preset has no node to bind parameters to",
+        ));
     }
 
     validate_parameters(asset, &node_kinds, &mut errors);
@@ -955,7 +1016,10 @@ fn validate_parameters(
             targets.push(target_key);
         }
 
-        if let MotionAssetKind::Scene | MotionAssetKind::Fragment = asset.kind {
+        if matches!(
+            asset.kind,
+            MotionAssetKind::Scene | MotionAssetKind::Fragment | MotionAssetKind::Image
+        ) {
             match nodes.iter().find(|(id, _)| id == &parameter.target.node_id) {
                 None => errors.push(diagnostic(
                     "MOTION_ASSET_UNKNOWN_PARAMETER_NODE",
@@ -1048,7 +1112,10 @@ fn kind_supports_field(kind: MotionNodeKind, field: MotionParameterField) -> boo
     match field {
         MotionParameterField::Text | MotionParameterField::FontSize => kind == MotionNodeKind::Text,
         MotionParameterField::SizeWidth | MotionParameterField::SizeHeight => {
-            matches!(kind, MotionNodeKind::Rectangle | MotionNodeKind::Ellipse)
+            matches!(
+                kind,
+                MotionNodeKind::Rectangle | MotionNodeKind::Ellipse | MotionNodeKind::Image
+            )
         }
         MotionParameterField::AssetId => kind == MotionNodeKind::Image,
         MotionParameterField::Fill => matches!(
@@ -1283,18 +1350,13 @@ pub fn instantiate_motion_asset(
         return Err(MotionAssetError::Invalid);
     }
     let payload = match asset.kind {
-        MotionAssetKind::Scene | MotionAssetKind::Fragment => {
-            asset.scene.clone().ok_or(MotionAssetError::Invalid)?
-        }
         MotionAssetKind::Motion => {
             return Err(MotionAssetError::NotInstantiable(
                 "a motion preset is applied to a node, not turned into a scene",
             ));
         }
-        MotionAssetKind::Image => {
-            return Err(MotionAssetError::NotInstantiable(
-                "an image asset needs the image pipeline, which this version does not have",
-            ));
+        MotionAssetKind::Scene | MotionAssetKind::Fragment | MotionAssetKind::Image => {
+            asset.scene.clone().ok_or(MotionAssetError::Invalid)?
         }
     };
     let mut nodes = payload.nodes;
@@ -1389,6 +1451,137 @@ fn remap_node_ids(prefix: &str, nodes: &mut [MotionNode]) {
         node.node_id = format!("{prefix}:{}", node.node_id);
         if let Some(children) = node.children.as_mut() {
             remap_node_ids(prefix, children);
+        }
+    }
+}
+
+fn has_node_kind(nodes: &[MotionNode], kind: MotionNodeKind) -> bool {
+    nodes.iter().any(|node| {
+        node.kind == kind
+            || node
+                .children
+                .as_ref()
+                .is_some_and(|children| has_node_kind(children, kind))
+    })
+}
+
+fn has_image_node(nodes: &[MotionNode], asset_id: &str) -> bool {
+    nodes.iter().any(|node| {
+        (node.kind == MotionNodeKind::Image && node.asset_id.as_deref() == Some(asset_id))
+            || node
+                .children
+                .as_ref()
+                .is_some_and(|children| has_image_node(children, asset_id))
+    })
+}
+
+/// One asset placed while composing a scene.
+pub struct MotionScenePlacement<'a> {
+    pub asset: &'a MotionAssetDocument,
+    pub values: BTreeMap<String, MotionParameterValue>,
+    pub offset_x: f64,
+    pub offset_y: f64,
+}
+
+/// Appends one asset to a scene, remapping its ids with `prefix` and shifting its
+/// nodes by the placement offset.
+///
+/// The result is a new validated scene; the input is untouched. A whole-scene
+/// template, a fragment and an image all take this path, so composition cannot
+/// disagree with single-asset instantiation.
+pub fn append_asset_to_scene(
+    scene: &MotionScene,
+    asset: &MotionAssetDocument,
+    values: &BTreeMap<String, MotionParameterValue>,
+    prefix: &str,
+    offset_x: f64,
+    offset_y: f64,
+) -> Result<MotionScene, MotionAssetError> {
+    if prefix.trim().is_empty() {
+        return Err(MotionAssetError::InvalidValue(
+            "a composition prefix must not be empty".to_owned(),
+        ));
+    }
+    let mut addition = instantiate_motion_asset(asset, values, &scene.scene_id, &scene.name)?;
+    remap_ids(prefix, &mut addition.nodes, &mut addition.animations);
+    remap_scene_asset_ids(prefix, &mut addition.assets, &mut addition.nodes);
+    offset_nodes(&mut addition.nodes, offset_x, offset_y);
+    let mut merged = scene.clone();
+    merged.nodes.extend(addition.nodes);
+    merged.animations.extend(addition.animations);
+    merged.assets.extend(addition.assets);
+    if !validate_scene(&merged).ok {
+        return Err(MotionAssetError::Invalid);
+    }
+    Ok(merged)
+}
+
+/// Composes validated assets into one scene.
+///
+/// Each placement is appended with its index as the remap prefix, so placing the
+/// same asset twice cannot collide, and every node position is shifted by the
+/// placement offset. The result is validated as an ordinary MotionScene.
+pub fn compose_motion_scene(
+    scene_id: &str,
+    name: &str,
+    canvas: MotionCanvas,
+    duration: RationalTime,
+    placements: &[MotionScenePlacement<'_>],
+) -> Result<MotionScene, MotionAssetError> {
+    let mut scene = MotionScene {
+        format: MOTION_SCENE_FORMAT.to_owned(),
+        schema_version: MOTION_SCENE_SCHEMA_VERSION,
+        scene_id: scene_id.to_owned(),
+        name: name.to_owned(),
+        duration,
+        canvas,
+        assets: Vec::new(),
+        nodes: Vec::new(),
+        animations: Vec::new(),
+    };
+    for (index, placement) in placements.iter().enumerate() {
+        scene = append_asset_to_scene(
+            &scene,
+            placement.asset,
+            &placement.values,
+            &format!("{index}"),
+            placement.offset_x,
+            placement.offset_y,
+        )?;
+    }
+    Ok(scene)
+}
+
+fn remap_scene_asset_ids(prefix: &str, assets: &mut [MotionAsset], nodes: &mut [MotionNode]) {
+    for asset in assets.iter_mut() {
+        asset.asset_id = format!("{prefix}:{}", asset.asset_id);
+    }
+    remap_node_asset_ids(prefix, nodes);
+}
+
+fn remap_node_asset_ids(prefix: &str, nodes: &mut [MotionNode]) {
+    for node in nodes.iter_mut() {
+        if let Some(asset_id) = node.asset_id.as_mut() {
+            *asset_id = format!("{prefix}:{asset_id}");
+        }
+        if let Some(children) = node.children.as_mut() {
+            remap_node_asset_ids(prefix, children);
+        }
+    }
+}
+
+fn offset_nodes(nodes: &mut [MotionNode], offset_x: f64, offset_y: f64) {
+    for node in nodes.iter_mut() {
+        if let Some(position) = node.position.as_mut() {
+            position.x += offset_x;
+            position.y += offset_y;
+        }
+        if let Some(end) = node.end.as_mut() {
+            end.x += offset_x;
+            end.y += offset_y;
+        }
+        if let Some(children) = node.children.as_mut() {
+            offset_nodes(children, offset_x, offset_y);
         }
     }
 }
@@ -1653,13 +1846,62 @@ mod tests {
         );
     }
 
+    fn image_asset_value(file: &str) -> serde_json::Value {
+        let asset_id = "5d0c3b2a-1f4e-4a6b-9c8d-7e6f5a4b3c2d";
+        json!({
+            "format": MOTION_ASSET_FORMAT,
+            "schema_version": MOTION_ASSET_SCHEMA_VERSION,
+            "asset_id": asset_id,
+            "name": "Mountain background",
+            "category": "background",
+            "category_source": "explicit",
+            "tags": [],
+            "kind": "image",
+            "canvas": {"width": 1920, "height": 1080},
+            "duration": {"numerator": 4, "denominator": 1},
+            "parameters": [
+                {
+                    "id": "opacity",
+                    "label": "Opacity",
+                    "type": "number",
+                    "target": {"node_id": "image", "field": "opacity"},
+                    "default": 1,
+                    "min": 0,
+                    "max": 1
+                },
+                {
+                    "id": "width",
+                    "label": "Width",
+                    "type": "number",
+                    "target": {"node_id": "image", "field": "size_width"},
+                    "default": 1920,
+                    "min": 1
+                }
+            ],
+            "image": {"file": file},
+            "scene": {
+                "assets": [{"asset_id": asset_id, "path": file}],
+                "nodes": [
+                    {
+                        "node_id": "image",
+                        "kind": "image",
+                        "asset_id": asset_id,
+                        "position": {"x": 0, "y": 0},
+                        "size": {"width": 1920, "height": 1080},
+                        "opacity": 1
+                    }
+                ],
+                "animations": []
+            }
+        })
+    }
+
     #[test]
-    fn an_image_asset_needs_a_safe_relative_file() {
-        let mut value = asset_value();
-        value["kind"] = json!("image");
-        value["scene"] = serde_json::Value::Null;
-        value["parameters"] = json!([]);
-        value["image"] = json!({"file": "../outside.png"});
+    fn an_image_asset_carries_its_scene_body_and_reference() {
+        assert!(validate_motion_asset(&parse(image_asset_value("images/pic.png"))).ok);
+
+        let mut value = image_asset_value("../outside.png");
+        value["scene"]["assets"][0]["path"] = json!("../outside.png");
         let validation = validate_motion_asset(&parse(value));
         assert!(
             validation
@@ -1668,12 +1910,38 @@ mod tests {
                 .any(|error| error.code == "MOTION_ASSET_INVALID_IMAGE_PATH")
         );
 
-        let mut value = asset_value();
-        value["kind"] = json!("image");
-        value["scene"] = serde_json::Value::Null;
-        value["parameters"] = json!([]);
-        value["image"] = json!({"file": "images/6f1c2f5e.png"});
-        assert!(validate_motion_asset(&parse(value)).ok);
+        let mut value = image_asset_value("images/pic.png");
+        value["scene"]["assets"] = json!([]);
+        let validation = validate_motion_asset(&parse(value));
+        assert!(
+            validation
+                .errors
+                .iter()
+                .any(|error| error.code == "MOTION_ASSET_IMAGE_REFERENCE_MISSING")
+        );
+    }
+
+    #[test]
+    fn an_image_asset_instantiates_and_keeps_its_adjustable_fields() {
+        let asset = parse(image_asset_value("images/pic.png"));
+        let mut overrides = BTreeMap::new();
+        overrides.insert("opacity".to_owned(), MotionParameterValue::Number(0.5));
+        overrides.insert("width".to_owned(), MotionParameterValue::Number(960.0));
+        let scene = instantiate_motion_asset(
+            &asset,
+            &overrides,
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "Imported",
+        )
+        .unwrap();
+        let node = scene
+            .nodes
+            .iter()
+            .find(|node| node.kind == MotionNodeKind::Image)
+            .unwrap();
+        assert_eq!(node.opacity, Some(0.5));
+        assert_eq!(node.size.unwrap().width, 960.0);
+        assert_eq!(scene.assets[0].path, "images/pic.png");
     }
 
     #[test]
@@ -1818,7 +2086,7 @@ mod tests {
     }
 
     #[test]
-    fn motion_and_image_assets_are_not_instantiable_yet() {
+    fn a_motion_preset_is_not_turned_into_a_scene() {
         let mut value = asset_value();
         value["kind"] = json!("motion");
         value["scene"] = serde_json::Value::Null;
@@ -1838,6 +2106,63 @@ mod tests {
             .unwrap_err(),
             MotionAssetError::NotInstantiable(_)
         ));
+    }
+
+    #[test]
+    fn composition_remaps_ids_and_offsets_each_placement() {
+        let text = parse(asset_value());
+        let image = parse(image_asset_value("images/pic.png"));
+        let scene = compose_motion_scene(
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "Composed",
+            MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            RationalTime::new(5, 1).unwrap(),
+            &[
+                MotionScenePlacement {
+                    asset: &text,
+                    values: BTreeMap::new(),
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                },
+                MotionScenePlacement {
+                    asset: &image,
+                    values: BTreeMap::new(),
+                    offset_x: 100.0,
+                    offset_y: 50.0,
+                },
+            ],
+        )
+        .unwrap();
+        assert!(validate_scene(&scene).ok);
+        let ids: Vec<&str> = scene
+            .nodes
+            .iter()
+            .map(|node| node.node_id.as_str())
+            .collect();
+        let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len());
+        let image_node = scene
+            .nodes
+            .iter()
+            .find(|node| node.kind == MotionNodeKind::Image)
+            .unwrap();
+        assert_eq!(image_node.position.unwrap().x, 100.0);
+        assert_eq!(image_node.position.unwrap().y, 50.0);
+        assert!(
+            image_node
+                .asset_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("1:"))
+        );
+        assert!(
+            scene
+                .assets
+                .iter()
+                .all(|asset| asset.asset_id.starts_with('1'))
+        );
     }
 
     #[test]

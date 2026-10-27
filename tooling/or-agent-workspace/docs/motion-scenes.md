@@ -75,22 +75,19 @@ clip only if the user asks.
 
 ## Reusable assets
 
-A motion asset (`.ormotionasset.json`, ADR 0010) wraps a scene template or a
-fragment with typed parameters for text, colour, size, opacity and rotation.
-The app has no asset MCP tool yet; when the user names a library folder, use the
-CLI:
+The app has an asset library (ADR 0010): reusable scenes, fragments and image
+cutouts with typed parameters for text, colour, size, opacity and rotation.
+Use the MCP tools, not the file system:
 
-```sh
-tools/or motion asset list --library PATH --json
-tools/or motion asset save --library PATH --file scenes/title.ormotionasset.json --json
-tools/or motion asset instantiate --library PATH --id ASSET_ID \
-  --values '{"title":"Hello"}' --output scenes/instantiated.ormotion.json
-```
+- `mcp__or__motion_asset_list` — ids, names, categories, kinds and durations.
+- `mcp__or__motion_asset_insert` — instantiate one asset with a `values` object
+  keyed by parameter id, render it through the app, and insert an ordinary clip.
+  Text and choice values are strings, numbers are numbers, and colours are
+  `{red,green,blue,alpha}`.
 
-`--values` is a JSON object keyed by parameter id. Saving recomputes the category
-from tags and the name unless it is explicit; pass `--category` to override it.
-An instantiated scene is an ordinary `.ormotion.json` you can validate and then
-pass to `mcp__or__motion_insert_scene`.
+The CLI mirrors the library for inspection when the user names a folder:
+`tools/or motion asset list --library PATH --json`. It is not needed for
+insertion, and the app owns the library the MCP tools read.
 
 ## Bounds
 

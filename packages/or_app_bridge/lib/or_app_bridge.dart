@@ -5,6 +5,28 @@ export 'src/rust/api/motion.dart'
         MotionMaterializationView,
         materializeMotionScene,
         materializeMotionSceneFromCode;
+export 'src/rust/api/motion_library.dart'
+    show
+        MotionAssetEntryView,
+        MotionAssetLibraryView,
+        MotionAssetMutationView,
+        MotionAssetParameterView,
+        MotionAssetView,
+        MotionScenePreviewView,
+        MotionSceneView,
+        motionAssetImportImage,
+        motionAssetLoad,
+        motionAssetMaterialize,
+        motionAssetRemove,
+        motionAssetSave,
+        motionAssetScene,
+        motionLibrary,
+        motionSceneAppend,
+        motionSceneCompose,
+        motionSceneMaterialize,
+        motionSceneNew,
+        motionScenePreview,
+        motionSceneSave;
 export 'src/rust/api/project.dart'
     show
         ProjectActionResult,

@@ -6,18 +6,19 @@
 //! composites like any decoded frame, so blending, effects and encoding stay in one
 //! place.
 //!
-//! It reads nothing. An image node draws a placeholder rather than decoding an asset,
-//! because evaluation resolves identities and the asset pipeline is a later step;
-//! drawing a placeholder is honest about that, where silently drawing nothing would
-//! look like a working scene with a missing picture.
+//! It reads no file itself. The caller decodes image assets and passes them by
+//! identity; an image node whose asset is absent draws a visible placeholder, where
+//! silently drawing nothing would look like a working scene with a missing picture.
 //!
 //! The coordinate space is canvas pixels with the origin at the top left, x to the
 //! right and y down, matching the RGBA buffer's own layout.
 
+use crate::motion_image::{MotionImage, draw_motion_image};
 use or_core::{TextAlignment, TextColor, TextFormatting, TextWeight};
 use or_motion::{
     MotionColor, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene, evaluate_scene,
 };
+use std::collections::BTreeMap;
 
 /// The largest canvas this rasterises, in pixels. The text layer bound is the same
 /// order of magnitude; a scene is authored content, not media.
@@ -83,6 +84,17 @@ impl RasterizedMotionFrame {
 pub fn rasterize_motion_frame(
     frame: &MotionFrame,
 ) -> Result<RasterizedMotionFrame, MotionRasterError> {
+    rasterize_motion_frame_with_images(frame, &BTreeMap::new())
+}
+
+/// Rasterises with decoded image assets keyed by asset id.
+///
+/// An image node whose asset is absent still draws the visible placeholder, so a
+/// missing file is a diagnostic rather than a silent hole.
+pub fn rasterize_motion_frame_with_images(
+    frame: &MotionFrame,
+    images: &BTreeMap<String, MotionImage>,
+) -> Result<RasterizedMotionFrame, MotionRasterError> {
     let width = frame.canvas.width;
     let height = frame.canvas.height;
     if width == 0 || height == 0 || width.saturating_mul(height) > MAX_MOTION_CANVAS_PIXELS {
@@ -96,7 +108,7 @@ pub fn rasterize_motion_frame(
     };
     let mut text = TextRasterizer::new();
     for instruction in &frame.instructions {
-        draw_instruction(&mut canvas, &mut text, instruction)?;
+        draw_instruction(&mut canvas, &mut text, instruction, images)?;
     }
     Ok(RasterizedMotionFrame {
         width,
@@ -107,7 +119,7 @@ pub fn rasterize_motion_frame(
 
 use crate::text::TextRasterizer;
 
-struct Canvas {
+pub(crate) struct Canvas {
     width: u32,
     height: u32,
     pixels: Vec<u8>,
@@ -115,7 +127,7 @@ struct Canvas {
 
 impl Canvas {
     /// Source-over blend of one straight-alpha colour onto the canvas.
-    fn blend(&mut self, x: i64, y: i64, color: [f64; 4]) {
+    pub(crate) fn blend(&mut self, x: i64, y: i64, color: [f64; 4]) {
         if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
             return;
         }
@@ -155,7 +167,7 @@ fn rgba(color: MotionColor, opacity: f64) -> [f64; 4] {
 /// The inverse-rotated offset of a point about a centre, in canvas units. Rotation
 /// is clockwise for a positive angle in a y-down space, which is what a reader
 /// expects from "rotate 90 degrees".
-fn unrotate(x: f64, y: f64, center_x: f64, center_y: f64, degrees: f64) -> (f64, f64) {
+pub(crate) fn unrotate(x: f64, y: f64, center_x: f64, center_y: f64, degrees: f64) -> (f64, f64) {
     if degrees == 0.0 {
         return (x - center_x, y - center_y);
     }
@@ -170,6 +182,7 @@ fn draw_instruction(
     canvas: &mut Canvas,
     text: &mut TextRasterizer,
     instruction: &MotionInstruction,
+    images: &BTreeMap<String, MotionImage>,
 ) -> Result<(), MotionRasterError> {
     match instruction.kind {
         MotionNodeKind::Group => {}
@@ -289,7 +302,14 @@ fn draw_instruction(
             }
         }
         MotionNodeKind::Image => {
-            // A placeholder, not a decoded asset: a bordered box with a cross, so a
+            if let Some(image) = instruction
+                .asset_id
+                .as_ref()
+                .and_then(|asset_id| images.get(asset_id))
+            {
+                return draw_motion_image(canvas, instruction, image);
+            }
+            // No decoded asset for this identity: a bordered box with a cross, so a
             // missing picture is visible instead of silent.
             let Some(size) = instruction.size else {
                 return Ok(());
@@ -470,6 +490,26 @@ pub fn for_each_motion_frame<F>(
     scene: &MotionScene,
     frame_rate_numerator: u32,
     frame_rate_denominator: u32,
+    visitor: F,
+) -> Result<u64, MotionSequenceError>
+where
+    F: FnMut(u64, &RasterizedMotionFrame) -> Result<(), MotionRasterError>,
+{
+    for_each_motion_frame_with_images(
+        scene,
+        frame_rate_numerator,
+        frame_rate_denominator,
+        &BTreeMap::new(),
+        visitor,
+    )
+}
+
+/// Produces every frame with decoded image assets available to the rasteriser.
+pub fn for_each_motion_frame_with_images<F>(
+    scene: &MotionScene,
+    frame_rate_numerator: u32,
+    frame_rate_denominator: u32,
+    images: &BTreeMap<String, MotionImage>,
     mut visitor: F,
 ) -> Result<u64, MotionSequenceError>
 where
@@ -506,7 +546,8 @@ where
         )?;
         let frame = evaluate_scene(scene, time)
             .map_err(|_| MotionSequenceError::Frame(MotionRasterError::InvalidCanvas))?;
-        let canvas = rasterize_motion_frame(&frame).map_err(MotionSequenceError::Frame)?;
+        let canvas = rasterize_motion_frame_with_images(&frame, images)
+            .map_err(MotionSequenceError::Frame)?;
         visitor(index, &canvas).map_err(MotionSequenceError::Frame)?;
     }
     Ok(frames)

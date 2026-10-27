@@ -700,6 +700,7 @@ class AssistantController extends ChangeNotifier {
         '${directory.path}${Platform.pathSeparator}session-pointer.json',
       );
       _pointerPath = file.path;
+      final support = await _supportDirectory();
       await file.writeAsString(
         jsonEncode({
           'version': 1,
@@ -707,6 +708,8 @@ class AssistantController extends ChangeNotifier {
           'project_path': _projectPath,
           'project_name': _projectName,
           'workspace_path': workspace,
+          'motion_library_path':
+              '${support.path}${Platform.pathSeparator}motion-library',
         }),
       );
     } catch (_) {

@@ -10,6 +10,7 @@
 use or_core::RationalTime;
 use serde_json::{Value, json};
 use std::{
+    collections::BTreeMap,
     ffi::OsString,
     io::{BufRead, Write},
     path::{Path, PathBuf},
@@ -205,6 +206,8 @@ impl Server {
             "set_frame_rate" => self.set_frame_rate(arguments),
             "add_marker" => self.add_marker(arguments),
             "motion_insert_scene" => self.motion_insert_scene(arguments),
+            "motion_asset_list" => self.motion_asset_list(arguments),
+            "motion_asset_insert" => self.motion_asset_insert(arguments),
             other => Err(format!(
                 "unknown tool: {other}. Call tools/list to see the supported tools."
             )),
@@ -636,6 +639,100 @@ impl Server {
         }))
     }
 
+    /// The library path the application records in its session pointer.
+    fn motion_library_root(&self) -> Result<PathBuf, String> {
+        let pointer = self
+            .pointer_state()
+            .ok_or_else(|| "no session pointer is available".to_owned())?;
+        pointer
+            .get("motion_library_path")
+            .and_then(Value::as_str)
+            .filter(|path| !path.trim().is_empty())
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                "the application did not record a motion library path; update the app or pass one through the workspace".to_owned()
+            })
+    }
+
+    fn motion_asset_list(&self, arguments: &Value) -> Result<String, String> {
+        let root = self.motion_library_root()?;
+        let library = or_motion::MotionLibrary::open(&root)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let entries = library
+            .list()
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let offset = optional_u32(arguments, "offset")?.unwrap_or(0) as usize;
+        let limit = optional_u32(arguments, "limit")?.unwrap_or(50).min(100) as usize;
+        let page: Vec<&or_motion::MotionLibraryEntry> =
+            entries.iter().skip(offset).take(limit).collect();
+        let has_more = offset.saturating_add(page.len()) < entries.len();
+        pretty(json!({
+            "root": library.root().display().to_string(),
+            "total": entries.len(),
+            "offset": offset,
+            "has_more": has_more,
+            "entries": page,
+        }))
+    }
+
+    /// Instantiates a library asset, prepares its image files beside a scratch
+    /// scene, and reuses the ordinary materialise/import/insert path.
+    fn motion_asset_insert(&self, arguments: &Value) -> Result<String, String> {
+        let root = self.motion_library_root()?;
+        let library = or_motion::MotionLibrary::open(&root)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let asset_id = required_str(arguments, "asset_id")?;
+        let asset = library
+            .load(&asset_id)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let values = match arguments.get("values") {
+            None | Some(Value::Null) => BTreeMap::new(),
+            Some(Value::Object(map)) => serde_json::from_value::<
+                BTreeMap<String, or_motion::MotionParameterValue>,
+            >(Value::Object(map.clone()))
+            .map_err(|error| format!("values must be parameter values by id: {error}"))?,
+            Some(_) => return Err("values must be an object keyed by parameter id".to_owned()),
+        };
+        let scene_id = or_motion::new_motion_asset_id();
+        let scene = or_motion::instantiate_motion_asset(&asset, &values, &scene_id, &asset.name)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let scratch = std::env::temp_dir().join(format!("or-mcp-motion-asset-{scene_id}"));
+        let prepared = library
+            .prepare_scene_assets(&scene, &scratch)
+            .map_err(|error| format!("{}: {error}", error.code()))?;
+        let scene_path = scratch.join("scene.ormotion.json");
+        let encoded = serde_json::to_vec_pretty(&prepared)
+            .map_err(|error| format!("the composed scene could not be encoded: {error}"))?;
+        std::fs::write(&scene_path, encoded)
+            .map_err(|error| format!("the composed scene could not be written: {error}"))?;
+
+        let width = optional_u32(arguments, "width")?.unwrap_or(asset.canvas.width);
+        let height = optional_u32(arguments, "height")?.unwrap_or(asset.canvas.height);
+        let mut insert = json!({
+            "scene_path": scene_path.display().to_string(),
+            "title": asset.name,
+            "width": width,
+            "height": height,
+        });
+        for key in ["at", "track_id", "frame_rate", "output_path"] {
+            if let Some(value) = arguments.get(key)
+                && !value.is_null()
+            {
+                insert[key] = value.clone();
+            }
+        }
+        let result = self.motion_insert_scene(&insert);
+        let _ = std::fs::remove_dir_all(&scratch);
+        let text = result?;
+        let mut value: Value = serde_json::from_str(&text)
+            .map_err(|error| format!("the insert response was not JSON: {error}"))?;
+        if let Some(object) = value.as_object_mut() {
+            object.insert("asset_id".to_owned(), json!(asset.asset_id));
+            object.insert("asset_name".to_owned(), json!(asset.name));
+        }
+        pretty(value)
+    }
+
     fn first_video_track(&self) -> Result<String, String> {
         let tracks = self.run_or(&["timeline", "tracks"])?;
         let items = tracks
@@ -982,6 +1079,28 @@ fn tool_definitions() -> Value {
                 "frame_rate": {"type": "string", "description": "e.g. 30/1"},
                 "output_path": {"type": "string", "description": "Optional absolute .mkv destination; defaults beside the project file."}
             }), &[]),
+        },
+        {
+            "name": "motion_asset_list",
+            "description": "List the reusable motion assets in the application's motion library: id, name, category, kind, canvas and duration. Use this before inserting one so you can choose a real asset id and see its category.",
+            "inputSchema": object_schema(json!({
+                "offset": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 100}
+            }), &[]),
+        },
+        {
+            "name": "motion_asset_insert",
+            "description": "Instantiate a reusable motion asset with optional parameter values, render it through the application's MotionScene materialiser, import it, and insert an ordinary editable clip. WAIT: materialisation renders every frame. When `at` is omitted the clip is appended after the track's last clip; when track_id is omitted the first video track is used.",
+            "inputSchema": object_schema(json!({
+                "asset_id": {"type": "string", "description": "The asset id from motion_asset_list."},
+                "values": {"type": "object", "description": "Optional parameter values keyed by parameter id; text and choice are strings, number is a number, colour is {red,green,blue,alpha}."},
+                "at": {"type": "string", "description": "Optional timeline position; defaults to the end of the target track."},
+                "track_id": {"type": "string"},
+                "width": {"type": "integer"},
+                "height": {"type": "integer"},
+                "frame_rate": {"type": "string", "description": "e.g. 30/1"},
+                "output_path": {"type": "string", "description": "Optional absolute .mkv destination; defaults beside the project file."}
+            }), &["asset_id"]),
         }
     ])
 }

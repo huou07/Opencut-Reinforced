@@ -842,24 +842,12 @@ void main() {
       expect(gateway.previewSeekCalls, previewSeeksBefore + 1);
       expect(gateway.lastPreviewSeek?.canonical, contentEnd.canonical);
 
-      // The Motion tab reports what the render produced instead of forgetting
-      // it the moment the dialog closed, and renders again from the same source.
+      // The Motion tab is now the asset library; the code-to-video dialog stays
+      // reachable from it.
       await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('motion-scene-card')), findsOneWidget);
-      expect(find.text('Illustration'), findsOneWidget);
-      expect(find.text('On timeline'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('motion-scene-rerender')));
-      await tester.pumpAndSettle();
-      expect(gateway.illustrationRequests, hasLength(2));
-      expect(
-        gateway.illustrationRequests.last.sourcePath,
-        gateway.illustrationRequests.first.sourcePath,
-      );
-      expect(
-        gateway.illustrationRequests.last.destinationPath,
-        gateway.illustrationRequests.first.destinationPath,
-      );
+      expect(find.byKey(const ValueKey('motion-library-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('motion-open-code')), findsOneWidget);
     },
   );
 
@@ -877,7 +865,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('tool-open-motion')));
+    await tester.tap(find.byKey(const ValueKey('motion-open-code')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Choose file'));
     await tester.pumpAndSettle();

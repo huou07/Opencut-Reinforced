@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -14,7 +15,9 @@ import '../assistant/assistant_panel.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
-import '../project/motion_scene_snapshot.dart';
+import '../motion/motion_library_controller.dart';
+import '../motion/motion_library_models.dart';
+import '../motion/motion_library_panel.dart';
 import '../project/project_gateway.dart';
 import 'viewer_transform_overlay.dart';
 import '../widgets/or_widgets.dart';
@@ -57,9 +60,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onOpenMotion,
     this.onCopyClip,
     this.onPasteClip,
-    this.motionScene,
-    this.onInsertMotionScene,
-    this.onRerenderMotionScene,
+    this.motionOutputDirectory,
+    this.onInsertMotionClip,
+    this.pickMotionImage,
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
@@ -147,11 +150,10 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime position,
   )?
   onPasteClip;
-  /// The scene this session last rendered, so the Motion tab can report the
-  /// file it produced instead of forgetting the moment the dialog closed.
-  final MotionSceneSnapshot? motionScene;
-  final Future<void> Function()? onInsertMotionScene;
-  final Future<void> Function()? onRerenderMotionScene;
+  /// A project-adjacent folder where materialised motion clips are written.
+  final String? motionOutputDirectory;
+  final Future<bool> Function(String path)? onInsertMotionClip;
+  final Future<String?> Function()? pickMotionImage;
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
@@ -387,10 +389,12 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   bool _mobileSheetRefreshScheduled = false;
   late final ValueNotifier<ProjectPreviewState?> _previewState;
   final ValueNotifier<int> _mobileSheetRevision = ValueNotifier(0);
+  late final MotionLibraryController _motionLibrary;
 
   @override
   void initState() {
     super.initState();
+    _motionLibrary = MotionLibraryController();
     _previewState = ValueNotifier(null);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncAssistantContext();
@@ -477,8 +481,41 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   void dispose() {
     _mediaSearchController.dispose();
     _previewState.dispose();
+    _motionLibrary.dispose();
     _mobileSheetRevision.dispose();
     super.dispose();
+  }
+
+  /// Materialises a dragged library asset and inserts it on the timeline.
+  Future<void> _insertMotionAsset(MotionAssetDragData data) async {
+    final directory = widget.motionOutputDirectory;
+    if (directory == null || directory.isEmpty) {
+      OrSnackBar.show(context, 'Open a project before adding a motion clip.');
+      return;
+    }
+    final safe = data.name.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '-');
+    final output = '$directory${Platform.pathSeparator}motion-$safe-'
+        '${DateTime.now().millisecondsSinceEpoch}.mkv';
+    final view = await _motionLibrary.materializeDrag(data, output);
+    if (!mounted) return;
+    if (view == null || !view.succeeded) {
+      final message = view?.message ?? '';
+      OrSnackBar.show(
+        context,
+        message.isNotEmpty
+            ? message
+            : (_motionLibrary.error ?? 'The motion clip could not be rendered.'),
+      );
+      return;
+    }
+    final added = await widget.onInsertMotionClip?.call(view.outputPath) ?? false;
+    if (!mounted) return;
+    OrSnackBar.show(
+      context,
+      added
+          ? 'Motion clip added to the timeline.'
+          : 'The rendered clip could not be inserted.',
+    );
   }
 
   void _onPreviewStateChanged(ProjectPreviewState state) {
@@ -827,13 +864,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       ? null
                       : widget.onExportCaptions,
                   onOpenMotion: widget.busy ? null : widget.onOpenMotion,
-                  motionScene: widget.motionScene,
-                  onInsertMotionScene: widget.busy
-                      ? null
-                      : widget.onInsertMotionScene,
-                  onRerenderMotionScene: widget.busy
-                      ? null
-                      : widget.onRerenderMotionScene,
+                  motionLibrary: _motionLibrary,
+                  motionOutputDirectory: widget.motionOutputDirectory,
+                  onInsertMotionClip: widget.onInsertMotionClip,
+                  pickMotionImage: widget.pickMotionImage,
+                  onNotice: (message) => OrSnackBar.show(context, message),
                 ),
               ),
               const VerticalDivider(width: 1),
@@ -931,6 +966,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 2,
           child: _TimelinePanel(
+            onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: false,
             previewState: _previewState,
@@ -1022,6 +1058,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 2,
           child: _TimelinePanel(
+            onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: true,
             previewState: _previewState,
@@ -1159,6 +1196,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             return SizedBox(
               height: height,
               child: _EditorToolPanel(
+                motionLibrary: _motionLibrary,
+                motionOutputDirectory: widget.motionOutputDirectory,
+                onInsertMotionClip: widget.onInsertMotionClip,
+                pickMotionImage: widget.pickMotionImage,
+                onNotice: (message) => OrSnackBar.show(context, message),
                 selectedTool: tool,
                 onSelectedTool: (picked) =>
                     setState(() => _selectedTool = picked),
@@ -1200,9 +1242,6 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                         onClose();
                         widget.onOpenMotion?.call();
                       },
-                motionScene: widget.motionScene,
-                onInsertMotionScene: widget.onInsertMotionScene,
-                onRerenderMotionScene: widget.onRerenderMotionScene,
                 onClose: onClose,
               ),
             );
@@ -1485,9 +1524,11 @@ class _EditorToolPanel extends StatelessWidget {
     this.onImportCaptions,
     this.onExportCaptions,
     this.onOpenMotion,
-    this.motionScene,
-    this.onInsertMotionScene,
-    this.onRerenderMotionScene,
+    required this.motionLibrary,
+    this.motionOutputDirectory,
+    this.onInsertMotionClip,
+    this.pickMotionImage,
+    required this.onNotice,
     this.onClose,
   });
 
@@ -1531,9 +1572,11 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final VoidCallback? onOpenMotion;
-  final MotionSceneSnapshot? motionScene;
-  final Future<void> Function()? onInsertMotionScene;
-  final Future<void> Function()? onRerenderMotionScene;
+  final MotionLibraryController motionLibrary;
+  final String? motionOutputDirectory;
+  final Future<bool> Function(String path)? onInsertMotionClip;
+  final Future<String?> Function()? pickMotionImage;
+  final ValueChanged<String> onNotice;
   final VoidCallback? onClose;
 
   @override
@@ -1639,29 +1682,13 @@ class _EditorToolPanel extends StatelessWidget {
       );
     }
     if (selectedTool == 'Motion') {
-      final scene = motionScene;
-      if (scene == null) {
-        return _ToolActionsPanel(
-          title: 'Motion',
-          showTitle: false,
-          subtitle:
-              'A code file becomes a deterministic MotionScene, rendered locally '
-              'and inserted as an ordinary clip that exports with the timeline.',
-          actions: [
-            _ToolAction(
-              keyName: 'tool-open-motion',
-              label: 'Create illustration video…',
-              icon: Icons.animation_outlined,
-              onPressed: onOpenMotion,
-            ),
-          ],
-        );
-      }
-      return _MotionScenePanel(
-        scene: scene,
-        onCreate: onOpenMotion,
-        onInsert: onInsertMotionScene,
-        onRerender: onRerenderMotionScene,
+      return MotionLibraryPanel(
+        controller: motionLibrary,
+        outputDirectory: motionOutputDirectory,
+        onInsertClip: onInsertMotionClip ?? (_) async => false,
+        onNotice: onNotice,
+        onOpenCodeMotion: onOpenMotion ?? () {},
+        pickImage: pickMotionImage,
       );
     }
 
@@ -1701,147 +1728,6 @@ class _EditorToolPanel extends StatelessWidget {
     );
   }
 }
-
-/// The scene this session rendered: what it is, what it wrote, and the two
-/// things an author does next. A render is a file plus an insert, so the panel
-/// keeps both facts visible instead of asking the owner to remember them.
-class _MotionScenePanel extends StatelessWidget {
-  const _MotionScenePanel({
-    required this.scene,
-    required this.onCreate,
-    required this.onInsert,
-    required this.onRerender,
-  });
-
-  final MotionSceneSnapshot scene;
-  final VoidCallback? onCreate;
-  final Future<void> Function()? onInsert;
-  final Future<void> Function()? onRerender;
-
-  @override
-  Widget build(BuildContext context) {
-    final size = scene.bytesWritten >= 1024 * 1024
-        ? '${(scene.bytesWritten / (1024 * 1024)).toStringAsFixed(1)} MB'
-        : '${(scene.bytesWritten / 1024).toStringAsFixed(0)} KB';
-    return ColoredBox(
-      color: OrColors.backgroundRaised,
-      child: ListView(
-        key: const ValueKey('motion-scene-list'),
-        padding: const EdgeInsets.all(OrSpacing.x3),
-        children: [
-          Container(
-            key: const ValueKey('motion-scene-card'),
-            padding: const EdgeInsets.all(OrSpacing.x3),
-            decoration: BoxDecoration(
-              color: OrColors.surface,
-              borderRadius: BorderRadius.circular(OrRadii.card),
-              border: Border.all(color: OrColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        scene.title,
-                        key: const ValueKey('motion-scene-title'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: OrColors.text,
-                          fontSize: OrType.controlSize,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    OrBadge(
-                      scene.inserted ? 'On timeline' : 'Rendered',
-                      key: const ValueKey('motion-scene-state'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: OrSpacing.x2),
-                _fact('Frames', '${scene.frameCount}'),
-                _fact(
-                  'Rate',
-                  '${scene.frameRate} fps',
-                ),
-                _fact('Size', '${scene.width} × ${scene.height}'),
-                _fact('File', '$size · ${_fileName(scene.destinationPath)}'),
-                const SizedBox(height: OrSpacing.x2),
-                Text(
-                  'Source ${_fileName(scene.sourcePath)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: OrColors.textMuted,
-                    fontSize: OrType.tinySize,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: OrSpacing.x2),
-          FilledButton.icon(
-            key: const ValueKey('motion-scene-insert'),
-            onPressed: scene.inserted || onInsert == null
-                ? null
-                : () => onInsert!(),
-            icon: const Icon(Icons.playlist_add, size: 16),
-            label: Text(scene.inserted ? 'Already on the timeline' : 'Insert into timeline'),
-          ),
-          const SizedBox(height: OrSpacing.x1),
-          OutlinedButton.icon(
-            key: const ValueKey('motion-scene-rerender'),
-            onPressed: onRerender == null ? null : () => onRerender!(),
-            icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Render again'),
-          ),
-          const SizedBox(height: OrSpacing.x1),
-          TextButton.icon(
-            key: const ValueKey('motion-scene-new'),
-            onPressed: onCreate,
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('New scene…'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _fact(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: OrSpacing.x1),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 56,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: OrColors.textMuted,
-              fontSize: OrType.tinySize,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: OrColors.textSecondary,
-              fontSize: OrType.tinySize,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-String _fileName(String path) => path.split(RegExp(r'[\\/]')).last;
 
 class _ToolAction {
   const _ToolAction({
@@ -5004,6 +4890,7 @@ class _TimelinePanel extends StatefulWidget {
   const _TimelinePanel({
     super.key,
     required this.compact,
+    this.onMotionAssetDropped,
     required this.previewState,
     this.onScrubTo,
     required this.isProjectWorkspace,
@@ -5064,6 +4951,11 @@ class _TimelinePanel extends StatefulWidget {
   });
 
   final bool compact;
+
+  /// Accepts a dragged motion asset anywhere on the timeline and appends the
+  /// materialised clip. Placement is deliberately the track end, not the drop
+  /// pixel: a drop cannot silently rewrite existing clip boundaries.
+  final Future<void> Function(MotionAssetDragData)? onMotionAssetDropped;
 
   final ValueListenable<ProjectPreviewState?> previewState;
 
@@ -5341,9 +5233,47 @@ class _TimelinePanelState extends State<_TimelinePanel> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ProjectPreviewState?>(
+    final timeline = ValueListenableBuilder<ProjectPreviewState?>(
       valueListenable: widget.previewState,
       builder: (context, preview, _) => _buildTimeline(context, preview),
+    );
+    final drop = widget.onMotionAssetDropped;
+    if (drop == null) return timeline;
+    return DragTarget<MotionAssetDragData>(
+      key: const ValueKey('timeline-motion-drop'),
+      onAcceptWithDetails: (details) => unawaited(drop(details.data)),
+      builder: (context, candidates, rejected) => Stack(
+        children: [
+          timeline,
+          if (candidates.isNotEmpty)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Container(
+                  color: OrColors.focus.withValues(alpha: 0.08),
+                  alignment: Alignment.center,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: OrSpacing.x3,
+                      vertical: OrSpacing.x2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: OrColors.surfaceSelected,
+                      borderRadius: BorderRadius.circular(OrRadii.control),
+                      border: Border.all(color: OrColors.focus),
+                    ),
+                    child: const Text(
+                      'Drop to add the motion clip',
+                      style: TextStyle(
+                        color: OrColors.text,
+                        fontSize: OrType.tinySize,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

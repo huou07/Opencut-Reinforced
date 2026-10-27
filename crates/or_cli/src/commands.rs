@@ -796,12 +796,16 @@ fn parse_positive_u32(options: &Options, flag: &str, json: bool) -> Result<Optio
 fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> {
     let options = Options::parse(args, &["--file", "--at", "--output"], &[], json)?;
     let scene = read_motion_scene(&options, json)?;
+    let scene_path = required_path(&options, "--file", json)?;
     let output = required_path(&options, "--output", json)?;
     let at = required_name(&options, "--at", json)?;
     let time = parse_cli_rational(&at, "--at", json)?;
+    let base = scene_path.parent().unwrap_or_else(|| Path::new("."));
+    let images = or_render::load_motion_scene_images(&scene, base)
+        .map_err(|error| CliError::new(4, json, "motion_image", error.code(), error.to_string()))?;
     let frame = or_motion::evaluate_scene(&scene, time)
         .map_err(|error| CliError::motion_evaluation(error, json))?;
-    let canvas = or_render::rasterize_motion_frame(&frame)
+    let canvas = or_render::rasterize_motion_frame_with_images(&frame, &images)
         .map_err(|error| CliError::motion_raster(error, json))?;
     let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
         .map_err(|error| CliError::motion_raster(error, json))?;
@@ -840,7 +844,7 @@ fn run_motion_asset(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
         return Err(CliError::usage(
             json,
-            "expected motion asset list, validate, save, instantiate or remove",
+            "expected motion asset list, validate, save, instantiate, remove or import",
         ));
     };
     match action {
@@ -849,9 +853,10 @@ fn run_motion_asset(args: &[OsString], json: bool) -> Result<String, CliError> {
         "save" => run_motion_asset_save(&args[1..], json),
         "instantiate" => run_motion_asset_instantiate(&args[1..], json),
         "remove" => run_motion_asset_remove(&args[1..], json),
+        "import" => run_motion_asset_import(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion asset action; expected list, validate, save, instantiate or remove",
+            "unknown motion asset action; expected list, validate, save, instantiate, remove or import",
         )),
     }
 }
@@ -1014,6 +1019,77 @@ fn run_motion_asset_remove(args: &[OsString], json: bool) -> Result<String, CliE
     } else {
         format!("No asset in {} has id {asset_id}", library.root().display())
     })
+}
+
+fn run_motion_asset_import(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--library",
+            "--source",
+            "--name",
+            "--category",
+            "--tags",
+            "--width",
+            "--height",
+            "--seconds",
+        ],
+        &[],
+        json,
+    )?;
+    let library = open_motion_library(&options, json)?;
+    let source = required_path(&options, "--source", json)?;
+    let name = options
+        .value("--name")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let category = match options.value("--category") {
+        Some(value) => Some(parse_motion_category(value, json)?),
+        None => None,
+    };
+    let tags = options
+        .value("--tags")
+        .map(|value| {
+            value
+                .to_string_lossy()
+                .split(',')
+                .map(str::trim)
+                .filter(|tag| !tag.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(1920);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(1080);
+    let seconds = parse_positive_u32(&options, "--seconds", json)?.unwrap_or(5);
+    let duration = RationalTime::new(i64::from(seconds), 1)
+        .map_err(|_| CliError::usage(json, "--seconds is not a valid duration"))?;
+    let asset = library
+        .import_image(or_motion::MotionImageImport {
+            source: &source,
+            name: &name,
+            category,
+            tags,
+            canvas: or_motion::MotionCanvas { width, height },
+            duration,
+        })
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let entry = or_motion::MotionLibraryEntry::from(&asset);
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "motion_asset": entry,
+        })));
+    }
+    Ok(format!(
+        "Imported {} as {} ({} {}, classified by {}) into {}",
+        source.display(),
+        entry.name,
+        entry.category.as_str(),
+        entry.kind.as_str(),
+        entry.category_source.as_str(),
+        library.root().display()
+    ))
 }
 
 fn open_motion_library(

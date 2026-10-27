@@ -65,6 +65,8 @@ mod tests {
     }
 }
 pub mod motion;
+pub mod motion_library;
 pub mod project;
 pub use motion::*;
+pub use motion_library::*;
 pub use project::*;

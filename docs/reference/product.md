@@ -86,17 +86,17 @@ deterministic rendering.
 
 ## Motion assets
 
-**P1 FOUNDATION (CLI, no UI):** reusable scene and fragment assets with typed
-parameters for text content, colour and size; an app-level JSON library with
-deterministic name/tag classification (background, people, nature, animal,
-vehicle, ...) and a manual override; `or motion asset validate/save/list/
-instantiate/remove`. See [motion-assets.md](../features/motion-assets.md).
+**MVP FOUNDATION (delivered):** reusable scene, fragment and image assets with
+typed parameters for text content, colour, size, opacity and rotation; an
+app-level JSON library with deterministic name/tag classification
+(background, people, nature, animal, vehicle, ...) and a manual override; PNG
+import and rendering; a Motion panel with search, previews, parameter editing
+and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
+See [motion-assets.md](../features/motion-assets.md).
 
-**PLANNED (P2/P3, [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)):**
-a Motion editing surface with library browsing, previews and parameter editing;
-drag and drop into the timeline or an open scene; image and motion-preset
-assets; bridge and MCP tools. Placement stays materialised in the first
-delivery; a live timeline MotionClip remains deferred.
+**DEFERRED:** a live timeline MotionClip that stays editable in place; motion
+presets applied to an existing node; move/resize handles on the composition
+canvas; a marketplace. Placement stays materialised for now.
 
 ## Interchange and extensibility
 

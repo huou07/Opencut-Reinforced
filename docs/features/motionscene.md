@@ -24,6 +24,9 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
 - Any randomness must be explicit and seeded from scene/source identity; V1 is
   otherwise deterministic.
 - Text uses the shared `cosmic-text` bundled-font path — not a second text engine.
+- Image nodes draw a decoded PNG asset resolved relative to the scene file, with a
+  16 MiB encoded / 64 megapixel bound; a missing image keeps the visible
+  placeholder.
 
 ## Canonical path
 

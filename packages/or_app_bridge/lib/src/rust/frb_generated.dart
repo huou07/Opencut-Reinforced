@@ -5,6 +5,7 @@
 
 import 'api.dart';
 import 'api/motion.dart';
+import 'api/motion_library.dart';
 import 'api/project.dart';
 
 import 'dart:async';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -631748514;
+  int get rustContentHash => -754328948;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -727,6 +728,111 @@ abstract class RustLibApi extends BaseApi {
     required int width,
     required int height,
     required String title,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetImportImage({
+    required String root,
+    required String sourcePath,
+    required String name,
+    String? category,
+    required List<String> tags,
+    required int width,
+    required int height,
+    required int seconds,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetLoad({
+    required String root,
+    required String assetId,
+  });
+
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionAssetMaterialize({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  });
+
+  Future<MotionAssetMutationView> crateApiMotionLibraryMotionAssetRemove({
+    required String root,
+    required String assetId,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetSave({
+    required String root,
+    required String documentJson,
+    String? category,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionAssetScene({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    String? sceneId,
+    String? name,
+  });
+
+  Future<MotionAssetLibraryView> crateApiMotionLibraryMotionLibrary({
+    required String root,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneAppend({
+    required String root,
+    required String sceneJson,
+    required String assetId,
+    required String valuesJson,
+    required String prefix,
+    required double offsetX,
+    required double offsetY,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneCompose({
+    required String root,
+    required String sceneId,
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+    required List<String> assetIds,
+    required List<String> valuesJson,
+    required List<double> offsetX,
+    required List<double> offsetY,
+  });
+
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionSceneMaterialize({
+    required String root,
+    required String sceneJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneNew({
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+  });
+
+  Future<MotionScenePreviewView> crateApiMotionLibraryMotionScenePreview({
+    required String root,
+    required String sceneJson,
+    required PlatformInt64 atMilliseconds,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
+    required String root,
+    required String sceneJson,
+    required String name,
+    String? category,
   });
 
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path});
@@ -5031,6 +5137,626 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetImportImage({
+    required String root,
+    required String sourcePath,
+    required String name,
+    String? category,
+    required List<String> tags,
+    required int width,
+    required int height,
+    required int seconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sourcePath, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_opt_String(category, serializer);
+          sse_encode_list_String(tags, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 85,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetImportImageConstMeta,
+        argValues: [
+          root,
+          sourcePath,
+          name,
+          category,
+          tags,
+          width,
+          height,
+          seconds,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetImportImageConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_import_image",
+        argNames: [
+          "root",
+          "sourcePath",
+          "name",
+          "category",
+          "tags",
+          "width",
+          "height",
+          "seconds",
+        ],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetLoad({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 86,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetLoadConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetLoadConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_load",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionAssetMaterialize({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 87,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetMaterializeConstMeta,
+        argValues: [
+          root,
+          assetId,
+          valuesJson,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetMaterializeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_materialize",
+        argNames: [
+          "root",
+          "assetId",
+          "valuesJson",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+        ],
+      );
+
+  @override
+  Future<MotionAssetMutationView> crateApiMotionLibraryMotionAssetRemove({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 88,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_mutation_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetRemoveConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetRemoveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_remove",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetSave({
+    required String root,
+    required String documentJson,
+    String? category,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(documentJson, serializer);
+          sse_encode_opt_String(category, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 89,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetSaveConstMeta,
+        argValues: [root, documentJson, category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetSaveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_save",
+        argNames: ["root", "documentJson", "category"],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionAssetScene({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    String? sceneId,
+    String? name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_opt_String(sceneId, serializer);
+          sse_encode_opt_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 90,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetSceneConstMeta,
+        argValues: [root, assetId, valuesJson, sceneId, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetSceneConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_scene",
+        argNames: ["root", "assetId", "valuesJson", "sceneId", "name"],
+      );
+
+  @override
+  Future<MotionAssetLibraryView> crateApiMotionLibraryMotionLibrary({
+    required String root,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 91,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_library_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionLibraryConstMeta,
+        argValues: [root],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionLibraryConstMeta =>
+      const TaskConstMeta(debugName: "motion_library", argNames: ["root"]);
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneAppend({
+    required String root,
+    required String sceneJson,
+    required String assetId,
+    required String valuesJson,
+    required String prefix,
+    required double offsetX,
+    required double offsetY,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_String(prefix, serializer);
+          sse_encode_f_64(offsetX, serializer);
+          sse_encode_f_64(offsetY, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 92,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneAppendConstMeta,
+        argValues: [
+          root,
+          sceneJson,
+          assetId,
+          valuesJson,
+          prefix,
+          offsetX,
+          offsetY,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneAppendConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_append",
+        argNames: [
+          "root",
+          "sceneJson",
+          "assetId",
+          "valuesJson",
+          "prefix",
+          "offsetX",
+          "offsetY",
+        ],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneCompose({
+    required String root,
+    required String sceneId,
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+    required List<String> assetIds,
+    required List<String> valuesJson,
+    required List<double> offsetX,
+    required List<double> offsetY,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneId, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          sse_encode_list_String(assetIds, serializer);
+          sse_encode_list_String(valuesJson, serializer);
+          sse_encode_list_prim_f_64_loose(offsetX, serializer);
+          sse_encode_list_prim_f_64_loose(offsetY, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 93,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneComposeConstMeta,
+        argValues: [
+          root,
+          sceneId,
+          name,
+          width,
+          height,
+          seconds,
+          assetIds,
+          valuesJson,
+          offsetX,
+          offsetY,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneComposeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_compose",
+        argNames: [
+          "root",
+          "sceneId",
+          "name",
+          "width",
+          "height",
+          "seconds",
+          "assetIds",
+          "valuesJson",
+          "offsetX",
+          "offsetY",
+        ],
+      );
+
+  @override
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionSceneMaterialize({
+    required String root,
+    required String sceneJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 94,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneMaterializeConstMeta,
+        argValues: [
+          root,
+          sceneJson,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneMaterializeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_materialize",
+        argNames: [
+          "root",
+          "sceneJson",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+        ],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneNew({
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(name, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 95,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneNewConstMeta,
+        argValues: [name, width, height, seconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneNewConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_new",
+        argNames: ["name", "width", "height", "seconds"],
+      );
+
+  @override
+  Future<MotionScenePreviewView> crateApiMotionLibraryMotionScenePreview({
+    required String root,
+    required String sceneJson,
+    required PlatformInt64 atMilliseconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_i_64(atMilliseconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 96,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_preview_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionScenePreviewConstMeta,
+        argValues: [root, sceneJson, atMilliseconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionScenePreviewConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_preview",
+        argNames: ["root", "sceneJson", "atMilliseconds"],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
+    required String root,
+    required String sceneJson,
+    required String name,
+    String? category,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_opt_String(category, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 97,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneSaveConstMeta,
+        argValues: [root, sceneJson, name, category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneSaveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_save",
+        argNames: ["root", "sceneJson", "name", "category"],
+      );
+
+  @override
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path}) {
     return handler.executeNormal(
       NormalTask(
@@ -5040,7 +5766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 98,
             port: port_,
           );
         },
@@ -5155,6 +5881,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -5253,6 +5985,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   FontIdentityView dco_decode_font_identity_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return FontIdentityView.values[raw as int];
@@ -5295,6 +6033,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<Capability> dco_decode_list_capability(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_capability).toList();
+  }
+
+  @protected
+  List<MotionAssetEntryView> dco_decode_list_motion_asset_entry_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_asset_entry_view)
+        .toList();
+  }
+
+  @protected
+  List<MotionAssetParameterView> dco_decode_list_motion_asset_parameter_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_asset_parameter_view)
+        .toList();
+  }
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<double>;
+  }
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float64List;
   }
 
   @protected
@@ -5448,6 +6218,99 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionAssetEntryView dco_decode_motion_asset_entry_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return MotionAssetEntryView(
+      assetId: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      category: dco_decode_String(arr[2]),
+      categorySource: dco_decode_String(arr[3]),
+      kind: dco_decode_String(arr[4]),
+      tags: dco_decode_list_String(arr[5]),
+      canvasWidth: dco_decode_u_32(arr[6]),
+      canvasHeight: dco_decode_u_32(arr[7]),
+      durationMilliseconds: dco_decode_i_64(arr[8]),
+      previewPath: dco_decode_String(arr[9]),
+    );
+  }
+
+  @protected
+  MotionAssetLibraryView dco_decode_motion_asset_library_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MotionAssetLibraryView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      root: dco_decode_String(arr[3]),
+      entries: dco_decode_list_motion_asset_entry_view(arr[4]),
+    );
+  }
+
+  @protected
+  MotionAssetMutationView dco_decode_motion_asset_mutation_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return MotionAssetMutationView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      removed: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  MotionAssetParameterView dco_decode_motion_asset_parameter_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return MotionAssetParameterView(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      kind: dco_decode_String(arr[2]),
+      nodeId: dco_decode_String(arr[3]),
+      field: dco_decode_String(arr[4]),
+      defaultJson: dco_decode_String(arr[5]),
+      min: dco_decode_opt_box_autoadd_f_64(arr[6]),
+      max: dco_decode_opt_box_autoadd_f_64(arr[7]),
+      choices: dco_decode_list_String(arr[8]),
+    );
+  }
+
+  @protected
+  MotionAssetView dco_decode_motion_asset_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return MotionAssetView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      assetId: dco_decode_String(arr[3]),
+      name: dco_decode_String(arr[4]),
+      category: dco_decode_String(arr[5]),
+      categorySource: dco_decode_String(arr[6]),
+      kind: dco_decode_String(arr[7]),
+      tags: dco_decode_list_String(arr[8]),
+      canvasWidth: dco_decode_u_32(arr[9]),
+      canvasHeight: dco_decode_u_32(arr[10]),
+      durationMilliseconds: dco_decode_i_64(arr[11]),
+      previewPath: dco_decode_String(arr[12]),
+      documentJson: dco_decode_String(arr[13]),
+      parameters: dco_decode_list_motion_asset_parameter_view(arr[14]),
+    );
+  }
+
+  @protected
   MotionMaterializationView dco_decode_motion_materialization_view(
     dynamic raw,
   ) {
@@ -5474,6 +6337,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionScenePreviewView dco_decode_motion_scene_preview_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return MotionScenePreviewView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      png: dco_decode_list_prim_u_8_strict(arr[3]),
+      width: dco_decode_u_32(arr[4]),
+      height: dco_decode_u_32(arr[5]),
+    );
+  }
+
+  @protected
+  MotionSceneView dco_decode_motion_scene_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return MotionSceneView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      sceneJson: dco_decode_String(arr[3]),
+      sceneId: dco_decode_String(arr[4]),
+      name: dco_decode_String(arr[5]),
+      width: dco_decode_u_32(arr[6]),
+      height: dco_decode_u_32(arr[7]),
+      durationMilliseconds: dco_decode_i_64(arr[8]),
+      previewPng: dco_decode_list_prim_u_8_strict(arr[9]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -5483,6 +6382,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_bool(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -6324,6 +7229,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_32(deserializer));
@@ -6435,6 +7346,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
   FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -6488,6 +7405,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_capability(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  List<MotionAssetEntryView> sse_decode_list_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionAssetEntryView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_asset_entry_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MotionAssetParameterView> sse_decode_list_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionAssetParameterView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_asset_parameter_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
+  }
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
   }
 
   @protected
@@ -6689,6 +7648,137 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionAssetEntryView sse_decode_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_assetId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_categorySource = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_canvasWidth = sse_decode_u_32(deserializer);
+    var var_canvasHeight = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPath = sse_decode_String(deserializer);
+    return MotionAssetEntryView(
+      assetId: var_assetId,
+      name: var_name,
+      category: var_category,
+      categorySource: var_categorySource,
+      kind: var_kind,
+      tags: var_tags,
+      canvasWidth: var_canvasWidth,
+      canvasHeight: var_canvasHeight,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPath: var_previewPath,
+    );
+  }
+
+  @protected
+  MotionAssetLibraryView sse_decode_motion_asset_library_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_root = sse_decode_String(deserializer);
+    var var_entries = sse_decode_list_motion_asset_entry_view(deserializer);
+    return MotionAssetLibraryView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      root: var_root,
+      entries: var_entries,
+    );
+  }
+
+  @protected
+  MotionAssetMutationView sse_decode_motion_asset_mutation_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_removed = sse_decode_bool(deserializer);
+    return MotionAssetMutationView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      removed: var_removed,
+    );
+  }
+
+  @protected
+  MotionAssetParameterView sse_decode_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_nodeId = sse_decode_String(deserializer);
+    var var_field = sse_decode_String(deserializer);
+    var var_defaultJson = sse_decode_String(deserializer);
+    var var_min = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_max = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_choices = sse_decode_list_String(deserializer);
+    return MotionAssetParameterView(
+      id: var_id,
+      label: var_label,
+      kind: var_kind,
+      nodeId: var_nodeId,
+      field: var_field,
+      defaultJson: var_defaultJson,
+      min: var_min,
+      max: var_max,
+      choices: var_choices,
+    );
+  }
+
+  @protected
+  MotionAssetView sse_decode_motion_asset_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_assetId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_categorySource = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_canvasWidth = sse_decode_u_32(deserializer);
+    var var_canvasHeight = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPath = sse_decode_String(deserializer);
+    var var_documentJson = sse_decode_String(deserializer);
+    var var_parameters = sse_decode_list_motion_asset_parameter_view(
+      deserializer,
+    );
+    return MotionAssetView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      assetId: var_assetId,
+      name: var_name,
+      category: var_category,
+      categorySource: var_categorySource,
+      kind: var_kind,
+      tags: var_tags,
+      canvasWidth: var_canvasWidth,
+      canvasHeight: var_canvasHeight,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPath: var_previewPath,
+      documentJson: var_documentJson,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
   MotionMaterializationView sse_decode_motion_materialization_view(
     SseDeserializer deserializer,
   ) {
@@ -6726,6 +7816,54 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionScenePreviewView sse_decode_motion_scene_preview_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_png = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    return MotionScenePreviewView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      png: var_png,
+      width: var_width,
+      height: var_height,
+    );
+  }
+
+  @protected
+  MotionSceneView sse_decode_motion_scene_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_sceneJson = sse_decode_String(deserializer);
+    var var_sceneId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPng = sse_decode_list_prim_u_8_strict(deserializer);
+    return MotionSceneView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      sceneJson: var_sceneJson,
+      sceneId: var_sceneId,
+      name: var_name,
+      width: var_width,
+      height: var_height,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPng: var_previewPng,
+    );
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -6742,6 +7880,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_bool(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
     } else {
       return null;
     }
@@ -7835,6 +8984,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self, serializer);
@@ -7950,6 +9105,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
   void sse_encode_font_identity_view(
     FontIdentityView self,
     SseSerializer serializer,
@@ -8001,6 +9162,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_capability(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_motion_asset_entry_view(
+    List<MotionAssetEntryView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_asset_entry_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_motion_asset_parameter_view(
+    List<MotionAssetParameterView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_asset_parameter_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(
+      self is Float64List ? self : Float64List.fromList(self),
+    );
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(self);
   }
 
   @protected
@@ -8168,6 +9375,89 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_motion_asset_entry_view(
+    MotionAssetEntryView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.assetId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_String(self.categorySource, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_u_32(self.canvasWidth, serializer);
+    sse_encode_u_32(self.canvasHeight, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_String(self.previewPath, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_library_view(
+    MotionAssetLibraryView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.root, serializer);
+    sse_encode_list_motion_asset_entry_view(self.entries, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_mutation_view(
+    MotionAssetMutationView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_bool(self.removed, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_parameter_view(
+    MotionAssetParameterView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.nodeId, serializer);
+    sse_encode_String(self.field, serializer);
+    sse_encode_String(self.defaultJson, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.min, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.max, serializer);
+    sse_encode_list_String(self.choices, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_view(
+    MotionAssetView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.assetId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_String(self.categorySource, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_u_32(self.canvasWidth, serializer);
+    sse_encode_u_32(self.canvasHeight, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_String(self.previewPath, serializer);
+    sse_encode_String(self.documentJson, serializer);
+    sse_encode_list_motion_asset_parameter_view(self.parameters, serializer);
+  }
+
+  @protected
   void sse_encode_motion_materialization_view(
     MotionMaterializationView self,
     SseSerializer serializer,
@@ -8190,6 +9480,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_motion_scene_preview_view(
+    MotionScenePreviewView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_list_prim_u_8_strict(self.png, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_scene_view(
+    MotionSceneView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.sceneJson, serializer);
+    sse_encode_String(self.sceneId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_list_prim_u_8_strict(self.previewPng, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -8206,6 +9528,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_bool(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
     }
   }
 
