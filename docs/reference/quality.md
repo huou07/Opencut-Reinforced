@@ -76,6 +76,24 @@ change:
 - `or_render`'s own 640×360 row is 1.4 ms p50 including readback on the same
   Metal adapter, so the bridge adds little per frame.
 
+### Hardware export from GPU NV12 planes (2026-10-27)
+
+- Workload: the ignored `a_hardware_export_writes_from_gpu_nv12_planes` — a blank
+  1920×1080, 30 fps, 4 s timeline (120 frames) exported to the MP4/H.264 profile,
+  run three times per path on the same host.
+- Source/build: `or_app_bridge` the commit that moved the colour conversion to
+  the GPU, debug test profile.
+- Codec/backend: VideoToolbox H.264, wgpu Metal composite and conversion.
+- Machine: MacBook Air M5, 10 CPU cores, 8 GPU cores, idle-ish host.
+- Result: GPU NV12 planes 1.868 s against packed RGBA plus swscale 4.447 s — 2.4×.
+  The decoded picture of a blank frame is luma 16, chroma 128, i.e. limited-range
+  black, and the container probes as `h264` 1920×1080, `color_range=tv`,
+  `color_space=bt709`.
+
+The saving is larger than the 2.02 ms swscale step alone because the packed path
+also wrote an 8.3 MB RGBA frame back, swizzled it to BGRA and copied it into an
+FFmpeg frame: 3.1 MB of planes replaces all of that.
+
 ### Delivery quality preference (2026-10-27)
 
 - Workload: the ignored `a_delivery_export_honours_the_quality_preference` — a

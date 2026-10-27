@@ -23,6 +23,9 @@ the selected profile's muxer and encoders.
 - Preview and export share the same timeline evaluation, renderer, text
   rasteriser and transform/effect path; resolution, quality and scheduling may
   differ.
+- The hardware H.264 profile is fed NV12 planes: the composited frame is
+  converted on the GPU and read back as two planes, so no CPU colour conversion
+  runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
 - Rendering and writing are pipelined: a render thread keeps at most two frames
   ahead of the writer, so decode, GPU composite and readback overlap colour
   conversion and encoding instead of alternating with them. Frames still reach

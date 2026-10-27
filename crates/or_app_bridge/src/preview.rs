@@ -1044,6 +1044,7 @@ mod desktop {
                 None,
                 Some((generation, &self.generation)),
                 false,
+                RenderOutput::Packed,
                 cancellation,
             )
         }
@@ -1119,6 +1120,7 @@ mod desktop {
             fixed_size: Option<(u32, u32)>,
             expected_generation: Option<(u64, &AtomicU64)>,
             fail_on_decode_error: bool,
+            output: RenderOutput,
             cancellation: &CancellationToken,
         ) -> Result<Presentation, PreviewError> {
             if cancellation.is_cancelled()
@@ -1190,6 +1192,7 @@ mod desktop {
                             width,
                             height,
                             pixels: frame.pixels().to_vec(),
+                            planes: None,
                             error_code: None,
                             error_message: None,
                         });
@@ -1392,9 +1395,20 @@ mod desktop {
                 );
             }
             let renderer = renderer()?;
-            let rendered = renderer
-                .render_rgba_layers(snapshot, size, &layers)
-                .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+            let (pixels, planes) = match output {
+                RenderOutput::Packed => {
+                    let rendered = renderer
+                        .render_rgba_layers(snapshot, size, &layers)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+                    (rendered.pixels().to_vec(), None)
+                }
+                RenderOutput::Nv12 => {
+                    let planes = renderer
+                        .render_rgba_layers_nv12(snapshot, size, &layers)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+                    (Vec::new(), Some(planes))
+                }
+            };
             if cancellation.is_cancelled() {
                 return Err(PreviewError::new(
                     "PREVIEW_CANCELLED",
@@ -1404,7 +1418,8 @@ mod desktop {
             Ok(Presentation {
                 width,
                 height,
-                pixels: rendered.pixels().to_vec(),
+                pixels,
+                planes,
                 error_code: decode_error
                     .as_ref()
                     .map(|_| "MEDIA_DECODE_FAILED".to_owned()),
@@ -1916,8 +1931,20 @@ mod desktop {
         width: u32,
         height: u32,
         pixels: Vec<u8>,
+        /// Set when the caller asked for NV12 output: the same composition in the
+        /// layout the hardware encoder takes, converted on the GPU.
+        planes: Option<or_render::Nv12Planes>,
         error_code: Option<String>,
         error_message: Option<String>,
+    }
+
+    /// Which CPU layout a render request wants back.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum RenderOutput {
+        /// Packed RGBA, for the viewer texture and the lossless encoder.
+        Packed,
+        /// NV12 planes, for the hardware H.264 encoder.
+        Nv12,
     }
 
     fn load_program(
@@ -2361,6 +2388,11 @@ mod desktop {
             let render_resources_for_render = Arc::clone(&render_resources);
             let render_rate = frame_rate;
             let render_sender = sender.clone();
+            let render_output = if media_profile == or_media::FfmpegExportProfile::Mp4H264Aac {
+                RenderOutput::Nv12
+            } else {
+                RenderOutput::Packed
+            };
             scope.spawn(move || {
                 for frame_index in 0..frame_count {
                     if job.is_cancelled() || cancellation.is_cancelled() {
@@ -2377,6 +2409,7 @@ mod desktop {
                                     Some(output_size),
                                     None,
                                     true,
+                                    render_output,
                                     cancellation,
                                 )
                                 .map(ExportFrame::from)
@@ -2401,9 +2434,22 @@ mod desktop {
                         return Err("the renderer stopped before the last frame".to_owned());
                     }
                 };
-                writer
-                    .write_video_frame(&frame.pixels, frame.width, frame.height, frame_index)
-                    .map_err(|error| error.to_string())?;
+                match &frame.planes {
+                    Some(planes) => writer.write_video_frame_nv12(
+                        planes.luma(),
+                        planes.chroma(),
+                        frame.width,
+                        frame.height,
+                        frame_index,
+                    ),
+                    None => writer.write_video_frame(
+                        &frame.pixels,
+                        frame.width,
+                        frame.height,
+                        frame_index,
+                    ),
+                }
+                .map_err(|error| error.to_string())?;
                 let next_time = frame_rate
                     .frame_time(frame_index.saturating_add(1))
                     .map_err(|error| error.to_string())?;
@@ -2439,12 +2485,13 @@ mod desktop {
         writer.finish().map_err(|error| error.to_string())
     }
 
-    /// One finished export frame: the pixels the writer encodes, without a render
+    /// One finished export frame: what the writer encodes, without a render
     /// handle, so it can cross the render thread's boundary.
     struct ExportFrame {
         width: u32,
         height: u32,
         pixels: Vec<u8>,
+        planes: Option<or_render::Nv12Planes>,
     }
 
     impl From<Presentation> for ExportFrame {
@@ -2453,6 +2500,7 @@ mod desktop {
                 width: presentation.width,
                 height: presentation.height,
                 pixels: presentation.pixels,
+                planes: presentation.planes,
             }
         }
     }
@@ -3508,6 +3556,90 @@ mod desktop {
         /// loop, probes nothing itself, and prints the throughput so the lane records
         /// the pipeline cost of one real export. It leaves the file behind so an
         /// independent probe can read the container, codec, frame count and duration.
+        /// Exports a blank timeline to the hardware H.264 profile, which is the
+        /// path that takes NV12 planes from the GPU, and leaves the file behind for
+        /// an independent probe. The picture should decode as limited-range black:
+        /// luma 16, chroma 128.
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_hardware_export_writes_from_gpu_nv12_planes() {
+            let directory =
+                std::env::temp_dir().join(format!("or-export-nv12-{}", std::process::id()));
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            let destination = directory.join("hardware.mp4");
+            let _ = std::fs::remove_file(&destination);
+
+            let project = or_core::ProjectDocument::new("nv12 export");
+            let rate = RationalRate::new(30, 1).expect("rate");
+            let program = Arc::new(PreviewProgram {
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(rate),
+                content_end: Some(RationalTime::new(4, 1).expect("duration")),
+                video_clips: Vec::new(),
+                text_clips: Vec::new(),
+                audio_clips: Vec::new(),
+            });
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    ExportProfile::Mp4H264Aac,
+                    ExportQuality::Quality,
+                    (1920, 1080),
+                    120,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+
+            let deadline = Instant::now() + Duration::from_secs(120);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(10));
+            }
+            lock(&outcome)
+                .take()
+                .expect("the export ran")
+                .expect("the export succeeded");
+            jobs.shutdown();
+
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            assert!(bytes > 0, "the export produced no bytes");
+            println!(
+                "OR_EXPORT_NV12 path={} bytes={bytes} frames=120 size=1920x1080 seconds={:.3}",
+                destination.display(),
+                started.elapsed().as_secs_f64()
+            );
+        }
+
         /// Exports the same blank timeline at both delivery qualities and prints the
         /// sizes, so the preference is proven by two files rather than by the option
         /// mapping alone. A blank frame is the hardest case for a size difference; the

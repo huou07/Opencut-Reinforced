@@ -1,6 +1,6 @@
 # ADR 0011 — Export frame handoff, hardware colour conversion and zero-copy
 
-- Status: Proposed — the measurement is recorded; no option is implemented
+- Status: Implemented — option 1 landed 2026-10-27; options 2 and 3 refused
 - Date: 2026-10-27
 
 This record answers one question before any code is written for it: how a
@@ -55,8 +55,15 @@ second renderer, not an optimisation.
 
 ## Decision
 
-Nothing is implemented in this record. Option 1 is the recommended next
-increment: it stays inside the existing spine, is measurable against the same
+Option 1 is implemented: `RenderDevice::render_rgba_layers_nv12` composites as
+before, converts BT.709 limited-range Y and interleaved chroma on the GPU, and
+reads the two planes back; the hardware H.264 profile takes those planes with no
+CPU colour conversion. Measured on the local M5, a 120-frame 1920×1080 hardware
+export went from 4.45 s to 1.87 s — 2.4× — and the decoded picture of a blank
+timeline reads as limited-range black (luma 16, chroma 128), which is the proof
+that the colour matrix is right.
+
+Option 1 was also the recommended next increment: it stays inside the existing spine, is measurable against the same
 export lane, and proves the colour maths (BT.709, limited range) that option 2
 would also need. Option 2 is refused while ADR 0002 stands: one render spine, and
 an export-only Metal path would have to re-earn compositing, text and effect

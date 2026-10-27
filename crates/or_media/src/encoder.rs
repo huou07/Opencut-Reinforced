@@ -67,6 +67,7 @@ pub struct FfmpegExportWriter {
     video_encoder: VideoEncoder,
     audio_encoder: AudioEncoder,
     profile: FfmpegExportProfile,
+    pixel_format: format::Pixel,
     video_scaler: Option<scaling::Context>,
     video_stream: usize,
     audio_stream: usize,
@@ -183,7 +184,7 @@ impl FfmpegExportWriter {
                         ExportEncodeError("linked FFmpeg has no libopus encoder".to_owned())
                     })?,
                     format::Pixel::YUV420P,
-                    Some(yuv420p_scaler(width, height)?),
+                    Some(yuv_scaler(width, height, format::Pixel::YUV420P)?),
                 ),
                 FfmpegExportProfile::Mp4H264Aac => (
                     "mov",
@@ -196,8 +197,10 @@ impl FfmpegExportWriter {
                     codec::encoder::find(codec::Id::AAC).ok_or_else(|| {
                         ExportEncodeError("linked FFmpeg has no AAC encoder".to_owned())
                     })?,
-                    format::Pixel::YUV420P,
-                    Some(yuv420p_scaler(width, height)?),
+                    // NV12 is what the hardware encoder takes, so a caller with
+                    // planes from the GPU needs no conversion at all.
+                    format::Pixel::NV12,
+                    Some(yuv_scaler(width, height, format::Pixel::NV12)?),
                 ),
             };
         let staging_file = staging_directory.join(staging_name);
@@ -325,6 +328,7 @@ impl FfmpegExportWriter {
             video_encoder,
             audio_encoder,
             profile,
+            pixel_format,
             video_scaler,
             video_stream,
             audio_stream,
@@ -371,7 +375,7 @@ impl FfmpegExportWriter {
             }
         }
         let mut encoded = if let Some(scaler) = &mut self.video_scaler {
-            let mut converted = frame::Video::new(format::Pixel::YUV420P, width, height);
+            let mut converted = frame::Video::new(self.pixel_format, width, height);
             scaler
                 .run(&encoded, &mut converted)
                 .map_err(ExportEncodeError::from)?;
@@ -384,6 +388,57 @@ impl FfmpegExportWriter {
         } else {
             encoded
         };
+        encoded.set_pts(Some(i64::try_from(frame_index).map_err(|_| {
+            ExportEncodeError("video frame index exceeds the FFmpeg time base".to_owned())
+        })?));
+        self.video_encoder
+            .send_frame(&encoded)
+            .map_err(ExportEncodeError::from)?;
+        self.drain_video_packets()
+    }
+
+    /// Encodes one NV12 picture from GPU-produced planes at its exact index.
+    ///
+    /// Only a profile whose encoder takes NV12 accepts this, and then no colour
+    /// conversion runs on the CPU: the composited frame arrives as the luma and
+    /// interleaved chroma planes the hardware encoder wants.
+    pub fn write_video_frame_nv12(
+        &mut self,
+        luma: &[u8],
+        chroma: &[u8],
+        width: u32,
+        height: u32,
+        frame_index: u64,
+    ) -> Result<(), ExportEncodeError> {
+        if self.pixel_format != format::Pixel::NV12 {
+            return Err(ExportEncodeError(
+                "this export profile does not take NV12 frames".to_owned(),
+            ));
+        }
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return Err(ExportEncodeError(
+                "NV12 frames need even dimensions".to_owned(),
+            ));
+        }
+        let luma_len = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| ExportEncodeError("video frame size overflowed".to_owned()))?;
+        let chroma_len = (width as usize / 2)
+            .checked_mul(height as usize / 2)
+            .and_then(|pairs| pairs.checked_mul(2))
+            .ok_or_else(|| ExportEncodeError("video frame size overflowed".to_owned()))?;
+        if luma.len() != luma_len || chroma.len() != chroma_len {
+            return Err(ExportEncodeError(
+                "rendered NV12 frame has an invalid byte length".to_owned(),
+            ));
+        }
+        let mut encoded = frame::Video::new(format::Pixel::NV12, width, height);
+        copy_plane(&mut encoded, 0, luma, width as usize, height);
+        copy_plane(&mut encoded, 1, chroma, width as usize, height / 2);
+        encoded.set_color_space(ffmpeg::color::Space::BT709);
+        encoded.set_color_range(ffmpeg::color::Range::MPEG);
+        encoded.set_color_primaries(ffmpeg::color::Primaries::BT709);
+        encoded.set_color_transfer_characteristic(ffmpeg::color::TransferCharacteristic::BT709);
         encoded.set_pts(Some(i64::try_from(frame_index).map_err(|_| {
             ExportEncodeError("video frame index exceeds the FFmpeg time base".to_owned())
         })?));
@@ -664,12 +719,30 @@ fn video_bitrate(width: u32, height: u32, quality: ExportQuality) -> u64 {
     }
 }
 
-fn yuv420p_scaler(width: u32, height: u32) -> Result<scaling::Context, ExportEncodeError> {
+/// Copies one tightly-packed plane into an FFmpeg frame plane, honouring the
+/// destination stride.
+fn copy_plane(frame: &mut frame::Video, plane: usize, source: &[u8], row_bytes: usize, rows: u32) {
+    let stride = frame.stride(plane);
+    let data = frame.data_mut(plane);
+    for (source_row, target_row) in source
+        .chunks_exact(row_bytes)
+        .zip(data.chunks_mut(stride))
+        .take(rows as usize)
+    {
+        target_row[..row_bytes].copy_from_slice(source_row);
+    }
+}
+
+fn yuv_scaler(
+    width: u32,
+    height: u32,
+    destination: format::Pixel,
+) -> Result<scaling::Context, ExportEncodeError> {
     let mut scaler = scaling::Context::get(
         format::Pixel::BGRA,
         width,
         height,
-        format::Pixel::YUV420P,
+        destination,
         width,
         height,
         scaling::flag::Flags::BILINEAR,
