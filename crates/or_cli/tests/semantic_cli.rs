@@ -2645,3 +2645,263 @@ fn motion_from_code_refuses_a_sample_larger_than_it_draws() {
     // Nothing was written: a refusal does not leave a partial scene behind.
     assert!(!directory.0.join("huge.ormotion.json").exists());
 }
+
+fn motion_asset_args(before: &[&str], paths: &[(&str, &Path)], after: &[&str]) -> Vec<OsString> {
+    let mut args = words(before);
+    for (flag, path) in paths {
+        args.push((*flag).into());
+        args.push(path.as_os_str().to_owned());
+    }
+    args.extend(words(after));
+    args
+}
+
+/// A scene asset with a text and a colour parameter, matching the P1 format.
+fn write_motion_asset(
+    directory: &TestDirectory,
+    file_name: &str,
+    asset_id: &str,
+    name: &str,
+    category: &str,
+    source: &str,
+) -> PathBuf {
+    let asset = serde_json::json!({
+        "format": "opencut-reinforced-motion-asset",
+        "schema_version": 1,
+        "asset_id": asset_id,
+        "name": name,
+        "category": category,
+        "category_source": source,
+        "tags": [],
+        "kind": "scene",
+        "canvas": {"width": 1920, "height": 1080},
+        "duration": {"numerator": 4, "denominator": 1},
+        "parameters": [
+            {
+                "id": "title",
+                "label": "Title",
+                "type": "text",
+                "target": {"node_id": "title", "field": "text"},
+                "default": "Hello"
+            },
+            {
+                "id": "accent",
+                "label": "Accent",
+                "type": "color",
+                "target": {"node_id": "title", "field": "fill"},
+                "default": {"red": 220, "green": 220, "blue": 220, "alpha": 255}
+            }
+        ],
+        "scene": {
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "background",
+                    "kind": "rectangle",
+                    "position": {"x": 0, "y": 0},
+                    "size": {"width": 1920, "height": 1080},
+                    "fill": {"red": 20, "green": 20, "blue": 24, "alpha": 255}
+                },
+                {
+                    "node_id": "title",
+                    "kind": "text",
+                    "text": "Hello",
+                    "position": {"x": 80, "y": 120},
+                    "font_size": 64,
+                    "fill": {"red": 220, "green": 220, "blue": 220, "alpha": 255}
+                }
+            ],
+            "animations": []
+        }
+    });
+    let path = directory.0.join(file_name);
+    fs::write(&path, serde_json::to_vec_pretty(&asset).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn motion_asset_library_saves_lists_instantiates_and_removes() {
+    let directory = TestDirectory::new();
+    let asset_id = "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f";
+    let asset = write_motion_asset(
+        &directory,
+        "title.ormotionasset.json",
+        asset_id,
+        "Explainer title",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+
+    let validated = cli(motion_asset_args(
+        &["motion", "asset", "validate"],
+        &[("--file", &asset)],
+        &[],
+    ));
+    assert!(validated.status.success(), "{validated:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&validated.stdout).trim(),
+        "Explainer title is a valid MotionAsset"
+    );
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["asset_id"], asset_id);
+    assert_eq!(saved["motion_asset"]["category"], "text");
+    assert_eq!(saved["motion_asset"]["duration_milliseconds"], 4000);
+
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--library", &library)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 1);
+    assert_eq!(listed["entries"][0]["name"], "Explainer title");
+
+    let output = directory.0.join("instantiated.ormotion.json");
+    let values = r#"{"title":"Changed","accent":{"red":10,"green":20,"blue":30,"alpha":255}}"#;
+    let (instantiated, _) = json_success(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(asset_id)),
+            ("--output", &output),
+        ],
+        &[
+            "--values",
+            values,
+            "--scene-id",
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "--name",
+            "Changed scene",
+            "--json",
+        ],
+    ));
+    assert_eq!(
+        instantiated["scene_id"],
+        "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d"
+    );
+    assert_eq!(instantiated["validation_ok"], true);
+    let scene: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(scene["name"], "Changed scene");
+    let title = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == "title")
+        .unwrap();
+    assert_eq!(title["text"], "Changed");
+    assert_eq!(title["fill"]["red"], 10);
+
+    let (removed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "remove"],
+        &[("--library", &library), ("--id", Path::new(asset_id))],
+        &["--json"],
+    ));
+    assert_eq!(removed["removed"], true);
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--library", &library)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 0);
+}
+
+#[test]
+fn motion_asset_save_refuses_an_invalid_document_and_writes_nothing() {
+    let directory = TestDirectory::new();
+    let asset = write_motion_asset(
+        &directory,
+        "broken.ormotionasset.json",
+        "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+        "Broken",
+        "object",
+        "explicit",
+    );
+    let mut value: Value = serde_json::from_slice(&fs::read(&asset).unwrap()).unwrap();
+    value["parameters"][0]["target"]["node_id"] = serde_json::json!("missing");
+    fs::write(&asset, serde_json::to_vec(&value).unwrap()).unwrap();
+
+    let library = directory.0.join("motion-library");
+    let output = cli(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["category"], "motion_library");
+    assert_eq!(error["error"]["code"], "MOTION_LIBRARY_INVALID_ASSET");
+    assert_eq!(
+        fs::read_dir(library.join("assets")).unwrap().count(),
+        0,
+        "a refused save leaves no asset file"
+    );
+}
+
+#[test]
+fn motion_asset_classification_and_manual_override_show_in_the_catalog() {
+    let directory = TestDirectory::new();
+    let asset = write_motion_asset(
+        &directory,
+        "mountain.ormotionasset.json",
+        "0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f",
+        "Mountain background",
+        "object",
+        "default",
+    );
+    let library = directory.0.join("motion-library");
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["category"], "background");
+    assert_eq!(saved["motion_asset"]["category_source"], "filename");
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--category", "nature", "--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["category"], "nature");
+    assert_eq!(saved["motion_asset"]["category_source"], "explicit");
+}
+
+#[test]
+fn motion_asset_instantiate_refuses_an_unknown_parameter() {
+    let directory = TestDirectory::new();
+    let asset_id = "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f";
+    let asset = write_motion_asset(
+        &directory,
+        "title.ormotionasset.json",
+        asset_id,
+        "Explainer title",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+    json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+
+    let output = cli(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(asset_id)),
+            ("--output", &directory.0.join("scene.ormotion.json")),
+        ],
+        &["--values", r#"{"missing":1}"#, "--json"],
+    ));
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["category"], "motion_asset");
+    assert_eq!(error["error"]["code"], "MOTION_ASSET_UNKNOWN_PARAMETER");
+}

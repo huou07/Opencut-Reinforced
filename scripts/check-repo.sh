@@ -56,6 +56,7 @@ required_files=(
   docs/features/effects-audio.md
   docs/features/export.md
   docs/features/motionscene.md
+  docs/features/motion-assets.md
   docs/features/workspace-ui.md
   docs/features/assistant.md
   docs/features/agent-workspace.md

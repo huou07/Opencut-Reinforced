@@ -45,6 +45,9 @@ The session catalog carries these. Load one only when its task matches.
   `docs/troubleshooting.md`.
 - `tools/motion-scaffold.mjs` — writes a valid V1 `.ormotion.json` skeleton:
   `node tools/motion-scaffold.mjs --name "Title" --out scenes/title.ormotion.json`.
+- `tools/or motion asset ...` — validate, save, list or instantiate a reusable
+  motion asset against a library folder the user names. The app does not expose
+  an asset MCP tool yet; prefer `mcp__or__*` for anything on the timeline.
 
 ## Working files
 

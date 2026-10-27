@@ -14,7 +14,7 @@ use or_ipc::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
 };
@@ -141,6 +141,16 @@ impl CliError {
     /// A MotionScene that could not be read, with the format's own stable code.
     fn motion(error: or_motion::MotionSceneError, json: bool) -> Self {
         Self::new(4, json, "motion_scene", error.code(), error.to_string())
+    }
+
+    /// A MotionAsset that could not be read or instantiated.
+    fn motion_asset(error: or_motion::MotionAssetError, json: bool) -> Self {
+        Self::new(4, json, "motion_asset", error.code(), error.to_string())
+    }
+
+    /// A motion library operation failure.
+    fn motion_library(error: or_motion::MotionLibraryError, json: bool) -> Self {
+        Self::new(4, json, "motion_library", error.code(), error.to_string())
     }
 
     /// A noise-reduction failure, reported with the same shape as the other media
@@ -486,9 +496,10 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
         "render" => run_motion_render(&args[1..], json),
         "from-code" => run_motion_from_code(&args[1..], json),
         "materialize" => run_motion_materialize(&args[1..], json),
+        "asset" => run_motion_asset(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate, inspect, evaluate, render, from-code or materialize",
+            "unknown motion action; expected validate, inspect, evaluate, render, from-code, materialize or asset",
         )),
     }
 }
@@ -819,6 +830,238 @@ fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> 
         time.numerator(),
         time.denominator()
     ))
+}
+
+/// `or motion asset` — the app-level motion library (ADR 0010).
+///
+/// The library is a plain directory; these verbs are pure reads and writes of it.
+/// They never open a project, render frames, or contact a provider.
+fn run_motion_asset(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(
+            json,
+            "expected motion asset list, validate, save, instantiate or remove",
+        ));
+    };
+    match action {
+        "list" => run_motion_asset_list(&args[1..], json),
+        "validate" => run_motion_asset_validate(&args[1..], json),
+        "save" => run_motion_asset_save(&args[1..], json),
+        "instantiate" => run_motion_asset_instantiate(&args[1..], json),
+        "remove" => run_motion_asset_remove(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown motion asset action; expected list, validate, save, instantiate or remove",
+        )),
+    }
+}
+
+fn run_motion_asset_list(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--library"], &[], json)?;
+    let library = open_motion_library(&options, json)?;
+    let entries = library
+        .list()
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "count": entries.len(),
+            "entries": entries,
+        })));
+    }
+    if entries.is_empty() {
+        return Ok(format!("No motion assets in {}", library.root().display()));
+    }
+    Ok(entries
+        .into_iter()
+        .map(|entry| {
+            format!(
+                "{}  {:<10}  {:<8}  {}",
+                entry.asset_id,
+                entry.category.as_str(),
+                entry.kind.as_str(),
+                entry.name
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+fn run_motion_asset_validate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let asset = read_motion_asset(&options, json)?;
+    let validation = or_motion::validate_motion_asset(&asset);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&validation).expect("validation is serializable"),
+        ));
+    }
+    if validation.ok {
+        Ok(format!("{} is a valid MotionAsset", asset.name))
+    } else {
+        Ok(validation
+            .errors
+            .iter()
+            .map(|error| format!("{} {} {}", error.code, error.path, error.message))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+}
+
+fn run_motion_asset_save(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--library", "--file", "--category"], &[], json)?;
+    let asset = read_motion_asset(&options, json)?;
+    let category = match options.value("--category") {
+        Some(value) => Some(parse_motion_category(value, json)?),
+        None => None,
+    };
+    let library = open_motion_library(&options, json)?;
+    let entry = library
+        .save(&asset, category)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "motion_asset": entry,
+        })));
+    }
+    Ok(format!(
+        "Saved {} ({}, {}, classified by {}) to {}",
+        entry.name,
+        entry.category.as_str(),
+        entry.kind.as_str(),
+        entry.category_source.as_str(),
+        library.root().display()
+    ))
+}
+
+fn run_motion_asset_instantiate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--library",
+            "--id",
+            "--values",
+            "--output",
+            "--scene-id",
+            "--name",
+        ],
+        &[],
+        json,
+    )?;
+    let library = open_motion_library(&options, json)?;
+    let asset_id = required_name(&options, "--id", json)?;
+    let asset = library
+        .load(&asset_id)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let overrides = match options.value("--values") {
+        Some(value) => parse_motion_values(value, json)?,
+        None => BTreeMap::new(),
+    };
+    let scene_id = match options.value("--scene-id") {
+        Some(value) => value
+            .to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| CliError::usage(json, "--scene-id must be valid UTF-8"))?,
+        None => or_motion::new_motion_asset_id(),
+    };
+    let name = options
+        .value("--name")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let output = required_path(&options, "--output", json)?;
+    let scene = or_motion::instantiate_motion_asset(&asset, &overrides, &scene_id, &name)
+        .map_err(|error| CliError::motion_asset(error, json))?;
+    let mut encoded = serde_json::to_vec_pretty(&scene).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be encoded: {error}"))
+    })?;
+    encoded.push(b'\n');
+    std::fs::write(&output, &encoded).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be written: {error}"))
+    })?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(json!({
+            "asset_id": asset.asset_id,
+            "scene_id": scene.scene_id,
+            "output": output.display().to_string(),
+            "bytes_written": encoded.len(),
+            "node_count": inspection.node_count,
+            "duration_milliseconds": inspection.duration_milliseconds,
+            "validation_ok": inspection.validation.ok,
+        })));
+    }
+    Ok(format!(
+        "Instantiated {} as {} ({} nodes, {} ms)",
+        asset.name, scene.scene_id, inspection.node_count, inspection.duration_milliseconds
+    ))
+}
+
+fn run_motion_asset_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--library", "--id"], &[], json)?;
+    let library = open_motion_library(&options, json)?;
+    let asset_id = required_name(&options, "--id", json)?;
+    let removed = library
+        .remove(&asset_id)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(
+            json!({"asset_id": asset_id, "removed": removed}),
+        ));
+    }
+    Ok(if removed {
+        format!("Removed {asset_id} from {}", library.root().display())
+    } else {
+        format!("No asset in {} has id {asset_id}", library.root().display())
+    })
+}
+
+fn open_motion_library(
+    options: &Options,
+    json: bool,
+) -> Result<or_motion::MotionLibrary, CliError> {
+    let path = required_path(options, "--library", json)?;
+    or_motion::MotionLibrary::open(&path).map_err(|error| CliError::motion_library(error, json))
+}
+
+fn read_motion_asset(
+    options: &Options,
+    json: bool,
+) -> Result<or_motion::MotionAssetDocument, CliError> {
+    let path = required_path(options, "--file", json)?;
+    let bytes = std::fs::read(&path)
+        .map_err(|error| CliError::usage(json, format!("the asset could not be read: {error}")))?;
+    or_motion::parse_motion_asset(&bytes).map_err(|error| CliError::motion_asset(error, json))
+}
+
+fn parse_motion_category(
+    value: &OsStr,
+    json: bool,
+) -> Result<or_motion::MotionAssetCategory, CliError> {
+    value
+        .to_str()
+        .and_then(or_motion::MotionAssetCategory::parse)
+        .ok_or_else(|| {
+            CliError::usage(
+                json,
+                "--category must be one of background, people, nature, animal, vehicle, object, text, shape, icon, chart, effect or motion",
+            )
+        })
+}
+
+fn parse_motion_values(
+    value: &OsStr,
+    json: bool,
+) -> Result<BTreeMap<String, or_motion::MotionParameterValue>, CliError> {
+    let text = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "--values must be valid UTF-8"))?;
+    serde_json::from_str(text).map_err(|error| {
+        CliError::usage(
+            json,
+            format!("--values must be a JSON object of parameter values: {error}"),
+        )
+    })
 }
 
 fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {

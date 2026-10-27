@@ -11,8 +11,17 @@
 //! are recorded in the ADR: one flat node shape per kind with `deny_unknown_fields`
 //! everywhere, exact rational times from `or_core`'s time model, and diagnostics
 //! with stable codes and JSON paths.
+//!
+//! The module set also carries the reusable motion asset format and its local
+//! library (ADR 0010). The library module owns a bounded directory store; it never
+//! touches a project, renders, or contacts a provider.
 
+mod asset;
 mod code;
+mod library;
+
+pub use asset::*;
+pub use library::*;
 
 pub use code::{
     CodeLanguage, CodeSceneError, CodeSceneOptions, CodeTheme, CodeToken, CodeTokenKind,
@@ -279,7 +288,7 @@ pub struct MotionDiagnostic {
 }
 
 impl MotionDiagnostic {
-    fn new(code: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.to_owned(),
             path: path.into(),
@@ -756,7 +765,7 @@ fn walk_nodes(
     }
 }
 
-fn is_uuid_v4(value: &str) -> bool {
+pub(crate) fn is_uuid_v4(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.len() != 36 {
         return false;

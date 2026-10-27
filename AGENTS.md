@@ -64,6 +64,9 @@ any other rule to this file.
 - **MotionScene** — declarative code-to-video contract, evaluator, materialisation.
   When: working on deterministic scenes, the Motion panel or motion CLI verbs.
   Path: `docs/features/motionscene.md`
+- **Motion assets** — parameterised scene/fragment assets, classification, the app-level library and its CLI.
+  When: working on reusable motion assets, classification or the motion library store.
+  Path: `docs/features/motion-assets.md`
 - **Workspace and UI shell** — shell slots, editor layout, interaction rules.
   When: adding or moving any control, panel, menu, shortcut or compact layout.
   Path: `docs/features/workspace-ui.md`

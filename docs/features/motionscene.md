@@ -59,11 +59,12 @@ Live `MotionClip` in the timeline without a separate schema/architecture gate,
 WebMotion (isolated browser sidecar for HTML/CSS/Canvas/WebGL), Remotion/Motion
 Canvas as runtimes, and generative motion providers.
 
-A reusable, parameterised motion asset library is proposed but **not
-implemented**: [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)
-records the intended asset document, classification, library store, Motion
-surface and phased delivery. Do not describe that library as current until a
-phase lands and this document is updated.
+A reusable, parameterised motion asset format and app-level library exist as
+**P1** of [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md): the
+document, typed parameters, classifier, store and `or motion asset` verbs are
+implemented in [motion-assets.md](motion-assets.md). There is no Motion surface,
+drag and drop, bridge command or MCP tool yet, and the placed clip remains
+materialised video.
 
 ## Where
 
@@ -74,5 +75,6 @@ phase lands and this document is updated.
 
 ## Related
 
+- [motion-assets.md](motion-assets.md) — the reusable asset document, classifier and library
 - [text-captions.md](text-captions.md) — shared text path
 - [export.md](export.md) — exporting the combined edit

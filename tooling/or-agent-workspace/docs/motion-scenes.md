@@ -73,6 +73,25 @@ The materialised clip already on the timeline is an ordinary video clip; re-runn
 the scene never silently replaces it — insert the new render and delete the old
 clip only if the user asks.
 
+## Reusable assets
+
+A motion asset (`.ormotionasset.json`, ADR 0010) wraps a scene template or a
+fragment with typed parameters for text, colour, size, opacity and rotation.
+The app has no asset MCP tool yet; when the user names a library folder, use the
+CLI:
+
+```sh
+tools/or motion asset list --library PATH --json
+tools/or motion asset save --library PATH --file scenes/title.ormotionasset.json --json
+tools/or motion asset instantiate --library PATH --id ASSET_ID \
+  --values '{"title":"Hello"}' --output scenes/instantiated.ormotion.json
+```
+
+`--values` is a JSON object keyed by parameter id. Saving recomputes the category
+from tags and the name unless it is explicit; pass `--category` to override it.
+An instantiated scene is an ordinary `.ormotion.json` you can validate and then
+pass to `mcp__or__motion_insert_scene`.
+
 ## Bounds
 
 A scene file is at most 4 MiB, 4096 nodes, groups nested 16 deep, 4096

@@ -86,13 +86,17 @@ deterministic rendering.
 
 ## Motion assets
 
-**PROPOSED in [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md), not
-implemented:** reusable motion assets with declared parameters for text content,
-colour and size; an app-level library with previews, search and categories;
-deterministic classification (background, people, object, nature, animal,
-vehicle, ...) with a manual override; a Motion editing surface; and drag and
-drop into the timeline or an open scene. Placement stays materialised in the
-first delivery; a live timeline MotionClip remains deferred.
+**P1 FOUNDATION (CLI, no UI):** reusable scene and fragment assets with typed
+parameters for text content, colour and size; an app-level JSON library with
+deterministic name/tag classification (background, people, nature, animal,
+vehicle, ...) and a manual override; `or motion asset validate/save/list/
+instantiate/remove`. See [motion-assets.md](../features/motion-assets.md).
+
+**PLANNED (P2/P3, [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)):**
+a Motion editing surface with library browsing, previews and parameter editing;
+drag and drop into the timeline or an open scene; image and motion-preset
+assets; bridge and MCP tools. Placement stays materialised in the first
+delivery; a live timeline MotionClip remains deferred.
 
 ## Interchange and extensibility
 

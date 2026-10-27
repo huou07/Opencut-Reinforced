@@ -30,9 +30,11 @@ One near-term delivery mission for the local macOS app, in this order:
 5. **Motion asset library (owner request, 2026-10-27).** Turn motion output into
    reusable, parameterised assets — adjustable text, colour and size; automatic
    classification; a browsable library; drag and drop into the timeline or an
-   open scene. The design, bounds and phases are recorded in
-   [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md); delivery starts
-   at P1, and no part of it is implemented yet.
+   open scene. P1 (asset document, typed parameters, classifier, library store
+   and `or motion asset` CLI) landed 2026-10-27
+   ([motion-assets.md](../features/motion-assets.md)); P2 is the Motion surface,
+   parameter editing and drag to the timeline, then P3 composition and agent
+   tools ([ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)).
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.
