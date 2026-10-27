@@ -15,6 +15,7 @@ the machine execution plan; they do not replace `docs/archive/execution/PLAN.jso
 - [0007 — Declarative MotionScene and procedural isolation](0007-declarative-motion-scenes-and-procedural-isolation.md)
 - [0008 — Product acceptance and execution quality](0008-product-acceptance-and-execution-quality.md)
 - [0009 — Assistant panel and external harness boundary](0009-assistant-panel-and-harness-boundary.md)
+- [0010 — Motion assets, parameterised scenes and a reusable library](0010-motion-assets-and-reusable-library.md) (Proposed)
 
 All records are architecture intent. A later implementation checkpoint must
 provide its own dependency, platform, licensing, test, and migration evidence.

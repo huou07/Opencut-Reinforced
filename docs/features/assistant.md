@@ -1,6 +1,6 @@
 # Feature — Assistant Panel
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
 ACP, the MCP tools that edit the open project, and the states the panel must
@@ -26,8 +26,11 @@ show. Architecture rationale is [ADR 0009](../adr/0009-assistant-panel-and-harne
   model, and the persona is replaced with OR's editing contract. The overlay
   contains no secret; the harness resolves credentials itself.
 - **Workspace** selects the session working directory and the address the agent's
-  file tools see. Default is the open project's folder. Changing it starts a new
-  conversation.
+  file tools see. The default is the app-installed **agent workspace**
+  ([agent-workspace.md](agent-workspace.md)): its `AGENTS.md` routes the agent to
+  the one guide a task needs. Assistant settings also offer the open project's
+  folder or a chosen folder. Changing the choice starts a new conversation; the
+  workspace does not follow the project when another project opens.
 - **Model** and **reasoning effort** come from the session's advertised ACP
   configuration options. The choice is persisted and applied to the next
   connection and the live session.
@@ -65,7 +68,9 @@ source file in the workspace, the app materialises it with the deterministic
 MotionScene renderer and its own FFmpeg encoder, then the same call imports the
 video and inserts an ordinary, editable clip. No provider or network call
 happens during rendering. The clip behaves like any other media clip: trim,
-split, move, export, and save/reopen.
+split, move, export, and save/reopen. The workspace Motion guide also documents
+`tools/or motion validate|inspect|from-code` and the scene scaffold, so an agent
+can check a scene before paying for a full materialisation.
 
 ## Transcript and permissions
 
@@ -111,6 +116,7 @@ them. Android has no assistant: the desktop process boundary is explicit.
 ## Where
 
 - `apps/or_app/lib/assistant/` — ACP client, controller, settings, panel
+- `apps/or_app/lib/assistant/agent_workspace.dart` — installed workspace and its runtime files
 - `apps/or_app/lib/screens/editor_shell_preview_screen.dart` — right-rail tabs
 - `crates/or_cli/src/mcp.rs` — `or mcp` tools
 - `crates/or_core/src/application.rs` — `MotionMaterialize` runtime request
@@ -118,6 +124,7 @@ them. Android has no assistant: the desktop process boundary is explicit.
 
 ## Related
 
+- [agent-workspace.md](agent-workspace.md)
 - [workspace-ui.md](workspace-ui.md)
 - [motionscene.md](motionscene.md)
 - [control-plane.md](../architecture/control-plane.md)

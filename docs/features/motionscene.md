@@ -1,6 +1,6 @@
 # Feature — MotionScene (Deterministic Code-to-Video)
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: turning source code into a short, deterministic illustration that can be
 previewed, materialised, inserted into an ordinary timeline and exported.
@@ -58,6 +58,12 @@ the sample, and bound asset size, node count, duration and evaluation work.
 Live `MotionClip` in the timeline without a separate schema/architecture gate,
 WebMotion (isolated browser sidecar for HTML/CSS/Canvas/WebGL), Remotion/Motion
 Canvas as runtimes, and generative motion providers.
+
+A reusable, parameterised motion asset library is proposed but **not
+implemented**: [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)
+records the intended asset document, classification, library store, Motion
+surface and phased delivery. Do not describe that library as current until a
+phase lands and this document is updated.
 
 ## Where
 

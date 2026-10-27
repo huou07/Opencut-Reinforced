@@ -1,6 +1,6 @@
 # Tooling Inventory
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: the scripts and machine-local tools an agent uses, and what each is for.
 Host-specific commands are in [operations/local-macos.md](../operations/local-macos.md).
@@ -20,6 +20,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/check_or_core_deps.py` | keeps `or_core` free of GPU/media/audio/text/AI dependencies |
 | `scripts/run_local_lane.sh`, `scripts/run_android_lane.sh` | platform lanes for future/other-platform work |
 | `scripts/record-hosted-evidence.sh` | record a hosted run for the current commit |
+| `tooling/or-agent-workspace/build.mjs` | pack the installed assistant workspace into its Flutter asset; `node --test` beside it guards drift |
 
 ## Machine-local tools
 

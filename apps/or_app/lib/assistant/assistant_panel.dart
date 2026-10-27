@@ -9,6 +9,7 @@ import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import 'assistant_controller.dart';
 import 'assistant_models.dart';
+import 'assistant_settings.dart';
 import 'assistant_settings_dialog.dart';
 
 /// The right-hand assistant surface: connection state, workspace and model
@@ -96,6 +97,12 @@ class _AssistantPanelState extends State<AssistantPanel> {
     if (path == null || path.isEmpty) return;
     await controller.changeWorkspace(path);
   }
+
+  String _workspaceLabel() => switch (controller.workspaceMode) {
+    AssistantWorkspaceMode.agent => 'Agent workspace',
+    AssistantWorkspaceMode.project => 'Project folder',
+    AssistantWorkspaceMode.custom => _basename(controller.workspace),
+  };
 
   Future<void> _openSettings() async {
     await showAssistantSettingsDialog(context: context, controller: controller);
@@ -229,8 +236,8 @@ class _AssistantPanelState extends State<AssistantPanel> {
           _ContextButton(
             keyName: 'assistant-workspace',
             icon: Icons.folder_outlined,
-            label: _basename(controller.workspace),
-            tooltip: controller.workspace,
+            label: _workspaceLabel(),
+            tooltip: '${controller.workspace}\nChange in Assistant settings',
             onPressed: _pickWorkspace,
           ),
           const SizedBox(height: OrSpacing.x1),

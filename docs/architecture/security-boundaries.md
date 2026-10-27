@@ -1,6 +1,6 @@
 # Security Boundaries
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: where trust boundaries sit in the architecture. Dependency, licence and
 reporting policy is in [reference/security-licensing.md](../reference/security-licensing.md).
@@ -40,6 +40,13 @@ to the same local IPC descriptor. The MCP tools expose project commands only;
 they cannot read project files directly, execute a shell, or receive the
 descriptor token. Provider credentials stay in the harness's credential service,
 and the generated `--patch` overlay contains no secret.
+
+The assistant's installed agent workspace is content, not a new authority. The
+app packs it (`tooling/or-agent-workspace`), validates every bundle path against
+absolute and `..` traversal, and writes it only under application support. It
+carries guides, skills and the `or` wrapper — never credentials — and grants no
+tool the assistant did not already have. Files the agent writes stay in that
+workspace; project changes still happen only through the `or` command path.
 
 ## Deterministic rendering
 

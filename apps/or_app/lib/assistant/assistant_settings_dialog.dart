@@ -37,10 +37,14 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
     text: widget.controller.settings.orCliPath,
   );
   late final TextEditingController _workspace = TextEditingController(
-    text: widget.controller.settings.workspacePath.isEmpty
-        ? widget.controller.workspace
-        : widget.controller.settings.workspacePath,
+    text:
+        widget.controller.settings.workspaceMode ==
+            AssistantWorkspaceMode.custom
+        ? widget.controller.settings.workspacePath
+        : widget.controller.workspace,
   );
+  late AssistantWorkspaceMode _workspaceMode =
+      widget.controller.settings.workspaceMode;
   late bool _autoApprove = widget.controller.settings.autoApprove;
   late String _reasoning = widget.controller.settings.reasoningValue;
 
@@ -73,28 +77,48 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       initialDirectory: _workspace.text,
     );
     if (path == null || path.isEmpty) return;
-    setState(() => _workspace.text = path);
+    setState(() {
+      _workspaceMode = AssistantWorkspaceMode.custom;
+      _workspace.text = path;
+    });
   }
 
   Future<void> _save() async {
     final current = widget.controller.settings;
-    final workspace = _workspace.text.trim();
-    // Keep following the open project unless the user actually chose a
-    // different folder; saving the prefill would silently pin this project's
-    // directory forever.
-    final workspacePath = workspace == widget.controller.workspace
-        ? current.workspacePath
-        : workspace;
+    final customPath = _workspace.text.trim();
+    final mode = _workspaceMode == AssistantWorkspaceMode.custom && customPath.isEmpty
+        ? AssistantWorkspaceMode.agent
+        : _workspaceMode;
     await widget.controller.updateSettings(
       current.copyWith(
         harnessPath: _harness.text.trim(),
         orCliPath: _orCli.text.trim(),
-        workspacePath: workspacePath,
+        workspaceMode: mode,
+        workspacePath: mode == AssistantWorkspaceMode.custom ? customPath : '',
         reasoningValue: _reasoning,
         autoApprove: _autoApprove,
       ),
     );
     if (mounted) Navigator.of(context).pop();
+  }
+
+  String _workspaceDescription() {
+    switch (_workspaceMode) {
+      case AssistantWorkspaceMode.agent:
+        final path = widget.controller.agentWorkspacePath;
+        return path.isEmpty
+            ? 'The app installs its AGENTS.md, guides, skills and tools here on connect.'
+            : 'AGENTS.md, guides, skills and tools installed by the app.\n$path';
+      case AssistantWorkspaceMode.project:
+        final path = widget.controller.projectPath;
+        return path.isEmpty
+            ? 'The open project folder. No project is open right now.'
+            : 'The open project folder.\n$path';
+      case AssistantWorkspaceMode.custom:
+        return _workspace.text.trim().isEmpty
+            ? 'Choose a folder for this session.'
+            : _workspace.text.trim();
+    }
   }
 
   @override
@@ -136,22 +160,54 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                 hint: 'Auto-detected from the checkout or PATH',
               ),
               const SizedBox(height: OrSpacing.x3),
+              DropdownButtonFormField<AssistantWorkspaceMode>(
+                key: const ValueKey('assistant-settings-workspace-mode'),
+                initialValue: _workspaceMode,
+                isExpanded: true,
+                dropdownColor: OrColors.surface,
+                decoration: const InputDecoration(
+                  labelText: 'Workspace',
+                  isDense: true,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: AssistantWorkspaceMode.agent,
+                    child: Text('Agent workspace'),
+                  ),
+                  DropdownMenuItem(
+                    value: AssistantWorkspaceMode.project,
+                    child: Text('Project folder'),
+                  ),
+                  DropdownMenuItem(
+                    value: AssistantWorkspaceMode.custom,
+                    child: Text('Choose a folder'),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setState(() => _workspaceMode = value ?? _workspaceMode),
+              ),
+              const SizedBox(height: OrSpacing.x2),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: _field(
-                      keyName: 'assistant-settings-workspace',
-                      label: 'Workspace',
-                      controller: _workspace,
-                      hint: 'Defaults to the project folder',
+                    child: Text(
+                      _workspaceDescription(),
+                      style: const TextStyle(
+                        color: OrColors.textMuted,
+                        fontSize: OrType.tinySize,
+                        height: 1.4,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: OrSpacing.x2),
-                  OutlinedButton(
-                    onPressed: _pickWorkspace,
-                    child: const Text('Choose'),
-                  ),
+                  if (_workspaceMode == AssistantWorkspaceMode.custom) ...[
+                    const SizedBox(width: OrSpacing.x2),
+                    OutlinedButton(
+                      key: const ValueKey('assistant-settings-workspace-choose'),
+                      onPressed: _pickWorkspace,
+                      child: const Text('Choose'),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: OrSpacing.x3),

@@ -8,6 +8,7 @@ void main() {
     const settings = AssistantSettings(
       harnessPath: '/opt/dsh',
       orCliPath: '/repo/target/debug/or',
+      workspaceMode: AssistantWorkspaceMode.custom,
       workspacePath: '/tmp/workspace',
       modelValue: '["opencode-go","deepseek-v4.1-flash"]',
       reasoningValue: 'high',
@@ -16,6 +17,8 @@ void main() {
     final decoded = AssistantSettings.fromJson(settings.toJson());
     expect(decoded.harnessPath, settings.harnessPath);
     expect(decoded.modelValue, settings.modelValue);
+    expect(decoded.workspaceMode, AssistantWorkspaceMode.custom);
+    expect(decoded.workspacePath, '/tmp/workspace');
     expect(decoded.autoApprove, isTrue);
 
     final malformed = AssistantSettings.fromJson({
@@ -24,6 +27,18 @@ void main() {
     });
     expect(malformed.harnessPath, '');
     expect(malformed.autoApprove, isFalse);
+  });
+
+  test('older settings keep a chosen folder and otherwise use the agent workspace', () {
+    final chosen = AssistantSettings.fromJson({'workspacePath': '/tmp/old'});
+    expect(chosen.workspaceMode, AssistantWorkspaceMode.custom);
+    expect(chosen.workspacePath, '/tmp/old');
+
+    final fresh = AssistantSettings.fromJson({});
+    expect(fresh.workspaceMode, AssistantWorkspaceMode.agent);
+
+    final invalid = AssistantSettings.fromJson({'workspaceMode': 'elsewhere'});
+    expect(invalid.workspaceMode, AssistantWorkspaceMode.agent);
   });
 
   test(

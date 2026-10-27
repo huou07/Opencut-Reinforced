@@ -1,6 +1,6 @@
 # OR Skills
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: how OR-specific agent skills are packaged, installed and edited. The skill
 catalogue itself is routed from [AGENTS.md](../../AGENTS.md).
@@ -11,6 +11,11 @@ OR skills are not project-local files. They ship as the local DeepSeek Harness
 plugin [`tooling/dsh-or-skills`](../../tooling/dsh-or-skills/README.md), which
 registers a `SkillProvider` over its `skills/` directory at rank 20 — ahead of
 filesystem roots — so every session in this repository receives them.
+
+These are **development** skills: they carry how to change OR. The assistant's
+installed agent workspace ships a separate, narrower set for **operating** OR
+through `or mcp` (see [agent-workspace.md](../features/agent-workspace.md)); do
+not merge the two catalogues.
 
 | Skill | Contract it carries |
 |---|---|

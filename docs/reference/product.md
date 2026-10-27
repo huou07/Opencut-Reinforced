@@ -1,6 +1,6 @@
 # Product Requirements Inventory
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: what OR is meant to be, area by area, with maturity labels. This is the
 requirement inventory, not implemented status — current work is selected by
@@ -72,7 +72,10 @@ transform and effect parameters, coherent preview/export parity.
 to a locally installed DeepSeek Harness over ACP, selects workspace and model,
 and edits the open project through `or mcp` and the shared command path. It can
 also turn a code file into a deterministic MotionScene video and insert it as an
-ordinary clip. OR stores no provider credentials; the harness keeps them.
+ordinary clip. The assistant opens by default in an app-installed agent
+workspace whose `AGENTS.md` routes it to one task guide, skill or tool
+([agent-workspace.md](../features/agent-workspace.md)). OR stores no provider
+credentials; the harness keeps them.
 
 **PLANNED/FUTURE:** transcripts and caption proposals, translation, scene/silence
 analysis, selected generative assets, dubbing, local models and optional cloud
@@ -80,6 +83,16 @@ providers inside OR. Requirements: provider-independent tasks returning
 proposals/assets, review before apply, credentials outside project/CLI, explicit
 consent and cost, no bundled model weights by default, no network call in
 deterministic rendering.
+
+## Motion assets
+
+**PROPOSED in [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md), not
+implemented:** reusable motion assets with declared parameters for text content,
+colour and size; an app-level library with previews, search and categories;
+deterministic classification (background, people, object, nature, animal,
+vehicle, ...) with a manual override; a Motion editing surface; and drag and
+drop into the timeline or an open scene. Placement stays materialised in the
+first delivery; a live timeline MotionClip remains deferred.
 
 ## Interchange and extensibility
 

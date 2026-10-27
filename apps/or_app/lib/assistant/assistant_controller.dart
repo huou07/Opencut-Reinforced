@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'acp_client.dart';
+import 'agent_workspace.dart';
 import 'assistant_models.dart';
 import 'assistant_settings.dart';
 
@@ -58,11 +59,12 @@ class AssistantController extends ChangeNotifier {
   bool _busy = false;
   String? _errorMessage;
   String? _errorHint;
-  String _workspace = '';
   String _projectPath = '';
   String _projectName = '';
   String _descriptorPath = '';
   String? _pointerPath;
+  AgentWorkspace? _agentWorkspace;
+  String _agentWorkspacePath = '';
   String? _harnessPath;
   String? _orCliPath;
   String? _overlayProfile;
@@ -89,8 +91,29 @@ class AssistantController extends ChangeNotifier {
   bool get busy => _busy;
   String? get errorMessage => _errorMessage;
   String? get errorHint => _errorHint;
-  String get workspace =>
-      _workspace.isNotEmpty ? _workspace : _defaultWorkspace();
+
+  /// The directory the harness session starts in.
+  ///
+  /// The agent workspace is the default because its AGENTS.md routes the agent to
+  /// the one guide a task needs. The project folder and a chosen folder remain
+  /// selectable in Assistant settings.
+  String get workspace => switch (_settings.workspaceMode) {
+    AssistantWorkspaceMode.agent =>
+      _agentWorkspacePath.isNotEmpty
+          ? _agentWorkspacePath
+          : _defaultWorkspace(),
+    AssistantWorkspaceMode.project =>
+      _projectPath.isNotEmpty ? _directoryOf(_projectPath) : _defaultWorkspace(),
+    AssistantWorkspaceMode.custom =>
+      _settings.workspacePath.isNotEmpty
+          ? _settings.workspacePath
+          : _defaultWorkspace(),
+  };
+
+  /// The installed agent workspace, empty until [initialize] finishes or when
+  /// installation failed and the panel fell back to another folder.
+  String get agentWorkspacePath => _agentWorkspacePath;
+  AssistantWorkspaceMode get workspaceMode => _settings.workspaceMode;
   String get projectName => _projectName;
   String get projectPath => _projectPath;
   String get descriptorPath => _descriptorPath;
@@ -131,11 +154,60 @@ class AssistantController extends ChangeNotifier {
 
   Future<void> _loadSettings() async {
     _settings = await _settingsStore.load();
+    await _ensureAgentWorkspace();
     _notify();
   }
 
-  /// Records the open project, writes the MCP pointer, and points the agent at
-  /// the project directory by default.
+  /// Installs the bundled workspace once and keeps its runtime files current.
+  ///
+  /// A failure is not fatal: the panel falls back to the project folder so the
+  /// assistant still works when application support is unavailable (for example
+  /// in a widget test).
+  Future<void> _ensureAgentWorkspace() async {
+    if (_agentWorkspacePath.isNotEmpty) return;
+    try {
+      final support = await _supportDirectory();
+      final bundle = await loadAgentWorkspaceBundle();
+      final workspace = await AgentWorkspace.install(
+        directory: Directory(
+          '${support.path}${Platform.pathSeparator}$agentWorkspaceDirectoryName',
+        ),
+        bundle: bundle,
+      );
+      _agentWorkspace = workspace;
+      _agentWorkspacePath = workspace.path;
+      await _writeWorkspaceRuntimeFiles();
+    } catch (_) {
+      _agentWorkspace = null;
+      _agentWorkspacePath = '';
+    }
+  }
+
+  /// Keeps `project.json`, `or-cli.json` and `tools/or` in step with the app.
+  Future<void> _writeWorkspaceRuntimeFiles() async {
+    final workspace = _agentWorkspace;
+    if (workspace == null) return;
+    try {
+      if (_projectPath.isNotEmpty || _descriptorPath.isNotEmpty) {
+        await workspace.writeProjectMarker(
+          projectName: _projectName,
+          projectPath: _projectPath,
+          descriptorPath: _descriptorPath,
+        );
+      }
+      final orCli = _orCliPath;
+      if (orCli != null && orCli.isNotEmpty) {
+        await workspace.writeOrCli(orCli);
+      }
+    } catch (_) {
+      // The workspace stays usable; the agent reports a missing tool if it is
+      // asked for before the next connection rewrites it.
+    }
+  }
+
+  /// Records the open project and writes the MCP pointer. The workspace choice is
+  /// independent of the project, so opening another project does not silently
+  /// move the agent's files.
   Future<void> updateProject({
     required String descriptorPath,
     required String projectPath,
@@ -146,18 +218,11 @@ class AssistantController extends ChangeNotifier {
         projectPath != _projectPath ||
         projectName != _projectName;
     if (!changed && _pointerPath != null) return;
-    final previousDefault = _projectPath.isEmpty
-        ? ''
-        : _directoryOf(_projectPath);
-    final followedProject =
-        _workspace.isEmpty ||
-        (previousDefault.isNotEmpty && _workspace == previousDefault);
     _descriptorPath = descriptorPath;
     _projectPath = projectPath;
     _projectName = projectName;
-    if (followedProject && projectPath.isNotEmpty) {
-      _workspace = _directoryOf(projectPath);
-    }
+    await _ensureAgentWorkspace();
+    await _writeWorkspaceRuntimeFiles();
     await _writePointer();
     _notify();
   }
@@ -167,18 +232,14 @@ class AssistantController extends ChangeNotifier {
     _notify();
   }
 
-  void setWorkspace(String path) {
-    if (path == _workspace) return;
-    _workspace = path;
-    _notify();
-  }
-
   /// Changes the session workspace and restarts the conversation so the
   /// agent's working directory and file tools match the choice.
   Future<void> changeWorkspace(String path) async {
-    if (path == _workspace) return;
-    _workspace = path;
-    _settings = _settings.copyWith(workspacePath: path);
+    if (path.isEmpty || path == workspace) return;
+    _settings = _settings.copyWith(
+      workspaceMode: AssistantWorkspaceMode.custom,
+      workspacePath: path,
+    );
     await _settingsStore.save(_settings);
     _notify();
     if (_isConnected) {
@@ -210,6 +271,8 @@ class AssistantController extends ChangeNotifier {
       }
       _harnessPath = harness;
       _orCliPath = orCli;
+      await _ensureAgentWorkspace();
+      await _writeWorkspaceRuntimeFiles();
       final overlay = await findHarnessOverlay();
       _overlayProfile = overlay?.profile;
       final directory = await _assistantDirectory();
@@ -399,14 +462,18 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> updateSettings(AssistantSettings settings) async {
-    final workspaceChanged = settings.workspacePath != _settings.workspacePath;
+    final previousWorkspace = workspace;
+    final workspaceChoiceChanged =
+        settings.workspaceMode != _settings.workspaceMode ||
+        settings.workspacePath != _settings.workspacePath;
     _settings = settings;
     await _settingsStore.save(settings);
-    if (settings.workspacePath.isNotEmpty) {
-      _workspace = settings.workspacePath;
-    }
+    await _ensureAgentWorkspace();
+    await _writeWorkspaceRuntimeFiles();
     _notify();
-    if (workspaceChanged && _isConnected) {
+    if (workspaceChoiceChanged &&
+        workspace != previousWorkspace &&
+        _isConnected) {
       await newConversation();
     }
   }

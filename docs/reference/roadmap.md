@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
@@ -22,6 +22,17 @@ One near-term delivery mission for the local macOS app, in this order:
    project and generate MotionScene illustrations by chatting with the local
    DeepSeek Harness. This is an external client over ACP and `or mcp`, not an OR
    provider integration; provider and inference work inside OR stays deferred.
+4. **Agent workspace (owner request, 2026-10-27).** Open the assistant in an
+   app-installed workspace whose `AGENTS.md` routes the agent to one guide,
+   skill or tool per task, instead of the project folder. Delivered 2026-10-27
+   ([agent-workspace.md](../features/agent-workspace.md)); dogfooding it against
+   real edits is the next check.
+5. **Motion asset library (owner request, 2026-10-27).** Turn motion output into
+   reusable, parameterised assets — adjustable text, colour and size; automatic
+   classification; a browsable library; drag and drop into the timeline or an
+   open scene. The design, bounds and phases are recorded in
+   [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md); delivery starts
+   at P1, and no part of it is implemented yet.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.

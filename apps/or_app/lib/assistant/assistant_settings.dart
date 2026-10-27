@@ -3,11 +3,24 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+/// Which directory the harness session starts in.
+enum AssistantWorkspaceMode {
+  /// The app-managed agent workspace with its AGENTS.md, guides and tools.
+  agent,
+
+  /// The open project's own folder.
+  project,
+
+  /// A folder the user chose.
+  custom,
+}
+
 /// Local preferences for the assistant panel. Nothing here is project state.
 class AssistantSettings {
   const AssistantSettings({
     this.harnessPath = '',
     this.orCliPath = '',
+    this.workspaceMode = AssistantWorkspaceMode.agent,
     this.workspacePath = '',
     this.modelValue = '',
     this.reasoningValue = '',
@@ -20,7 +33,10 @@ class AssistantSettings {
   /// Empty means "discover the `or` CLI beside the checkout or on PATH".
   final String orCliPath;
 
-  /// Empty means "use the project's directory".
+  /// How the session workspace is resolved.
+  final AssistantWorkspaceMode workspaceMode;
+
+  /// The chosen folder when [workspaceMode] is [AssistantWorkspaceMode.custom].
   final String workspacePath;
 
   /// Opaque ACP model option value, e.g. `["opencode-go","deepseek-v4.1-flash"]`.
@@ -35,6 +51,7 @@ class AssistantSettings {
   AssistantSettings copyWith({
     String? harnessPath,
     String? orCliPath,
+    AssistantWorkspaceMode? workspaceMode,
     String? workspacePath,
     String? modelValue,
     String? reasoningValue,
@@ -42,6 +59,7 @@ class AssistantSettings {
   }) => AssistantSettings(
     harnessPath: harnessPath ?? this.harnessPath,
     orCliPath: orCliPath ?? this.orCliPath,
+    workspaceMode: workspaceMode ?? this.workspaceMode,
     workspacePath: workspacePath ?? this.workspacePath,
     modelValue: modelValue ?? this.modelValue,
     reasoningValue: reasoningValue ?? this.reasoningValue,
@@ -49,9 +67,10 @@ class AssistantSettings {
   );
 
   Map<String, Object?> toJson() => {
-    'version': 1,
+    'version': 2,
     'harnessPath': harnessPath,
     'orCliPath': orCliPath,
+    'workspaceMode': workspaceMode.name,
     'workspacePath': workspacePath,
     'modelValue': modelValue,
     'reasoningValue': reasoningValue,
@@ -65,14 +84,31 @@ class AssistantSettings {
       return raw is String && raw.length <= 4096 ? raw : '';
     }
 
+    final workspacePath = string('workspacePath');
+    final mode = _workspaceMode(value['workspaceMode'], workspacePath);
     return AssistantSettings(
       harnessPath: string('harnessPath'),
       orCliPath: string('orCliPath'),
-      workspacePath: string('workspacePath'),
+      workspaceMode: mode,
+      workspacePath: workspacePath,
       modelValue: string('modelValue'),
       reasoningValue: string('reasoningValue'),
       autoApprove: value['autoApprove'] == true,
     );
+  }
+
+  /// Reads the stored mode. Settings written before modes existed keep a custom
+  /// folder when they had one, and otherwise adopt the agent workspace default.
+  static AssistantWorkspaceMode _workspaceMode(
+    Object? raw,
+    String workspacePath,
+  ) {
+    for (final mode in AssistantWorkspaceMode.values) {
+      if (raw == mode.name) return mode;
+    }
+    return workspacePath.isEmpty
+        ? AssistantWorkspaceMode.agent
+        : AssistantWorkspaceMode.custom;
   }
 }
 
@@ -310,8 +346,9 @@ String buildHarnessPatch({
   }
   buffer.writeln('    personaSuffix: |-');
   buffer.writeln(
-    '      Work only inside the session workspace shown above; the or tools '
-    'own the project.',
+    '      Read and write files only inside the session workspace. The or tools '
+    'own the project; import an external file by absolute path only when the user '
+    'names it.',
   );
   if (overlay != null) {
     buffer.writeln(overlay.patchBlock);
@@ -327,13 +364,15 @@ String _assistantPersona({
 You are the built-in editing assistant inside Opencut Reinforced, a local-first video editor.
 The open project is "$projectName". The session workspace is $workspace.
 
-Use only the mcp__or__* tools to read or change the project. The running application owns the project; never edit a .orproj file directly.
+The workspace AGENTS.md is the routing index for this session. Read the one guide that matches the current task; do not preload every guide.
+
+Use only the mcp__or__* tools to read or change the project. The running application owns the project; never edit a .orproj file directly. Use tools/or and tools/motion-scaffold.mjs from the workspace when a scene needs validating or scaffolding.
 
 Work in this order:
 1. Call mcp__or__project_status, then mcp__or__timeline_overview or mcp__or__media_list when you need ids, tracks, clips or durations. Use the real ids and exact times those calls return.
 2. Make the smallest edit the user asked for with mcp__or__insert_clip, mcp__or__insert_text, mcp__or__move_clip, mcp__or__trim_clip, mcp__or__split_clip, mcp__or__delete_clip, mcp__or__set_frame_rate or mcp__or__add_marker.
 3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). Durations default to the media's full length when omitted.
-4. For an illustration or motion graphic, write a small source file in the workspace (or use an existing one) and call mcp__or__motion_insert_scene. It renders through the app's MotionScene renderer and inserts an ordinary, editable clip.
+4. For an illustration or motion graphic, write a small source file in the workspace (or use an existing one) and call mcp__or__motion_insert_scene. It renders through the app's MotionScene renderer and inserts an ordinary, editable clip. For an authored scene, start with tools/motion-scaffold.mjs and validate it with tools/or motion validate before rendering.
 5. After finishing an edit, call mcp__or__save unless the user asked to review first.
 
 Never claim a change you did not make. If a tool fails, report the error and the next concrete step. Keep replies short: say what changed, on which track, at what time.''';

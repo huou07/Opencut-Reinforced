@@ -58,6 +58,7 @@ required_files=(
   docs/features/motionscene.md
   docs/features/workspace-ui.md
   docs/features/assistant.md
+  docs/features/agent-workspace.md
   docs/operations/workflow.md
   docs/operations/verification.md
   docs/operations/local-macos.md

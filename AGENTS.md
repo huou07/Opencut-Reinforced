@@ -1,6 +1,6 @@
 # Opencut Reinforced — Agent Guide
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 OR is an MIT-licensed, local-first video editor with one Rust-owned project core
 shared by the Flutter UI, the `or` CLI and agents.
@@ -70,6 +70,9 @@ any other rule to this file.
 - **Assistant panel** — ACP harness connection, MCP editing tools, motion insertion, panel states.
   When: changing the assistant panel, its harness overlay, or the `or mcp` tools.
   Path: `docs/features/assistant.md`
+- **Agent workspace** — the app-installed workspace, its AGENTS.md routing, guides, skills and tools.
+  When: changing what the assistant reads or runs by default, or updating a workspace guide, skill or tool.
+  Path: `docs/features/agent-workspace.md`
 
 ### Design
 
@@ -142,6 +145,9 @@ any other rule to this file.
 - **ADR index** — recorded architecture decisions and their status.
   When: changing a subsystem boundary, or checking why an architecture choice was made.
   Path: `docs/adr/README.md`
+- **Motion assets proposal** — proposed parameterised assets, classification, library store and phases.
+  When: planning or building the reusable motion asset library.
+  Path: `docs/adr/0010-motion-assets-and-reusable-library.md`
 
 ### History
 
@@ -172,6 +178,9 @@ any other rule to this file.
 - **Performance budget** — measure the local budget rows.
   When: checking for a performance regression or recording a measurement.
   Path: `scripts/bench_quality.py`
+- **Agent workspace bundle** — packs the installed assistant workspace and guards bundle drift.
+  When: editing the workspace AGENTS.md, guides, skills or tools.
+  Path: `tooling/or-agent-workspace/build.mjs`
 
 ### Skills
 
