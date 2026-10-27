@@ -204,6 +204,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_project_transcript_segment_view(dynamic raw);
 
   @protected
+  List<ProjectTranscriptionModelOptionView>
+  dco_decode_list_project_transcription_model_option_view(dynamic raw);
+
+  @protected
   MediaArtifactBytesView dco_decode_media_artifact_bytes_view(dynamic raw);
 
   @protected
@@ -404,6 +408,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProjectTranscriptionJobView dco_decode_project_transcription_job_view(
     dynamic raw,
   );
+
+  @protected
+  ProjectTranscriptionModelOptionView
+  dco_decode_project_transcription_model_option_view(dynamic raw);
 
   @protected
   ProjectTranscriptionModelView dco_decode_project_transcription_model_view(
@@ -671,6 +679,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_list_project_transcript_segment_view(SseDeserializer deserializer);
 
   @protected
+  List<ProjectTranscriptionModelOptionView>
+  sse_decode_list_project_transcription_model_option_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   MediaArtifactBytesView sse_decode_media_artifact_bytes_view(
     SseDeserializer deserializer,
   );
@@ -935,6 +949,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectTranscriptionJobView sse_decode_project_transcription_job_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTranscriptionModelOptionView
+  sse_decode_project_transcription_model_option_view(
     SseDeserializer deserializer,
   );
 
@@ -1250,6 +1270,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_project_transcript_segment_view(
     List<ProjectTranscriptSegmentView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_project_transcription_model_option_view(
+    List<ProjectTranscriptionModelOptionView> self,
     SseSerializer serializer,
   );
 
@@ -1571,6 +1597,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_transcription_job_view(
     ProjectTranscriptionJobView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_transcription_model_option_view(
+    ProjectTranscriptionModelOptionView self,
     SseSerializer serializer,
   );
 

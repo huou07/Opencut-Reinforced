@@ -41,8 +41,11 @@ One near-term delivery mission for the local macOS app, in this order:
    a background bed, and caption existing audio with the local multilingual
    model. Delivered as the workspace tools `voiceover.mjs` and `music.mjs`, the
    host-owned `or captions transcribe` runtime request, and the reviewed
-   `timeline import-captions` command. Follow-up: dogfood the Vietnamese path on
-   a real project and measure transcription time and caption quality.
+   `timeline import-captions` command. Delivered 2026-10-27 also as in-app
+   Audio-tool dialogs: Generate voiceover… and Generate music…, with selectable
+   speech models and −12 dB ducking under a chosen voice track. Follow-up:
+   dogfood the Vietnamese path on a real project, measure transcription time and
+   caption quality, and group a ducking batch into one undo entry.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.

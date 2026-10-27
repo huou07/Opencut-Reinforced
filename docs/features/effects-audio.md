@@ -26,6 +26,13 @@ tagged BT.709 limited-range SDR. HDR remains deferred.
 
 ## Audio
 
+Automatic ducking is not a project field yet. The app implements it with
+ordinary split and gain commands: a music clip is split at every overlapping
+voice boundary and the overlapping segments are set to the chosen duck level
+(−12 dB by default). The result is editable clip state, but it costs one undo
+step per split and per changed segment; a single grouped duck command remains
+future work.
+
 Clip gain and mute are canonical clip state; gain, pan, fades and later DSP belong
 to the audio engine (`or_audio`), never to Flutter widgets. Desktop audio output
 is available; Android audio output is explicitly unavailable.

@@ -52,6 +52,19 @@ product still needs.
   agents as `or captions transcribe`, with `or timeline import-captions` applying
   a reviewed SRT/WebVTT as a new caption track. The transcript stays a proposal
   until the user applies it.
+- **In-app voiceover and music**: the Audio tool exposes Generate voiceover…
+  and Generate music…. The voiceover dialog speaks one line per scene with the
+  chosen macOS voice, imports the WAVs, places them on a new audio track and
+  imports exact captions. The music dialog synthesises a quiet royalty-free bed,
+  places it, and can duck it −12 dB under a selected voice track.
+- **Selectable speech models**: Base, Small, Medium, Large v3 Turbo q5 and
+  Large v3 Turbo are listed in the app with their real sizes and licences; the
+  user picks one, downloads it once, and the app and `or captions transcribe`
+  share the choice. Installed-model listing checks presence and size, while the
+  transcription job still verifies the full SHA-256.
+- **Local transcription helpers**: `scripts/install_local_transcription_helpers.sh`
+  copies `whisper-cli` and the rebuilt provider into a local debug bundle,
+  re-signs it ad hoc, and can install a verified small model.
 - **Assistant production workflow**: the installed workspace carries
   `tools/voiceover.mjs` — an offline `or-assistant-script` narrator using the
   macOS `say` voice that measures real durations, writes a timing manifest and

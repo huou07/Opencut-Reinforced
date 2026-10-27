@@ -2024,9 +2024,21 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.transcriptionModel(session);
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) => _gateway.transcriptionModels(session);
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => _gateway.selectTranscriptionModel(session, modelId);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
-  ) => _gateway.beginTranscriptionModelDownload(session);
+    String modelId,
+  ) => _gateway.beginTranscriptionModelDownload(session, modelId);
 
   @override
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(

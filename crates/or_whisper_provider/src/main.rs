@@ -22,14 +22,14 @@ const MAX_AUDIO_DURATION_MS: u64 = 4 * 60 * 60 * 1_000;
 const MAX_PROVIDER_RUNTIME: Duration = Duration::from_secs(4 * 60 * 60);
 const FILE_CHUNK_BYTES: usize = 64 * 1024;
 const PROVIDER_ID: &str = "whisper.cpp";
-const MODEL_ID: &str = "whisper-small-multilingual";
-const MODEL_VERSION: &str = "1.0";
-const MODEL_LICENSE: &str = "MIT";
 
 struct Config {
     whisper_cli: PathBuf,
     model: PathBuf,
     managed_root: PathBuf,
+    model_id: String,
+    model_version: String,
+    model_license: String,
 }
 
 enum Input {
@@ -45,14 +45,12 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let config = parse_arguments()?;
-    let config = Config {
-        whisper_cli: existing_file(config.whisper_cli)
-            .map_err(|_| "provider runtime unavailable")?,
-        model: existing_file(config.model).map_err(|_| "model unavailable")?,
-        managed_root: fs::canonicalize(config.managed_root)
-            .map_err(|_| "managed workspace unavailable")?,
-    };
+    let mut config = parse_arguments()?;
+    config.whisper_cli =
+        existing_file(config.whisper_cli).map_err(|_| "provider runtime unavailable")?;
+    config.model = existing_file(config.model).map_err(|_| "model unavailable")?;
+    config.managed_root =
+        fs::canonicalize(config.managed_root).map_err(|_| "managed workspace unavailable")?;
 
     let (sender, receiver) = mpsc::channel();
     thread::Builder::new()
@@ -127,12 +125,39 @@ fn parse_arguments() -> Result<Config, String> {
     let mut whisper_cli = None;
     let mut model = None;
     let mut managed_root = None;
+    let mut model_id = None;
+    let mut model_version = None;
+    let mut model_license = None;
     while let Some(argument) = args.next() {
         let value = args.next().ok_or("provider configuration is incomplete")?;
         match argument.to_str() {
             Some("--whisper-cli") if whisper_cli.is_none() => whisper_cli = Some(value.into()),
             Some("--model") if model.is_none() => model = Some(value.into()),
             Some("--managed-root") if managed_root.is_none() => managed_root = Some(value.into()),
+            Some("--model-id") if model_id.is_none() => {
+                model_id = Some(
+                    value
+                        .to_str()
+                        .ok_or("provider configuration is invalid")?
+                        .to_owned(),
+                );
+            }
+            Some("--model-version") if model_version.is_none() => {
+                model_version = Some(
+                    value
+                        .to_str()
+                        .ok_or("provider configuration is invalid")?
+                        .to_owned(),
+                );
+            }
+            Some("--model-license") if model_license.is_none() => {
+                model_license = Some(
+                    value
+                        .to_str()
+                        .ok_or("provider configuration is invalid")?
+                        .to_owned(),
+                );
+            }
             _ => return Err("provider configuration is invalid".to_owned()),
         }
     }
@@ -140,6 +165,9 @@ fn parse_arguments() -> Result<Config, String> {
         whisper_cli: whisper_cli.ok_or("provider runtime is not configured")?,
         model: model.ok_or("model is not configured")?,
         managed_root: managed_root.ok_or("managed workspace is not configured")?,
+        model_id: model_id.ok_or("model identity is not configured")?,
+        model_version: model_version.ok_or("model identity is not configured")?,
+        model_license: model_license.ok_or("model identity is not configured")?,
     })
 }
 
@@ -160,9 +188,9 @@ fn handle_transcription(
     output: &mut impl Write,
 ) -> Result<(), String> {
     if request.identity.provider_id != PROVIDER_ID
-        || request.identity.model_id != MODEL_ID
-        || request.identity.model_version != MODEL_VERSION
-        || request.identity.model_license != MODEL_LICENSE
+        || request.identity.model_id != config.model_id
+        || request.identity.model_version != config.model_version
+        || request.identity.model_license != config.model_license
         || request.language.as_deref().is_some_and(|language| {
             language != "auto"
                 && (language.len() < 2
@@ -176,7 +204,7 @@ fn handle_transcription(
             output,
             request_id,
             ProviderErrorCode::InvalidRequest,
-            "This provider accepts Vietnamese, English or auto-detected transcription requests up to four hours.",
+            "This provider accepts a configured multilingual model, Vietnamese, English or auto-detected language, and up to four hours of audio.",
         );
     }
     let language = request.language.as_deref().unwrap_or("auto").to_owned();

@@ -98,6 +98,7 @@ pub struct ProjectExportJobView {
 #[derive(Clone, Debug)]
 pub struct ProjectTranscriptionModelView {
     pub model_id: String,
+    pub label: String,
     pub version: String,
     pub license: String,
     pub language: String,
@@ -105,11 +106,28 @@ pub struct ProjectTranscriptionModelView {
     pub source: String,
     pub installed: bool,
     pub provider_available: bool,
+    pub active: bool,
+}
+
+/// One selectable speech model in the app's picker.
+#[derive(Clone, Debug)]
+pub struct ProjectTranscriptionModelOptionView {
+    pub model_id: String,
+    pub label: String,
+    pub version: String,
+    pub license: String,
+    pub language: String,
+    pub size_bytes: u64,
+    pub source: String,
+    pub installed: bool,
+    pub provider_available: bool,
+    pub active: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct ProjectModelDownloadView {
     pub download_id: String,
+    pub model_id: String,
     pub destination: String,
     pub source: String,
     pub size_bytes: u64,
@@ -151,6 +169,7 @@ pub struct ProjectTranscriptProposalView {
 fn transcription_model_view(info: TranscriptionModelInfo) -> ProjectTranscriptionModelView {
     ProjectTranscriptionModelView {
         model_id: info.model_id,
+        label: info.label,
         version: info.version,
         license: info.license,
         language: info.language,
@@ -158,12 +177,31 @@ fn transcription_model_view(info: TranscriptionModelInfo) -> ProjectTranscriptio
         source: info.source,
         installed: info.installed,
         provider_available: info.provider_available,
+        active: info.active,
+    }
+}
+
+fn transcription_model_option_view(
+    info: TranscriptionModelInfo,
+) -> ProjectTranscriptionModelOptionView {
+    ProjectTranscriptionModelOptionView {
+        model_id: info.model_id,
+        label: info.label,
+        version: info.version,
+        license: info.license,
+        language: info.language,
+        size_bytes: info.size_bytes,
+        source: info.source,
+        installed: info.installed,
+        provider_available: info.provider_available,
+        active: info.active,
     }
 }
 
 fn model_download_view(download: ModelDownload) -> ProjectModelDownloadView {
     ProjectModelDownloadView {
         download_id: download.download_id,
+        model_id: download.model_id,
         destination: download.destination,
         source: download.source,
         size_bytes: download.size_bytes,
@@ -897,6 +935,12 @@ fn transcription_service_failure(
         crate::transcription::TranscriptionServiceError::ModelUnavailable => {
             "TRANSCRIPTION_MODEL_UNAVAILABLE"
         }
+        crate::transcription::TranscriptionServiceError::ModelNotFound => {
+            "TRANSCRIPTION_MODEL_UNKNOWN"
+        }
+        crate::transcription::TranscriptionServiceError::PreferenceUnavailable => {
+            "TRANSCRIPTION_PREFERENCE_UNAVAILABLE"
+        }
         crate::transcription::TranscriptionServiceError::ProviderUnavailable => {
             "TRANSCRIPTION_RUNTIME_UNAVAILABLE"
         }
@@ -1091,12 +1135,34 @@ impl ProjectHostHandle {
         transcription_model_view(info)
     }
 
+    pub fn transcription_models(&self) -> Vec<ProjectTranscriptionModelOptionView> {
+        self.transcription_service
+            .as_deref()
+            .map(TranscriptionService::models)
+            .unwrap_or_default()
+            .into_iter()
+            .map(transcription_model_option_view)
+            .collect()
+    }
+
+    pub fn select_transcription_model(
+        &self,
+        model_id: String,
+    ) -> Result<ProjectTranscriptionModelView, ProjectBridgeError> {
+        let info = self
+            .transcription_service()?
+            .select_model(&model_id)
+            .map_err(transcription_error)?;
+        Ok(transcription_model_view(info))
+    }
+
     pub fn begin_transcription_model_download(
         &self,
+        model_id: String,
     ) -> Result<ProjectModelDownloadView, ProjectBridgeError> {
         let download = self
             .transcription_service()?
-            .begin_model_download()
+            .begin_model_download(&model_id)
             .map_err(transcription_error)?;
         Ok(model_download_view(download))
     }

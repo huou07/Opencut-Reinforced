@@ -101,10 +101,12 @@ routes them through `docs/script-and-voice.md`:
   leaves the machine and no model is downloaded.
 - `tools/music.mjs` synthesises a quiet, royalty-free background bed from a mood,
   tempo and duration. It is deterministic per seed and has no network path.
-- `tools/or captions transcribe --media <id>` runs the app's local multilingual
-  whisper model (Vietnamese and English are detected automatically) and returns
-  bounded cues; `tools/or timeline import-captions` applies a reviewed SRT/WebVTT
-  as an editable caption track. This is the "captions from existing audio" path.
+- `tools/or captions transcribe --media <id>` runs the app's **selected** local
+  multilingual whisper model (Vietnamese and English are detected automatically)
+  and returns bounded cues; `tools/or timeline import-captions` applies a
+  reviewed SRT/WebVTT as an editable caption track. This is the "captions from
+  existing audio" path. The user picks Base/Small/Medium/Large v3 Turbo in the
+  app; the CLI and MCP tool reuse that choice rather than starting their own.
 
 Narration derived from a written script and captions derived from transcription
 are different claims: the agent must say which one produced the result. Every

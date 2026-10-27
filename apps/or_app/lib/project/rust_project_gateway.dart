@@ -781,10 +781,28 @@ class RustProjectGateway implements ProjectGateway {
   ) async => _transcriptionModel(await _host(session).transcriptionModel());
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) async => [
+    for (final option in await _host(session).transcriptionModels())
+      _transcriptionModelOption(option),
+  ];
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) async => _transcriptionModel(
+    await _host(session).selectTranscriptionModel(modelId: modelId),
+  );
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
-  ) async =>
-      _modelDownload(await _host(session).beginTranscriptionModelDownload());
+    String modelId,
+  ) async => _modelDownload(
+    await _host(session).beginTranscriptionModelDownload(modelId: modelId),
+  );
 
   @override
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
@@ -1530,6 +1548,7 @@ class RustProjectGateway implements ProjectGateway {
     rust.ProjectTranscriptionModelView value,
   ) => ProjectTranscriptionModel(
     modelId: value.modelId,
+    label: value.label,
     version: value.version,
     license: value.license,
     language: value.language,
@@ -1537,12 +1556,29 @@ class RustProjectGateway implements ProjectGateway {
     source: value.source,
     installed: value.installed,
     providerAvailable: value.providerAvailable,
+    active: value.active,
+  );
+
+  static ProjectTranscriptionModel _transcriptionModelOption(
+    rust.ProjectTranscriptionModelOptionView value,
+  ) => ProjectTranscriptionModel(
+    modelId: value.modelId,
+    label: value.label,
+    version: value.version,
+    license: value.license,
+    language: value.language,
+    sizeBytes: value.sizeBytes,
+    source: value.source,
+    installed: value.installed,
+    providerAvailable: value.providerAvailable,
+    active: value.active,
   );
 
   static ProjectModelDownload _modelDownload(
     rust.ProjectModelDownloadView value,
   ) => ProjectModelDownload(
     downloadId: value.downloadId,
+    modelId: value.modelId,
     destination: value.destination,
     source: value.source,
     sizeBytes: value.sizeBytes,

@@ -22,6 +22,9 @@ import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
 import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
+import '../production/music_dialog.dart';
+import '../production/voiceover_dialog.dart';
+import '../production/voiceover_service.dart';
 import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -121,8 +124,7 @@ const Map<ShortcutActivator, Intent> _alwaysShortcuts = {
 /// Editing verbs. They are installed only while no text field has focus.
 const Map<ShortcutActivator, Intent> _editingShortcuts = {
   OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
-  OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true):
-      RedoProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true): RedoProjectIntent(),
   SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
   SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(-1),
   SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(1),
@@ -215,9 +217,9 @@ class _PlatformMenus extends StatelessWidget {
     required this.onToggleSnapping,
     required this.onReverseClip,
     required this.onFreezeClip,
-  required this.canImport,
-  required this.onImportMedia,
-  required this.onImportFolder,
+    required this.canImport,
+    required this.onImportMedia,
+    required this.onImportFolder,
     required this.child,
   });
 
@@ -268,7 +270,7 @@ class _PlatformMenus extends StatelessWidget {
         if (defaultTargetPlatform == TargetPlatform.macOS)
           PlatformMenu(
             label: 'Opencut Reinforced',
-          menus: [
+            menus: [
               PlatformProvidedMenuItem(
                 type: PlatformProvidedMenuItemType.about,
               ),
@@ -292,19 +294,25 @@ class _PlatformMenus extends StatelessWidget {
                   ),
                 ],
               ),
-          ],
-        ),
+            ],
+          ),
         PlatformMenu(
           label: 'File',
           menus: [
             PlatformMenuItem(
               label: 'New Project…',
-              shortcut: const SingleActivator(LogicalKeyboardKey.keyN, meta: true),
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.keyN,
+                meta: true,
+              ),
               onSelected: onNewProject,
             ),
             PlatformMenuItem(
               label: 'Open Project…',
-              shortcut: const SingleActivator(LogicalKeyboardKey.keyO, meta: true),
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.keyO,
+                meta: true,
+              ),
               onSelected: onOpenProject,
             ),
             PlatformMenuItemGroup(
@@ -377,7 +385,9 @@ class _PlatformMenus extends StatelessWidget {
                 ),
                 PlatformMenuItem(
                   label: 'Duplicate Clip',
-                  onSelected: !textInputFocused && isEditor ? onDuplicate : null,
+                  onSelected: !textInputFocused && isEditor
+                      ? onDuplicate
+                      : null,
                 ),
                 PlatformMenuItem(
                   label: 'Copy Clip',
@@ -431,7 +441,10 @@ class _PlatformMenus extends StatelessWidget {
             PlatformMenuItem(label: 'Projects', onSelected: onProjects),
             PlatformMenuItem(
               label: 'Command Palette…',
-              shortcut: const SingleActivator(LogicalKeyboardKey.keyK, meta: true),
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.keyK,
+                meta: true,
+              ),
               onSelected: onCommandPalette,
             ),
           ],
@@ -441,7 +454,10 @@ class _PlatformMenus extends StatelessWidget {
           menus: [
             PlatformMenuItem(
               label: 'Settings…',
-              shortcut: const SingleActivator(LogicalKeyboardKey.comma, meta: true),
+              shortcut: const SingleActivator(
+                LogicalKeyboardKey.comma,
+                meta: true,
+              ),
               onSelected: onSettings,
             ),
           ],
@@ -569,9 +585,7 @@ class _AppShellState extends State<AppShell> {
             : _destination.label;
 
         return Shortcuts(
-          shortcuts: orShellShortcuts(
-            textInputFocused: _textInputFocused,
-          ),
+          shortcuts: orShellShortcuts(textInputFocused: _textInputFocused),
           child: Actions(
             actions: {
               OpenCommandPaletteIntent:
@@ -709,20 +723,20 @@ class _AppShellState extends State<AppShell> {
                 },
               ),
               CopyClipIntent: CallbackAction<CopyClipIntent>(
-              onInvoke: (intent) {
-                if (!editor || _textInputFocused) return null;
-                _editorKey.currentState?.copySelectedClip();
-                return null;
-              },
-            ),
-            PasteClipIntent: CallbackAction<PasteClipIntent>(
-              onInvoke: (intent) {
-                if (!editor || _textInputFocused) return null;
-                _editorKey.currentState?.pasteClipboardClip();
-                return null;
-              },
-            ),
-            SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
+                onInvoke: (intent) {
+                  if (!editor || _textInputFocused) return null;
+                  _editorKey.currentState?.copySelectedClip();
+                  return null;
+                },
+              ),
+              PasteClipIntent: CallbackAction<PasteClipIntent>(
+                onInvoke: (intent) {
+                  if (!editor || _textInputFocused) return null;
+                  _editorKey.currentState?.pasteClipboardClip();
+                  return null;
+                },
+              ),
+              SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
                 onInvoke: (intent) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.setBladeMode(intent.enabled);
@@ -788,7 +802,8 @@ class _AppShellState extends State<AppShell> {
                     !(_exportJob?.isActive ?? false) &&
                     !_exportPublishing,
                 canEditProject: editor && _activeSession != null,
-                canImport: editor && widget.projectFilePicker.supportsMediaImport,
+                canImport:
+                    editor && widget.projectFilePicker.supportsMediaImport,
                 onNewProject: _createProject,
                 onOpenProject: _openProject,
                 onSaveProject: _saveProject,
@@ -811,10 +826,12 @@ class _AppShellState extends State<AppShell> {
                     _editorKey.currentState?.rippleDeleteSelectedClip(),
                 onFreezeClip: () =>
                     _editorKey.currentState?.toggleSelectedClipFrozen(),
-                onImportMedia: editor && widget.projectFilePicker.supportsMediaImport
+                onImportMedia:
+                    editor && widget.projectFilePicker.supportsMediaImport
                     ? () => unawaited(_importMedia())
                     : null,
-                onImportFolder: editor && widget.projectFilePicker.supportsMediaImport
+                onImportFolder:
+                    editor && widget.projectFilePicker.supportsMediaImport
                     ? () => unawaited(_importMediaFolder())
                     : null,
                 onAddMarker: () =>
@@ -824,82 +841,82 @@ class _AppShellState extends State<AppShell> {
                 onReverseClip: () =>
                     _editorKey.currentState?.toggleSelectedClipReverse(),
                 child: Scaffold(
-                body: SafeArea(
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      AppTopBar(
-                        title: title,
-                        compact: compact,
-                        statusLabel: editor
-                            ? (_exportStatus ?? _autosaveStatus)
-                            : null,
-                        statusIsError: _exportStatus != null
-                            ? _exportFailed
-                            : _autosaveFailed,
-                        // The bar is the workspace's only title row: it also
-                        // owns save state, history and the project menu.
-                        projectDirty: editor && _activeSession != null
-                            ? (_activeProject?.dirty ?? false)
-                            : null,
-                        onUndo: editor ? _undoProject : null,
-                        onRedo: editor ? _redoProject : null,
-                        onRenameProject: editor ? _renameProject : null,
-                        onSaveProject: editor ? _saveProject : null,
-                        onCloseProject: editor ? _closeProject : null,
-                        onExport:
-                            editor &&
-                                _activeSession != null &&
-                                widget.projectFilePicker.supportsExport &&
-                                !(_exportJob?.isActive ?? false) &&
-                                !_exportPublishing
-                            ? _startExport
-                            : null,
-                        onCancelExport:
-                            _exportJob?.isActive == true || _exportPublishing
-                            ? _cancelExport
-                            : null,
-                        exportIsActive:
-                            (_exportJob?.isActive ?? false) ||
-                            _exportPublishing,
-                        onHome: () => _select(AppDestination.home),
-                        onOpenCommandPalette: _openCommandPalette,
-                        onExitEditorPreview: editor
-                            ? (_activeSession == null
-                                  ? () => _select(AppDestination.home)
-                                  : _closeProject)
-                            : null,
-                      ),
-                      Expanded(
-                        // Stretch, not the Row default of center: a short page
-                        // (Settings, Templates) otherwise shrank to its content
-                        // height and floated in the middle of the workspace, so
-                        // the same page title sat at y=120 on Projects and
-                        // y=302 on Settings at 1280x800 (measured 2026-10-25).
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (!compact && !editor) ...[
-                              DesktopNavigation(
-                                selected: _destination,
-                                onSelected: _select,
-                              ),
-                              const VerticalDivider(width: 1),
-                            ],
-                            Expanded(child: _screen()),
-                          ],
+                  body: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        AppTopBar(
+                          title: title,
+                          compact: compact,
+                          statusLabel: editor
+                              ? (_exportStatus ?? _autosaveStatus)
+                              : null,
+                          statusIsError: _exportStatus != null
+                              ? _exportFailed
+                              : _autosaveFailed,
+                          // The bar is the workspace's only title row: it also
+                          // owns save state, history and the project menu.
+                          projectDirty: editor && _activeSession != null
+                              ? (_activeProject?.dirty ?? false)
+                              : null,
+                          onUndo: editor ? _undoProject : null,
+                          onRedo: editor ? _redoProject : null,
+                          onRenameProject: editor ? _renameProject : null,
+                          onSaveProject: editor ? _saveProject : null,
+                          onCloseProject: editor ? _closeProject : null,
+                          onExport:
+                              editor &&
+                                  _activeSession != null &&
+                                  widget.projectFilePicker.supportsExport &&
+                                  !(_exportJob?.isActive ?? false) &&
+                                  !_exportPublishing
+                              ? _startExport
+                              : null,
+                          onCancelExport:
+                              _exportJob?.isActive == true || _exportPublishing
+                              ? _cancelExport
+                              : null,
+                          exportIsActive:
+                              (_exportJob?.isActive ?? false) ||
+                              _exportPublishing,
+                          onHome: () => _select(AppDestination.home),
+                          onOpenCommandPalette: _openCommandPalette,
+                          onExitEditorPreview: editor
+                              ? (_activeSession == null
+                                    ? () => _select(AppDestination.home)
+                                    : _closeProject)
+                              : null,
                         ),
-                      ),
-                    ],
+                        Expanded(
+                          // Stretch, not the Row default of center: a short page
+                          // (Settings, Templates) otherwise shrank to its content
+                          // height and floated in the middle of the workspace, so
+                          // the same page title sat at y=120 on Projects and
+                          // y=302 on Settings at 1280x800 (measured 2026-10-25).
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (!compact && !editor) ...[
+                                DesktopNavigation(
+                                  selected: _destination,
+                                  onSelected: _select,
+                                ),
+                                const VerticalDivider(width: 1),
+                              ],
+                              Expanded(child: _screen()),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  bottomNavigationBar: compact
+                      ? CompactNavigation(
+                          selected: _destination,
+                          onSelected: _select,
+                        )
+                      : null,
                 ),
-                bottomNavigationBar: compact
-                    ? CompactNavigation(
-                        selected: _destination,
-                        onSelected: _select,
-                      )
-                    : null,
-              ),
               ),
             ),
           ),
@@ -1023,6 +1040,9 @@ class _AppShellState extends State<AppShell> {
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
+              onManageSpeechModel: _manageSpeechModel,
+              onGenerateVoiceover: _generateVoiceover,
+              onGenerateMusic: _generateMusic,
               onCleanUpAudio: _cleanUpMediaAudio,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
@@ -1103,7 +1123,8 @@ class _AppShellState extends State<AppShell> {
           ),
           CommandPaletteAction(
             label: 'Ripple Delete Selected Clip',
-            onSelected: () => _editorKey.currentState?.rippleDeleteSelectedClip(),
+            onSelected: () =>
+                _editorKey.currentState?.rippleDeleteSelectedClip(),
           ),
           CommandPaletteAction(
             label: 'Delete Selected Clip',
@@ -2349,7 +2370,9 @@ class _AppShellState extends State<AppShell> {
   /// Ask the host to reveal a published file. Desktop-only by construction:
   /// the channel is registered by the macOS runner, and other hosts fall back
   /// to the copy-path action the receipt already offers.
-  static const MethodChannel _revealChannel = MethodChannel('or_macos_file_access');
+  static const MethodChannel _revealChannel = MethodChannel(
+    'or_macos_file_access',
+  );
 
   Future<void> _revealInFinder(String path) async {
     try {
@@ -2701,7 +2724,14 @@ class _AppShellState extends State<AppShell> {
     var transcriptionDialogOpen = false;
     ValueNotifier<ProjectTranscriptionJob?>? transcriptionDialogState;
     try {
-      var model = await widget.projectGateway.transcriptionModel(session);
+      var models = await widget.projectGateway.transcriptionModels(session);
+      if (models.isEmpty) {
+        models = [await widget.projectGateway.transcriptionModel(session)];
+      }
+      var model = models.firstWhere(
+        (candidate) => candidate.active,
+        orElse: () => models.first,
+      );
       if (!model.providerAvailable) {
         _showUnavailable(
           'Local caption generation is not included in this installation.',
@@ -2709,12 +2739,20 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       if (!model.installed) {
-        final install = await _confirmSpeechModelDownload(model);
-        if (!install || !mounted) return;
-        final downloadedModel = await _downloadSpeechModel(session);
-        if (downloadedModel == null) return;
-        model = downloadedModel;
-        if (!mounted) return;
+        final chosen = await _chooseSpeechModel(session, models);
+        if (chosen == null || !mounted) return;
+        model = chosen;
+        if (!model.installed) {
+          final install = await _confirmSpeechModelDownload(model);
+          if (!install || !mounted) return;
+          final downloadedModel = await _downloadSpeechModel(
+            session,
+            modelId: model.modelId,
+          );
+          if (downloadedModel == null) return;
+          model = downloadedModel;
+          if (!mounted) return;
+        }
       }
       if (!mounted) return;
 
@@ -2897,11 +2935,198 @@ class _AppShellState extends State<AppShell> {
       ) ??
       false;
 
-  Future<ProjectTranscriptionModel?> _downloadSpeechModel(
+  /// Opens the offline voiceover workflow and refreshes the edit afterwards.
+  Future<void> _generateVoiceover() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    if (session == null || project == null || _busy) return;
+    final applied = await showDialog<VoiceoverApplied>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => VoiceoverDialog(
+        gateway: widget.projectGateway,
+        session: session,
+        project: project,
+      ),
+    );
+    if (!mounted || !identical(session, _activeSession)) return;
+    await _refreshProjectState(session);
+    if (applied == null || !mounted) return;
+    setState(() {
+      _projectNotice =
+          'Added ${applied.lines.length} narration '
+          '${applied.lines.length == 1 ? 'line' : 'lines'} and '
+          '${applied.captionCount} '
+          '${applied.captionCount == 1 ? 'caption' : 'captions'}.';
+    });
+  }
+
+  /// Opens the generated-music workflow and refreshes the edit afterwards.
+  Future<void> _generateMusic() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    if (session == null || project == null || _busy) return;
+    final applied = await showDialog<MusicApplied>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => MusicDialog(
+        gateway: widget.projectGateway,
+        session: session,
+        project: project,
+      ),
+    );
+    if (!mounted || !identical(session, _activeSession)) return;
+    await _refreshProjectState(session);
+    if (applied == null || !mounted) return;
+    final duckNote = applied.ducked
+        ? ' Ducked -12 dB under the selected voice track; that used '
+              '${applied.undoSteps} undo ${applied.undoSteps == 1 ? 'step' : 'steps'}.'
+        : '';
+    setState(() {
+      _projectNotice = 'Added a ${applied.bed.mood} music bed.$duckNote';
+    });
+  }
+
+  /// Asks which local speech model to use and persists the choice.
+  ///
+  /// Selecting an installed model is immediate; a model that is not installed
+  /// is installed by the caller so the download prompt can show its real size.
+  Future<ProjectTranscriptionModel?> _chooseSpeechModel(
     ProjectSessionHandle session,
+    List<ProjectTranscriptionModel> models,
   ) async {
+    if (models.isEmpty) {
+      _showUnavailable('No local speech model catalog is available.');
+      return null;
+    }
+    var choice = models.firstWhere(
+      (candidate) => candidate.active,
+      orElse: () => models.first,
+    );
+    final selected = await showDialog<ProjectTranscriptionModel>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Speech model'),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Choose the local model used for captions. Larger models take '
+                  'longer to download and run, and are more accurate — '
+                  'especially for Vietnamese.',
+                ),
+                const SizedBox(height: 12),
+                for (final model in models)
+                  ListTile(
+                    key: ValueKey('speech-model-${model.modelId}'),
+                    selected: model.modelId == choice.modelId,
+                    leading: Icon(
+                      model.modelId == choice.modelId
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      size: 20,
+                    ),
+                    title: Text(
+                      model.label.isEmpty ? model.modelId : model.label,
+                    ),
+                    subtitle: Text(
+                      '${_speechModelSize(model)} · '
+                      '${model.installed ? 'Installed' : 'Download needed'} · '
+                      '${model.license}',
+                    ),
+                    onTap: () =>
+                        setDialogState(() => choice = model),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(choice),
+              child: const Text('Use model'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return null;
+    try {
+      return await widget.projectGateway.selectTranscriptionModel(
+        session,
+        selected.modelId,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    }
+  }
+
+  String _speechModelSize(ProjectTranscriptionModel model) {
+    final mib = (model.sizeBytes ~/ BigInt.from(1024 * 1024)).toInt();
+    return mib >= 1024
+        ? '${(mib / 1024).toStringAsFixed(1)} GiB'
+        : '$mib MiB';
+  }
+
+  /// Lets the user switch or install a speech model without starting a
+  /// transcription first.
+  Future<void> _manageSpeechModel() async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final models = await widget.projectGateway.transcriptionModels(session);
+      if (!mounted) return;
+      final chosen = await _chooseSpeechModel(session, models);
+      if (chosen == null || !mounted) return;
+      if (!chosen.providerAvailable) {
+        _showUnavailable(
+          'Local caption generation is not included in this installation.',
+        );
+        return;
+      }
+      if (!chosen.installed) {
+        final install = await _confirmSpeechModelDownload(chosen);
+        if (!install || !mounted) return;
+        final downloaded = await _downloadSpeechModel(
+          session,
+          modelId: chosen.modelId,
+        );
+        if (downloaded == null || !mounted) return;
+        setState(
+          () => _projectNotice =
+              '${downloaded.label.isEmpty ? downloaded.modelId : downloaded.label} '
+              'installed and selected.',
+        );
+      } else {
+        setState(
+          () => _projectNotice =
+              '${chosen.label.isEmpty ? chosen.modelId : chosen.label} selected.',
+        );
+      }
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+    } catch (_) {
+      _showUnavailable('The speech model could not be changed.');
+    } finally {
+      if (mounted && _busy) setState(() => _busy = false);
+    }
+  }
+
+  Future<ProjectTranscriptionModel?> _downloadSpeechModel(
+    ProjectSessionHandle session, {
+    String modelId = 'whisper-small-multilingual',
+  }) async {
     final download = await widget.projectGateway
-        .beginTranscriptionModelDownload(session);
+        .beginTranscriptionModelDownload(session, modelId);
     if (!mounted) {
       await widget.projectGateway.cancelTranscriptionModelDownload(
         session,

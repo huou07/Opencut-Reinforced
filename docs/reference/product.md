@@ -85,7 +85,10 @@ track, through the app's Generate Captions action and the host-owned
 workspace also carries an offline production workflow: an `or-assistant-script`,
 macOS `say` narration with exact caption timing, reviewed SRT import, and a
 generated royalty-free music bed
-([assistant.md](../features/assistant.md)).
+([assistant.md](../features/assistant.md)). The Audio tool also generates
+offline narration (macOS `say`) and royalty-free music beds in-app, with exact
+captions and optional −12 dB ducking under a voice track; the visible voice and
+music surfaces are no longer assistant-only.
 
 **PLANNED/FUTURE:** translation, dubbing, scene/silence analysis, selected
 generative assets, neural/cloud voices and music, and optional cloud providers

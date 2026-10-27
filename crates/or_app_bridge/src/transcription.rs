@@ -37,6 +37,7 @@ const MAX_PROVIDER_RUNTIME: Duration = Duration::from_secs(4 * 60 * 60);
 #[derive(Clone, Debug)]
 pub struct TranscriptionModelInfo {
     pub model_id: String,
+    pub label: String,
     pub version: String,
     pub license: String,
     pub language: String,
@@ -44,13 +45,15 @@ pub struct TranscriptionModelInfo {
     pub source: String,
     pub installed: bool,
     pub provider_available: bool,
+    pub active: bool,
 }
 
 impl TranscriptionModelInfo {
     pub fn unavailable() -> Self {
-        let manifest = or_ai::whisper_multilingual_manifest();
+        let manifest = or_ai::default_whisper_model();
         Self {
-            model_id: manifest.model_id,
+            model_id: manifest.model_id.clone(),
+            label: or_ai::whisper_model_label(&manifest.model_id).to_owned(),
             version: manifest.version,
             license: manifest.license,
             language: "Vietnamese and English".to_owned(),
@@ -58,6 +61,7 @@ impl TranscriptionModelInfo {
             source: manifest.source,
             installed: false,
             provider_available: false,
+            active: true,
         }
     }
 }
@@ -65,6 +69,7 @@ impl TranscriptionModelInfo {
 #[derive(Clone, Debug)]
 pub struct ModelDownload {
     pub download_id: String,
+    pub model_id: String,
     pub destination: String,
     pub source: String,
     pub size_bytes: u64,
@@ -74,6 +79,7 @@ pub struct ModelDownload {
 struct DownloadFile {
     directory: TempDirectory,
     path: PathBuf,
+    manifest: ModelManifest,
 }
 
 #[derive(Default)]
@@ -87,6 +93,7 @@ pub struct TranscriptionService {
     state: Arc<Mutex<TranscriptionState>>,
     downloads: Mutex<HashMap<Uuid, DownloadFile>>,
     model_root: PathBuf,
+    active_model: Mutex<String>,
     provider_binary: PathBuf,
     whisper_cli: PathBuf,
 }
@@ -95,34 +102,86 @@ impl TranscriptionService {
     pub fn new() -> Option<Self> {
         let model_root = model_store_root()?;
         fs::create_dir_all(&model_root).ok()?;
+        let active_model = read_active_model(&model_root);
         let jobs = JobManager::new(JobManagerConfig::new(1, 1, 1).ok()?);
         Some(Self {
             jobs,
             state: Arc::new(Mutex::new(TranscriptionState::default())),
             downloads: Mutex::new(HashMap::new()),
             model_root,
+            active_model: Mutex::new(active_model),
             provider_binary: helper_path("OR_WHISPER_PROVIDER_PATH", "or-whisper-provider"),
             whisper_cli: helper_path("OR_WHISPER_CLI_PATH", "whisper-cli"),
         })
     }
 
-    pub fn model_info(&self) -> TranscriptionModelInfo {
-        let manifest = or_ai::whisper_multilingual_manifest();
-        let installed = or_ai::verify_installed_model(&self.model_root, &manifest).is_ok();
-        TranscriptionModelInfo {
-            model_id: manifest.model_id,
-            version: manifest.version,
-            license: manifest.license,
-            language: "Vietnamese and English".to_owned(),
-            size_bytes: manifest.size_bytes,
-            source: manifest.source,
-            installed,
-            provider_available: self.provider_binary.is_file() && self.whisper_cli.is_file(),
+    #[cfg(test)]
+    fn for_test(model_root: PathBuf) -> Self {
+        fs::create_dir_all(&model_root).unwrap();
+        Self {
+            jobs: JobManager::new(JobManagerConfig::new(1, 1, 1).unwrap()),
+            state: Arc::new(Mutex::new(TranscriptionState::default())),
+            downloads: Mutex::new(HashMap::new()),
+            active_model: Mutex::new(read_active_model(&model_root)),
+            model_root,
+            provider_binary: PathBuf::from("/nonexistent/or-whisper-provider"),
+            whisper_cli: PathBuf::from("/nonexistent/whisper-cli"),
         }
     }
 
-    pub fn begin_model_download(&self) -> Result<ModelDownload, TranscriptionServiceError> {
-        let manifest = or_ai::whisper_multilingual_manifest();
+    fn active_manifest(&self) -> ModelManifest {
+        let id = lock(&self.active_model).clone();
+        or_ai::whisper_model(&id).unwrap_or_else(or_ai::default_whisper_model)
+    }
+
+    fn model_info_for(&self, manifest: &ModelManifest) -> TranscriptionModelInfo {
+        let active = *lock(&self.active_model) == manifest.model_id;
+        TranscriptionModelInfo {
+            model_id: manifest.model_id.clone(),
+            label: or_ai::whisper_model_label(&manifest.model_id).to_owned(),
+            version: manifest.version.clone(),
+            license: manifest.license.clone(),
+            language: "Vietnamese and English".to_owned(),
+            size_bytes: manifest.size_bytes,
+            source: manifest.source.clone(),
+            installed: or_ai::model_artifact_present(&self.model_root, manifest),
+            provider_available: self.provider_binary.is_file() && self.whisper_cli.is_file(),
+            active,
+        }
+    }
+
+    pub fn model_info(&self) -> TranscriptionModelInfo {
+        self.model_info_for(&self.active_manifest())
+    }
+
+    /// Every catalog entry, with its install and active state, in the fixed
+    /// fast-to-best order the picker shows.
+    pub fn models(&self) -> Vec<TranscriptionModelInfo> {
+        or_ai::whisper_models()
+            .iter()
+            .map(|manifest| self.model_info_for(manifest))
+            .collect()
+    }
+
+    /// Selects the model later transcriptions use and persists the choice.
+    pub fn select_model(
+        &self,
+        model_id: &str,
+    ) -> Result<TranscriptionModelInfo, TranscriptionServiceError> {
+        let manifest =
+            or_ai::whisper_model(model_id).ok_or(TranscriptionServiceError::ModelNotFound)?;
+        write_active_model(&self.model_root, &manifest.model_id)
+            .map_err(|_| TranscriptionServiceError::PreferenceUnavailable)?;
+        *lock(&self.active_model) = manifest.model_id.clone();
+        Ok(self.model_info_for(&manifest))
+    }
+
+    pub fn begin_model_download(
+        &self,
+        model_id: &str,
+    ) -> Result<ModelDownload, TranscriptionServiceError> {
+        let manifest =
+            or_ai::whisper_model(model_id).ok_or(TranscriptionServiceError::ModelNotFound)?;
         if or_ai::verify_installed_model(&self.model_root, &manifest).is_ok() {
             return Err(TranscriptionServiceError::ModelAlreadyInstalled);
         }
@@ -130,13 +189,15 @@ impl TranscriptionService {
         if !downloads.is_empty() {
             return Err(TranscriptionServiceError::DownloadBusy);
         }
-        let (id, file) = create_download_file()?;
+        let (id, mut file) = create_download_file()?;
+        file.manifest = manifest.clone();
         let download = ModelDownload {
             download_id: id.to_string(),
+            model_id: manifest.model_id.clone(),
             destination: file.path.to_string_lossy().into_owned(),
-            source: manifest.source,
+            source: manifest.source.clone(),
             size_bytes: manifest.size_bytes,
-            license: manifest.license,
+            license: manifest.license.clone(),
         };
         downloads.insert(id, file);
         Ok(download)
@@ -150,14 +211,11 @@ impl TranscriptionService {
         let file = lock(&self.downloads)
             .remove(&id)
             .ok_or(TranscriptionServiceError::DownloadNotFound)?;
-        let result = install_download(
-            &self.model_root,
-            &or_ai::whisper_multilingual_manifest(),
-            &file,
-        );
+        let manifest = file.manifest.clone();
+        let result = install_download(&self.model_root, &manifest, &file);
         drop(file);
         result?;
-        Ok(self.model_info())
+        self.select_model(&manifest.model_id)
     }
 
     pub fn cancel_model_download(
@@ -207,7 +265,7 @@ impl TranscriptionService {
         drop(state);
 
         let model_root = self.model_root.clone();
-        let model = or_ai::whisper_multilingual_manifest();
+        let model = self.active_manifest();
         let provider_binary = self.provider_binary.clone();
         let whisper_cli = self.whisper_cli.clone();
         let state = Arc::clone(&self.state);
@@ -282,8 +340,10 @@ pub enum TranscriptionServiceError {
     LocalFileRequired,
     ModelAlreadyInstalled,
     ModelUnavailable,
+    ModelNotFound,
     ProviderUnavailable,
     StorageUnavailable,
+    PreferenceUnavailable,
     JobSubmit,
 }
 
@@ -298,7 +358,9 @@ impl std::fmt::Display for TranscriptionServiceError {
             Self::JobUnavailable => "The transcription job could not be inspected.",
             Self::LocalFileRequired => "Local file media is required for transcription.",
             Self::ModelAlreadyInstalled => "The transcription model is already installed.",
-            Self::ModelUnavailable => "Download the local transcription model first.",
+            Self::ModelUnavailable => "Download the selected local transcription model first.",
+            Self::ModelNotFound => "The selected transcription model is not in the catalog.",
+            Self::PreferenceUnavailable => "The selected transcription model could not be saved.",
             Self::ProviderUnavailable => "The packaged local transcription runtime is unavailable.",
             Self::StorageUnavailable => "The model could not be safely installed.",
             Self::JobSubmit => "The transcription queue is full or shutting down.",
@@ -490,6 +552,12 @@ fn run_provider(
         .arg(request.model)
         .arg("--managed-root")
         .arg(request.managed_root)
+        .arg("--model-id")
+        .arg(&request.identity.model_id)
+        .arg("--model-version")
+        .arg(&request.identity.model_version)
+        .arg("--model-license")
+        .arg(&request.identity.model_license)
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -767,8 +835,38 @@ fn create_download_file() -> Result<(Uuid, DownloadFile), TranscriptionServiceEr
         .open(&path)
         .map_err(|_| TranscriptionServiceError::StorageUnavailable)?;
     let id = Uuid::new_v4();
-    let file = DownloadFile { directory, path };
+    let file = DownloadFile {
+        directory,
+        path,
+        manifest: or_ai::default_whisper_model(),
+    };
     Ok((id, file))
+}
+
+fn active_model_path(model_root: &Path) -> PathBuf {
+    model_root.join("active-model")
+}
+
+/// Reads the persisted model choice. An unknown or missing file falls back to
+/// the catalog default rather than failing the whole service.
+fn read_active_model(model_root: &Path) -> String {
+    fs::read_to_string(active_model_path(model_root))
+        .ok()
+        .map(|text| text.trim().to_owned())
+        .filter(|model_id| or_ai::whisper_model(model_id).is_some())
+        .unwrap_or_else(|| or_ai::default_whisper_model().model_id)
+}
+
+/// Replaces the model choice atomically; a partial write can never point the
+/// service at a model that is not in the catalog.
+fn write_active_model(model_root: &Path, model_id: &str) -> io::Result<()> {
+    let temporary = model_root.join(format!(".active-model-{}", Uuid::new_v4()));
+    fs::write(&temporary, model_id)?;
+    if let Err(error) = fs::rename(&temporary, active_model_path(model_root)) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn install_download(
@@ -883,4 +981,72 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temporary_model_root() -> PathBuf {
+        std::env::temp_dir().join(format!("or-transcription-service-{}", Uuid::new_v4()))
+    }
+
+    #[test]
+    fn catalog_selection_is_persisted_and_unknown_models_are_refused() {
+        let root = temporary_model_root();
+        let service = TranscriptionService::for_test(root.clone());
+        let models = service.models();
+        assert_eq!(models.len(), 5);
+        assert_eq!(
+            models
+                .iter()
+                .find(|model| model.active)
+                .expect("an active model")
+                .model_id,
+            "whisper-small-multilingual"
+        );
+        assert!(models.iter().all(|model| !model.installed));
+
+        let selected = service.select_model("whisper-medium-multilingual").unwrap();
+        assert_eq!(selected.model_id, "whisper-medium-multilingual");
+        assert!(selected.active);
+        assert!(!selected.installed);
+        assert_eq!(
+            fs::read_to_string(root.join("active-model")).unwrap(),
+            "whisper-medium-multilingual"
+        );
+
+        // A new service instance reads the same persisted choice.
+        let reopened = TranscriptionService::for_test(root.clone());
+        assert_eq!(
+            reopened.model_info().model_id,
+            "whisper-medium-multilingual"
+        );
+
+        assert!(matches!(
+            service.select_model("not-a-model"),
+            Err(TranscriptionServiceError::ModelNotFound)
+        ));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn downloads_are_bound_to_the_requested_manifest() {
+        let root = temporary_model_root();
+        let service = TranscriptionService::for_test(root.clone());
+        let download = service
+            .begin_model_download("whisper-base-multilingual")
+            .unwrap();
+        assert_eq!(download.model_id, "whisper-base-multilingual");
+        assert_eq!(download.size_bytes, 147_951_465);
+        service
+            .cancel_model_download(&download.download_id)
+            .unwrap();
+        assert!(matches!(
+            service.begin_model_download("not-a-model"),
+            Err(TranscriptionServiceError::ModelNotFound)
+        ));
+        fs::remove_dir_all(root).ok();
+    }
 }

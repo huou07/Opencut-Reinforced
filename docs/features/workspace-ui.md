@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-27
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -25,6 +25,11 @@ justification and review.
   selected; the assistant reuses the same slot instead of adding a region.
 - Bottom timeline with thumbnail/waveform clips, visible trim handles, context
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
+- The Audio tool exposes **Generate voiceover…** and **Generate music…** next to
+  import/add-track. Each opens one dialog that owns the offline synthesis,
+  import, placement and (for music) optional ducking, then refreshes through the
+  normal project reads. Generation is a bounded batch of ordinary commands, not
+  a second project model.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 
@@ -50,6 +55,9 @@ justification and review.
   availability, command IDs, panel, inspector sections, shortcut metadata); do
   not build a plugin framework for it.
 - Every visible action must work or be visibly unavailable — no silent dead ends.
+- A production batch (voiceover, music + ducking) is several validated commands,
+  so it is several undo steps; the notice says so. Grouping a batch into one
+  undo entry is not implemented yet.
 
 ## Where
 

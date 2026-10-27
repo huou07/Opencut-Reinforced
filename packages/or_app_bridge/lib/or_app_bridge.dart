@@ -48,6 +48,7 @@ export 'src/rust/api/project.dart'
         ProjectHostEventView,
         ProjectHostHandle,
         ProjectExportJobView,
+        ProjectTranscriptionModelOptionView,
         ProjectTranscriptionModelView,
         ProjectModelDownloadView,
         ProjectTranscriptionJobView,

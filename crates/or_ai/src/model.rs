@@ -33,27 +33,105 @@ pub struct ModelManifest {
     pub languages: Vec<String>,
 }
 
-/// The supported optional model for local multilingual caption proposals.
+/// One selectable local transcription model and its reviewed artifact.
 ///
-/// The multilingual small checkpoint is the first model that transcribes both
-/// Vietnamese and English audio with usable punctuation. Language is detected
-/// by the provider, so one installed artifact serves both languages. Runtime
-/// and model licenses remain independently verified and presented.
-pub fn whisper_multilingual_manifest() -> ModelManifest {
+/// Every entry is multilingual, MIT licensed, pinned to the same whisper.cpp
+/// revision and downloaded only after explicit consent. Sizes and digests are
+/// the Hugging Face LFS values; `ModelManifest::validate` and the installer
+/// re-check them.
+const WHISPER_REVISION: &str = "5359861c739e955e79d9a303bcbc70fb988958b1";
+
+fn whisper_manifest(
+    model_id: &str,
+    artifact: &str,
+    sha256: &str,
+    size_bytes: u64,
+) -> ModelManifest {
     ModelManifest {
         schema_version: 1,
-        model_id: "whisper-small-multilingual".to_owned(),
+        model_id: model_id.to_owned(),
         version: "1.0".to_owned(),
         tasks: vec![AiTask::Transcribe],
         provider_id: "whisper.cpp".to_owned(),
         runtime: "whisper.cpp/1.9.4".to_owned(),
-        source: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin".to_owned(),
-        sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b".to_owned(),
-        size_bytes: 487_601_967,
+        source: format!(
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/{WHISPER_REVISION}/{artifact}"
+        ),
+        sha256: sha256.to_owned(),
+        size_bytes,
         license: "MIT".to_owned(),
-        provenance: "ggerganov/whisper.cpp revision 5359861c739e955e79d9a303bcbc70fb988958b1".to_owned(),
+        provenance: format!("ggerganov/whisper.cpp revision {WHISPER_REVISION}"),
         hardware_requirements: vec!["CPU".to_owned()],
         languages: vec!["vi".to_owned(), "en".to_owned()],
+    }
+}
+
+/// The selectable whisper models, fast to best.
+///
+/// Base and Small are comfortable CPU downloads; Medium and Large v3 Turbo are
+/// large but materially better for Vietnamese. The quantised Turbo is the best
+/// quality-per-byte option because it keeps the large-v3 family while fitting
+/// under 600 MiB.
+pub fn whisper_models() -> Vec<ModelManifest> {
+    vec![
+        whisper_manifest(
+            "whisper-base-multilingual",
+            "ggml-base.bin",
+            "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+            147_951_465,
+        ),
+        whisper_manifest(
+            "whisper-small-multilingual",
+            "ggml-small.bin",
+            "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+            487_601_967,
+        ),
+        whisper_manifest(
+            "whisper-medium-multilingual",
+            "ggml-medium.bin",
+            "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
+            1_533_763_059,
+        ),
+        whisper_manifest(
+            "whisper-large-v3-turbo-q5",
+            "ggml-large-v3-turbo-q5_0.bin",
+            "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
+            574_041_195,
+        ),
+        whisper_manifest(
+            "whisper-large-v3-turbo",
+            "ggml-large-v3-turbo.bin",
+            "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+            1_624_555_275,
+        ),
+    ]
+}
+
+/// The default model: small is the best balance for a first local install.
+pub fn default_whisper_model() -> ModelManifest {
+    whisper_models()
+        .into_iter()
+        .find(|model| model.model_id == "whisper-small-multilingual")
+        .expect("the default whisper model is in the catalog")
+}
+
+/// Looks up one catalog entry by id. Unknown ids are refused rather than
+/// guessed at, so a stale preference cannot download an arbitrary artifact.
+pub fn whisper_model(model_id: &str) -> Option<ModelManifest> {
+    whisper_models()
+        .into_iter()
+        .find(|model| model.model_id == model_id)
+}
+
+/// A short human label for the picker; ids remain the stable wire identity.
+pub fn whisper_model_label(model_id: &str) -> &'static str {
+    match model_id {
+        "whisper-base-multilingual" => "Base - fastest",
+        "whisper-small-multilingual" => "Small - balanced",
+        "whisper-medium-multilingual" => "Medium - accurate",
+        "whisper-large-v3-turbo-q5" => "Large v3 Turbo q5 - best value",
+        "whisper-large-v3-turbo" => "Large v3 Turbo - best",
+        _ => "Local speech model",
     }
 }
 
@@ -229,6 +307,21 @@ fn lock_model_store(model_root: &Path) -> Result<File, ModelValidationError> {
     }
 }
 
+/// A fast presence check for pickers and catalogs.
+///
+/// It checks the managed file's identity and exact size without hashing a
+/// multi-gigabyte artifact. The transcription job still calls
+/// [`verify_installed_model`] before running, so a corrupted file is caught
+/// where it matters rather than on every catalog render.
+pub fn model_artifact_present(model_root: &Path, manifest: &ModelManifest) -> bool {
+    if manifest.validate().is_err() {
+        return false;
+    }
+    fs::metadata(manifest.installed_path(model_root))
+        .map(|metadata| metadata.is_file() && metadata.len() == manifest.size_bytes)
+        .unwrap_or(false)
+}
+
 pub fn verify_installed_model(
     model_root: &Path,
     manifest: &ModelManifest,
@@ -393,7 +486,7 @@ mod tests {
 
     #[test]
     fn shipped_transcription_manifest_matches_the_reviewed_artifact_identity() {
-        let manifest = whisper_multilingual_manifest();
+        let manifest = default_whisper_model();
         manifest.validate().unwrap();
         assert_eq!(manifest.model_id, "whisper-small-multilingual");
         assert_eq!(manifest.runtime, "whisper.cpp/1.9.4");
@@ -404,6 +497,36 @@ mod tests {
         );
         assert_eq!(manifest.license, "MIT");
         assert_eq!(manifest.languages, ["vi", "en"]);
+    }
+
+    #[test]
+    fn catalog_is_unique_valid_and_ordered_fast_to_best() {
+        let models = whisper_models();
+        assert_eq!(models.len(), 5);
+        let mut ids: Vec<&str> = models.iter().map(|model| model.model_id.as_str()).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), models.len(), "model ids are unique");
+        for model in &models {
+            model.validate().unwrap();
+            assert_eq!(model.license, "MIT");
+            assert_eq!(model.languages, ["vi", "en"]);
+            assert!(model.source.contains("/resolve/"));
+        }
+        assert_eq!(
+            models.first().unwrap().model_id,
+            "whisper-base-multilingual"
+        );
+        assert_eq!(models.last().unwrap().model_id, "whisper-large-v3-turbo");
+        assert_eq!(
+            default_whisper_model().model_id,
+            "whisper-small-multilingual"
+        );
+        assert!(whisper_model("missing-model").is_none());
+        assert_eq!(
+            whisper_model_label("whisper-medium-multilingual"),
+            "Medium - accurate"
+        );
     }
 
     fn directory() -> PathBuf {

@@ -28,9 +28,20 @@ rather than adding a second text engine.
   agents as `or captions transcribe`. Both paths require review before apply and
   apply through the ordinary `timeline.captions.import` command, so an accepted
   proposal is an editable caption track, never a hidden layer.
-- Model weights are not bundled. A 465 MiB multilingual model is downloaded
-  only after explicit consent, verified by size and SHA-256, and stored in the
-  app's private model folder; the licence and source are shown before download.
+- Model weights are not bundled. Five multilingual checkpoints are selectable —
+  Base (141 MiB), Small (465 MiB), Medium (1.43 GiB), Large v3 Turbo q5
+  (547 MiB) and Large v3 Turbo (1.51 GiB). One is downloaded at a time only
+  after explicit consent, verified by size and SHA-256, and stored in the app's
+  private model folder; the licence and source are shown before download. The
+  chosen model is persisted app-side and is the one both the app and
+  `or captions transcribe` use. A picker changes it; only the installed models
+  need disk space. Listing a model checks its presence and size, and the
+  transcription job still verifies the full digest before running, so a large
+  model does not have to be hashed on every dialog open.
+- A plain local debug build does not ship the whisper runtime. `scripts/
+  install_local_transcription_helpers.sh` copies a pinned `whisper-cli` and the
+  rebuilt provider into the app bundle, re-signs it ad hoc, and can install a
+  verified small model; packaged Developer Preview builds include both binaries.
 
 ## Rules
 

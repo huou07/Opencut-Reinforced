@@ -201,6 +201,7 @@ class ProjectExportJob {
 class ProjectTranscriptionModel {
   const ProjectTranscriptionModel({
     required this.modelId,
+    this.label = '',
     required this.version,
     required this.license,
     required this.language,
@@ -208,9 +209,11 @@ class ProjectTranscriptionModel {
     required this.source,
     required this.installed,
     required this.providerAvailable,
+    this.active = false,
   });
 
   final String modelId;
+  final String label;
   final String version;
   final String license;
   final String language;
@@ -218,11 +221,13 @@ class ProjectTranscriptionModel {
   final String source;
   final bool installed;
   final bool providerAvailable;
+  final bool active;
 }
 
 class ProjectModelDownload {
   const ProjectModelDownload({
     required this.downloadId,
+    this.modelId = '',
     required this.destination,
     required this.source,
     required this.sizeBytes,
@@ -230,6 +235,7 @@ class ProjectModelDownload {
   });
 
   final String downloadId;
+  final String modelId;
   final String destination;
   final String source;
   final BigInt sizeBytes;
@@ -1018,8 +1024,16 @@ abstract interface class ProjectGateway {
   Future<ProjectTranscriptionModel> transcriptionModel(
     ProjectSessionHandle session,
   );
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  );
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
+    String modelId,
   );
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
     ProjectSessionHandle session,

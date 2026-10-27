@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `failure`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `job_state_name`, `media_artifact_cache_root`, `media_artifact_event_receiver`, `media_artifact_event_view`, `media_item_view`, `model_download_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_media_artifact`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_error`, `transcription_job_view`, `transcription_model_view`, `transcription_proposal_view`, `transcription_service`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `failure`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `job_state_name`, `media_artifact_cache_root`, `media_artifact_event_receiver`, `media_artifact_event_view`, `media_item_view`, `model_download_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_identity`, `request_media_artifact`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_error`, `transcription_failure`, `transcription_job_view`, `transcription_job`, `transcription_model_option_view`, `transcription_model_view`, `transcription_proposal_view`, `transcription_service_failure`, `transcription_service`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `BridgeTranscriptionHandler`, `CachePlatform`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `handle_transcription_request`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -48,7 +48,9 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectActionResult> autosaveCheckpoint();
 
-  Future<ProjectModelDownloadView> beginTranscriptionModelDownload();
+  Future<ProjectModelDownloadView> beginTranscriptionModelDownload({
+    required String modelId,
+  });
 
   Future<ProjectExportJobView> cancelExport({
     required String projectId,
@@ -364,6 +366,10 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectActionResult> save();
 
+  Future<ProjectTranscriptionModelView> selectTranscriptionModel({
+    required String modelId,
+  });
+
   /// Holds one frame for the clip's whole duration, or releases it.
   ///
   /// The source range is left untouched, so unfreezing restores the original
@@ -460,6 +466,8 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
   Future<ProjectTranscriptionJobView> transcriptionJob({required String jobId});
 
   Future<ProjectTranscriptionModelView> transcriptionModel();
+
+  Future<List<ProjectTranscriptionModelOptionView>> transcriptionModels();
 
   Future<ProjectTranscriptProposalView?> transcriptionProposal({
     required String jobId,
@@ -993,6 +1001,7 @@ class ProjectMediaPageView {
 
 class ProjectModelDownloadView {
   final String downloadId;
+  final String modelId;
   final String destination;
   final String source;
   final BigInt sizeBytes;
@@ -1000,6 +1009,7 @@ class ProjectModelDownloadView {
 
   const ProjectModelDownloadView({
     required this.downloadId,
+    required this.modelId,
     required this.destination,
     required this.source,
     required this.sizeBytes,
@@ -1009,6 +1019,7 @@ class ProjectModelDownloadView {
   @override
   int get hashCode =>
       downloadId.hashCode ^
+      modelId.hashCode ^
       destination.hashCode ^
       source.hashCode ^
       sizeBytes.hashCode ^
@@ -1020,6 +1031,7 @@ class ProjectModelDownloadView {
       other is ProjectModelDownloadView &&
           runtimeType == other.runtimeType &&
           downloadId == other.downloadId &&
+          modelId == other.modelId &&
           destination == other.destination &&
           source == other.source &&
           sizeBytes == other.sizeBytes &&
@@ -1809,8 +1821,10 @@ class ProjectTranscriptionJobView {
           failureMessage == other.failureMessage;
 }
 
-class ProjectTranscriptionModelView {
+/// One selectable speech model in the app's picker.
+class ProjectTranscriptionModelOptionView {
   final String modelId;
+  final String label;
   final String version;
   final String license;
   final String language;
@@ -1818,9 +1832,11 @@ class ProjectTranscriptionModelView {
   final String source;
   final bool installed;
   final bool providerAvailable;
+  final bool active;
 
-  const ProjectTranscriptionModelView({
+  const ProjectTranscriptionModelOptionView({
     required this.modelId,
+    required this.label,
     required this.version,
     required this.license,
     required this.language,
@@ -1828,18 +1844,76 @@ class ProjectTranscriptionModelView {
     required this.source,
     required this.installed,
     required this.providerAvailable,
+    required this.active,
   });
 
   @override
   int get hashCode =>
       modelId.hashCode ^
+      label.hashCode ^
       version.hashCode ^
       license.hashCode ^
       language.hashCode ^
       sizeBytes.hashCode ^
       source.hashCode ^
       installed.hashCode ^
-      providerAvailable.hashCode;
+      providerAvailable.hashCode ^
+      active.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTranscriptionModelOptionView &&
+          runtimeType == other.runtimeType &&
+          modelId == other.modelId &&
+          label == other.label &&
+          version == other.version &&
+          license == other.license &&
+          language == other.language &&
+          sizeBytes == other.sizeBytes &&
+          source == other.source &&
+          installed == other.installed &&
+          providerAvailable == other.providerAvailable &&
+          active == other.active;
+}
+
+class ProjectTranscriptionModelView {
+  final String modelId;
+  final String label;
+  final String version;
+  final String license;
+  final String language;
+  final BigInt sizeBytes;
+  final String source;
+  final bool installed;
+  final bool providerAvailable;
+  final bool active;
+
+  const ProjectTranscriptionModelView({
+    required this.modelId,
+    required this.label,
+    required this.version,
+    required this.license,
+    required this.language,
+    required this.sizeBytes,
+    required this.source,
+    required this.installed,
+    required this.providerAvailable,
+    required this.active,
+  });
+
+  @override
+  int get hashCode =>
+      modelId.hashCode ^
+      label.hashCode ^
+      version.hashCode ^
+      license.hashCode ^
+      language.hashCode ^
+      sizeBytes.hashCode ^
+      source.hashCode ^
+      installed.hashCode ^
+      providerAvailable.hashCode ^
+      active.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1847,13 +1921,15 @@ class ProjectTranscriptionModelView {
       other is ProjectTranscriptionModelView &&
           runtimeType == other.runtimeType &&
           modelId == other.modelId &&
+          label == other.label &&
           version == other.version &&
           license == other.license &&
           language == other.language &&
           sizeBytes == other.sizeBytes &&
           source == other.source &&
           installed == other.installed &&
-          providerAvailable == other.providerAvailable;
+          providerAvailable == other.providerAvailable &&
+          active == other.active;
 }
 
 class ProjectView {

@@ -7203,8 +7203,20 @@ class _FakeProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) async => [await transcriptionModel(session)];
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => transcriptionModel(session);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
+    String modelId,
   ) => Future.error(UnimplementedError());
 
   @override
