@@ -36,7 +36,8 @@ the selected profile's muxer and encoders.
   encoding time and bytes on a cleaner picture, `speed` takes the cheapest
   setting. The lossless profile ignores it because it has no rate control. The
   preference travels on `ExportRequest::Start` and defaults when an older client
-  omits it.
+  omits it. The export surface offers it as a row beside the profile, and the
+  bridge takes it as an optional argument so an old caller keeps compiling.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.

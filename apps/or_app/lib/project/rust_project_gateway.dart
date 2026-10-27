@@ -1405,13 +1405,15 @@ class RustProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  ) async => _exportJob(
+    String destination, {
+    String? quality,
+  }) async => _exportJob(
     await _host(session).startExport(
       projectId: current.projectId,
       projectInstanceId: current.projectInstanceId,
       expectedRevision: current.revision,
       destination: destination,
+      quality: quality,
     ),
   );
 

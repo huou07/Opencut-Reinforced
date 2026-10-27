@@ -446,6 +446,7 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   });
 
   Future<ProjectTranscriptionJobView> startTranscription({

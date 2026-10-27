@@ -1277,8 +1277,9 @@ abstract interface class ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  );
+    String destination, {
+    String? quality,
+  });
   Future<ProjectExportJob> exportStatus(
     ProjectSessionHandle session,
     ProjectReadModel current,

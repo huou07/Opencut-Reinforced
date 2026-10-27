@@ -3431,7 +3431,19 @@ impl ProjectHostHandle {
         project_instance_id: String,
         expected_revision: u64,
         destination: String,
+        quality: Option<String>,
     ) -> ProjectExportJobView {
+        // An optional argument keeps every existing generated caller compiling and
+        // gives an old client the quality preference rather than the fastest mode.
+        let quality = match quality
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
+            Some("speed") => or_core::ExportQuality::Speed,
+            _ => or_core::ExportQuality::Quality,
+        };
         let profile = std::path::Path::new(&destination)
             .extension()
             .and_then(std::ffi::OsStr::to_str)
@@ -3462,7 +3474,7 @@ impl ProjectHostHandle {
             expected_project_revision,
             destination,
             profile,
-            quality: or_core::ExportQuality::Quality,
+            quality,
         })
     }
 

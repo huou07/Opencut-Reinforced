@@ -2306,10 +2306,11 @@ class _AppShellState extends State<AppShell> {
     try {
       final current = await widget.projectGateway.summary(session);
       if (!mounted || !identical(session, _activeSession)) return;
-      final profile = await _chooseExportProfile();
-      if (profile == null || !mounted || !identical(session, _activeSession)) {
+      final choice = await _chooseExportOptions();
+      if (choice == null || !mounted || !identical(session, _activeSession)) {
         return;
       }
+      final profile = choice.profile;
       destination = await widget.projectFilePicker.saveExportPath(
         suggestedName: profile.suggestedName(current.name),
         profile: profile,
@@ -2325,6 +2326,7 @@ class _AppShellState extends State<AppShell> {
         session,
         current,
         destination,
+        quality: profile.hasQualityChoice ? choice.quality.wireName : null,
       );
       if (!mounted || !identical(session, _activeSession)) {
         await _discardExportDestination(destination);
@@ -3488,13 +3490,21 @@ class _AppShellState extends State<AppShell> {
         },
       );
 
-  Future<ExportProfile?> _chooseExportProfile() {
+  Future<({ExportProfile profile, ExportQuality quality})?>
+  _chooseExportOptions() {
     final profiles = ExportProfile.available;
-    if (profiles.length == 1) return Future.value(profiles.single);
-    return showDialog<ExportProfile>(
+    final defaultChoice = (
+      profile: ExportProfile.defaultForPlatform,
+      quality: ExportQuality.defaultChoice,
+    );
+    if (profiles.length == 1 && !profiles.single.hasQualityChoice) {
+      return Future.value(defaultChoice);
+    }
+    return showDialog<({ExportProfile profile, ExportQuality quality})>(
       context: context,
       builder: (context) {
-        var selected = ExportProfile.defaultForPlatform;
+        var selected = defaultChoice.profile;
+        var quality = defaultChoice.quality;
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Export video'),
@@ -3511,6 +3521,19 @@ class _AppShellState extends State<AppShell> {
                         ? const Icon(Icons.check)
                         : null,
                   ),
+                if (selected.hasQualityChoice) ...[
+                  const Divider(),
+                  for (final option in ExportQuality.values)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => setDialogState(() => quality = option),
+                      title: Text(option.label),
+                      subtitle: Text(option.description),
+                      trailing: quality == option
+                          ? const Icon(Icons.check)
+                          : null,
+                    ),
+                ],
                 const SizedBox(height: 4),
                 Text(
                   'Next you choose where to save the file.',
@@ -3528,7 +3551,10 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(context).pop(selected),
+                onPressed: () => Navigator.of(context).pop((
+                  profile: selected,
+                  quality: quality,
+                )),
                 child: const Text('Continue'),
               ),
             ],

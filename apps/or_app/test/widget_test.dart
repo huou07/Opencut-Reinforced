@@ -2720,6 +2720,55 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('export starts on the quality preference', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    // The default profile is lossy on this host, so the surface offers the choice
+    // and starts on quality.
+    expect(defaultProfile.hasQualityChoice, isTrue);
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    expect(find.text('Quality'), findsOneWidget);
+    expect(find.text('Faster'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.exportCalls, 1);
+    expect(gateway.lastExportQuality, ExportQuality.quality.wireName);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('choosing faster reaches the gateway as its wire name', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    await tester.tap(find.text('Faster'));
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.exportCalls, 1);
+    expect(gateway.lastExportQuality, ExportQuality.speed.wireName);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'completed export is published through the selected storage boundary',
     (tester) async {
@@ -6532,6 +6581,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int exportStatusCalls = 0;
   int exportCancelCalls = 0;
   String? lastExportDestination;
+  String? lastExportQuality;
   ProjectExportJob? _exportJob;
 
   void completeExport() {
@@ -8174,10 +8224,12 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle handle,
     ProjectReadModel current,
-    String destination,
-  ) async {
+    String destination, {
+    String? quality,
+  }) async {
     exportCalls++;
     lastExportDestination = destination;
+    lastExportQuality = quality;
     _exportJob = ProjectExportJob(
       succeeded: true,
       errorCode: '',

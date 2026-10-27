@@ -3644,6 +3644,7 @@ fn wire__crate__api__project__ProjectHostHandle_start_export_impl(
             let api_project_instance_id = <String>::sse_decode(&mut deserializer);
             let api_expected_revision = <u64>::sse_decode(&mut deserializer);
             let api_destination = <String>::sse_decode(&mut deserializer);
+            let api_quality = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -3668,6 +3669,7 @@ fn wire__crate__api__project__ProjectHostHandle_start_export_impl(
                             api_project_instance_id,
                             api_expected_revision,
                             api_destination,
+                            api_quality,
                         ))?;
                     std::result::Result::Ok(output_ok)
                 })())

@@ -581,6 +581,7 @@ abstract class RustLibApi extends BaseApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   });
 
   Future<ProjectTranscriptionJobView>
@@ -4068,6 +4069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -4081,6 +4083,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(projectInstanceId, serializer);
           sse_encode_u_64(expectedRevision, serializer);
           sse_encode_String(destination, serializer);
+          sse_encode_opt_String(quality, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -4099,6 +4102,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           projectInstanceId,
           expectedRevision,
           destination,
+          quality,
         ],
         apiImpl: this,
       ),
@@ -4114,6 +4118,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "projectInstanceId",
           "expectedRevision",
           "destination",
+          "quality",
         ],
       );
 
@@ -11478,12 +11483,14 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   }) => RustLib.instance.api.crateApiProjectProjectHostHandleStartExport(
     that: this,
     projectId: projectId,
     projectInstanceId: projectInstanceId,
     expectedRevision: expectedRevision,
     destination: destination,
+    quality: quality,
   );
 
   Future<ProjectTranscriptionJobView> startTranscription({

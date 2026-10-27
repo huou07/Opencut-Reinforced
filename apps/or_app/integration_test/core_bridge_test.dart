@@ -2413,8 +2413,14 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  ) => _gateway.startExport(session, current, destination);
+    String destination, {
+    String? quality,
+  }) => _gateway.startExport(
+    session,
+    current,
+    destination,
+    quality: quality,
+  );
 
   @override
   Future<ProjectExportJob> exportStatus(
