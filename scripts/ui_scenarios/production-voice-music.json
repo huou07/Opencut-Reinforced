@@ -124,6 +124,11 @@
       "budget_ms": 60000
     },
     {
+      "op": "wait_label",
+      "label_regex": "used 1 undo step",
+      "budget_ms": 60000
+    },
+    {
       "op": "shot",
       "name": "music-ducked"
     },

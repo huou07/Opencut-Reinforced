@@ -25,8 +25,8 @@ justification and review.
   selected; the assistant reuses the same slot instead of adding a region.
 - Bottom timeline with thumbnail/waveform clips, visible trim handles, context
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
-- The Audio tool exposes **Generate voiceover…** and **Generate music…** next to
-  import/add-track. Each opens one dialog that owns the offline synthesis,
+- The Audio tool exposes **Generate voiceover…**, **Generate music…** and
+  **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the
   normal project reads. Generation is a bounded batch of ordinary commands, not
   a second project model.

@@ -1717,6 +1717,12 @@ class _EditorToolPanel extends StatelessWidget {
             icon: Icons.music_note_outlined,
             onPressed: onGenerateMusic,
           ),
+          _ToolAction(
+            keyName: 'tool-speech-model',
+            label: 'Speech model…',
+            icon: Icons.mic_none_outlined,
+            onPressed: onManageSpeechModel,
+          ),
         ],
       );
     }

@@ -1,0 +1,25 @@
+{
+  "name": "speech-model-manager",
+  "harness": "or_ui",
+  "description": "Create a project, open the speech-model picker from the Audio tool, and confirm the catalog, the active Small model, its remove control, and the larger models without changing the install.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": [],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    { "op": "enter_text", "selector": { "key": "new-project-name" }, "value": "Speech model journey" },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait", "text": "No timeline tracks", "budget_ms": 20000 },
+    { "op": "tap", "selector": { "key": "editor-tool-audio" } },
+    { "op": "tap", "selector": { "key": "tool-speech-model" } },
+    { "op": "wait", "text": "Speech model", "budget_ms": 10000 },
+    { "op": "wait", "text": "Small - balanced", "budget_ms": 10000 },
+    { "op": "expect", "key": "speech-model-whisper-small-multilingual", "role": "button" },
+    { "op": "expect", "key": "speech-model-remove-whisper-small-multilingual", "role": "button" },
+    { "op": "wait", "text": "Medium - accurate", "budget_ms": 10000 },
+    { "op": "wait", "text": "Large v3 Turbo - best", "budget_ms": 10000 },
+    { "op": "shot", "name": "speech-model-picker" },
+    { "op": "tree", "name": "speech-model-picker" },
+    { "op": "tap", "selector": { "label": "Cancel", "role": "button" } }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "local-captions",
+  "harness": "or_ui",
+  "description": "Create a project, import a real Vietnamese speech WAV, run the installed local multilingual model through Generate Captions, and reach the reviewed transcript before applying it.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": ["copy:/tmp/vi16.wav"],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    { "op": "enter_text", "selector": { "key": "new-project-name" }, "value": "Local captions journey" },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait", "text": "No timeline tracks", "budget_ms": 20000 },
+    { "op": "picker", "next": "media" },
+    { "op": "tap", "selector": { "key": "timeline-empty-import-media" } },
+    { "op": "wait", "text": "vi16.wav", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key_regex": "^media-actions-.*$" } },
+    { "op": "tap", "selector": { "key_regex": "^media-generate-captions-.*$" } },
+    { "op": "wait", "text": "Generating captions", "budget_ms": 30000 },
+    { "op": "wait", "text": "Review Local VI transcript captions", "budget_ms": 180000 },
+    { "op": "shot", "name": "reviewed-captions" },
+    { "op": "tree", "name": "reviewed-captions" }
+  ]
+}
