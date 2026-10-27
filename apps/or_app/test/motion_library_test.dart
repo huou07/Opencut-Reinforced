@@ -1090,6 +1090,49 @@ void main() {
     },
   );
 
+  testWidgets('the library bar appears for a ticked or select-all row', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    late MotionLibraryController controller;
+    late Directory support;
+    await tester.runAsync(() async {
+      (controller, _, support) = await buildController();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: SizedBox(
+            width: 340,
+            height: 2000,
+            child: MotionLibraryPanel(
+              controller: controller,
+              outputDirectory: support.path,
+              onInsertClip: (_) async => true,
+              onNotice: (_) {},
+              onOpenCodeMotion: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('motion-library-bulk')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('motion-library-select-all')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('motion-library-bulk')), findsOneWidget);
+    expect(controller.selectedAssetIds, hasLength(2));
+
+    await tester.tap(find.byKey(const ValueKey('motion-library-bulk-clear')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('motion-library-bulk')), findsNothing);
+  });
+
   testWidgets('a marquee selects several objects and drags them together', (
     tester,
   ) async {

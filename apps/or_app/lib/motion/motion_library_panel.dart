@@ -576,14 +576,24 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                 color: OrColors.selection,
               ),
               const SizedBox(width: OrSpacing.x1),
-              Expanded(
+              Text(
+                '$count',
+                key: const ValueKey('motion-library-bulk-count'),
+                style: const TextStyle(
+                  color: OrColors.text,
+                  fontSize: OrType.metadataCompactSize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x1),
+              // "selected" is its own text so a journey can wait for the bar by a
+              // stable string instead of an unknown count.
+              const Expanded(
                 child: Text(
-                  '$count selected',
-                  key: const ValueKey('motion-library-bulk-count'),
-                  style: const TextStyle(
+                  'selected',
+                  style: TextStyle(
                     color: OrColors.text,
                     fontSize: OrType.metadataCompactSize,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
