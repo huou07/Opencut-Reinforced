@@ -2204,12 +2204,12 @@ class _AppShellState extends State<AppShell> {
         setState(() {
           _activeProject = updated;
           if (changed) {
-            _mediaLoading = true;
-            _timelineLoading = true;
+            _mediaLoading = _mediaPage == null;
+            _timelineLoading = _timelineTracks == null;
             _timelineLoadingMoreMarkers = false;
           }
         });
-        if (changed) await _refreshProjectState(session);
+        if (changed) await _refreshProjectState(session, known: updated);
       }
       return updated;
     } on ProjectGatewayException catch (error) {
@@ -4599,12 +4599,12 @@ class _AppShellState extends State<AppShell> {
     final mediaGeneration = _mediaRefreshGeneration;
     var current = project;
     setState(() {
-      _timelineTracks = null;
-      _timelineClipPages.clear();
-      _timelineMarkerPage = null;
+      // Keep the previous tracks and clips visible while the new revision
+      // loads; the success branch replaces them in one frame. Nulling them
+      // here was the visible part of "every edit looks like a project reopen".
       _timelineLoadingMoreTracks.clear();
       _timelineLoadingMoreMarkers = false;
-      _timelineLoading = true;
+      if (_timelineTracks == null) _timelineLoading = true;
       _timelineLoadError = null;
     });
 
@@ -4878,11 +4878,19 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _refreshProjectState(ProjectSessionHandle session) async {
+  /// Refreshes the read model after a revision change.
+  ///
+  /// [known] is the summary the command already returned. Passing it avoids a
+  /// second round trip, and the previous library/timeline stay on screen while
+  /// the new revision loads instead of blanking on every edit.
+  Future<void> _refreshProjectState(
+    ProjectSessionHandle session, {
+    ProjectReadModel? known,
+  }) async {
     if (!mounted || !identical(session, _activeSession)) return;
     final refreshGeneration = ++_mediaRefreshGeneration;
     try {
-      final view = await widget.projectGateway.summary(session);
+      final view = known ?? await widget.projectGateway.summary(session);
       if (!mounted ||
           !identical(session, _activeSession) ||
           refreshGeneration != _mediaRefreshGeneration) {
@@ -4890,15 +4898,12 @@ class _AppShellState extends State<AppShell> {
       }
       setState(() {
         _activeProject = view;
-        _mediaLoading = true;
         _mediaLoadError = null;
-        _timelineTracks = null;
-        _timelineClipPages.clear();
-        _timelineMarkerPage = null;
         _timelineLoadingMoreTracks.clear();
         _timelineLoadingMoreMarkers = false;
-        _timelineLoading = true;
         _timelineLoadError = null;
+        if (_mediaPage == null) _mediaLoading = true;
+        if (_timelineTracks == null) _timelineLoading = true;
       });
       await Future.wait([
         _refreshMediaPage(

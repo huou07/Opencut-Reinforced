@@ -2633,6 +2633,48 @@ void main() {
     );
   });
 
+  testWidgets(
+    'an edit refreshes the viewer frame without rebuilding the viewer',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway()
+        ..preview = ProjectPreviewState(
+          position: ProjectRationalTime(BigInt.from(2), 1),
+          contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+          playing: false,
+          generation: BigInt.zero,
+          frameSequence: BigInt.from(3),
+          width: 1280,
+          height: 720,
+        );
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/preview-fast.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Fast preview');
+      await tester.pumpAndSettle();
+
+      final stateCallsBefore = gateway.previewStateCalls;
+      final seekCallsBefore = gateway.previewSeekCalls;
+      await tester.tap(find.byKey(const ValueKey('workspace-rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('rename-project-name')),
+        'Fast preview renamed',
+      );
+      await tester.tap(find.byKey(const ValueKey('confirm-rename-project')));
+      await tester.pumpAndSettle();
+
+      // One seek against the same playhead replaces the frame. The viewer no
+      // longer re-reads preview state, blanks the stage or re-binds the
+      // texture for every project revision.
+      expect(gateway.previewSeekCalls, seekCallsBefore + 1);
+      expect(gateway.previewStateCalls, stateCallsBefore);
+      expect(gateway.lastPreviewSeek?.canonical, '2/1');
+      expect(find.byKey(const ValueKey('preview-error')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('dirty projects periodically autosave to recovery', (
     tester,
   ) async {

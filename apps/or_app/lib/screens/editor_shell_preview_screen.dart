@@ -2581,6 +2581,8 @@ class _ViewerPanelState extends State<_ViewerPanel>
   int _epoch = 0;
   bool _busy = false;
   bool _tickInFlight = false;
+  bool _revisionRefreshInFlight = false;
+  bool _pendingRevisionRefresh = false;
   bool _applicationResumed = true;
   bool _lifecyclePauseAttempted = false;
 
@@ -2615,13 +2617,87 @@ class _ViewerPanelState extends State<_ViewerPanel>
     final previewInputChanged =
         oldWidget.previewSeekPosition != widget.previewSeekPosition &&
         widget.previewSeekPosition != null;
-    if (oldWidget.gateway != widget.gateway ||
+    final identityChanged =
+        oldWidget.gateway != widget.gateway ||
         oldWidget.session != widget.session ||
         oldProject?.projectId != project?.projectId ||
-        oldProject?.projectInstanceId != project?.projectInstanceId ||
-        oldProject?.revision != project?.revision ||
-        previewInputChanged) {
+        oldProject?.projectInstanceId != project?.projectInstanceId;
+    if (identityChanged || project == null) {
       unawaited(_initialize());
+      return;
+    }
+    // A project revision change is the common case: one clip was edited, so the
+    // same texture must show the same playhead against the new state. Tearing
+    // the viewer down here blanked the stage, re-bound the platform texture and
+    // made two IPC round trips for every edit. Keep the picture and the texture
+    // and ask for the replacement frame in one call.
+    if (previewInputChanged) {
+      unawaited(_seekToRequestedPosition());
+      return;
+    }
+    if (oldProject?.revision != project.revision) {
+      unawaited(_refreshAfterRevision());
+    }
+  }
+
+  /// Re-renders the current playhead for a new project revision without a
+  /// teardown. A newer revision that arrives while a refresh is in flight is
+  /// coalesced into one follow-up call on the latest state.
+  Future<void> _refreshAfterRevision() async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    final project = widget.project;
+    if (gateway == null || session == null || project == null) return;
+    if (_revisionRefreshInFlight) {
+      _pendingRevisionRefresh = true;
+      return;
+    }
+    _revisionRefreshInFlight = true;
+    final epoch = _epoch;
+    try {
+      do {
+        _pendingRevisionRefresh = false;
+        final position =
+            _scrubPosition ??
+            _preview?.position ??
+            ProjectRationalTime(BigInt.zero, 1);
+        final wasPlaying = _preview?.playing ?? false;
+        final state = await gateway.previewSeek(session, position);
+        if (!_isCurrent(epoch)) return;
+        _acceptState(state, epoch, acceptRewind: true);
+        if (wasPlaying && mounted && !state.playing) {
+          final resumed = await gateway.previewPlay(session);
+          if (_isCurrent(epoch)) {
+            _acceptState(resumed, epoch, acceptRewind: true);
+          }
+        }
+      } while (_pendingRevisionRefresh);
+    } catch (error) {
+      if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
+    } finally {
+      _revisionRefreshInFlight = false;
+    }
+  }
+
+  /// Consumes an explicit seek request from the editor without rebinding the
+  /// texture. The full initialise path is still used before the first frame.
+  Future<void> _seekToRequestedPosition() async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    final target = widget.previewSeekPosition;
+    if (gateway == null || session == null || target == null) return;
+    if (_preview == null || _textureId == null) {
+      await _initialize();
+      return;
+    }
+    final epoch = _epoch;
+    try {
+      final state = await gateway.previewSeek(session, target);
+      if (!_isCurrent(epoch)) return;
+      _acceptState(state, epoch, acceptRewind: true);
+      widget.onPreviewSeekConsumed?.call();
+    } catch (error) {
+      if (_isCurrent(epoch)) setState(() => _error = _errorMessage(error));
     }
   }
 
@@ -2691,8 +2767,13 @@ class _ViewerPanelState extends State<_ViewerPanel>
 
   bool _isCurrent(int epoch) => mounted && epoch == _epoch;
 
-  void _acceptState(ProjectPreviewState state, int epoch) {
-    if (!_isCurrent(epoch) || _isOlder(state)) return;
+  void _acceptState(
+    ProjectPreviewState state,
+    int epoch, {
+    bool acceptRewind = false,
+  }) {
+    if (!_isCurrent(epoch)) return;
+    if (acceptRewind ? _isStaleGeneration(state) : _isOlder(state)) return;
     final previous = _preview;
     setState(() {
       _preview = state;
@@ -2722,6 +2803,14 @@ class _ViewerPanelState extends State<_ViewerPanel>
       return true;
     }
     return !current.playing && incoming.playing;
+  }
+
+  /// A deliberate seek answers an obsolete request even when its position is
+  /// earlier than the one on screen; only a stale generation may be dropped.
+  bool _isStaleGeneration(ProjectPreviewState incoming) {
+    final current = _preview;
+    if (current == null) return false;
+    return incoming.generation.compareTo(current.generation) < 0;
   }
 
   void _startTimer(int epoch) {
