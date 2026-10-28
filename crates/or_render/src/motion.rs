@@ -14,7 +14,7 @@
 //! right and y down, matching the RGBA buffer's own layout.
 
 use crate::motion_image::{MotionImage, draw_motion_image};
-use or_core::{TextAlignment, TextColor, TextFormatting, TextWeight};
+use or_core::{FontIdentity, TextAlignment, TextColor, TextFormatting, TextWeight};
 use or_motion::{
     MotionColor, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene, evaluate_scene,
 };
@@ -387,6 +387,13 @@ fn draw_instruction(
                 return Err(MotionRasterError::InvalidTextSize);
             }
             let mut formatting = TextFormatting {
+                // Vietnamese text gets the display face designed for its stacked
+                // marks; plain Latin stays on the neutral UI face.
+                font: if content.chars().any(|character| !character.is_ascii()) {
+                    FontIdentity::BeVietnamPro
+                } else {
+                    FontIdentity::BundledInter
+                },
                 size_milli_points: milli_points as u32,
                 weight: TextWeight::Regular,
                 alignment: TextAlignment::Start,

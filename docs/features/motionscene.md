@@ -29,7 +29,9 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
 - Any randomness must be explicit and seeded from scene/source identity; V1 is
   otherwise deterministic.
 - Text uses the shared `cosmic-text` bundled-font path — not a second text engine.
-  Each line is measured against the canvas and shrunk (down to 60 % of the
+  ASCII lines use Inter; a line containing non-ASCII (Vietnamese) uses Be Vietnam
+  Pro, so stacked marks get the display face. Each line is measured against the
+  canvas and shrunk (down to 60 % of the
   requested size) or wrapped before it is rasterised, so a long Vietnamese title
   cannot run off the frame.
 - Image nodes draw a decoded PNG asset resolved relative to the scene file, with a
