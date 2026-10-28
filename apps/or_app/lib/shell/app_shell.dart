@@ -3433,6 +3433,9 @@ class _AppShellState extends State<AppShell> {
                             '${_captionTimeLabel(cue.startMs)} – ${_captionTimeLabel(cue.endMs)}',
                             style: Theme.of(context).textTheme.labelSmall,
                           ),
+                          // The field's label floats above its box, so the timing
+                          // line needs its own gap instead of being overlapped.
+                          const SizedBox(height: OrSpacing.x3),
                           TextFormField(
                             key: ValueKey('caption-import-text-$index'),
                             initialValue: cue.text,

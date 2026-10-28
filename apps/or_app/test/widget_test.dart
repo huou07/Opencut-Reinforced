@@ -1867,6 +1867,16 @@ void main() {
     expect(find.textContaining('empty cues were skipped'), findsOneWidget);
     expect(find.text('00:00:01.250 – 00:00:03.000'), findsOneWidget);
     expect(find.byKey(const ValueKey('caption-import-text-0')), findsOneWidget);
+    // The floated field label must not sit on top of the cue's timing line.
+    final timestamp = tester.getRect(
+      find.text('00:00:01.250 – 00:00:03.000'),
+    );
+    final floatedLabel = tester.getRect(find.text('Caption 1 text'));
+    expect(
+      floatedLabel.top,
+      greaterThanOrEqualTo(timestamp.bottom),
+      reason: 'the caption label overlaps its timing line',
+    );
     expect(gateway.captionImportCalls, 0);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
