@@ -1,0 +1,62 @@
+{
+ "NHÀ MÁY ĐIỆN HẠT NHÂN": {
+  "size": 78,
+  "width": 986,
+  "lead": 102
+ },
+ "Nguyên lý hoạt động — từ phân hạch đến lưới điện": {
+  "size": 30,
+  "width": 714,
+  "lead": 98
+ },
+ "LÒ NƯỚC ÁP LỰC (PWR) · NHIÊN LIỆU U-235": {
+  "size": 22,
+  "width": 470,
+  "lead": 98
+ },
+ "TÓM LẠI": {
+  "size": 24,
+  "width": 95,
+  "lead": 97
+ },
+ "MỘT CHUỖI CHUYỂN HÓA NĂNG LƯỢNG": {
+  "size": 48,
+  "width": 947,
+  "lead": 100
+ },
+ "mỗi mắt lưới chỉ đổi một dạng năng lượng": {
+  "size": 24,
+  "width": 464,
+  "lead": 97
+ },
+ "Nhiên liệu U-235 · lò nước áp lực (PWR) · chu trình kín, vận hành không phát thải CO₂": {
+  "size": 23,
+  "width": 920,
+  "lead": 98
+ },
+ "PHÂN HẠCH": {
+  "size": 26,
+  "width": 152,
+  "lead": 98
+ },
+ "NHIỆT": {
+  "size": 26,
+  "width": 75,
+  "lead": 98
+ },
+ "HƠI NƯỚC": {
+  "size": 26,
+  "width": 128,
+  "lead": 98
+ },
+ "QUAY": {
+  "size": 26,
+  "width": 71,
+  "lead": 97
+ },
+ "ĐIỆN": {
+  "size": 26,
+  "width": 59,
+  "lead": 96
+ }
+}
