@@ -106,8 +106,11 @@ routes them through `docs/script-and-voice.md` and `docs/audio-prep.md`:
   workspace pointer), then the first installed Vietnamese voice; the tool has
   no product-level voice constant. This is the offline narration path; nothing
   leaves the machine and no model is downloaded.
-- `tools/music.mjs` synthesises a quiet, royalty-free background bed from a mood,
-  tempo and duration. It is deterministic per seed and has no network path.
+- `tools/music.mjs` synthesises a quiet, royalty-free background bed. `--prompt`
+  takes a Vietnamese or English sentence and reads it with the same interpreter
+  as the in-app dialog (mood, tempo, length, drums), printing the same readback
+  and `plan.notes`; explicit `--mood`, `--tempo`, `--duration` and `--seed` still
+  win. It is deterministic per seed and has no network path.
 - `tools/or media clean-audio --source <file> --out <file>` runs the packaged
   FFmpeg noise reduction on one file and writes another; the agent imports the
   result as its own item, and the app's **Clean up Audio** menu action does the
@@ -198,7 +201,7 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - `crates/or_app_bridge/src/preview.rs` — materialisation handler
 - `crates/or_app_bridge/src/transcription.rs` — local transcription job and model store
 - `tooling/or-agent-workspace/tools/voiceover.mjs` — offline narration, timing and captions
-- `tooling/or-agent-workspace/tools/music.mjs` — generated background bed
+- `tooling/or-agent-workspace/tools/music.mjs` — generated background bed, prompt or flags
 
 ## Related
 

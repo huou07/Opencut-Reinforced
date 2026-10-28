@@ -91,6 +91,15 @@ void main() {
 
       expect(plan.moodId, 'uplifting');
       expect(plan.drumsScale, greaterThan(1));
+
+      // The workspace tool reads the same English phrasing (tools.test.mjs).
+      final english = MusicPromptInterpreter.interpret(
+        'strong drums, cinematic',
+        fallbackTempo: 72,
+        fallbackSeconds: 60,
+      );
+      expect(english.moodId, 'tense');
+      expect(english.drumsScale, greaterThan(1));
     });
   });
 

@@ -49,8 +49,9 @@ One near-term delivery mission for the local macOS app, in this order:
 7. **Prompt-driven music (owner request, 2026-10-28).** The Generate music dialog
    reads a Vietnamese/English sentence for mood, bpm, length and drum intent and
    generates exactly that bed; the same prompt is reproducible and Variation
-   reseeds it. Delivered in-app; the workspace `music.mjs` still takes flags, so
-   agent/app prompt parity is open work.
+   reseeds it. Delivered in-app and in the workspace `music.mjs` (`--prompt`,
+   `--variation`), so an agent reads a sentence the same way the dialog does;
+   explicit flags still win for an older command line.
 8. **Importable, editable motion scenes (owner request, 2026-10-28).** Open an
    `.ormotion.json` authored elsewhere, validate it, adopt its PNGs into the app
    library and edit it on the existing canvas; a saved scene reopens from its

@@ -100,6 +100,90 @@ test('music refuses an unknown mood without writing a file', async () => {
   }
 });
 
+test('music reads a Vietnamese prompt the way the app dialog does', async () => {
+  const directory = await temporaryDirectory('or-music-prompt-');
+  try {
+    const output = path.join(directory, 'bed.wav');
+    const result = JSON.parse(
+      await runTool(musicTool, [
+        '--out',
+        output,
+        '--duration',
+        '4',
+        '--prompt',
+        'nhạc nền nhẹ nhàng, không trống',
+        '--json',
+      ]),
+    );
+    assert.equal(result.mood, 'calm');
+    assert.equal(result.tempo, 62);
+    assert.equal(result.summary, 'calm · 62 bpm · 4 s · no drums');
+    assert.equal(result.plan.drums_scale, 0);
+    assert.equal(result.plan.notes.length, 0);
+    // The same request is reproducible, and a variation moves the seed.
+    const again = JSON.parse(
+      await runTool(musicTool, [
+        '--out', output, '--duration', '4', '--prompt',
+        'nhạc nền nhẹ nhàng, không trống', '--json',
+      ]),
+    );
+    assert.equal(again.seed, result.seed);
+    const varied = JSON.parse(
+      await runTool(musicTool, [
+        '--out', output, '--duration', '4', '--prompt',
+        'nhạc nền nhẹ nhàng, không trống', '--variation', '3', '--json',
+      ]),
+    );
+    assert.notEqual(varied.seed, result.seed);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('music reads an English prompt and explicit flags win', async () => {
+  const directory = await temporaryDirectory('or-music-prompt-en-');
+  try {
+    const output = path.join(directory, 'bed.wav');
+    const result = JSON.parse(
+      await runTool(musicTool, [
+        '--out', output, '--duration', '4',
+        '--prompt', 'tense cinematic 40 seconds with strong drums', '--json',
+      ]),
+    );
+    assert.equal(result.plan.mood, 'tense');
+    assert.equal(result.plan.seconds, 40);
+    assert.equal(result.plan.drums_scale, 1.2);
+
+    const overridden = JSON.parse(
+      await runTool(musicTool, [
+        '--out', output, '--duration', '4',
+        '--prompt', 'tense cinematic 40 seconds with strong drums',
+        '--mood', 'warm', '--tempo', '90', '--json',
+      ]),
+    );
+    assert.equal(overridden.mood, 'warm');
+    assert.equal(overridden.tempo, 90);
+    assert.equal(overridden.summary, 'warm · 90 bpm · 4 s · strong drums');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('music reports an unrecognised prompt instead of pretending', async () => {
+  const directory = await temporaryDirectory('or-music-prompt-none-');
+  try {
+    const output = path.join(directory, 'bed.wav');
+    const result = JSON.parse(
+      await runTool(musicTool, ['--out', output, '--duration', '4', '--prompt', 'abc xyz', '--json']),
+    );
+    assert.equal(result.mood, 'calm');
+    assert.equal(result.tempo, 72);
+    assert.match(result.plan.notes[0], /No music words were recognised/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('voiceover plan validates the script and writes nothing', async () => {
   const directory = await temporaryDirectory('or-voice-plan-');
   try {

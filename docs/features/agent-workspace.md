@@ -155,7 +155,7 @@ surface and lets the user act.
 
 - `tooling/or-agent-workspace/` — source tree, bundle build, production tools and tests
 - `tooling/or-agent-workspace/tools/voiceover.mjs` — script narration, timing and captions
-- `tooling/or-agent-workspace/tools/music.mjs` — procedural background bed
+- `tooling/or-agent-workspace/tools/music.mjs` — procedural background bed, prompt or flags
 - `apps/or_app/assets/agent_workspace/bundle.json` — packed bundle
 - `apps/or_app/lib/assistant/agent_workspace.dart` — parse, install, runtime files
 - `apps/or_app/lib/assistant/assistant_controller.dart` — default and mode resolution

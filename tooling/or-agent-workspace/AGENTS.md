@@ -81,8 +81,10 @@ The session catalog carries these. Load one only when its task matches.
   macOS voice, writes a timing manifest and SRT, and can import/place/caption the
   result with `--apply`:
   `node tools/voiceover.mjs --script work/scripts/demo.json --plan --json`.
-- `tools/music.mjs` — synthesises a quiet, royalty-free background bed offline:
-  `node tools/music.mjs --out work/music/bed.wav --duration 60 --mood calm --json`.
+- `tools/music.mjs` — synthesises a quiet, royalty-free background bed offline.
+  A prompt is read the same way as the app's Generate music dialog; flags are the
+  fallback and override it:
+  `node tools/music.mjs --out work/music/bed.wav --prompt "nhạc nền nhẹ nhàng 30 giây, không trống" --json`.
 
 ## Working files
 

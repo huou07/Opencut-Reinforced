@@ -85,6 +85,7 @@ class MusicPromptInterpreter {
         folded.contains('co trong') ||
         folded.contains('punchy drums') ||
         folded.contains('with drums') ||
+        folded.contains('strong drums') ||
         folded.contains('beat manh');
     if (noDrums) {
       drums = 0;

@@ -23,6 +23,10 @@ product still needs.
   leave the controls alone instead of failing the dialog. The same prompt and
   variation are reproducible, and **Variation** reseeds the arpeggio without
   changing the readback.
+- **Music prompt in the assistant workspace**: `tooling/or-agent-workspace/tools/music.mjs`
+  takes `--prompt` and reads it with the same interpreter as the dialog, printing
+  the same summary and `plan.notes`; `--variation` reseeds it and explicit
+  `--mood`/`--tempo`/`--duration`/`--seed` still win.
 - **Open a MotionScene file on the canvas**: the Motion panel opens an
   `.ormotion.json` authored by the CLI or an agent. Rust bounds the file, parses
   and validates it, and adopts its referenced PNGs into the app library first, so

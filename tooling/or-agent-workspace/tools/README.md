@@ -16,7 +16,7 @@ have no verb here on purpose.
 | `tools/or motion asset ...` | List, validate, save, instantiate, import, remove or insert from the app's motion library; pass `--attach project.json` and the CLI resolves the folder from the pointer. |
 | `node tools/motion-scaffold.mjs` | Write a valid V1 `.ormotion.json` skeleton into `scenes/`. |
 | `node tools/voiceover.mjs` | Speak an `or-assistant-script` with the macOS voice, write exact timings and SRT, optionally import and place the result. |
-| `node tools/music.mjs` | Synthesise a quiet, royalty-free background music bed offline. |
+| `node tools/music.mjs` | Synthesise a quiet, royalty-free background music bed offline, from a prompt or explicit flags. |
 
 The app keeps its motion library at `<application support>/motion-library`, and the
 workspace `project.json` records that path, so every motion verb resolves it from
@@ -43,7 +43,7 @@ tools/or motion asset list --attach project.json --json
 tools/or motion asset insert --attach project.json --asset-id ASSET_ID --json
 node tools/voiceover.mjs --script work/scripts/demo.json --plan --json
 node tools/voiceover.mjs --script work/scripts/demo.json --out work/voiceover/demo --apply --attach project.json --json
-node tools/music.mjs --out work/music/bed.wav --duration 60 --mood calm --json
+node tools/music.mjs --out work/music/bed.wav --prompt "nhạc nền nhẹ nhàng 30 giây, không trống" --json
 tools/or captions transcribe --attach project.json --media MEDIA_ID --srt-out work/captions/clip.srt --json
 tools/or timeline import-captions --attach project.json --file work/captions/clip.srt --json
 ```

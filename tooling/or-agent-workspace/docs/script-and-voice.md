@@ -151,16 +151,23 @@ the track.
 ## Music
 
 ```sh
-node tools/music.mjs --out work/music/bed.wav --duration 60 \
-  --mood calm --tempo 72 --json
+node tools/music.mjs --out work/music/bed.wav \
+  --prompt "nhạc nền nhẹ nhàng 30 giây, không trống" --json
 ```
 
-Moods are `calm`, `warm`, `uplifting`, `tense`, and `minimal`. The bed is
-synthesised locally, differs by `--seed`, and is royalty-free. It is generated
-quiet (about −20 dB RMS, −9 dB peak) so it sits under speech; change the clip
-gain in the inspector rather than regenerating louder. The app's **Audio →
-Generate music…** produces the same kind of bed and can duck it under a voice
-track in one step. To place the workspace file:
+The prompt is read by the same interpreter as the app's **Audio → Generate
+music…** dialog: a mood word (`calm`, `warm`, `uplifting`, `tense`, `minimal`, in
+Vietnamese or English), a length (`90 giây`, `2 phút`, `40s`), a tempo (`90 bpm`)
+and drums on or off (`không trống`, `no drums`, `strong drums`). The JSON carries
+`summary` — `calm · 62 bpm · 30 s · no drums` — which is the readback to report,
+and `plan.notes` when nothing in the sentence was understood. `--variation N`
+reseeds the same request. Explicit `--mood`, `--tempo`, `--duration` and `--seed`
+still work and win over the prompt, so an older command line keeps its meaning.
+
+The bed is synthesised locally, differs by `--seed`, and is royalty-free. It is
+generated quiet (about −20 dB RMS, −9 dB peak) so it sits under speech; change the
+clip gain in the inspector rather than regenerating louder. The app's dialog also
+ducks it under a voice track in one step. To place the workspace file:
 
 ```sh
 tools/or media add --attach project.json --source /absolute/path/work/music/bed.wav --json
