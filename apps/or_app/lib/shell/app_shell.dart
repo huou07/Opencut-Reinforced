@@ -1044,6 +1044,7 @@ class _AppShellState extends State<AppShell> {
               motionOutputDirectory: _motionOutputDirectory,
               onInsertMotionClip: _addMaterializedIllustration,
               pickMotionImage: _pickMotionImage,
+              pickMotionScene: _pickMotionScene,
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
@@ -1225,6 +1226,28 @@ class _AppShellState extends State<AppShell> {
       return null;
     } catch (_) {
       _showUnavailable('An image could not be selected.');
+      return null;
+    }
+  }
+
+  /// Picks one `.ormotion.json` scene through the shared picker so a scene
+  /// authored by the CLI or an agent can be opened and edited in the canvas.
+  Future<String?> _pickMotionScene() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      final scenes = sources
+          .where((source) => source.toLowerCase().endsWith('.json'))
+          .toList(growable: false);
+      if (scenes.isEmpty) {
+        _showUnavailable('Choose a motion scene file (.ormotion.json).');
+        return null;
+      }
+      return scenes.first;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('A scene file could not be selected.');
       return null;
     }
   }
@@ -2143,7 +2166,16 @@ class _AppShellState extends State<AppShell> {
   }) async {
     final session = _activeSession;
     final current = _activeProject;
-    if (session == null || current == null || _busy) return null;
+    if (session == null || current == null) return null;
+    if (_busy) {
+      // A silent no-op here read as a broken button: the owner clicked Import or
+      // Add track, nothing moved, and no message said why. The guard still
+      // refuses to stack commands, but it now says so.
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then try again.',
+      );
+      return null;
+    }
     if (!_sameProjectIdentity(expected, current)) {
       _showUnavailable(
         'The project changed while this action was open. Refresh the project before trying again.',
@@ -4418,7 +4450,13 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _importMediaSources({required bool folder}) async {
     final session = _activeSession;
-    if (session == null || _busy) return;
+    if (session == null) return;
+    if (_busy) {
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then import again.',
+      );
+      return;
+    }
     List<String> sources;
     try {
       sources = folder

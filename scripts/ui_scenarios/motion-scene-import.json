@@ -1,0 +1,43 @@
+{
+  "name": "motion-scene-import",
+  "harness": "or_ui",
+  "description": "Open an .ormotion.json scene authored outside the app, prove its objects and preview reach the canvas, select the imported title, nudge it, and insert the edited scene on the timeline. This is the documented 'import a scene, then edit it' journey that the Motion panel previously had no entry point for.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:crates/or_motion/tests/fixtures/scene-demo.ormotion.json"
+  ],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    {
+      "op": "enter_text",
+      "selector": { "key": "new-project-name" },
+      "value": "Motion scene import journey"
+    },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait", "text": "No timeline tracks", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key": "editor-tool-motion" } },
+    { "op": "wait", "text": "Motion library", "budget_ms": 10000 },
+    { "op": "picker", "next": "media" },
+    { "op": "tap", "selector": { "key": "motion-library-import-scene" } },
+    { "op": "wait", "text": "2 objects", "budget_ms": 30000 },
+    { "op": "shot", "name": "scene-imported" },
+    { "op": "tree", "name": "scene-imported" },
+    { "op": "tap", "selector": { "key": "motion-scene-expand" } },
+    { "op": "wait", "text": "Edit scene", "budget_ms": 10000 },
+    { "op": "tap", "selector": { "key": "motion-editor-layer-title" } },
+    { "op": "tap", "selector": { "key": "motion-editor-node-nudge-right" } },
+    { "op": "shot", "name": "imported-title-nudged" },
+    { "op": "tap", "selector": { "key": "motion-editor-close" } },
+    { "op": "tap", "selector": { "key": "motion-insert-draft" } },
+    {
+      "op": "wait",
+      "text": "Motion clip added to the timeline.",
+      "budget_ms": 240000
+    },
+    { "op": "shot", "name": "scene-inserted" }
+  ]
+}

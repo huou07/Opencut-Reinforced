@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'music_prompt.dart';
+
 /// One selectable background-music character.
 class MusicMood {
   const MusicMood({
@@ -116,6 +118,8 @@ class MusicBed {
     required this.bytes,
     required this.mood,
     required this.tempo,
+    this.summary = '',
+    this.seed = 1,
   });
 
   final String path;
@@ -123,6 +127,10 @@ class MusicBed {
   final int bytes;
   final String mood;
   final int tempo;
+
+  /// The interpreted request, when the bed came from a prompt.
+  final String summary;
+  final int seed;
 }
 
 class MusicException implements Exception {
@@ -144,9 +152,13 @@ class MusicService {
 
   Future<Directory> outputDirectory() async {
     final support = await getApplicationSupportDirectory();
-    return Directory('${support.path}/music/${DateTime.now().millisecondsSinceEpoch}');
+    return Directory(
+      '${support.path}/music/${DateTime.now().millisecondsSinceEpoch}',
+    );
   }
 
+  /// Generates a bed. A [plan] (from a prompt) overrides the mood, tempo,
+  /// length, mix and seed in one step; explicit arguments are used otherwise.
   Future<MusicBed> generate({
     required String moodId,
     required int tempo,
@@ -154,7 +166,14 @@ class MusicService {
     required Directory directory,
     int seed = 1,
     double levelDb = -9,
+    MusicPlan? plan,
   }) async {
+    if (plan != null) {
+      moodId = plan.moodId;
+      tempo = plan.tempo;
+      seconds = plan.seconds;
+      seed = plan.seed;
+    }
     MusicMood? mood;
     for (final candidate in musicMoods) {
       if (candidate.id == moodId) {
@@ -174,6 +193,17 @@ class MusicService {
     if (levelDb < -30 || levelDb > 0) {
       throw const MusicException('The level must be -30-0 dBFS.');
     }
+    final drums = mood.drums * (plan?.drumsScale ?? 1.0);
+    final padGain = mood.padGain * (plan?.padScale ?? 1.0);
+    final arpGain = mood.arpGain * (plan?.arpScale ?? 1.0);
+    final brightness = mood.brightness * (plan?.brightnessScale ?? 1.0);
+    final octaveShift = plan?.octaveShift ?? 0;
+    // A prompt's seed also rotates the arpeggio, so two requests that differ
+    // only in wording still sound like two different cues.
+    final arp = <int>[
+      for (var index = 0; index < mood.arp.length; index += 1)
+        mood.arp[(index + seed % mood.arp.length) % mood.arp.length],
+    ];
     final frames = (seconds * sampleRate);
     final left = Float32List(frames);
     final right = Float32List(frames);
@@ -193,8 +223,9 @@ class MusicService {
             right,
             barStart,
             barFrames,
-            _frequency(note + octave) * (1 + (random.nextDouble() - 0.5) * 0.0012),
-            mood.padGain / chord.length,
+            _frequency(note + octave) *
+                (1 + (random.nextDouble() - 0.5) * 0.0012),
+            padGain / chord.length,
             0.5 + (random.nextDouble() - 0.5) * 0.2,
             (time) => _padEnvelope(time, barSeconds),
           );
@@ -210,14 +241,22 @@ class MusicService {
         0.5,
         (time) => _bassEnvelope(time, barSeconds),
       );
-      final stepFrames = barFrames ~/ mood.arp.length;
-      for (var step = 0; step < mood.arp.length; step += 1) {
-        final note = chord[mood.arp[step]] + 12;
+      final stepFrames = barFrames ~/ arp.length;
+      for (var step = 0; step < arp.length; step += 1) {
+        final note = chord[arp[step]] + 12 + octaveShift;
         final start = barStart + step * stepFrames;
         final pan = 0.35 + (step % 2) * 0.3 + (random.nextDouble() - 0.5) * 0.1;
-        final amplitude = mood.arpGain * (0.8 + random.nextDouble() * 0.4);
+        final amplitude = arpGain * (0.8 + random.nextDouble() * 0.4);
         final noteFrames = min((sampleRate * 0.5).round(), barFrames);
-        _addPluck(left, right, start, noteFrames, _frequency(note), amplitude, pan);
+        _addPluck(
+          left,
+          right,
+          start,
+          noteFrames,
+          _frequency(note),
+          amplitude,
+          pan,
+        );
         _addPluck(
           left,
           right,
@@ -234,21 +273,21 @@ class MusicService {
         barStart,
         barFrames,
         _frequency(chord.last + 24),
-        0.012 * mood.brightness,
+        0.012 * brightness,
         0.5,
         (time) =>
             _padEnvelope(time, barSeconds) *
             (0.6 + 0.4 * sin(2 * pi * 0.15 * time)),
       );
-      if (mood.drums > 0) {
-        _kick(left, right, barStart, 0.2 * mood.drums);
-        _kick(left, right, barStart + barFrames ~/ 2, 0.12 * mood.drums);
+      if (drums > 0) {
+        _kick(left, right, barStart, 0.2 * drums);
+        _kick(left, right, barStart + barFrames ~/ 2, 0.12 * drums);
         for (final fraction in [0.25, 0.75]) {
           _hat(
             left,
             right,
             barStart + (barFrames * fraction).round(),
-            0.05 * mood.drums,
+            0.05 * drums,
             random,
           );
         }
@@ -267,12 +306,17 @@ class MusicService {
       if (index < fadeFrames) envelope = index / fadeFrames;
       final tail = frames - index;
       if (tail < fadeFrames) envelope = min(envelope, tail / fadeFrames);
-      left[index] = (left[index] * scale * envelope).clamp(-1.0, 1.0).toDouble();
-      right[index] = (right[index] * scale * envelope).clamp(-1.0, 1.0).toDouble();
+      left[index] = (left[index] * scale * envelope)
+          .clamp(-1.0, 1.0)
+          .toDouble();
+      right[index] = (right[index] * scale * envelope)
+          .clamp(-1.0, 1.0)
+          .toDouble();
     }
 
     await directory.create(recursive: true);
-    final file = File('${directory.path}/bed-${mood.id}-$tempo.wav');
+    final label = plan?.summary.isNotEmpty == true ? '-${seed % 997}' : '';
+    final file = File('${directory.path}/bed-${mood.id}-$tempo$label.wav');
     final bytes = _wavBytes(left, right);
     await file.writeAsBytes(bytes, flush: true);
     return MusicBed(
@@ -281,10 +325,13 @@ class MusicService {
       bytes: bytes.length,
       mood: mood.id,
       tempo: tempo,
+      summary: plan?.summary ?? '',
+      seed: seed,
     );
   }
 
-  static double _frequency(int midi) => 440 * pow(2, (midi - 69) / 12).toDouble();
+  static double _frequency(int midi) =>
+      440 * pow(2, (midi - 69) / 12).toDouble();
 
   static double _padEnvelope(double time, double duration) {
     final attack = min(0.9, duration * 0.35);
@@ -352,7 +399,12 @@ class MusicService {
     }
   }
 
-  static void _kick(Float32List left, Float32List right, int start, double amplitude) {
+  static void _kick(
+    Float32List left,
+    Float32List right,
+    int start,
+    double amplitude,
+  ) {
     final length = (sampleRate * 0.22).round();
     for (var index = 0; index < length; index += 1) {
       final position = start + index;
@@ -415,7 +467,11 @@ class MusicService {
     var offset = 44;
     for (var index = 0; index < frames; index += 1) {
       header.setInt16(offset, (left[index] * 32767).round(), Endian.little);
-      header.setInt16(offset + 2, (right[index] * 32767).round(), Endian.little);
+      header.setInt16(
+        offset + 2,
+        (right[index] * 32767).round(),
+        Endian.little,
+      );
       offset += 4;
     }
     return bytes;

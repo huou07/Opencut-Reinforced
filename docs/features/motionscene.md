@@ -74,6 +74,13 @@ timeline-referenced materialised asset is not cache-only.
   composed draft is editable on the canvas — move, text, colour, size, add and
   delete — through the typed operation set in `or_motion::edit`; see
   [motion-assets.md](motion-assets.md#editing-a-composed-scene).
+- A scene authored outside the app can be opened in the same canvas: **open a
+  scene file** reads one `.ormotion.json`, validates it and adopts its images
+  into the app library (`motion_scene_read`). A scene saved with **Save to
+  library** reopens from its row (`motion_scene_from_asset`), so the canvas is
+  not limited to the session that composed a scene. Both paths return the same
+  scene JSON and node boxes as composition, so every edit and the materialiser
+  treat them identically.
 - External agents and templates are first-class producers. CLI verbs are
   `or motion validate`, `inspect`, `evaluate`, `layout`, `render`, `from-code`,
   `materialize` and `publish`; `materialize` and `publish` need a live app

@@ -525,6 +525,51 @@ impl MotionLibrary {
         Ok(prepared)
     }
 
+    /// Copies a scene file's referenced PNGs into this library and rewrites the
+    /// scene's asset paths so the document no longer depends on where the file
+    /// was opened from.
+    ///
+    /// Importing a `.ormotion.json` hands the editor a scene it can edit and
+    /// materialise like any composed draft. Leaving the original relative paths
+    /// would make a scene opened from another folder render its images as
+    /// placeholders after the first edit, so the bytes are adopted here, once,
+    /// and every path becomes library-relative.
+    pub fn adopt_scene_images(
+        &self,
+        scene: &MotionScene,
+        source_directory: &Path,
+    ) -> Result<MotionScene, MotionLibraryError> {
+        if scene.assets.is_empty() {
+            return Ok(scene.clone());
+        }
+        let mut adopted: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut rewritten = scene.clone();
+        for asset in &mut rewritten.assets {
+            if !is_safe_relative_path(&asset.path) {
+                return Err(MotionLibraryError::UnsafePath(asset.path.clone()));
+            }
+            if let Some(path) = adopted.get(&asset.path) {
+                asset.path = path.clone();
+                continue;
+            }
+            let bytes = fs::read(source_directory.join(&asset.path))
+                .map_err(|_| MotionLibraryError::MissingImage(asset.path.clone()))?;
+            if bytes.len() > MAX_MOTION_IMAGE_BYTES {
+                return Err(MotionLibraryError::ImageTooLarge);
+            }
+            if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                return Err(MotionLibraryError::InvalidImage(asset.path.clone()));
+            }
+            let file = format!("images/{}.png", new_motion_asset_id());
+            let destination = self.resolve_relative(&file)?;
+            write_atomic(&destination, &bytes)?;
+            adopted.insert(asset.path.clone(), file.clone());
+            asset.path = file;
+        }
+        Ok(rewritten)
+    }
+
     fn asset_path(&self, asset_id: &str) -> PathBuf {
         self.root
             .join("assets")
@@ -738,6 +783,77 @@ mod tests {
             MotionLibraryError::NotFound(asset.asset_id.clone())
         );
         assert!(!library.remove(&asset.asset_id).unwrap());
+    }
+
+    #[test]
+    fn adopting_scene_images_copies_them_into_the_library() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("opened-scene");
+        fs::create_dir_all(source.join("art")).unwrap();
+        // The adoption path only checks the PNG signature; the renderer validates
+        // decoded pixels later.
+        let bytes = b"\x89PNG\r\n\x1a\nscene-image".to_vec();
+        fs::write(source.join("art/logo.png"), &bytes).unwrap();
+        let scene = MotionScene {
+            format: crate::MOTION_SCENE_FORMAT.to_owned(),
+            schema_version: crate::MOTION_SCENE_SCHEMA_VERSION,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            name: "Imported".to_owned(),
+            duration: RationalTime::new(4, 1).unwrap(),
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            assets: vec![MotionAsset {
+                asset_id: "logo".to_owned(),
+                sha256: None,
+                path: "art/logo.png".to_owned(),
+            }],
+            nodes: Vec::new(),
+            animations: Vec::new(),
+            camera: None,
+        };
+
+        let adopted = library.adopt_scene_images(&scene, &source).unwrap();
+
+        let path = adopted.assets[0].path.clone();
+        assert!(path.starts_with("images/"), "{path}");
+        assert!(path.ends_with(".png"), "{path}");
+        assert_eq!(fs::read(directory.0.join(&path)).unwrap(), bytes);
+        assert_eq!(scene.assets[0].path, "art/logo.png");
+    }
+
+    #[test]
+    fn adopting_scene_images_refuses_a_path_that_escapes_the_scene_folder() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let scene = MotionScene {
+            format: crate::MOTION_SCENE_FORMAT.to_owned(),
+            schema_version: crate::MOTION_SCENE_SCHEMA_VERSION,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            name: "Escaping".to_owned(),
+            duration: RationalTime::new(4, 1).unwrap(),
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            assets: vec![MotionAsset {
+                asset_id: "logo".to_owned(),
+                sha256: None,
+                path: "../outside.png".to_owned(),
+            }],
+            nodes: Vec::new(),
+            animations: Vec::new(),
+            camera: None,
+        };
+
+        assert_eq!(
+            library
+                .adopt_scene_images(&scene, &directory.0)
+                .unwrap_err(),
+            MotionLibraryError::UnsafePath("../outside.png".to_owned())
+        );
     }
 
     #[test]

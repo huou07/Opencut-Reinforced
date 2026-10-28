@@ -112,6 +112,21 @@ still of its first frame and the node boxes that still shows — one round trip 
 gesture. `MOTION_EDIT_*` codes name every refusal (unknown node, wrong kind,
 duplicate id, unusable value, invalid result, animated size, oversized selection).
 
+### Opening a scene that was authored elsewhere
+
+The Motion panel's **open a scene file** action takes an `.ormotion.json` from
+disk through `motion_scene_read`: the file is bounded (8 MiB), parsed with the
+same reader as every other scene, validated, and its referenced PNGs are copied
+into the app motion library (`images/<id>.png`) before the canvas sees it. The
+rewritten scene therefore keeps its images after the first edit, and
+materialisation never depends on the folder the file was opened from. A missing
+image, an unsafe relative path or an oversized image is a named refusal, not a
+placeholder frame that silently drops the file's content.
+
+A scene saved with **Save to library** keeps its whole payload; its row's edit
+action reopens it (`motion_scene_from_asset`) on the same canvas, so editing is
+not limited to the session that composed it.
+
 ### Coordinates are evaluated, not raw
 
 A node under a translation track sits at its anchor **plus** the track's value at

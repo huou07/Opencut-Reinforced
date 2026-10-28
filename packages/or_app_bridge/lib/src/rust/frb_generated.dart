@@ -70,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -222946721;
+  int get rustContentHash => -1932195339;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -840,6 +840,11 @@ abstract class RustLibApi extends BaseApi {
     required String editJson,
   });
 
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneFromAsset({
+    required String root,
+    required String assetId,
+  });
+
   Future<MotionMaterializationView>
   crateApiMotionLibraryMotionSceneMaterialize({
     required String root,
@@ -862,6 +867,11 @@ abstract class RustLibApi extends BaseApi {
     required String root,
     required String sceneJson,
     required PlatformInt64 atMilliseconds,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneRead({
+    required String root,
+    required String path,
   });
 
   Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
@@ -5850,6 +5860,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneFromAsset({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 99,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneFromAssetConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneFromAssetConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_from_asset",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
   Future<MotionMaterializationView>
   crateApiMotionLibraryMotionSceneMaterialize({
     required String root,
@@ -5874,7 +5919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 100,
             port: port_,
           );
         },
@@ -5929,7 +5974,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 101,
             port: port_,
           );
         },
@@ -5966,7 +6011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 102,
             port: port_,
           );
         },
@@ -5988,6 +6033,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneRead({
+    required String root,
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 103,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneReadConstMeta,
+        argValues: [root, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneReadConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_read",
+        argNames: ["root", "path"],
+      );
+
+  @override
   Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
     required String root,
     required String sceneJson,
@@ -6005,7 +6085,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 104,
             port: port_,
           );
         },
@@ -6036,7 +6116,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 105,
             port: port_,
           );
         },

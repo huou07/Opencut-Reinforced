@@ -1,0 +1,27 @@
+{
+  "format": "opencut-reinforced-motion-scene",
+  "schema_version": 1,
+  "scene_id": "0b6a2f4c-1d3e-4a5b-8c7d-9e0f1a2b3c4d",
+  "name": "Imported demo",
+  "duration": { "numerator": 4, "denominator": 1 },
+  "canvas": { "width": 1920, "height": 1080 },
+  "assets": [],
+  "nodes": [
+    {
+      "node_id": "card",
+      "kind": "rectangle",
+      "position": { "x": 560, "y": 390 },
+      "size": { "width": 800, "height": 300 },
+      "fill": { "red": 32, "green": 34, "blue": 40, "alpha": 255 }
+    },
+    {
+      "node_id": "title",
+      "kind": "text",
+      "text": "Imported scene",
+      "position": { "x": 640, "y": 480 },
+      "font_size": 72,
+      "fill": { "red": 245, "green": 245, "blue": 245, "alpha": 255 }
+    }
+  ],
+  "animations": []
+}

@@ -85,6 +85,18 @@ abstract class MotionLibraryGateway {
     required String name,
     String? category,
   });
+
+  /// Opens an untrusted `.ormotion.json` file into an editable scene.
+  Future<MotionSceneView> readScene({
+    required String root,
+    required String path,
+  });
+
+  /// Reopens a scene that was saved to this library as an editable draft.
+  Future<MotionSceneView> sceneFromAsset({
+    required String root,
+    required String assetId,
+  });
 }
 
 /// The real gateway: every call is a Rust bridge function.
@@ -252,6 +264,18 @@ class RustMotionLibraryGateway implements MotionLibraryGateway {
     name: name,
     category: category,
   );
+
+  @override
+  Future<MotionSceneView> readScene({
+    required String root,
+    required String path,
+  }) => motionSceneRead(root: root, path: path);
+
+  @override
+  Future<MotionSceneView> sceneFromAsset({
+    required String root,
+    required String assetId,
+  }) => motionSceneFromAsset(root: root, assetId: assetId);
 }
 
 /// Owns the motion library surface: the catalogue, the selected asset's parameter
@@ -658,6 +682,72 @@ class MotionLibraryController extends ChangeNotifier {
     _appendSequence = 0;
     _remember(before);
     _notify();
+  }
+
+  /// Opens a `.ormotion.json` file from disk into the editable draft.
+  ///
+  /// Rust parses, validates and adopts the scene's images into this library, so
+  /// the returned draft edits and renders exactly like one composed in the app.
+  Future<MotionSceneView?> importSceneFile(String path) async {
+    if (_root.isEmpty || path.trim().isEmpty) return null;
+    _busy = true;
+    _error = null;
+    _notice = null;
+    _notify();
+    final before = _snapshot();
+    try {
+      final view = await _gateway.readScene(root: _root, path: path);
+      if (_disposed) return null;
+      if (!view.ok) {
+        _error = view.message.isEmpty ? view.code : view.message;
+        return null;
+      }
+      _seedDraft(view, before);
+      _notice = 'Imported ${view.name}';
+      return view;
+    } catch (error) {
+      _error = 'The scene could not be imported: $error';
+      return null;
+    } finally {
+      _busy = false;
+      _notify();
+    }
+  }
+
+  /// Reopens a scene saved to this library so it can be edited again.
+  Future<MotionSceneView?> openSceneAsset(String assetId) async {
+    if (_root.isEmpty) return null;
+    _busy = true;
+    _error = null;
+    _notice = null;
+    _notify();
+    final before = _snapshot();
+    try {
+      final view = await _gateway.sceneFromAsset(root: _root, assetId: assetId);
+      if (_disposed) return null;
+      if (!view.ok) {
+        _error = view.message.isEmpty ? view.code : view.message;
+        return null;
+      }
+      _seedDraft(view, before);
+      _notice = 'Opened ${view.name}';
+      return view;
+    } catch (error) {
+      _error = 'The saved scene could not be opened: $error';
+      return null;
+    } finally {
+      _busy = false;
+      _notify();
+    }
+  }
+
+  void _seedDraft(MotionSceneView view, _SceneSnapshot before) {
+    _draftSceneJson = view.sceneJson;
+    _draftPreview = view.previewPng.isEmpty ? null : view.previewPng;
+    _sceneNodes = view.nodes;
+    _selectedNodeIds.clear();
+    _appendSequence = 0;
+    _remember(before);
   }
 
   // -- node selection ---------------------------------------------------

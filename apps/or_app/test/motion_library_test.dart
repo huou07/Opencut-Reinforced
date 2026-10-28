@@ -491,6 +491,30 @@ class _FakeMotionGateway implements MotionLibraryGateway {
     name,
     category ?? 'object',
   );
+
+  @override
+  Future<MotionSceneView> readScene({
+    required String root,
+    required String path,
+  }) async => MotionSceneView(
+    ok: true,
+    code: 'OK',
+    message: '',
+    sceneJson: jsonEncode(scene),
+    sceneId: '7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d',
+    name: 'Imported demo',
+    width: 1920,
+    height: 1080,
+    durationMilliseconds: 5000,
+    previewPng: _png,
+    nodes: _fakeNodes(scene),
+  );
+
+  @override
+  Future<MotionSceneView> sceneFromAsset({
+    required String root,
+    required String assetId,
+  }) async => readScene(root: root, path: assetId);
 }
 
 void main() {
@@ -729,6 +753,33 @@ void main() {
     expect(controller.sceneNodes, isNotEmpty);
     expect(controller.selectedNode?.text, 'First object');
     expect(gateway.edits.last['op'], 'add_text');
+  });
+
+  test('importing a scene file seeds the editable canvas', () async {
+    final (controller, _, _) = await buildController();
+    expect(controller.hasDraft, isFalse);
+
+    final view = await controller.importSceneFile('/tmp/demo.ormotion.json');
+
+    expect(view, isNotNull);
+    expect(controller.hasDraft, isTrue);
+    expect(controller.sceneNodes, isNotEmpty);
+    expect(controller.draftPreview, isNotNull);
+    expect(controller.notice, contains('Imported'));
+    expect(controller.canUndo, isTrue);
+  });
+
+  test('a saved scene can be reopened as an editable draft', () async {
+    final (controller, _, _) = await buildController();
+
+    final view = await controller.openSceneAsset(
+      '1c8e3a7f-6d2b-4a4c-8e9f-0b1c2d3e4f5a',
+    );
+
+    expect(view, isNotNull);
+    expect(controller.hasDraft, isTrue);
+    expect(controller.sceneNodes, isNotEmpty);
+    expect(controller.notice, contains('Opened'));
   });
 
   testWidgets('dragging a handle on the scene canvas moves the object', (

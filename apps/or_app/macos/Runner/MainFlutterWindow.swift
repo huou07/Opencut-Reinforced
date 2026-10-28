@@ -30,7 +30,8 @@ class MainFlutterWindow: NSWindow {
     NarrationBridge.register(
       with: flutterViewController.registrar(forPlugin: "NarrationBridge"))
     MacOSScopedFileAccessPlugin.register(
-      with: flutterViewController.registrar(forPlugin: "MacOSScopedFileAccessPlugin"))
+      with: flutterViewController.registrar(forPlugin: "MacOSScopedFileAccessPlugin"),
+      window: self)
 
     super.awakeFromNib()
   }
@@ -39,9 +40,25 @@ class MainFlutterWindow: NSWindow {
 private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
   private static let channelName = "or_macos_file_access"
   private let bookmarks = PersistentScopedBookmarks()
+  /// The Flutter window panels attach to. Captured at registration: attaching a
+  /// panel as a sheet keeps it visible above the editor and makes an accidental
+  /// second click answer clearly instead of stacking hidden dialogs.
+  private weak var window: NSWindow?
+  /// One panel at a time. A second request while one is up re-focuses the
+  /// visible sheet and reports FILE_PANEL_BUSY so the caller can say so.
+  private weak var activePanel: NSSavePanel?
+
+  init(window: NSWindow?) {
+    self.window = window
+    super.init()
+  }
 
   static func register(with registrar: FlutterPluginRegistrar) {
-    let plugin = MacOSScopedFileAccessPlugin()
+    register(with: registrar, window: nil)
+  }
+
+  static func register(with registrar: FlutterPluginRegistrar, window: NSWindow?) {
+    let plugin = MacOSScopedFileAccessPlugin(window: window)
     registrar.addMethodCallDelegate(
       plugin,
       channel: FlutterMethodChannel(
@@ -116,7 +133,12 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
       panel.allowsMultipleSelection = false
       panel.prompt = "Choose Folder"
       panel.message = "Choose where to save \(suggestedName)."
-      panel.begin { response in
+      present(panel) { [weak self] response in
+        guard let self else { return }
+        guard response != .abort else {
+          result(self.filePanelBusyError())
+          return
+        }
         guard response == .OK, let folder = panel.url else {
           result(nil)
           return
@@ -172,7 +194,12 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     panel.allowsMultipleSelection = false
     panel.prompt = "Export Here"
     panel.message = "Save \(suggestedName) in the selected folder."
-    panel.begin { response in
+    present(panel) { [weak self] response in
+      guard let self else { return }
+      guard response != .abort else {
+        result(self.filePanelBusyError())
+        return
+      }
       guard response == .OK, let folder = panel.url else {
         result(nil)
         return
@@ -188,27 +215,99 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
           ))
           return
         }
-        let alert = NSAlert()
-        alert.messageText = "Replace existing export?"
-        alert.informativeText = "\(suggestedName) already exists in this folder."
-        alert.addButton(withTitle: "Replace")
-        alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else {
+        self.confirmReplacingExistingExport(
+          suggestedName: suggestedName,
+          destination: destination,
+          folder: folder,
+          result: result
+        )
+        return
+      }
+      self.finishExportFolder(destination: destination, folder: folder, result: result)
+    }
+  }
+
+  private func confirmReplacingExistingExport(
+    suggestedName: String,
+    destination: URL,
+    folder: URL,
+    result: @escaping FlutterResult
+  ) {
+    let alert = NSAlert()
+    alert.messageText = "Replace existing export?"
+    alert.informativeText = "\(suggestedName) already exists in this folder."
+    alert.addButton(withTitle: "Replace")
+    alert.addButton(withTitle: "Cancel")
+    // A sheet keeps the replacement question attached to the editor instead of
+    // starting a second application-modal loop on top of the picker sheet.
+    if let window = window ?? NSApp.keyWindow ?? NSApp.mainWindow {
+      alert.beginSheetModal(for: window) { [weak self] response in
+        guard let self else { return }
+        guard response == .alertFirstButtonReturn else {
           result(nil)
           return
         }
+        self.finishExportFolder(destination: destination, folder: folder, result: result)
       }
-      do {
-        try self.bookmarks.store(urls: [folder])
-        result(destination.path)
-      } catch {
-        result(FlutterError(
-          code: "BOOKMARK_STORE_FAILED",
-          message: "macOS could not retain access to the selected export folder.",
-          details: nil
-        ))
-      }
+    } else if alert.runModal() == .alertFirstButtonReturn {
+      finishExportFolder(destination: destination, folder: folder, result: result)
+    } else {
+      result(nil)
     }
+  }
+
+  private func finishExportFolder(
+    destination: URL,
+    folder: URL,
+    result: @escaping FlutterResult
+  ) {
+    do {
+      try bookmarks.store(urls: [folder])
+      result(destination.path)
+    } catch {
+      result(FlutterError(
+        code: "BOOKMARK_STORE_FAILED",
+        message: "macOS could not retain access to the selected export folder.",
+        details: nil
+      ))
+    }
+  }
+
+  /// Presents one panel as a sheet on the editor window.
+  ///
+  /// A plain `panel.begin` is an application-modal session whose window can end
+  /// up ordered below the editor: the app then looks frozen because every click
+  /// is consumed by a dialog the owner cannot see. A sheet is attached, always
+  /// visible and dismissed with its parent, and the guard keeps a second request
+  /// from stacking another modal session on top.
+  private func present(
+    _ panel: NSSavePanel,
+    completion: @escaping (NSApplication.ModalResponse) -> Void
+  ) {
+    if let active = activePanel {
+      active.makeKeyAndOrderFront(nil)
+      completion(.abort)
+      return
+    }
+    activePanel = panel
+    NSApp.activate(ignoringOtherApps: true)
+    let finish = { [weak self] (response: NSApplication.ModalResponse) in
+      guard let self else { return }
+      self.activePanel = nil
+      self.restoreEditorFocus()
+      completion(response)
+    }
+    if let window = window ?? NSApp.keyWindow ?? NSApp.mainWindow {
+      panel.beginSheetModal(for: window, completionHandler: finish)
+    } else {
+      panel.begin(completionHandler: finish)
+    }
+  }
+
+  private func restoreEditorFocus() {
+    guard let window = window ?? NSApp.mainWindow else { return }
+    NSApp.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(nil)
   }
 
   private func openPanel(
@@ -225,7 +324,12 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     if let contentTypes {
       panel.allowedContentTypes = contentTypes
     }
-    panel.begin { response in
+    present(panel) { [weak self] response in
+      guard let self else { return }
+      guard response != .abort else {
+        result(self.filePanelBusyError())
+        return
+      }
       guard response == .OK else {
         result(allowsMultipleSelection ? [] : nil)
         return
@@ -251,6 +355,14 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     }
   }
 
+  private func filePanelBusyError() -> FlutterError {
+    FlutterError(
+      code: "FILE_PANEL_BUSY",
+      message: "Finish choosing in the open dialog first.",
+      details: nil
+    )
+  }
+
   private func chooseProjectFolder(
     for projectURL: URL,
     result: @escaping FlutterResult
@@ -263,7 +375,12 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     panel.directoryURL = expectedFolder
     panel.prompt = "Allow Access"
     panel.message = "Select the folder containing \(projectURL.lastPathComponent) so OR can save it safely."
-    panel.begin { response in
+    present(panel) { [weak self] response in
+      guard let self else { return }
+      guard response != .abort else {
+        result(self.filePanelBusyError())
+        return
+      }
       guard response == .OK, let folder = panel.url else {
         result(nil)
         return

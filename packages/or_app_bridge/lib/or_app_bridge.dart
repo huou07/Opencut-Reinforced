@@ -25,9 +25,11 @@ export 'src/rust/api/motion_library.dart'
         motionSceneAppend,
         motionSceneCompose,
         motionSceneEdit,
+        motionSceneFromAsset,
         motionSceneMaterialize,
         motionSceneNew,
         motionScenePreview,
+        motionSceneRead,
         motionSceneSave;
 export 'src/rust/api/project.dart'
     show

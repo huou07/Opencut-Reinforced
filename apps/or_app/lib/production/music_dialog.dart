@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
 import 'ducking_service.dart';
+import 'music_prompt.dart';
 import 'music_service.dart';
 
 class MusicApplied {
@@ -43,6 +45,7 @@ class MusicDialog extends StatefulWidget {
 
 class _MusicDialogState extends State<MusicDialog> {
   final MusicService _music = MusicService();
+  final TextEditingController _promptField = TextEditingController();
 
   String _moodId = musicMoods.first.id;
   double _tempo = 72;
@@ -54,11 +57,84 @@ class _MusicDialogState extends State<MusicDialog> {
   String _stage = '';
   double? _progress;
   String? _error;
+  MusicPlan? _plan;
+  int _variation = 0;
+
+  /// Reads the prompt and makes the visible controls agree with it, so the user
+  /// always sees the exact bed that "Generate and add" will write.
+  void _interpretPrompt() {
+    final text = _promptField.text.trim();
+    if (text.isEmpty) {
+      if (_plan != null && mounted) setState(() => _plan = null);
+      return;
+    }
+    final plan = MusicPromptInterpreter.interpret(
+      text,
+      fallbackTempo: _tempo.round(),
+      fallbackSeconds: _seconds.round(),
+      variation: _variation,
+      fallbackMoodId: _moodId,
+    );
+    if (!mounted) return;
+    setState(() {
+      _plan = plan;
+      _moodId = plan.moodId;
+      _tempo = plan.tempo.toDouble();
+      _seconds = plan.seconds.toDouble();
+    });
+  }
+
+  /// The controls stay authoritative; the prompt contributes the mix, octave
+  /// and seed. Moving a slider after a prompt must not snap back.
+  MusicPlan? _effectivePlan() {
+    final base = _plan;
+    if (base == null) return null;
+    return MusicPlan(
+      moodId: _moodId,
+      tempo: _tempo.round(),
+      seconds: _seconds.round(),
+      drumsScale: base.drumsScale,
+      padScale: base.padScale,
+      arpScale: base.arpScale,
+      brightnessScale: base.brightnessScale,
+      octaveShift: base.octaveShift,
+      seed: base.seed,
+      summary: base.summary,
+      notes: base.notes,
+    );
+  }
+
+  String get _planReadback {
+    final mood = musicMoods.firstWhere(
+      (candidate) => candidate.id == _moodId,
+      orElse: () => musicMoods.first,
+    );
+    final plan = _plan;
+    final drums = (plan?.drumsScale ?? 1) <= 0
+        ? 'no drums'
+        : (plan?.drumsScale ?? 1) > 1
+        ? 'strong drums'
+        : 'light drums';
+    return '${mood.label.toLowerCase()} · ${_tempo.round()} bpm · '
+        '${_seconds.round()} s · $drums';
+  }
+
+  void _useVariation() {
+    _variation = nextMusicVariation(_variation);
+    _interpretPrompt();
+  }
 
   @override
   void initState() {
     super.initState();
     _loadTracks();
+    _promptField.addListener(_interpretPrompt);
+  }
+
+  @override
+  void dispose() {
+    _promptField.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTracks() async {
@@ -91,11 +167,14 @@ class _MusicDialogState extends State<MusicDialog> {
     });
     try {
       final directory = await _music.outputDirectory();
+      final plan = _effectivePlan();
       final bed = await _music.generate(
         moodId: _moodId,
         tempo: _tempo.round(),
         seconds: _seconds.round(),
         directory: directory,
+        seed: plan?.seed ?? 1,
+        plan: plan,
       );
       if (!mounted) return;
       setState(() => _stage = 'Importing and placing the bed…');
@@ -246,7 +325,8 @@ class _MusicDialogState extends State<MusicDialog> {
     final duration = media.firstAudioDuration ?? media.containerDuration;
     if (duration == null || duration.denominator == 0) return measuredMs;
     final mediaMs =
-        (duration.numerator * BigInt.from(1000)) ~/ BigInt.from(duration.denominator);
+        (duration.numerator * BigInt.from(1000)) ~/
+        BigInt.from(duration.denominator);
     if (mediaMs <= BigInt.zero) return measuredMs;
     return mediaMs.toInt() < measuredMs ? mediaMs.toInt() : measuredMs;
   }
@@ -263,11 +343,105 @@ class _MusicDialogState extends State<MusicDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'A quiet, royalty-free bed is synthesised locally and placed on '
-                'its own audio track. It can be ducked under a narration track '
-                'in the same step.',
+                'Describe the bed you want, then generate it. It is synthesised '
+                'locally, stays royalty-free, and can be ducked under a '
+                'narration track in the same step.',
               ),
               const SizedBox(height: 12),
+              TextField(
+                key: const ValueKey('music-prompt'),
+                controller: _promptField,
+                enabled: !_busy,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'Describe the music',
+                  hintText:
+                      'e.g. “nhạc nền nhẹ nhàng 90 giây, không trống” or '
+                      '“tense trailer 120 bpm 45s”',
+                  helperText: 'Vietnamese or English: mood, tempo (bpm), length, drums.',
+                  helperMaxLines: 2,
+                ),
+              ),
+              if (_plan != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 14,
+                      color: OrColors.textMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _planReadback,
+                        key: const ValueKey('music-plan-readback'),
+                        style: const TextStyle(
+                          color: OrColors.textSecondary,
+                          fontSize: OrType.metadataCompactSize,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      key: const ValueKey('music-variation'),
+                      onPressed: _busy ? null : _useVariation,
+                      child: const Text('Variation'),
+                    ),
+                  ],
+                ),
+                for (final note in _plan!.notes)
+                  Text(
+                    note,
+                    style: const TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: OrType.tinySize,
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (
+                    var index = 0;
+                    index < _musicPromptExamples.length;
+                    index++
+                  )
+                    ActionChip(
+                      key: ValueKey('music-prompt-example-$index'),
+                      label: Text(
+                        _musicPromptExamples[index].label,
+                        style: const TextStyle(fontSize: OrType.tinySize),
+                      ),
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              _promptField.text =
+                                  _musicPromptExamples[index].prompt;
+                              _promptField.selection = TextSelection.collapsed(
+                                offset: _promptField.text.length,
+                              );
+                              _interpretPrompt();
+                            },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              const SizedBox(height: 4),
+              const Text(
+                'Fine-tune',
+                style: TextStyle(
+                  color: OrColors.textMuted,
+                  fontSize: OrType.tinySize,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const SizedBox(height: 4),
               DropdownButtonFormField<String>(
                 key: const ValueKey('music-mood'),
                 initialValue: _moodId,
@@ -415,3 +589,17 @@ class _MusicDialogState extends State<MusicDialog> {
     );
   }
 }
+
+/// One-tap starting points. They are examples, not the whole grammar: the field
+/// accepts any sentence whose mood, tempo, length or drum intent can be read.
+const List<({String label, String prompt})> _musicPromptExamples = [
+  (
+    label: 'Nhẹ nhàng 90 giây',
+    prompt: 'nhạc nền nhẹ nhàng thư giãn 90 giây, không trống',
+  ),
+  (label: 'Vlog sôi động', prompt: 'upbeat vlog 120 bpm 45 giây, trống nhẹ'),
+  (
+    label: 'Trailer kịch tính',
+    prompt: 'căng thẳng kịch tính cho trailer, 100 bpm, 30 giây',
+  ),
+];

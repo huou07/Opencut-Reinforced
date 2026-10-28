@@ -40,6 +40,7 @@ class MotionLibraryPanel extends StatefulWidget {
     required this.onOpenCodeMotion,
     this.outputDirectory,
     this.pickImage,
+    this.pickScene,
   });
 
   final MotionLibraryController controller;
@@ -55,6 +56,9 @@ class MotionLibraryPanel extends StatefulWidget {
   /// Returns one PNG path, or null when the user cancels. The shell supplies
   /// this from the shared file picker so Android SAF and the UI harness work.
   final Future<String?> Function()? pickImage;
+
+  /// Returns one `.ormotion.json` path, or null when the user cancels.
+  final Future<String?> Function()? pickScene;
 
   @override
   State<MotionLibraryPanel> createState() => _MotionLibraryPanelState();
@@ -104,6 +108,38 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
           ? (controller.error ?? 'The image could not be imported.')
           : 'Imported ${asset.name}',
     );
+  }
+
+  /// Opens an untrusted `.ormotion.json` file into the editable canvas.
+  Future<void> _importScene() async {
+    final pick = widget.pickScene;
+    if (pick == null) {
+      widget.onNotice('Opening a scene file is unavailable here.');
+      return;
+    }
+    final path = await pick();
+    if (path == null || path.isEmpty || !mounted) return;
+    final view = await controller.importSceneFile(path);
+    if (!mounted) return;
+    widget.onNotice(
+      view == null
+          ? (controller.error ?? 'The scene file could not be opened.')
+          : 'Imported ${view.name} — edit it on the canvas.',
+    );
+  }
+
+  /// Reopens a scene saved to the library and puts it back on the canvas.
+  Future<void> _editSavedScene(MotionAssetEntryView entry) async {
+    final view = await controller.openSceneAsset(entry.assetId);
+    if (!mounted) return;
+    if (view == null) {
+      widget.onNotice(
+        controller.error ?? 'The saved scene could not be opened.',
+      );
+      return;
+    }
+    widget.onNotice('Editing ${view.name}');
+    await showMotionSceneEditor(context, controller);
   }
 
   String? _outputPath(String label) {
@@ -293,6 +329,13 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ),
+            IconButton(
+              key: const ValueKey('motion-library-import-scene'),
+              iconSize: 18,
+              tooltip: 'Open a scene file (.ormotion.json)',
+              onPressed: controller.busy ? null : _importScene,
+              icon: const Icon(Icons.file_open_outlined),
             ),
             IconButton(
               key: const ValueKey('motion-library-import-image'),
@@ -507,6 +550,21 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                   ],
                 ),
               ),
+              if (entry.kind == 'scene')
+                IconButton(
+                  key: ValueKey('motion-edit-scene-${entry.assetId}'),
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  tooltip: 'Open this scene in the editor',
+                  onPressed: controller.busy
+                      ? null
+                      : () => unawaited(_editSavedScene(entry)),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               const Icon(
                 Icons.drag_indicator,
                 size: 14,

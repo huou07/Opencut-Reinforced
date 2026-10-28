@@ -322,6 +322,51 @@ pub fn motion_asset_scene(
     scene_view(&scene, &library)
 }
 
+/// Opens a saved scene asset as an editable draft.
+///
+/// A scene saved from the canvas keeps its whole payload in the library document,
+/// so it can be reopened and edited instead of only being instantiated. Its image
+/// paths are already library-relative. A non-scene asset is refused with a code
+/// the panel can show.
+pub fn motion_scene_from_asset(root: String, asset_id: String) -> MotionSceneView {
+    let library = match open_library(&root) {
+        Ok(library) => library,
+        Err(error) => return scene_failure(error.code(), error.to_string()),
+    };
+    let asset = match library.load(&asset_id) {
+        Ok(asset) => asset,
+        Err(error) => return scene_failure(error.code(), error.to_string()),
+    };
+    if asset.kind != MotionAssetKind::Scene {
+        return scene_failure(
+            "MOTION_ASSET_NOT_SCENE",
+            "Only a saved scene can be opened in the scene editor.",
+        );
+    }
+    let Some(payload) = asset.scene.clone() else {
+        return scene_failure(
+            "MOTION_ASSET_EMPTY_SCENE",
+            "The saved scene has no scene document.",
+        );
+    };
+    let scene = MotionScene {
+        format: or_motion::MOTION_SCENE_FORMAT.to_owned(),
+        schema_version: or_motion::MOTION_SCENE_SCHEMA_VERSION,
+        scene_id: new_motion_asset_id(),
+        name: asset.name.clone(),
+        duration: asset.duration,
+        canvas: asset.canvas,
+        assets: payload.assets,
+        nodes: payload.nodes,
+        animations: payload.animations,
+        camera: payload.camera,
+    };
+    if !validate_scene(&scene).ok {
+        return scene_failure("MOTION_INVALID_SCENE", "the saved scene did not validate");
+    }
+    scene_view(&scene, &library)
+}
+
 /// Creates an empty composition scene.
 pub fn motion_scene_new(name: String, width: u32, height: u32, seconds: u32) -> MotionSceneView {
     let duration = match or_core::RationalTime::new(i64::from(seconds.max(1)), 1) {
@@ -346,7 +391,7 @@ pub fn motion_scene_new(name: String, width: u32, height: u32, seconds: u32) -> 
         nodes: Vec::new(),
         animations: Vec::new(),
         camera: None,
-        };
+    };
     if !validate_scene(&scene).ok {
         return scene_failure("MOTION_INVALID_SCENE", "the scene did not validate");
     }
@@ -545,6 +590,65 @@ pub fn motion_scene_edit(root: String, scene_json: String, edit_json: String) ->
         Err(error) => return scene_failure(error.code(), error.to_string()),
     };
     scene_view(&edited, &library)
+}
+
+/// Opens a `.ormotion.json` scene from disk so the canvas can edit it.
+///
+/// The file is untrusted input: bounded by size, parsed through the same
+/// document reader as every other scene, validated, and its referenced PNGs are
+/// adopted into the app library so the returned draft keeps its images after the
+/// first edit. The caller never receives a path into the original folder.
+pub fn motion_scene_read(root: String, path: String) -> MotionSceneView {
+    /// A scene is a small declarative document; anything past this is not one.
+    const MAX_SCENE_FILE_BYTES: u64 = 8 * 1024 * 1024;
+    let library = match open_library(&root) {
+        Ok(library) => library,
+        Err(error) => return scene_failure(error.code(), error.to_string()),
+    };
+    let source = Path::new(&path);
+    let metadata = match std::fs::metadata(source) {
+        Ok(metadata) => metadata,
+        Err(_) => {
+            return scene_failure(
+                "MOTION_SCENE_NOT_FOUND",
+                "The scene file could not be found. Choose it again.",
+            );
+        }
+    };
+    if !metadata.is_file() {
+        return scene_failure(
+            "MOTION_SCENE_NOT_FILE",
+            "Choose a scene file, not a folder.",
+        );
+    }
+    if metadata.len() > MAX_SCENE_FILE_BYTES {
+        return scene_failure(
+            "MOTION_SCENE_TOO_LARGE",
+            "The scene file is larger than the 8 MiB scene limit.",
+        );
+    }
+    let text = match std::fs::read_to_string(source) {
+        Ok(text) => text,
+        Err(_) => {
+            return scene_failure(
+                "MOTION_SCENE_UNREADABLE",
+                "The scene file could not be read as UTF-8 JSON.",
+            );
+        }
+    };
+    let scene = match parse_scene(&text) {
+        Ok(scene) => scene,
+        Err((code, message)) => return scene_failure(&code, message),
+    };
+    let source_directory = source
+        .parent()
+        .filter(|directory| !directory.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let scene = match library.adopt_scene_images(&scene, source_directory) {
+        Ok(scene) => scene,
+        Err(error) => return scene_failure(error.code(), error.to_string()),
+    };
+    scene_view(&scene, &library)
 }
 
 /// Materialises a composed scene into a video file.

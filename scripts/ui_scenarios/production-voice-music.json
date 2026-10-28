@@ -108,6 +108,22 @@
       "budget_ms": 20000
     },
     {
+      "op": "enter_text",
+      "selector": {
+        "key": "music-prompt"
+      },
+      "value": "nhạc nền nhẹ nhàng 30 giây, không trống"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "calm · 62 bpm · 30 s · no drums",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "music-prompt-interpreted"
+    },
+    {
       "op": "tap",
       "selector": {
         "key": "music-generate"

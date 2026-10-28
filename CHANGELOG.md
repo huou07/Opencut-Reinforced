@@ -16,7 +16,24 @@ product still needs.
 ## Unreleased
 
 ### Added
-
+- **Prompt-driven background music**: the Generate music dialog accepts a free
+  sentence in Vietnamese or English, shows the interpreted mood, tempo, length
+  and drum intent, then generates exactly that bed. A tempo in bpm, a length in
+  seconds/minutes and "không trống"/"no drums" are honoured; unrecognised words
+  leave the controls alone instead of failing the dialog. The same prompt and
+  variation are reproducible, and **Variation** reseeds the arpeggio without
+  changing the readback.
+- **Open a MotionScene file on the canvas**: the Motion panel opens an
+  `.ormotion.json` authored by the CLI or an agent. Rust bounds the file, parses
+  and validates it, and adopts its referenced PNGs into the app library first, so
+  the imported scene edits, previews and materialises like a composed draft; a
+  missing or unsafe image is a named refusal. A scene saved to the library can be
+  reopened from its row for further editing.
+- **`motion_scene_read` / `motion_scene_from_asset`** bridge functions and their
+  adoption test in `or_motion::library`.
+- `scripts/ui_scenarios/motion-scene-import.json` — imports a scene fixture,
+  proves its objects reach the canvas, nudges one, and inserts the edited scene
+  on the timeline.
 - **Assistant panel**: a right-rail tab connects to a locally installed
   DeepSeek Harness over ACP, lets the user pick the workspace and model, streams
   replies and tool calls, and renders permission prompts. The harness reads and
@@ -134,6 +151,16 @@ product still needs.
   application. Its hermetic checks run in `scripts/check-repo.sh`.
 
 ### Fixed
+
+- **The editor could look frozen after a native file panel.** macOS open/save
+  panels are now sheets attached to the editor window with a single-flight guard
+  and focus restoration after dismissal. A panel that previously ended up behind
+  the editor left an invisible application-modal session that swallowed every
+  click while keyboard shortcuts still worked; a second request while one sheet
+  is open now reports `FILE_PANEL_BUSY` instead of stacking another session.
+- **Import Media and Add track could do nothing with no message** while another
+  project action was running. The concurrency guard still refuses to stack
+  commands, but it now tells the user what to wait for.
 
 - **Text input in every field**: the shell's shortcut map no longer captures
   typing keys while a text field is focused. Backspace, Space, letters, arrows,

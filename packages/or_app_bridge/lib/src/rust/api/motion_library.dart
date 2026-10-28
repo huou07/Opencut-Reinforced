@@ -76,6 +76,20 @@ Future<MotionSceneView> motionAssetScene({
   name: name,
 );
 
+/// Opens a saved scene asset as an editable draft.
+///
+/// A scene saved from the canvas keeps its whole payload in the library document,
+/// so it can be reopened and edited instead of only being instantiated. Its image
+/// paths are already library-relative. A non-scene asset is refused with a code
+/// the panel can show.
+Future<MotionSceneView> motionSceneFromAsset({
+  required String root,
+  required String assetId,
+}) => RustLib.instance.api.crateApiMotionLibraryMotionSceneFromAsset(
+  root: root,
+  assetId: assetId,
+);
+
 /// Creates an empty composition scene.
 Future<MotionSceneView> motionSceneNew({
   required String name,
@@ -157,6 +171,20 @@ Future<MotionSceneView> motionSceneEdit({
   root: root,
   sceneJson: sceneJson,
   editJson: editJson,
+);
+
+/// Opens a `.ormotion.json` scene from disk so the canvas can edit it.
+///
+/// The file is untrusted input: bounded by size, parsed through the same
+/// document reader as every other scene, validated, and its referenced PNGs are
+/// adopted into the app library so the returned draft keeps its images after the
+/// first edit. The caller never receives a path into the original folder.
+Future<MotionSceneView> motionSceneRead({
+  required String root,
+  required String path,
+}) => RustLib.instance.api.crateApiMotionLibraryMotionSceneRead(
+  root: root,
+  path: path,
 );
 
 /// Materialises a composed scene into a video file.

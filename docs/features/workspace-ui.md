@@ -33,7 +33,12 @@ justification and review.
 - The Audio tool exposes **Record voice…**, **Generate voiceover…**,
   **Generate music…** and **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the
-  normal project reads. Generation is a bounded batch of ordinary commands, not
+  normal project reads. The music dialog leads with a **Describe the music**
+  field: one sentence in Vietnamese or English is read for mood, bpm, length and
+  drum intent, the interpreted values replace the fine-tune controls and a
+  readback line shows exactly what will be generated; one-tap examples start a
+  common request, and **Variation** reseeds the bed without changing the read.
+  Generation is a bounded batch of ordinary commands, not
   a second project model. The voice a narration run uses is chosen in
   **Settings → Narration**, where it can be searched and previewed. The same
   Settings panel holds the cloud provider cards (key save/test/remove, Azure

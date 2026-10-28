@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
@@ -46,6 +46,16 @@ One near-term delivery mission for the local macOS app, in this order:
    speech models and −12 dB ducking under a chosen voice track. Follow-up:
    dogfood the Vietnamese path on a real project and measure transcription time
    and caption quality.
+7. **Prompt-driven music (owner request, 2026-10-28).** The Generate music dialog
+   reads a Vietnamese/English sentence for mood, bpm, length and drum intent and
+   generates exactly that bed; the same prompt is reproducible and Variation
+   reseeds it. Delivered in-app; the workspace `music.mjs` still takes flags, so
+   agent/app prompt parity is open work.
+8. **Importable, editable motion scenes (owner request, 2026-10-28).** Open an
+   `.ormotion.json` authored elsewhere, validate it, adopt its PNGs into the app
+   library and edit it on the existing canvas; a saved scene reopens from its
+   library row. Delivered with the `motion_scene_read`/`motion_scene_from_asset`
+   bridge functions and `scripts/ui_scenarios/motion-scene-import.json`.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.

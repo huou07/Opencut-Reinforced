@@ -1,6 +1,6 @@
 # Product Requirements Inventory
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: what OR is meant to be, area by area, with maturity labels. This is the
 requirement inventory, not implemented status — current work is selected by
@@ -107,8 +107,8 @@ and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
 See [motion-assets.md](../features/motion-assets.md).
 
 **DEFERRED:** a live timeline MotionClip that stays editable in place; motion
-presets applied to an existing node; move/resize handles on the composition
-canvas; a marketplace. Placement stays materialised for now.
+presets applied to an existing node; a marketplace. Placement stays materialised
+for now.
 
 ## Interchange and extensibility
 

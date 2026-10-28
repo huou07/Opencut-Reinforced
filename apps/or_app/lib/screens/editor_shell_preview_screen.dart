@@ -64,6 +64,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.motionOutputDirectory,
     this.onInsertMotionClip,
     this.pickMotionImage,
+    this.pickMotionScene,
     this.onImportCaptions,
     this.onExportCaptions,
     this.onGenerateCaptions,
@@ -161,6 +162,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final String? motionOutputDirectory;
   final Future<bool> Function(String path)? onInsertMotionClip;
   final Future<String?> Function()? pickMotionImage;
+
+  /// Returns one `.ormotion.json` path, or null when the picker is cancelled.
+  final Future<String?> Function()? pickMotionScene;
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
@@ -936,6 +940,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   motionOutputDirectory: widget.motionOutputDirectory,
                   onInsertMotionClip: widget.onInsertMotionClip,
                   pickMotionImage: widget.pickMotionImage,
+                  pickMotionScene: widget.pickMotionScene,
                   onNotice: (message) => OrSnackBar.show(context, message),
                 ),
               ),
@@ -1278,6 +1283,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 motionOutputDirectory: widget.motionOutputDirectory,
                 onInsertMotionClip: widget.onInsertMotionClip,
                 pickMotionImage: widget.pickMotionImage,
+                pickMotionScene: widget.pickMotionScene,
                 onNotice: (message) => OrSnackBar.show(context, message),
                 selectedTool: tool,
                 onSelectedTool: (picked) =>
@@ -1620,6 +1626,7 @@ class _EditorToolPanel extends StatelessWidget {
     this.motionOutputDirectory,
     this.onInsertMotionClip,
     this.pickMotionImage,
+    this.pickMotionScene,
     required this.onNotice,
     this.onClose,
   });
@@ -1672,6 +1679,7 @@ class _EditorToolPanel extends StatelessWidget {
   final String? motionOutputDirectory;
   final Future<bool> Function(String path)? onInsertMotionClip;
   final Future<String?> Function()? pickMotionImage;
+  final Future<String?> Function()? pickMotionScene;
   final ValueChanged<String> onNotice;
   final VoidCallback? onClose;
 
@@ -1810,6 +1818,7 @@ class _EditorToolPanel extends StatelessWidget {
         onNotice: onNotice,
         onOpenCodeMotion: onOpenMotion ?? () {},
         pickImage: pickMotionImage,
+        pickScene: pickMotionScene,
       );
     }
 
