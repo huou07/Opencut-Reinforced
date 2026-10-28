@@ -1,6 +1,6 @@
 # Git and External Actions
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: repository history rules and the actions that are out of bounds for the
 current mission.
@@ -8,6 +8,8 @@ current mission.
 ## Commits
 
 - One local commit per coherent, verified increment.
+- Commit each verified increment before reporting it: never leave verified work
+  uncommitted when the turn ends.
 - Do not amend, rebase or rewrite existing history.
 - Do not discard unrelated changes, clean other worktrees, or reset user work.
 - Do not commit generated media, caches, build output, secrets or model weights.
