@@ -1,6 +1,6 @@
 # Feature — MotionScene (Deterministic Code-to-Video)
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: turning source code into a short, deterministic illustration that can be
 previewed, materialised, inserted into an ordinary timeline and exported.
@@ -63,11 +63,13 @@ timeline-referenced materialised asset is not cache-only.
   composed draft is editable on the canvas — move, text, colour, size, add and
   delete — through the typed operation set in `or_motion::edit`; see
   [motion-assets.md](motion-assets.md#editing-a-composed-scene).
-- External agents and templates are first-class producers. `or mcp` exposes
-  `motion_insert_scene` to the assistant; it materialises through the app
-  runtime, then imports and inserts through ordinary commands. CLI verbs are
-  `or motion validate`, `inspect`, `render` and `materialize`; only
-  `materialize` needs a live app because the CLI ships no FFmpeg libraries.
+- External agents and templates are first-class producers. CLI verbs are
+  `or motion validate`, `inspect`, `evaluate`, `layout`, `render`, `from-code`,
+  `materialize` and `publish`; `materialize` and `publish` need a live app
+  because the CLI ships no FFmpeg libraries. `publish` also saves the scene to
+  the motion library, imports the render and inserts the clip, so the agent's
+  default path is the CLI. `or mcp` still exposes `motion_insert_scene` as the
+  fallback.
 - Materialised output appears in the library and on the timeline like any media.
 
 ## Bounds

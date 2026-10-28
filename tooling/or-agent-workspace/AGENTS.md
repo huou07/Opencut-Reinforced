@@ -65,15 +65,15 @@ The session catalog carries these. Load one only when its task matches.
 - `tools/or captions transcribe` / `tools/or timeline import-captions` — local
   multilingual transcription of existing audio, and applying reviewed cues as a
   caption track. This is the "subtitles from audio" path.
-- `mcp__or__motion_insert_scene`, `mcp__or__motion_asset_list`,
-  `mcp__or__motion_asset_insert`, `mcp__or__motion_asset_save` — the app's MCP
-  fallback. Use them only for motion insertion and the motion library, where the
-  CLI can render a file but cannot import or place a clip. A CLI failure whose
-  error does not explain itself is the other fallback; report it before switching.
+- `tools/or motion publish` — validate, save to the motion library, render,
+  import and insert a scene in one call. `tools/or motion asset list|insert`
+  covers the reusable library. The `mcp__or__motion_*` tools are a fallback for
+  a CLI failure whose error does not explain itself; report the failure before
+  switching.
 
 ## Working files
 
-- `scenes/` — scene sources you author. `mcp__or__motion_insert_scene` reads them.
+- `scenes/` — scene sources you author. `tools/or motion publish --scene` reads them.
 - `work/` — scratch files, notes and copies. Nothing here is project state.
 - `project.json`, `or-cli.json` and `tools/or` are written by the app; leave them
   alone. `project.json` names the live descriptor the CLI attaches through.
@@ -82,6 +82,7 @@ The session catalog carries these. Load one only when its task matches.
 
 - Never edit a `.orproj` file, the project directory, or any path listed in `project.json`.
 - Project mutations go through `tools/or ... --attach project.json`; the app applies
-  them and owns history. The motion MCP tools are the only other write path.
+  them and owns history. The motion MCP tools are a fallback write path, not the
+  default.
 - Make one requested change at a time, confirm it with a timeline read, then save
   unless the user asked to review first.

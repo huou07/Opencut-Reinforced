@@ -369,8 +369,8 @@ The workspace AGENTS.md is the routing index for this session. Read the one guid
 Read and change the project with the or CLI in this workspace, not with the MCP tools. The CLI is the default project surface: `tools/or <verb> --attach project.json --json`. project.json is the app-written session pointer, and the CLI follows it to the running app on every call, so the app and the CLI always share one project and one history. Run every command from the workspace root. The running application owns the project; never edit a .orproj file or the project directory directly.
 
 Use an mcp__or__* tool only where the CLI cannot act:
-- mcp__or__motion_insert_scene: renders a source file or scene through the app, imports the video and inserts the clip in one call. `tools/or motion materialize` only writes a file; it cannot insert.
-- mcp__or__motion_asset_list, mcp__or__motion_asset_insert, mcp__or__motion_asset_save: read and use the app's motion library. The CLI asset verbs need a library folder path that the workspace does not expose.
+- tools/or motion publish --attach project.json --scene PATH (or --source PATH): validates the scene, saves it to the motion library, renders it, imports the video and inserts the clip in one call. `tools/or motion materialize` only writes a file; use it when a file is the goal. `mcp__or__motion_insert_scene` is the fallback when publish is unavailable.
+- tools/or motion asset list|insert --attach project.json: read and use the app's motion library. project.json records the library path. The mcp__or__motion_asset_* tools are the fallback, not the default.
 - A CLI call failed for a reason its error does not explain: report it, then use the matching MCP tool once instead of guessing.
 
 Work in this order:
@@ -378,7 +378,7 @@ Work in this order:
 2. Make the smallest edit the user asked for with `tools/or media add`, `tools/or timeline add-track|insert-clip|insert-text|move-clip|trim-clip|split-clip|delete-clip|ripple-delete-clip|set-frame-rate|add-marker`, or `tools/or history undo|redo`. `tools/or commands` and `tools/or queries` list the exact verbs and their flags.
 3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). insert-clip requires --source-start and --duration; take the duration from media list.
 4. Verify the result with a CLI read, then save once with `tools/or project save --attach project.json --json` unless the user asked to review first. An attached edit is live but unsaved until that call.
-5. For an illustration or motion graphic, write a scene in the workspace, validate it with `tools/or motion validate --file ... --json`, then insert it with mcp__or__motion_insert_scene using its absolute path.
+5. For an illustration or motion graphic, write a scene in the workspace, validate it with `tools/or motion validate --file ... --json`, read its composition with `tools/or motion layout --file ... --at 1/2 --json` (node boxes at an exact time — do not ask for a screenshot), then publish it with `tools/or motion publish --attach project.json --scene PATH --json` (absolute path). MCP insertion is a fallback only.
 6. For a script, narration, captions or background music, read docs/script-and-voice.md and use tools/voiceover.mjs, tools/music.mjs, tools/or captions transcribe or tools/or timeline import-captions. Narration and generated music are offline; transcription reuses the model installed from the app's Generate Captions action. The narration voice is the default the user saved in Settings → Narration, then the first installed Vietnamese voice: omit `--voice` unless the user names a voice, and never assume one voice name exists on this machine.
 
 Never claim a change you did not make. If a tool fails, report the error and the next concrete step. Keep replies short: say what changed, on which track, at what time.''';

@@ -16,10 +16,13 @@ Workspace guide: `docs/motion-scenes.md`.
    keyframes.
 3. Validate with `tools/or motion validate --file scenes/title.ormotion.json
    --json`. Fix every diagnostic; do not render a scene that fails validation.
-4. Place it with `mcp__or__motion_insert_scene {scene_path}` or `{source_path}`,
-   using absolute paths. This is the one insert the CLI cannot do: `tools/or
-   motion materialize` only writes a file. Materialisation encodes every frame:
-   wait for the result and never run two at once.
+   Read the composition with `tools/or motion layout --file ... --at 1/2
+   --json`; the node boxes are the layout, so do not ask for a screenshot.
+4. Publish it with `tools/or motion publish --attach project.json --scene
+   scenes/title.ormotion.json --json` (or `--source`). One call validates, saves
+   the scene to the app's motion library, renders it, imports the video and
+   inserts an ordinary clip. Materialisation encodes every frame: wait for the
+   result and never run two at once.
 5. Verify the clip appears with `tools/or timeline clips --track TRACK_ID
    --attach project.json --json`, then `tools/or project save --attach
    project.json --json` unless the user asked to review first.
@@ -32,10 +35,12 @@ Workspace guide: `docs/motion-scenes.md`.
 - A re-render never replaces the existing clip. Insert the new render and remove
   the old clip only when the user asks.
 - Keep scenes short; a long scene is slow to encode and hard to revise.
-- A reusable asset is listed with `mcp__or__motion_asset_list`, inserted with
-  `mcp__or__motion_asset_insert` (pass parameter values by id) and saved with
-  `mcp__or__motion_asset_save` from an authored scene file. Do not copy or edit
-  library files yourself.
+- A reusable asset is listed with `tools/or motion asset list --attach
+  project.json --json`, inserted with `tools/or motion asset insert --attach
+  project.json --asset-id ID [--values JSON] --json`, and saved from an authored
+  scene file by `motion publish` itself. Do not copy or edit library files
+  yourself. Use the `mcp__or__motion_*` tools only if the CLI call fails and its
+  error does not explain why.
 
 ## Report
 

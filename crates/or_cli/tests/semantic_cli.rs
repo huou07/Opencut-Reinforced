@@ -1,11 +1,14 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, JobId, JobState, MarkerId,
-    MediaId, ProjectDocument, ProjectFileSession, ProjectRevision, ProjectSession, QueryResult,
+    MediaId, MotionMaterializeRequest, MotionMaterializeResponse, ProjectDocument,
+    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, RationalTime,
     TrackId, TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
     TranscriptionResponse, TranscriptionSegmentView, load_project_file, save_project_file_atomic,
     write_recovery_checkpoint,
 };
-use or_ipc::{LiveProjectHost, ProjectHostEventKind, TranscriptionRequestHandler};
+use or_ipc::{
+    LiveProjectHost, MotionMaterializeHandler, ProjectHostEventKind, TranscriptionRequestHandler,
+};
 use serde_json::Value;
 use std::{
     ffi::OsString,
@@ -194,7 +197,8 @@ fn json_success(args: impl IntoIterator<Item = OsString>) -> (Value, Output) {
     let output = cli(args);
     assert!(
         output.status.success(),
-        "expected success, stderr: {}",
+        "expected success, stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(output.stderr.is_empty());
@@ -3301,4 +3305,197 @@ fn headless_timeline_duck_cli_lowers_music_in_one_command() {
         .collect();
     assert_eq!(gains, [0, -12_000, 0, -12_000, 0]);
 
+}
+
+
+/// Stands in for the app's FFmpeg encoder: it writes a real, probeable source
+/// file to the destination the runtime requested.
+struct FixtureMaterializer;
+
+impl MotionMaterializeHandler for FixtureMaterializer {
+    fn handle_motion_materialize_request(
+        &self,
+        _session: &ProjectSession,
+        request: MotionMaterializeRequest,
+    ) -> MotionMaterializeResponse {
+        let destination = match request {
+            MotionMaterializeRequest::FromCode { destination, .. }
+            | MotionMaterializeRequest::FromScene { destination, .. } => destination,
+        };
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../or_media/tests/fixtures/tiny_h264_aac.mp4");
+        let bytes = fs::read(&fixture).expect("read the MP4 fixture");
+        fs::write(&destination, &bytes).expect("write the materialised fixture");
+        MotionMaterializeResponse {
+            succeeded: true,
+            error_code: String::new(),
+            message: String::new(),
+            output_path: destination,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            scene_name: "Publish fixture".to_owned(),
+            width: 32,
+            height: 24,
+            frame_rate_numerator: 30,
+            frame_rate_denominator: 1,
+            frame_count: 30,
+            duration: RationalTime::new(1, 2).unwrap(),
+            bytes_written: bytes.len() as u64,
+        }
+    }
+}
+
+#[test]
+fn motion_publish_saves_an_asset_materialises_imports_and_inserts_in_one_call() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Publish");
+    let descriptor = directory.0.join("endpoint.json");
+    let session = ProjectFileSession::open(&project_path).unwrap();
+    let _host = LiveProjectHost::start_with_handlers(
+        session,
+        Some(&descriptor),
+        None,
+        Some(Arc::new(FixtureMaterializer)),
+    )
+    .unwrap();
+
+    let library = directory.0.join("motion-library");
+    let scene = directory.motion_scene_path("publish.ormotion.json", None);
+    let output = directory.0.join("published.mkv");
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1,
+            "descriptor_path": descriptor.display().to_string(),
+            "project_path": project_path.display().to_string(),
+            "motion_library_path": library.display().to_string(),
+            "app_support_path": directory.0.display().to_string(),
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let mut args = words(&["motion", "publish"]);
+    args.push("--attach".into());
+    args.push(pointer.as_os_str().to_owned());
+    args.push("--scene".into());
+    args.push(scene.as_os_str().to_owned());
+    args.push("--name".into());
+    args.push("Explainer asset".into());
+    args.push("--output".into());
+    args.push(output.as_os_str().to_owned());
+    args.push("--json".into());
+    let (published, _) = json_success(args);
+
+    // One command saved the asset, materialised it through the host, imported
+    // the video and inserted a normal clip.
+    let asset_id = published["motion_asset"]["asset_id"]
+        .as_str()
+        .expect("publish reports the saved asset id");
+    assert_eq!(published["motion_asset"]["kind"], "scene");
+    assert!(published["media_id"].is_string());
+    assert!(published["track_id"].is_string());
+    assert!(output.is_file());
+    let catalog: Value =
+        serde_json::from_slice(&fs::read(library.join("catalog.json")).unwrap()).unwrap();
+    assert_eq!(catalog["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(catalog["entries"][0]["asset_id"], asset_id);
+
+    let (tracks, _) = json_success(attach_args(
+        &["timeline", "tracks"],
+        &pointer,
+        &["--json"],
+    ));
+    let track_id = tracks["timeline_tracks_v2"][0]["track_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (clips, _) = json_success(path_args(
+        &["timeline", "clips"],
+        "--attach",
+        &pointer,
+        &["--track", &track_id, "--json"],
+    ));
+    assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 1);
+
+    // The stored asset inserts again with one command, without a scene file.
+    let second_output = directory.0.join("inserted-again.mkv");
+    let mut insert_args = words(&["motion", "asset", "insert"]);
+    insert_args.push("--attach".into());
+    insert_args.push(pointer.as_os_str().to_owned());
+    insert_args.push("--asset-id".into());
+    insert_args.push(asset_id.into());
+    insert_args.push("--output".into());
+    insert_args.push(second_output.as_os_str().to_owned());
+    insert_args.push("--json".into());
+    let (inserted, _) = json_success(insert_args);
+    assert_eq!(inserted["track_id"].as_str(), Some(track_id.as_str()));
+    assert!(second_output.is_file());
+    let (clips, _) = json_success(path_args(
+        &["timeline", "clips"],
+        "--attach",
+        &pointer,
+        &["--track", &track_id, "--json"],
+    ));
+    assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 2);
+}
+
+
+#[test]
+fn motion_layout_reads_the_evaluated_boxes_at_an_exact_time() {
+    let directory = TestDirectory::new();
+    let path = directory.0.join("layout.ormotion.json");
+    let scene = serde_json::json!({
+        "format": "opencut-reinforced-motion-scene",
+        "schema_version": 1,
+        "scene_id": "7f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+        "name": "Layout probe",
+        "duration": {"numerator": 4, "denominator": 1},
+        "canvas": {"width": 1920, "height": 1080},
+        "assets": [],
+        "nodes": [{
+            "node_id": "title",
+            "kind": "text",
+            "text": "Xin chào",
+            "position": {"x": 100, "y": 80},
+            "font_size": 40,
+        }],
+        "animations": [{
+            "node_id": "title",
+            "property": "translation_x",
+            "keyframes": [
+                {"at": {"numerator": 0, "denominator": 1}, "value": 0.0},
+                {"at": {"numerator": 4, "denominator": 1}, "value": 400.0},
+            ],
+            "easing": "linear",
+        }],
+    });
+    fs::write(&path, serde_json::to_vec_pretty(&scene).unwrap()).unwrap();
+
+    let (start, _) = json_success(words(&[
+        "motion",
+        "layout",
+        "--file",
+        path.to_str().unwrap(),
+        "--at",
+        "0/1",
+        "--json",
+    ]));
+    let (middle, _) = json_success(words(&[
+        "motion",
+        "layout",
+        "--file",
+        path.to_str().unwrap(),
+        "--at",
+        "2/1",
+        "--json",
+    ]));
+    assert_eq!(start["node_count"], 1);
+    assert_eq!(start["nodes"][0]["text"], "Xin chào");
+    assert_eq!(start["nodes"][0]["position"]["x"], 100.0);
+    // The animation moves the anchor 0 → 400 px over four seconds, so the
+    // mid-point box is where the picture puts it, not the raw anchor.
+    assert_eq!(middle["nodes"][0]["position"]["x"], 300.0);
+    assert_eq!(middle["nodes"][0]["animated"], true);
 }

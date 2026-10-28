@@ -21,16 +21,18 @@ pointer to attach through).
 - When this workspace has no `project.json`, use the `mcp__or__*` tools for the
   edit instead, and say which surface you used.
 
-## A motion MCP tool is not available
+## A motion CLI verb is not available
 
-`mcp__or__motion_insert_scene` and the motion asset tools come from the app's MCP
-server. If the session does not expose them, the CLI can still validate and
-render a scene file to disk, but it cannot import or insert the result. Tell the
-user that insertion needs the app's assistant connection, and stop there.
+`tools/or motion publish` and the motion asset verbs need a running OR app with
+this workspace's `project.json`. If the verb itself is missing, the app build is
+older than the workspace: ask the user to update OR, and use the
+`mcp__or__motion_*` fallback only until then. If the app is not connected, the
+CLI can still validate a scene and render a file to disk, but nothing can be
+imported or inserted; tell the user insertion needs the open app and stop.
 
 ## Materialisation is slow
 
-`motion_insert_scene` encodes every frame with the app's encoder. A short scene
+`motion publish` encodes every frame with the app's encoder. A short scene
 still takes seconds to minutes. Wait for the tool result; do not start a second
 render and do not retry after a timeout without checking whether the clip
 appeared. If a render fails, read the returned code, fix the scene, and retry

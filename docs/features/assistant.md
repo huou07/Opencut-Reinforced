@@ -68,10 +68,10 @@ library, and a CLI failure its error does not explain:
 | `captions transcribe` | `captions_transcribe` | local multilingual transcript proposal; review before applying |
 | `timeline import-captions` | — | apply a reviewed SRT/WebVTT file as a new caption track |
 | `timeline duck-clip` | `duck_music` | lower a music clip under a voice track as one undoable command |
-| — (renders a file only) | `motion_insert_scene` | render a code file or `.ormotion.json` scene, import it, insert it |
-| — (needs a library path) | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
-| — (needs a library path) | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
-| `motion asset save` (needs a library path) | `motion_asset_save` | save an authored scene file as a classified library asset with a preview |
+| `motion publish` | `motion_insert_scene` | validate a scene, save it to the library, render it, import it and insert it in one call |
+| `motion asset list` | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
+| `motion asset insert` | `motion_asset_insert` | instantiate a library asset with parameter values, render it, import it and insert it |
+| `motion asset save` | `motion_asset_save` | save an authored scene file as a classified library asset with a preview |
 
 Times accept exact `NUM/DEN` seconds or decimal seconds. Neither surface can
 write project files directly, read arbitrary paths through IPC, or run shell
@@ -85,10 +85,11 @@ MotionScene renderer and its own FFmpeg encoder, then the same call imports the
 video and inserts an ordinary, editable clip. No provider or network call
 happens during rendering. The clip behaves like any other media clip: trim,
 split, move, export, and save/reopen. The workspace Motion guide documents
-`tools/or motion validate|inspect|evaluate|from-code|render` and the scene
-scaffold, so an agent checks a scene with the CLI before paying for a full
-materialisation; insertion stays on the MCP tool because `or motion materialize`
-only writes a file.
+`tools/or motion validate|inspect|evaluate|from-code|render|publish` and the
+scene scaffold, so an agent checks a scene with the CLI before paying for a full
+materialisation. `or motion publish` performs the whole path (library save,
+render, import, insert) through ordinary validated commands; `materialize` only
+writes a file, and the MCP insertion tool is its fallback.
 
 ## Script, narration, captions and music from chat
 

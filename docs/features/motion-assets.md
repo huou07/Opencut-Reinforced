@@ -1,6 +1,6 @@
 # Feature — Motion Assets and Library
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: the reusable MotionAsset document, its deterministic classifier, the
 app-level library, the Motion surface and the timeline/agent insertion paths
@@ -16,7 +16,8 @@ scene clip.
 | Composition canvas | Select (click, shift-click, marquee), drag, resize, rotate, retitle, recolour, outline, resize text, nudge, add text, add a library object, delete, and undo/redo the draft — inline or in the expanded editor |
 | Timeline | Accepts a dragged asset card and appends the materialised clip at the end of the first unlocked video track |
 | `or mcp` | `motion_asset_list`, `motion_asset_insert` for the assistant — the fallback the CLI cannot replace |
-| `or motion asset` | `validate`, `save`, `list`, `instantiate`, `remove`, `import` for people and scripts |
+| `or motion asset` | `validate`, `save`, `list`, `instantiate`, `insert`, `remove`, `import`; `insert` renders and places a library asset in the open project |
+| `or motion publish` | save a scene as an asset, render it, import it and insert it in one call |
 
 ## Asset document
 
@@ -173,17 +174,16 @@ validated before the bridge returns it.
 
 ## Agents
 
-`mcp__or__motion_asset_list` pages the catalogue; `mcp__or__motion_asset_insert`
-takes `asset_id`, an optional `values` object keyed by parameter id, and the
-usual `at`, `track_id`, `width`, `height`, `frame_rate`, `output_path`. It
-instantiates, prepares the image files, materialises through the app, imports and
-inserts. `mcp__or__motion_asset_save` wraps an authored scene file into a scene
-asset with a preview.
+`or motion asset list --attach project.json` pages the catalogue; `or motion
+asset insert --asset-id ... [--values JSON]` instantiates, prepares the image
+files, materialises through the app, imports and inserts. `or motion publish`
+saves an authored scene as a scene asset with a preview and inserts the render.
+The CLI resolves the library folder from the workspace `project.json`
+(`motion_library_path`), so no flag is needed; `--library` overrides it.
 
-These are fallback tools: the assistant reads and edits the project through the
-`or` CLI by default, and the library operations stay on MCP because the CLI asset
-verbs need a library folder path the session workspace does not expose. The
-workspace guide and persona route to them for that reason.
+The MCP tools (`motion_asset_list`, `motion_asset_insert`, `motion_asset_save`,
+`motion_insert_scene`) remain as the fallback when a CLI verb is unavailable.
+The workspace guide and persona route to the CLI first.
 
 ## Bounds
 
@@ -198,6 +198,8 @@ materialised frames.
 - No live timeline MotionClip; an inserted asset is video plus a provenance
   sidecar, not an editable scene object, and the app does not surface the sidecar
   in its inspector yet.
+- `publish` accepts vector scenes; a scene with image assets is still saved from
+  the app, because publishing would have to copy those images into the library.
 - A dragged card appends at the track end; it does not place at the drop time or
   the playhead.
 - Motion presets (`kind: motion`) are validated and catalogued but cannot be

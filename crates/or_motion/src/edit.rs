@@ -194,7 +194,7 @@ impl fmt::Display for MotionSceneEditError {
 }
 
 /// One node as the editor draws it: an anchor, a handle box and what to show.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct MotionNodeBox {
     pub node_id: String,
     pub kind: MotionNodeKind,
@@ -606,13 +606,19 @@ fn check_selection_size(count: usize) -> Result<(), MotionSceneEditError> {
 /// the picture puts the node. A translation track moves on top of the static anchor
 /// and is reflected here; the editor still edits the anchor.
 pub fn scene_node_boxes(scene: &MotionScene) -> Vec<MotionNodeBox> {
+    scene_node_boxes_at(scene, RationalTime::ZERO)
+}
+
+/// The same boxes at an exact time, so an agent or a reviewer can read a
+/// mid-animation composition instead of guessing from a screenshot.
+pub fn scene_node_boxes_at(scene: &MotionScene, time: RationalTime) -> Vec<MotionNodeBox> {
     let animated = |node_id: &str| {
         scene
             .animations
             .iter()
             .any(|animation| animation.node_id == node_id)
     };
-    match crate::evaluate_scene(scene, RationalTime::ZERO) {
+    match crate::evaluate_scene(scene, time) {
         Ok(frame) => frame
             .instructions
             .into_iter()
@@ -656,8 +662,8 @@ pub fn scene_node_boxes(scene: &MotionScene) -> Vec<MotionNodeBox> {
                 }
             })
             .collect(),
-        // A scene whose first frame cannot be evaluated (an empty duration, say) is
-        // still worth listing so the editor can be used to fix it.
+        // A scene whose frame cannot be evaluated (an empty duration, say) is
+        // still worth listing so the editor or an agent can fix it.
         Err(_) => raw_node_boxes(&scene.nodes, 0, &animated),
     }
 }
