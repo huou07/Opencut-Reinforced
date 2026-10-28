@@ -1,6 +1,6 @@
 # Feature — Media Library and Import
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: bringing media into a project, showing it, replacing it, and telling the
 user precisely what is wrong when it cannot be used.
@@ -17,6 +17,11 @@ user precisely what is wrong when it cannot be used.
   symlinks, and reports an empty or oversized selection before mutating anything.
 - Unsupported media is reported as unsupported (container or codec), never as
   corruption.
+- A failed packaged `ffprobe` does not block import: the bridge falls back to
+  the libavformat it links for playback and applies the identical matrix. The
+  `mov-import` journey imports a real QuickTime file in the running app with
+  `OR_FFPROBE_PATH` pointed at a missing executable, so the fallback is the path
+  under test.
 
 Supported profile: Matroska (FFV1/PCM S16LE, VP9/Opus, H.264/AAC), WAV PCM
 S16LE, MP3 audio and WebM VP9/Opus. MP4-family H.264/AAC import is a candidate
