@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -29,7 +29,8 @@ justification and review.
   **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the
   normal project reads. Generation is a bounded batch of ordinary commands, not
-  a second project model.
+  a second project model. The voice a narration run uses is chosen in
+  **Settings → Narration**, where it can be searched and previewed.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

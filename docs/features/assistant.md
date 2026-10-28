@@ -1,6 +1,6 @@
 # Feature — Assistant Panel
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
 ACP, the `or` CLI surface and MCP fallback that edit the open project, and the
@@ -98,7 +98,10 @@ routes them through `docs/script-and-voice.md`:
 - `tools/voiceover.mjs` validates an `or-assistant-script`, speaks each scene
   with the macOS `say` voice, measures the real WAV duration, writes a timing
   manifest and SRT, and with `--apply` imports the WAVs, places them on an audio
-  track and applies the captions. This is the offline narration path; nothing
+  track and applies the captions. The voice is the one saved in **Settings →
+  Narration** (written to `narration-settings.json` and read through the
+  workspace pointer), then the first installed Vietnamese voice; the tool has
+  no product-level voice constant. This is the offline narration path; nothing
   leaves the machine and no model is downloaded.
 - `tools/music.mjs` synthesises a quiet, royalty-free background bed from a mood,
   tempo and duration. It is deterministic per seed and has no network path.
@@ -162,8 +165,9 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
 - The MCP server still exposes every CLI verb as a fallback; a smaller fallback
   surface (motion insertion and the library only) is not yet enforced.
-- Narration quality is the system `say` voice; no cloud or neural voice is
-  selectable from the panel.
+- Narration quality is the installed system `say` voice. The voice is
+  selectable and previewable in Settings → Narration, but cloud and neural
+  providers, API keys and voice cloning are not implemented yet.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.
 - `--apply` reports a placed track and caption count but has no per-step undo

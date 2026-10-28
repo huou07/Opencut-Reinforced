@@ -191,6 +191,53 @@ class VoiceoverService {
     return results;
   }
 
+  /// Speechs one short sample with [voice] and plays it through the system
+  /// output. The returned file lets a test inspect the WAV without audio
+  /// hardware; playback is best-effort and never blocks the picker.
+  Future<File> preview({
+    required String voice,
+    required String text,
+    required Directory directory,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      throw const VoiceoverException('Nothing to preview.');
+    }
+    await directory.create(recursive: true);
+    final file = File('${directory.path}/voice-preview.wav');
+    final arguments = <String>[
+      if (voice != 'default') ...['-v', voice],
+      '-r',
+      '180',
+      '-o',
+      file.path,
+      '--data-format=LEI16@44100',
+      trimmed.length > 240 ? trimmed.substring(0, 240) : trimmed,
+    ];
+    final ProcessResult result;
+    try {
+      result = await Process.run(sayExecutable, arguments);
+    } on ProcessException catch (error) {
+      throw VoiceoverException(
+        'The macOS say command is unavailable (${error.message}).',
+      );
+    }
+    if (result.exitCode != 0) {
+      final detail = result.stderr.toString().trim();
+      throw VoiceoverException(
+        'say could not speak the preview: ${detail.isEmpty ? 'exit ${result.exitCode}' : detail}',
+      );
+    }
+    // `afplay` is the system player; a missing player is not a synthesis
+    // failure, so the preview file still returns.
+    try {
+      await Process.run('afplay', [file.path]);
+    } on ProcessException {
+      // The sample was written; the caller can still inspect or play it.
+    }
+    return file;
+  }
+
   /// Reads the exact duration of the PCM WAV that `say` wrote.
   Future<int> wavDurationMs(File file) async {
     final bytes = await file.readAsBytes();

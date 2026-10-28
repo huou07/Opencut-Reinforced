@@ -3247,10 +3247,25 @@ impl ProjectHostHandle {
         let item = match prepare_import_source(&path) {
             Ok(item) => item,
             Err(error) => {
+                let mut message = error.to_string();
+                // A missing `moov` is the signature of a recording that is still
+                // being written or a copy that was interrupted, not of a codec
+                // the editor refuses. Say what to do instead of repeating the
+                // backend's English reason alone.
+                if let or_core::MediaImportError::Probe(probe) = &error
+                    && probe
+                        .diagnostic()
+                        .is_some_and(|detail| detail.contains("moov atom not found"))
+                {
+                    message.push_str(
+                        " The file may still be recording or was not fully copied; \
+                         finish writing it and import again.",
+                    );
+                }
                 return ProjectActionResult {
                     succeeded: false,
                     error_code: error.code_str().to_owned(),
-                    message: error.to_string(),
+                    message,
                     view: None,
                 };
             }

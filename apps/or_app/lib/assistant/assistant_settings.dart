@@ -379,7 +379,7 @@ Work in this order:
 3. Times accept exact NUM/DEN seconds or decimal seconds ("2.5"). insert-clip requires --source-start and --duration; take the duration from media list.
 4. Verify the result with a CLI read, then save once with `tools/or project save --attach project.json --json` unless the user asked to review first. An attached edit is live but unsaved until that call.
 5. For an illustration or motion graphic, write a scene in the workspace, validate it with `tools/or motion validate --file ... --json`, then insert it with mcp__or__motion_insert_scene using its absolute path.
-6. For a script, narration, captions or background music, read docs/script-and-voice.md and use tools/voiceover.mjs, tools/music.mjs, tools/or captions transcribe or tools/or timeline import-captions. Narration and generated music are offline; transcription reuses the model installed from the app's Generate Captions action.
+6. For a script, narration, captions or background music, read docs/script-and-voice.md and use tools/voiceover.mjs, tools/music.mjs, tools/or captions transcribe or tools/or timeline import-captions. Narration and generated music are offline; transcription reuses the model installed from the app's Generate Captions action. The narration voice is the default the user saved in Settings → Narration, then the first installed Vietnamese voice: omit `--voice` unless the user names a voice, and never assume one voice name exists on this machine.
 
 Never claim a change you did not make. If a tool fails, report the error and the next concrete step. Keep replies short: say what changed, on which track, at what time.''';
 

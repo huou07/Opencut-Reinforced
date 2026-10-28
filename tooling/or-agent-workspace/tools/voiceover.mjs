@@ -16,7 +16,6 @@ const TOOL_ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_RATE = 44100;
 const MAX_SCENES = 300;
 const MAX_NARRATION_BYTES = 2000;
-const DEFAULT_VOICE = 'Linh';
 const DEFAULT_RATE = 180;
 const DEFAULT_GAP_MS = 250;
 
@@ -30,7 +29,7 @@ function usage() {
 Options:
   --script PATH   The or-assistant-script v1 file to narrate (required).
   --out DIR       Output directory; defaults to work/voiceover/<script slug>.
-  --voice NAME    macOS voice for say; defaults to the script voice or "${DEFAULT_VOICE}".
+  --voice NAME    macOS voice for say; defaults to the script voice, the app's saved narration default, then the first Vietnamese voice installed on this Mac.
   --rate N        Words per minute for say; defaults to the script rate or ${DEFAULT_RATE}.
   --gap-ms N      Silence between narration lines; defaults to the script gap_ms or ${DEFAULT_GAP_MS}.
   --plan          Validate and print the planned timings without speaking.
@@ -41,7 +40,7 @@ Options:
   --json          Print machine-readable JSON.
   --help          Print this text.
 
-The macOS command 'say -v ?' lists the installed voices. The default Linh voice is vi_VN.`;
+The macOS command 'say -v ?' lists the installed voices. The app writes the\nchosen default to narration-settings.json in its application support folder;\nthis tool reads it through the workspace project.json pointer.`;
 }
 
 function fail(message) {
@@ -169,9 +168,9 @@ function validateScript(document) {
     title: typeof document.title === 'string' && document.title.trim() ? document.title.trim() : null,
     language: typeof document.language === 'string' ? document.language.trim() : null,
     voice:
-      typeof document.voice === 'string' && document.voice.trim() ? document.voice.trim() : DEFAULT_VOICE,
-    rate: Number.isFinite(document.rate) ? Number(document.rate) : DEFAULT_RATE,
-    gapMs: Number.isFinite(document.gap_ms) ? Number(document.gap_ms) : DEFAULT_GAP_MS,
+      typeof document.voice === 'string' && document.voice.trim() ? document.voice.trim() : null,
+    rate: Number.isFinite(document.rate) ? Number(document.rate) : null,
+    gapMs: Number.isFinite(document.gap_ms) ? Number(document.gap_ms) : null,
     scenes,
   };
 }
@@ -186,6 +185,45 @@ function slugify(value) {
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'script'
   );
+}
+
+/// The app writes the user's voice choice beside its support data. The
+/// workspace pointer names that folder, so this tool follows the same default
+/// the Audio tool shows instead of hardcoding a voice name.
+async function readNarrationDefaults(attachPath) {
+  try {
+    const pointer = JSON.parse(await readFile(path.resolve(attachPath), 'utf8'));
+    const support = typeof pointer.app_support_path === 'string' ? pointer.app_support_path : '';
+    if (!support) return {};
+    const settings = JSON.parse(
+      await readFile(path.join(support, 'narration-settings.json'), 'utf8'),
+    );
+    return {
+      voice: typeof settings.voice === 'string' && settings.voice.trim() ? settings.voice.trim() : null,
+      rate: Number.isFinite(settings.rate) ? Number(settings.rate) : null,
+      gapMs: Number.isFinite(settings.gap_ms) ? Number(settings.gap_ms) : null,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/// Picks the machine's Vietnamese voice instead of a product constant.
+function firstInstalledVietnameseVoice() {
+  const result = spawnSync('say', ['-v', '?'], { encoding: 'utf8' });
+  if (result.error || result.status !== 0) {
+    fail('macOS say is unavailable; a narration voice cannot be resolved');
+  }
+  const voices = [];
+  for (const rawLine of (result.stdout ?? '').split('\n')) {
+    const match = /^(.+?)\s+([a-z]{2,3}_[A-Z]{2})(?:\s+#.*)?$/.exec(rawLine.trimEnd());
+    if (!match) continue;
+    voices.push({ name: match[1].trim(), locale: match[2] });
+  }
+  if (voices.length === 0) return 'default';
+  const vietnamese = voices.find((voice) => voice.locale === 'vi_VN') ??
+    voices.find((voice) => voice.locale.startsWith('vi'));
+  return (vietnamese ?? voices[0]).name;
 }
 
 function say(text, outPath, voice, rate) {
@@ -350,9 +388,14 @@ async function main() {
     fail(`could not read ${args.script}: ${error.message}`);
   }
   const script = validateScript(raw);
-  const voice = args.voice ?? script.voice;
-  const rate = args.rate ?? script.rate;
-  const gapMs = args.gapMs ?? script.gapMs;
+  const narration = await readNarrationDefaults(args.attach);
+  const voice =
+    args.voice ??
+    script.voice ??
+    narration.voice ??
+    (process.platform === 'darwin' ? firstInstalledVietnameseVoice() : 'default');
+  const rate = args.rate ?? script.rate ?? narration.rate ?? DEFAULT_RATE;
+  const gapMs = args.gapMs ?? script.gapMs ?? narration.gapMs ?? DEFAULT_GAP_MS;
   const outDirectory = path.resolve(
     args.out ?? path.join('work', 'voiceover', slugify(script.title ?? path.basename(scriptPath, '.json'))),
   );

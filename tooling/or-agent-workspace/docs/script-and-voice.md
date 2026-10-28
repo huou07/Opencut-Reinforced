@@ -30,7 +30,6 @@ shows (it defaults to the narration).
   "schema_version": 1,
   "title": "Giới thiệu OR",
   "language": "vi",
-  "voice": "Linh",
   "rate": 180,
   "gap_ms": 250,
   "scenes": [
@@ -58,8 +57,11 @@ shows (it defaults to the narration).
 | `marker` | optional timeline marker label for this scene boundary |
 | `duration_ms` | the planned visual length; only used by `--plan` |
 
-The script may contain at most 300 scenes. `voice` defaults to `Linh` (vi_VN),
-`rate` to 180 words per minute, and `gap_ms` to 250 milliseconds between lines.
+The script may contain at most 300 scenes. Every field except `scenes` is
+optional. When `voice` is omitted the tool uses the voice saved in the app's
+**Narration voice** dialog, then the first installed Vietnamese voice on the
+machine; it never falls back to a product constant such as `Linh`. `rate`
+defaults to 180 words per minute and `gap_ms` to 250 milliseconds between lines.
 
 ## Narration
 
@@ -86,7 +88,6 @@ manifest is the same shape the applied path uses:
 {
   "format": "or-voiceover-manifest",
   "schema_version": 1,
-  "voice": "Linh",
   "rate": 180,
   "gap_ms": 250,
   "total_ms": 6484,

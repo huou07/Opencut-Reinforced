@@ -138,6 +138,10 @@ class AgentWorkspace {
     'project_name': projectName,
     'project_path': projectPath,
     'descriptor_path': descriptorPath,
+    // The workspace lives directly under application support, so the installed
+    // tools can find non-secret app preferences (the narration voice) without
+    // guessing a bundle identifier or duplicating a product constant.
+    'app_support_path': directory.parent.path,
   });
 
   /// Records the `or` CLI beside the app build for `tools/or`.

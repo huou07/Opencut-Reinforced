@@ -4,6 +4,8 @@ import '../core_gateway.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../production/narration_settings.dart';
+import '../production/narration_settings_dialog.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
 
@@ -36,6 +38,32 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   _SettingsSection _selected = _SettingsSection.appearance;
   late Future<_Diagnostics> _diagnostics = _loadDiagnostics();
+  final NarrationSettingsStore _narrationStore = NarrationSettingsStore();
+  NarrationSettings? _narration;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNarration();
+  }
+
+  Future<void> _loadNarration() async {
+    final settings = await _narrationStore.load();
+    if (mounted) setState(() => _narration = settings);
+  }
+
+  /// The voice surface is app-level, so it is reachable without an open
+  /// project; the same file is what `tools/voiceover.mjs` follows.
+  Future<void> _chooseNarrationVoice() async {
+    final current = _narration ?? await _narrationStore.load();
+    if (!mounted) return;
+    final chosen = await showDialog<NarrationSettings>(
+      context: context,
+      builder: (context) => NarrationSettingsDialog(initial: current),
+    );
+    if (!mounted || chosen == null) return;
+    setState(() => _narration = chosen);
+  }
 
   Future<_Diagnostics> _loadDiagnostics() async => (
     appInfo: await widget.gateway.appInfo(),
@@ -172,17 +200,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _generalSection() => const OrPanel(
-    key: ValueKey('settings-general'),
-    title: 'General',
-    padding: EdgeInsets.zero,
-    child: OrEmptyState(
-      title: 'No general settings are available yet',
-      message:
-          'This Developer Preview has no configurable general preferences.',
-      icon: Icons.tune_outlined,
-    ),
-  );
+  Widget _generalSection() {
+    final narration = _narration;
+    final voice = narration == null || narration.voice.isEmpty
+        ? 'Automatic: the first installed Vietnamese voice on this Mac'
+        : '${narration.voice} (${narration.locale}) · ${narration.rate} wpm · ${narration.gapMs} ms gap';
+    return OrPanel(
+      key: const ValueKey('settings-general'),
+      title: 'Narration',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'The voice the Audio tool and the assistant use for offline '
+            'narration. The choice is saved for this Mac; no audio or text '
+            'leaves the machine.',
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          Text(
+            voice,
+            key: const ValueKey('settings-narration-voice-summary'),
+            style: const TextStyle(fontSize: OrType.metadataSize),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          OutlinedButton.icon(
+            key: const ValueKey('settings-choose-narration-voice'),
+            onPressed: _chooseNarrationVoice,
+            icon: const Icon(Icons.record_voice_over_outlined, size: 16),
+            label: const Text('Choose voice…'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _advancedSection() {
     return Column(

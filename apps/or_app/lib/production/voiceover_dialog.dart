@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../project/project_gateway.dart';
+import 'narration_settings.dart';
+import 'narration_settings_dialog.dart';
 import 'voiceover_service.dart';
 
 /// Collects a script and runs offline narration into the open project.
@@ -28,9 +30,11 @@ class VoiceoverDialog extends StatefulWidget {
 class _VoiceoverDialogState extends State<VoiceoverDialog> {
   final TextEditingController _script = TextEditingController();
   final VoiceoverService _voiceover = VoiceoverService();
+  final NarrationSettingsStore _settings = NarrationSettingsStore();
   late final VoiceoverApplier _applier = VoiceoverApplier(widget.gateway);
 
   List<VoiceOption> _voices = const [];
+  NarrationSettings _saved = const NarrationSettings();
   String? _voice;
   double _rate = 180;
   double _gapMs = 250;
@@ -57,24 +61,49 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     });
     try {
       final voices = await _voiceover.listVoices();
+      final saved = await _settings.load();
       if (!mounted) return;
-      VoiceOption? preferred;
-      for (final locale in ['vi_VN', 'en_US', 'en_GB']) {
-        for (final voice in voices) {
-          if (voice.locale == locale) {
-            preferred = voice;
-            break;
-          }
-        }
-        if (preferred != null) break;
-      }
+      final preferred =
+          NarrationSettings.preferredVoiceName(voices, saved) ??
+          (voices.isEmpty ? null : voices.first.name);
       setState(() {
         _voices = voices;
-        _voice = (preferred ?? (voices.isEmpty ? null : voices.first))?.name;
+        _saved = saved;
+        _voice = preferred;
+        _rate = saved.rate.toDouble();
+        _gapMs = saved.gapMs.toDouble();
       });
     } on VoiceoverException catch (error) {
       if (mounted) setState(() => _error = error.message);
     }
+  }
+
+  /// Opens the full voice surface, then adopts and persists its result.
+  Future<void> _openVoiceSettings() async {
+    final current = NarrationSettings(
+      voice: _voice ?? _saved.voice,
+      locale: _localeOf(_voice) ?? _saved.locale,
+      rate: _rate.round(),
+      gapMs: _gapMs.round(),
+    );
+    final chosen = await showDialog<NarrationSettings>(
+      context: context,
+      builder: (context) => NarrationSettingsDialog(initial: current),
+    );
+    if (!mounted || chosen == null) return;
+    setState(() {
+      _saved = chosen;
+      if (chosen.voice.isNotEmpty) _voice = chosen.voice;
+      _rate = chosen.rate.toDouble();
+      _gapMs = chosen.gapMs.toDouble();
+    });
+  }
+
+  String? _localeOf(String? voice) {
+    for (final option in _voices) {
+      if (option.name == voice) return option.locale;
+    }
+    return null;
   }
 
   Future<void> _generate() async {
@@ -98,6 +127,20 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       _stage = 'Preparing narration…';
       _progress = null;
     });
+    // The inline choices are the next run's defaults; a failed write is not a
+    // reason to refuse the narration.
+    try {
+      await _settings.save(
+        NarrationSettings(
+          voice: voice,
+          locale: _localeOf(voice) ?? _saved.locale,
+          rate: _rate.round(),
+          gapMs: _gapMs.round(),
+        ),
+      );
+    } catch (_) {
+      // Persisting a preference is best-effort.
+    }
     try {
       final directory = await _voiceover.outputDirectory();
       final synthesized = await _voiceover.synthesize(
@@ -188,24 +231,40 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                   ],
                 )
               else
-                DropdownButtonFormField<String>(
-                  key: ValueKey('voiceover-voice-${_voice ?? 'none'}'),
-                  initialValue: _voice,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    labelText: 'Voice',
-                  ),
-                  items: [
-                    for (final voice in _voices)
-                      DropdownMenuItem(
-                        value: voice.name,
-                        child: Text(voice.label, overflow: TextOverflow.ellipsis),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey('voiceover-voice-${_voice ?? 'none'}'),
+                        initialValue: _voice,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Voice',
+                        ),
+                        items: [
+                          for (final voice in _voices)
+                            DropdownMenuItem(
+                              value: voice.name,
+                              child: Text(
+                                voice.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() => _voice = value),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const ValueKey('voiceover-manage-voices'),
+                      onPressed: _busy ? null : _openVoiceSettings,
+                      child: const Text('Voice settings…'),
+                    ),
                   ],
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() => _voice = value),
                 ),
               const SizedBox(height: 8),
               Row(
