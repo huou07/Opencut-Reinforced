@@ -625,7 +625,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                         Expanded(
                           // Stretch, not the Row default of center: a short page
-                          // (Settings, Templates) otherwise shrank to its content
+                          // (Settings) otherwise shrank to its content
                           // height and floated in the middle of the workspace, so
                           // the same page title sat at y=120 on Projects and
                           // y=302 on Settings at 1280x800 (measured 2026-10-25).
