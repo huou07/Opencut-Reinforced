@@ -1,6 +1,6 @@
 # Quality Bar
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: the attributes OR holds itself to, how each is measured, and which gaps
 are known. The current runtime target is the local macOS app on the owner's M5
@@ -90,6 +90,18 @@ change:
   compress far less, and there the encode gets slower than a stored block in
   exchange for a smaller payload, which is the right trade for a still that
   crosses the bridge into the panel.
+
+### Interaction latency after in-place preview refresh (2026-10-28)
+
+- Workload: `scripts/ui_scenarios/interaction-latency.json` on the Flutter test
+  binding — ten repeats per block, timed to the visible state rather than to the
+  harness's settle.
+- Result: preview frame step forward/back **p50 5.2 ms, p95 14.8 ms** (inside the
+  16.68 ms budget); Projects/Home screen switch p50 101.7 ms, p95 179.1 ms;
+  export dialog open/cancel p50 133.6 ms, p95 165.3 ms.
+- Caveat: debug-lane wall clock, not a release or GPU claim. The edit-to-preview
+  path is structural evidence (one seek, texture kept) plus the widget contract,
+  not a separate wall-clock row yet.
 
 ### Hardware export from GPU NV12 planes (2026-10-27)
 
