@@ -1337,11 +1337,8 @@ mod tests {
         // the direction silently resets on reopen.
         let forward = ClipContent::Media {
             media_id: MediaId::generate(),
-            source_range: TimeRange::new(
-                RationalTime::ZERO,
-                RationalTime::new(2, 1).unwrap(),
-            )
-            .unwrap(),
+            source_range: TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap())
+                .unwrap(),
             playback_rate: RationalRate::ONE,
             reversed: false,
             frozen: false,
@@ -1354,11 +1351,8 @@ mod tests {
 
         let reversed = ClipContent::Media {
             media_id: MediaId::generate(),
-            source_range: TimeRange::new(
-                RationalTime::ZERO,
-                RationalTime::new(2, 1).unwrap(),
-            )
-            .unwrap(),
+            source_range: TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap())
+                .unwrap(),
             playback_rate: RationalRate::ONE,
             reversed: true,
             frozen: false,
@@ -1375,22 +1369,21 @@ mod tests {
         // freeze must be expressible by writing the same content back.
         let frozen = ClipContent::Media {
             media_id: MediaId::generate(),
-            source_range: TimeRange::new(
-                RationalTime::ZERO,
-                RationalTime::new(2, 1).unwrap(),
-            )
-            .unwrap(),
+            source_range: TimeRange::new(RationalTime::ZERO, RationalTime::new(2, 1).unwrap())
+                .unwrap(),
             playback_rate: RationalRate::ONE,
             reversed: false,
             frozen: true,
         };
         let encoded = serde_json::to_string(&frozen).unwrap();
         assert!(encoded.contains("frozen"));
-        assert_eq!(serde_json::from_str::<ClipContent>(&encoded).unwrap(), frozen);
+        assert_eq!(
+            serde_json::from_str::<ClipContent>(&encoded).unwrap(),
+            frozen
+        );
         assert!(frozen.frozen());
         assert!(!forward.frozen());
     }
-
 
     use super::{
         ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,

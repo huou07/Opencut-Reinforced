@@ -6,9 +6,7 @@
 
 use or_core::{MediaSourceRef, ProjectDocument, RationalTime, TimeRange};
 use or_media::SoftwareMediaDecoder;
-use or_runtime::{
-    BudgetLimits, CancellationToken, RenderSnapshot, RuntimeBudgets,
-};
+use or_runtime::{BudgetLimits, CancellationToken, RenderSnapshot, RuntimeBudgets};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -44,8 +42,11 @@ fn decode_1080p_throughput() {
     let project = ProjectDocument::new("decode throughput");
     let project_snapshot = RenderSnapshot::from_project(
         &project,
-        TimeRange::new(RationalTime::new(0, 1).unwrap(), RationalTime::new(10, 1).unwrap())
-            .unwrap(),
+        TimeRange::new(
+            RationalTime::new(0, 1).unwrap(),
+            RationalTime::new(10, 1).unwrap(),
+        )
+        .unwrap(),
     );
     let _ = project_snapshot;
 

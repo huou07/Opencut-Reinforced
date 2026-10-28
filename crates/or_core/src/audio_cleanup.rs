@@ -422,16 +422,13 @@ pub fn measure_noise_floor_db(
 
     let samples = read_wav_pcm16(&decoded);
     let _ = std::fs::remove_file(&decoded);
-    let samples = samples.ok_or_else(|| {
-        AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed)
-    })?;
+    let samples =
+        samples.ok_or_else(|| AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed))?;
     let windows = window_rms_dbfs(&samples, WINDOW_SAMPLES);
     // A recording with no measurable window is silent, which is a fact about the
     // material rather than a failed run; the caller can say so.
     if windows.is_empty() {
-        return Err(AudioCleanupError::new(
-            AudioCleanupErrorCode::SilentSource,
-        ));
+        return Err(AudioCleanupError::new(AudioCleanupErrorCode::SilentSource));
     }
     let floor = percentile(&windows, percentile_rank)
         .ok_or_else(|| AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed))?;
@@ -532,10 +529,22 @@ mod tests {
             .iter()
             .map(|argument| argument.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
-        assert!(arguments.windows(2).any(|pair| pair == ["-ac", "1"]), "{arguments:?}");
-        assert!(arguments.windows(2).any(|pair| pair == ["-f", "wav"]), "{arguments:?}");
-        assert_eq!(arguments.last().map(String::as_str), Some("/tmp/or-decoded.wav"));
-        assert!(!arguments.iter().any(|argument| argument.contains("astats")), "{arguments:?}");
+        assert!(
+            arguments.windows(2).any(|pair| pair == ["-ac", "1"]),
+            "{arguments:?}"
+        );
+        assert!(
+            arguments.windows(2).any(|pair| pair == ["-f", "wav"]),
+            "{arguments:?}"
+        );
+        assert_eq!(
+            arguments.last().map(String::as_str),
+            Some("/tmp/or-decoded.wav")
+        );
+        assert!(
+            !arguments.iter().any(|argument| argument.contains("astats")),
+            "{arguments:?}"
+        );
     }
 
     #[test]
@@ -549,10 +558,7 @@ mod tests {
 
     #[test]
     fn a_wav_written_by_the_helper_is_read_back_as_samples() {
-        let path = std::env::temp_dir().join(format!(
-            "or-wav-read-{}.wav",
-            std::process::id()
-        ));
+        let path = std::env::temp_dir().join(format!("or-wav-read-{}.wav", std::process::id()));
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"RIFF");
         bytes.extend_from_slice(&(36u32 + 8).to_le_bytes());
@@ -573,7 +579,6 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         assert_eq!(samples, Some(vec![1, -2]));
     }
-
 
     #[test]
     fn a_silent_source_has_no_measurable_window() {
