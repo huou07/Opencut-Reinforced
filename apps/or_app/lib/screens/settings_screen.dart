@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core_gateway.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../production/cloud_voice_settings_panel.dart';
 import '../production/editor_settings.dart';
 import '../production/narration_settings.dart';
 import '../production/narration_settings_dialog.dart';
@@ -59,6 +62,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadNarration() async {
     final settings = await _narrationStore.load();
     if (mounted) setState(() => _narration = settings);
+  }
+
+  Future<void> _saveNarration(NarrationSettings settings) async {
+    setState(() => _narration = settings);
+    try {
+      await _narrationStore.save(settings);
+    } catch (_) {
+      if (mounted) {
+        OrSnackBar.show(context, 'The narration settings could not be saved.');
+      }
+    }
   }
 
   Future<void> _setShowInspector(bool show) async {
@@ -253,6 +267,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: _chooseNarrationVoice,
             icon: const Icon(Icons.record_voice_over_outlined, size: 16),
             label: const Text('Choose voice…'),
+          ),
+          const Divider(height: OrSpacing.x6),
+          Text(
+            'CLOUD VOICES',
+            style: TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.tinySize,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          CloudVoiceSettingsPanel(
+            settings: narration ?? const NarrationSettings(),
+            onChanged: (settings) => unawaited(_saveNarration(settings)),
           ),
           const Divider(height: OrSpacing.x6),
           SwitchListTile(

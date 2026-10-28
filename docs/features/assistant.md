@@ -166,9 +166,12 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
 - The MCP server still exposes every CLI verb as a fallback; a smaller fallback
   surface (motion insertion and the library only) is not yet enforced.
-- Narration quality is the installed system `say` voice. The voice is
-  selectable and previewable in Settings → Narration, but cloud and neural
-  providers, API keys and voice cloning are not implemented yet.
+- Narration quality is the installed system `say` voice, or a configured cloud
+  provider. The voice is selectable and previewable in Settings → Narration;
+  ElevenLabs and Azure keys are stored in the keychain, and an ElevenLabs
+  personal voice can be created from a recorded WAV sample with an explicit
+  consent checkbox. The offline `tools/voiceover.mjs` path still uses the system
+  voice, so a cloud choice applies to narration produced in the app.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.
 - `--apply` reports a placed track and caption count but has no per-step undo

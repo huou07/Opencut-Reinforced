@@ -305,6 +305,7 @@ class VoiceoverApplier {
     required ProjectSessionHandle session,
     required ProjectReadModel project,
     required List<VoiceoverLine> lines,
+    bool includeCaptions = true,
     void Function(String stage, int completed, int total)? onProgress,
   }) async {
     var current = project;
@@ -357,6 +358,9 @@ class VoiceoverApplier {
       onProgress?.call('Placing narration', index + 1, lines.length);
     }
 
+    if (!includeCaptions) {
+      return VoiceoverApplied(trackId: trackId, captionCount: 0, lines: lines);
+    }
     final cues = lines
         .map(
           (line) => ProjectCaptionCue(

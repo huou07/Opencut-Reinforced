@@ -20,6 +20,11 @@ output and AI output. A project file never causes code execution on open.
 - Network permissions and Offline Mode are enforced at the application/provider
   boundary — below individual UI controls — so GUI, CLI and agents cannot bypass
   them.
+- Narration API keys are generic-password items in the macOS keychain, service
+  `io.github.huou07.orApp.narration`, account = provider id, accessible only when
+  the device is unlocked and never synced. The key crosses the Flutter/Rust
+  boundary only inside the provider request that uses it; it is not written to
+  `narration-settings.json`, a project, the agent workspace, logs or CLI output.
 
 ## Local IPC
 

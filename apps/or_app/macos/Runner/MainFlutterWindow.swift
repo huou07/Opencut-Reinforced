@@ -1,6 +1,8 @@
 import Cocoa
 import FlutterMacOS
 import UniformTypeIdentifiers
+import Security
+import AVFoundation
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
@@ -25,6 +27,8 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    NarrationBridge.register(
+      with: flutterViewController.registrar(forPlugin: "NarrationBridge"))
     MacOSScopedFileAccessPlugin.register(
       with: flutterViewController.registrar(forPlugin: "MacOSScopedFileAccessPlugin"))
 
@@ -443,5 +447,193 @@ private final class PersistentScopedBookmarks {
     case accessUnavailable
     case storageUnavailable
     case invalidStore
+  }
+}
+
+
+/// Keychain-backed narration credentials.
+///
+/// API keys never enter the project file, a preferences file or the Dart layer:
+/// Dart can write, delete and ask whether an account is configured, but it reads
+/// the secret back only through this channel when a request is made. The item is
+/// device-only and available when unlocked.
+private final class NarrationBridge: NSObject, FlutterPlugin {
+  private static let channelName = "or_narration"
+  private static let service = "io.github.huou07.orApp.narration"
+  private var recorder: AVAudioRecorder?
+
+  static func register(with registrar: FlutterPluginRegistrar) {
+    registrar.addMethodCallDelegate(
+      NarrationBridge(),
+      channel: FlutterMethodChannel(
+        name: channelName,
+        binaryMessenger: registrar.messenger
+      )
+    )
+  }
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let arguments = call.arguments as? [String: Any],
+          let account = arguments["account"] as? String,
+          !account.isEmpty,
+          account.count <= 128 else {
+      result(FlutterError(
+        code: "INVALID_ACCOUNT",
+        message: "A narration credential needs a short account name.",
+        details: nil
+      ))
+      return
+    }
+    switch call.method {
+    case "keychainGet":
+      result(read(account))
+    case "keychainSet":
+      guard let value = arguments["value"] as? String, !value.isEmpty else {
+        result(FlutterError(
+          code: "INVALID_SECRET",
+          message: "The key is empty.",
+          details: nil
+        ))
+        return
+      }
+      do {
+        try write(account, value)
+        result(true)
+      } catch {
+        result(FlutterError(
+          code: "KEYCHAIN_WRITE_FAILED",
+          message: "macOS could not store this key.",
+          details: nil
+        ))
+      }
+    case "keychainDelete":
+      delete(account)
+      result(true)
+    case "keychainHas":
+      result(read(account)?.isEmpty == false)
+    case "recordPermission":
+      permission(result)
+    case "recordStart":
+      guard let path = arguments["path"] as? String, !path.isEmpty else {
+        result(FlutterError(
+          code: "INVALID_PATH",
+          message: "Recording needs an output path.",
+          details: nil
+        ))
+        return
+      }
+      startRecording(path, result: result)
+    case "recordStop":
+      stopRecording(result: result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func permission(_ result: @escaping FlutterResult) {
+    switch AVCaptureDevice.authorizationStatus(for: .audio) {
+    case .authorized:
+      result("granted")
+    case .denied:
+      result("denied")
+    case .restricted:
+      result("restricted")
+    case .notDetermined:
+      AVCaptureDevice.requestAccess(for: .audio) { granted in
+        DispatchQueue.main.async {
+          result(granted ? "granted" : "denied")
+        }
+      }
+    @unknown default:
+      result("unknown")
+    }
+  }
+
+  private func startRecording(_ path: String, result: @escaping FlutterResult) {
+    let url = URL(fileURLWithPath: path)
+    try? FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    let settings: [String: Any] = [
+      AVFormatIDKey: Int(kAudioFormatLinearPCM),
+      AVSampleRateKey: 48_000.0,
+      AVNumberOfChannelsKey: 1,
+      AVLinearPCMBitDepthKey: 16,
+      AVLinearPCMIsFloatKey: false,
+      AVLinearPCMIsBigEndianKey: false,
+    ]
+    do {
+      recorder?.stop()
+      let next = try AVAudioRecorder(url: url, settings: settings)
+      next.isMeteringEnabled = false
+      guard next.prepareToRecord(), next.record() else {
+        result(FlutterError(
+          code: "RECORDING_FAILED",
+          message: "The microphone could not start recording.",
+          details: nil
+        ))
+        return
+      }
+      recorder = next
+      result(true)
+    } catch {
+      result(FlutterError(
+        code: "RECORDING_FAILED",
+        message: "The microphone could not start recording.",
+        details: nil
+      ))
+    }
+  }
+
+  private func stopRecording(result: @escaping FlutterResult) {
+    guard let recorder else {
+      result(FlutterError(
+        code: "NOT_RECORDING",
+        message: "No recording is in progress.",
+        details: nil
+      ))
+      return
+    }
+    let seconds = recorder.currentTime
+    recorder.stop()
+    self.recorder = nil
+    result(["duration_ms": Int((seconds * 1000).rounded())])
+  }
+
+  private func baseQuery(_ account: String) -> [CFString: Any] {
+    [
+      kSecClass: kSecClassGenericPassword,
+      kSecAttrService: Self.service,
+      kSecAttrAccount: account,
+    ]
+  }
+
+  private func read(_ account: String) -> String? {
+    var query = baseQuery(account)
+    query[kSecReturnData] = true
+    query[kSecMatchLimit] = kSecMatchLimitOne
+    var item: CFTypeRef?
+    guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+          let data = item as? Data,
+          let value = String(data: data, encoding: .utf8) else {
+      return nil
+    }
+    return value
+  }
+
+  private func write(_ account: String, _ value: String) throws {
+    SecItemDelete(baseQuery(account) as CFDictionary)
+    var query = baseQuery(account)
+    query[kSecValueData] = Data(value.utf8)
+    query[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    let status = SecItemAdd(query as CFDictionary, nil)
+    guard status == errSecSuccess else {
+      throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+    }
+  }
+
+  private func delete(_ account: String) {
+    SecItemDelete(baseQuery(account) as CFDictionary)
   }
 }

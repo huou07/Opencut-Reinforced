@@ -23,6 +23,7 @@ import '../project/project_gateway.dart';
 import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
 import '../production/music_dialog.dart';
+import '../production/record_voice_dialog.dart';
 import '../production/voiceover_dialog.dart';
 import '../production/voiceover_service.dart';
 import '../screens/asset_library_screen.dart';
@@ -982,9 +983,13 @@ class _AppShellState extends State<AppShell> {
     ),
     AppDestination.editorPreview =>
       _activeSession == null
-          ? EditorShellPreviewScreen(assistant: _assistant)
+          ? EditorShellPreviewScreen(
+              assistant: _assistant,
+              onRecordVoice: _recordVoice,
+            )
           : EditorShellPreviewScreen(
               assistant: _assistant,
+              onRecordVoice: _recordVoice,
               key: _editorKey,
               isProjectWorkspace: true,
               project: _activeProject,
@@ -2961,6 +2966,51 @@ class _AppShellState extends State<AppShell> {
           '${applied.captionCount} '
           '${applied.captionCount == 1 ? 'caption' : 'captions'}.';
     });
+  }
+
+  /// Records one take and places it as an ordinary audio clip.
+  Future<void> _recordVoice() async {
+    final session = _activeSession;
+    final project = _activeProject;
+    if (session == null || project == null || _busy) return;
+    final recording = await showDialog<VoiceRecording>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const RecordVoiceDialog(),
+    );
+    if (!mounted || !identical(session, _activeSession) || recording == null) {
+      return;
+    }
+    if (recording.durationMs <= 0) {
+      _showUnavailable('The recording was empty. Record a longer take.');
+      return;
+    }
+    try {
+      await VoiceoverApplier(widget.projectGateway).apply(
+        session: session,
+        project: _activeProject ?? project,
+        lines: [
+          VoiceoverLine(
+            index: 1,
+            text: 'Recorded voice',
+            caption: '',
+            path: recording.path,
+            startMs: 0,
+            endMs: recording.durationMs,
+          ),
+        ],
+        includeCaptions: false,
+      );
+      if (!mounted || !identical(session, _activeSession)) return;
+      await _refreshProjectState(session);
+      if (!mounted) return;
+      final seconds = (recording.durationMs / 1000).toStringAsFixed(1);
+      setState(() => _projectNotice = 'Added a recorded voice clip (${seconds}s).');
+    } on VoiceoverException catch (error) {
+      if (mounted) _showUnavailable(error.message);
+    } on ProjectGatewayException catch (error) {
+      if (mounted) _showUnavailable(error.message);
+    }
   }
 
   /// Opens the generated-music workflow and refreshes the edit afterwards.

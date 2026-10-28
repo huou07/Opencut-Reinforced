@@ -68,6 +68,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onExportCaptions,
     this.onGenerateCaptions,
     this.onManageSpeechModel,
+    this.onRecordVoice,
     this.onGenerateVoiceover,
     this.onGenerateMusic,
     this.onCleanUpAudio,
@@ -163,6 +164,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
   final VoidCallback? onManageSpeechModel;
+  final VoidCallback? onRecordVoice;
   final VoidCallback? onGenerateVoiceover;
   final VoidCallback? onGenerateMusic;
   final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
@@ -909,6 +911,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onManageSpeechModel: widget.busy
                       ? null
                       : widget.onManageSpeechModel,
+                  onRecordVoice: widget.busy ? null : widget.onRecordVoice,
                   onGenerateVoiceover: widget.busy
                       ? null
                       : widget.onGenerateVoiceover,
@@ -1298,6 +1301,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 onManageSpeechModel: widget.busy
                     ? null
                     : widget.onManageSpeechModel,
+                onRecordVoice: widget.busy ? null : widget.onRecordVoice,
                 onGenerateVoiceover: widget.busy
                     ? null
                     : widget.onGenerateVoiceover,
@@ -1595,6 +1599,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.onRelinkMedia,
     required this.onGenerateCaptions,
     this.onManageSpeechModel,
+    this.onRecordVoice,
     this.onGenerateVoiceover,
     this.onGenerateMusic,
     required this.onCleanUpAudio,
@@ -1634,6 +1639,7 @@ class _EditorToolPanel extends StatelessWidget {
   final ValueChanged<ProjectMediaItem>? onRelinkMedia;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
   final VoidCallback? onManageSpeechModel;
+  final VoidCallback? onRecordVoice;
   final VoidCallback? onGenerateVoiceover;
   final VoidCallback? onGenerateMusic;
   final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
@@ -1763,6 +1769,12 @@ class _EditorToolPanel extends StatelessWidget {
             label: 'Import audio or video…',
             icon: Icons.add,
             onPressed: onImportMedia,
+          ),
+          _ToolAction(
+            keyName: 'tool-record-voice',
+            label: 'Record voice…',
+            icon: Icons.mic_none_outlined,
+            onPressed: onRecordVoice,
           ),
           _ToolAction(
             keyName: 'tool-generate-voiceover',

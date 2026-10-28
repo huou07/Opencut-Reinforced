@@ -29,12 +29,15 @@ justification and review.
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
   Selecting a media clip adds its speed control to that strip; the same value
   remains in the advanced inspector.
-- The Audio tool exposes **Generate voiceover…**, **Generate music…** and
-  **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
+- The Audio tool exposes **Record voice…**, **Generate voiceover…**,
+  **Generate music…** and **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the
   normal project reads. Generation is a bounded batch of ordinary commands, not
   a second project model. The voice a narration run uses is chosen in
-  **Settings → Narration**, where it can be searched and previewed.
+  **Settings → Narration**, where it can be searched and previewed. The same
+  Settings panel holds the cloud provider cards (key save/test/remove, Azure
+  region, ElevenLabs personal-voice creation from a recorded WAV sample); keys
+  live in the macOS keychain, not in this app's files.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

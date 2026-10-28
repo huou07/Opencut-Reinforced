@@ -146,6 +146,9 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
       locale: selected?.locale ?? '',
       rate: _rate.round(),
       gapMs: _gapMs.round(),
+      provider: widget.initial.provider,
+      cloudVoiceId: widget.initial.cloudVoiceId,
+      azureRegion: widget.initial.azureRegion,
     );
     try {
       await _store.save(settings);

@@ -16,6 +16,9 @@ class NarrationSettings {
     this.locale = '',
     this.rate = 180,
     this.gapMs = 250,
+    this.provider = 'system',
+    this.cloudVoiceId = '',
+    this.azureRegion = '',
   });
 
   /// The installed macOS voice name, for example `Linh`. Empty means "let the
@@ -31,24 +34,43 @@ class NarrationSettings {
   /// Silence between narration lines, in milliseconds.
   final int gapMs;
 
+  /// `system`, `elevenlabs` or `azure`. Empty/unknown reads as `system`.
+  final String provider;
+
+  /// The cloud voice id the last run used; empty means "ask next time".
+  final String cloudVoiceId;
+
+  /// Azure Speech region, stored because the endpoint depends on it. The key
+  /// itself lives in the keychain.
+  final String azureRegion;
+
   NarrationSettings copyWith({
     String? voice,
     String? locale,
     int? rate,
     int? gapMs,
+    String? provider,
+    String? cloudVoiceId,
+    String? azureRegion,
   }) => NarrationSettings(
     voice: voice ?? this.voice,
     locale: locale ?? this.locale,
     rate: rate ?? this.rate,
     gapMs: gapMs ?? this.gapMs,
+    provider: provider ?? this.provider,
+    cloudVoiceId: cloudVoiceId ?? this.cloudVoiceId,
+    azureRegion: azureRegion ?? this.azureRegion,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 1,
+    'version': 2,
     'voice': voice,
     'locale': locale,
     'rate': rate,
     'gap_ms': gapMs,
+    'provider': provider,
+    'cloud_voice_id': cloudVoiceId,
+    'azure_region': azureRegion,
   };
 
   static NarrationSettings fromJson(Object? value) {
@@ -64,11 +86,17 @@ class NarrationSettings {
       return rounded < minimum || rounded > maximum ? fallback : rounded;
     }
 
+    final provider = text('provider');
     return NarrationSettings(
       voice: text('voice'),
       locale: text('locale'),
       rate: bounded(value['rate'], 180, 90, 400),
       gapMs: bounded(value['gap_ms'], 250, 0, 10000),
+      provider: const {'system', 'elevenlabs', 'azure'}.contains(provider)
+          ? provider
+          : 'system',
+      cloudVoiceId: text('cloud_voice_id'),
+      azureRegion: text('azure_region'),
     );
   }
 
