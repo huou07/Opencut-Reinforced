@@ -898,9 +898,10 @@ mod tests {
                     spans: None,
                 },
             ],
+            camera: None,
             animations: Vec::new(),
         }
-    }
+        }
 
     fn translation(node_id: &str, property: MotionProperty, value: f64) -> MotionAnimation {
         MotionAnimation {

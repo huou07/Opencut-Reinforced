@@ -937,7 +937,7 @@ mod tests {
             "animations": []
         });
         parse_motion_scene(&serde_json::to_vec(&scene).unwrap()).unwrap()
-    }
+        }
 
     fn raster() -> RasterizedMotionFrame {
         let frame =

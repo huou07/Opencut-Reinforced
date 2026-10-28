@@ -345,7 +345,8 @@ pub fn motion_scene_new(name: String, width: u32, height: u32, seconds: u32) -> 
         assets: Vec::new(),
         nodes: Vec::new(),
         animations: Vec::new(),
-    };
+        camera: None,
+        };
     if !validate_scene(&scene).ok {
         return scene_failure("MOTION_INVALID_SCENE", "the scene did not validate");
     }
@@ -726,6 +727,7 @@ pub fn motion_scene_save(
             assets: scene.assets.clone(),
             nodes: scene.nodes.clone(),
             animations: scene.animations.clone(),
+            camera: scene.camera.clone(),
         }),
         preset: None,
         image: None,

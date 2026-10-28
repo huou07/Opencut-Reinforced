@@ -12,7 +12,8 @@ MotionScene is a versioned, **declarative, non-executable** data format
 provider or hidden font lookup, and evaluation makes **zero** model calls.
 
 V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
-`duration`, `canvas`, typed `assets`, `nodes`, `animations`.
+`duration`, `canvas`, typed `assets`, `nodes`, `animations`, and an optional
+`camera`.
 
 - Time is nonnegative finite `RationalTime` on a half-open `[0, duration)` local
   timeline with exact-time random access.
@@ -20,6 +21,10 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
   renderer-gated `Polyline`, `Image`.
 - Animation: typed translation, scale, rotation, opacity, bounded geometry, and
   supported fill/stroke values with a small locked easing set.
+- Camera: optional `camera.keyframes` with `pan_x`, `pan_y`, `zoom` (0.25–4) and
+  `rotation_degrees`, interpolated with the same easing set and applied to every
+  resolved instruction. Absent camera means identity, so old scenes render
+  unchanged; assets may carry the camera body too.
 - Charts and diagrams start as typed templates over those primitives.
 - Any randomness must be explicit and seeded from scene/source identity; V1 is
   otherwise deterministic.

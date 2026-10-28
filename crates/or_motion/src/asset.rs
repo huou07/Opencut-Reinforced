@@ -13,7 +13,7 @@
 use crate::{
     MAX_MOTION_ANIMATIONS, MAX_MOTION_KEYFRAMES, MAX_MOTION_NODE_DEPTH, MAX_MOTION_NODES,
     MAX_MOTION_TEXT_BYTES, MOTION_SCENE_FORMAT, MOTION_SCENE_SCHEMA_VERSION, MotionAnimation,
-    MotionAsset, MotionCanvas, MotionColor, MotionDiagnostic, MotionEasing, MotionKeyframe,
+    MotionAsset, MotionCamera, MotionCanvas, MotionColor, MotionDiagnostic, MotionEasing, MotionKeyframe,
     MotionNode, MotionNodeKind, MotionProperty, MotionScene, MotionValidation, is_uuid_v4,
     validate_scene,
 };
@@ -473,6 +473,9 @@ pub struct MotionAssetPayload {
     pub nodes: Vec<MotionNode>,
     #[serde(default)]
     pub animations: Vec<MotionAnimation>,
+    /// Optional camera move; an older asset carries none and keeps the identity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<MotionCamera>,
 }
 
 /// One animation preset for the `motion` kind.
@@ -874,7 +877,8 @@ fn validate_payload(
         assets: payload.assets.clone(),
         nodes: payload.nodes.clone(),
         animations: payload.animations.clone(),
-    };
+        camera: payload.camera.clone(),
+        };
     for mut error in validate_scene(&scene).errors {
         if error.path.starts_with("/nodes")
             || error.path.starts_with("/animations")
@@ -1395,7 +1399,8 @@ pub fn instantiate_motion_asset(
         assets: payload.assets,
         nodes,
         animations,
-    };
+        camera: payload.camera,
+        };
     if !validate_scene(&scene).ok {
         return Err(MotionAssetError::Invalid);
     }
@@ -1538,7 +1543,8 @@ pub fn compose_motion_scene(
         assets: Vec::new(),
         nodes: Vec::new(),
         animations: Vec::new(),
-    };
+        camera: None,
+        };
     for (index, placement) in placements.iter().enumerate() {
         scene = append_asset_to_scene(
             &scene,

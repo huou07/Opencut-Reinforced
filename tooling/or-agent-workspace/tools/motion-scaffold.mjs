@@ -135,6 +135,27 @@ const scene = {
       easing: 'linear',
     },
   ],
+  // A slow push-in keeps the whole scene alive without a cut. Zoom stays at or
+  // above 1 so a flat background never reveals the canvas edge.
+  camera: {
+    keyframes: [
+      {
+        at: { numerator: 0, denominator: 1 },
+        pan_x: 0,
+        pan_y: 0,
+        zoom: 1,
+        rotation_degrees: -0.4,
+      },
+      {
+        at: duration,
+        pan_x: Math.round(width * -0.012),
+        pan_y: Math.round(height * -0.008),
+        zoom: 1.08,
+        rotation_degrees: 0.4,
+      },
+    ],
+    easing: 'ease_in_out',
+  },
 };
 
 const target = path.resolve(out);

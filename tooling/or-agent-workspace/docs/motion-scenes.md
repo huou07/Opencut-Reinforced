@@ -67,6 +67,9 @@ insert the result; use it only when a file is wanted, never as an insertion path
   Inter face (it covers Vietnamese).
 - **Cut on movement.** Overlap the end of one idea with the start of the next;
   avoid a fully empty frame between beats.
+- **A camera move is the cheapest life.** A slow push-in (`camera.keyframes`
+  with `zoom` 1 → 1.08, a small pan) keeps every frame moving; keep zoom ≥ 1 so
+  a flat background never shows the canvas edge.
 - Read the result with `tools/or motion layout --file ... --at MID --json`; the
   boxes are what a viewer sees, so check that text stays inside its canvas.
 
@@ -82,9 +85,21 @@ insert the result; use it only when a file is wanted, never as an insertion path
   "canvas": {"width": 1920, "height": 1080},
   "assets": [],
   "nodes": [],
-  "animations": []
+  "animations": [],
+  "camera": {
+    "keyframes": [
+      {"at": {"numerator": 0, "denominator": 1}, "zoom": 1.0},
+      {"at": {"numerator": 4, "denominator": 1}, "zoom": 1.08, "pan_x": -24}
+    ],
+    "easing": "ease_in_out"
+  }
 }
 ```
+
+`camera` is optional; without it the identity camera is used, so existing scenes
+render unchanged. Keys carry `pan_x`/`pan_y`, `zoom` (0.25–4) and
+`rotation_degrees`; they are interpolated like node animations and applied to
+every resolved instruction, so preview, layout and materialisation agree.
 
 Node kinds: `group`, `text`, `rectangle`, `ellipse`, `arrow`, `image`.
 

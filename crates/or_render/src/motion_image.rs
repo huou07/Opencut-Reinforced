@@ -328,8 +328,9 @@ mod tests {
                 spans: None,
             }],
             animations: vec![],
+            camera: None,
         }
-    }
+        }
 
     #[test]
     fn a_produced_png_round_trips_through_the_decoder() {

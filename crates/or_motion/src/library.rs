@@ -448,6 +448,7 @@ impl MotionLibrary {
                 }],
                 nodes: vec![node],
                 animations: vec![],
+                camera: None,
             }),
             preset: None,
             image: Some(MotionImage {

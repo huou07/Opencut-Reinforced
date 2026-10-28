@@ -1042,6 +1042,7 @@ fn run_motion_publish(args: &[OsString], json: bool) -> Result<String, CliError>
                 assets: Vec::new(),
                 nodes: scene.nodes.clone(),
                 animations: scene.animations.clone(),
+                camera: scene.camera.clone(),
             }),
             preset: None,
             image: None,
