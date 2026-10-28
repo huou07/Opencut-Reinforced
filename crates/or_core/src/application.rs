@@ -8845,6 +8845,12 @@ mod tests {
                     allowed_in_transaction: false,
                 },
                 CommandDescriptor {
+                    id: "timeline.clip.duck",
+                    schema_version: 1,
+                    mutates_project: true,
+                    allowed_in_transaction: false,
+                },
+                CommandDescriptor {
                     id: "timeline.clip.ripple_delete",
                     schema_version: 1,
                     mutates_project: true,
@@ -10354,6 +10360,7 @@ mod tests {
         assert!(behind_zero.is_err());
     }
 
+    #[test]
     fn timeline_clip_move_reorders_and_preserves_semantics_across_same_kind_tracks() {
         let mut session = fixed_session();
         session
@@ -11681,6 +11688,7 @@ mod tests {
             "timeline.clip.roll",
             "timeline.clip.slide",
             "timeline.clip.split",
+            "timeline.clip.duck",
             "timeline.clip.ripple_delete",
         ] {
             let mut session = fixed_session();
