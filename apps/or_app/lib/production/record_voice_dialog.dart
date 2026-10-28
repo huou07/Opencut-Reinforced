@@ -33,7 +33,8 @@ class RecordVoiceDialog extends StatefulWidget {
   State<RecordVoiceDialog> createState() => _RecordVoiceDialogState();
 }
 
-class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
+class _RecordVoiceDialogState extends State<RecordVoiceDialog>
+    with WidgetsBindingObserver {
   late final VoiceRecorder _recorder = widget.recorder ?? const VoiceRecorder();
   Timer? _ticker;
   Stopwatch? _watch;
@@ -48,22 +49,32 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
   @override
   void initState() {
     super.initState();
-    _checkPermission();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshPermission();
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  Future<void> _checkPermission() async {
+  /// Reads the state without prompting; the prompt belongs to a take.
+  Future<void> _refreshPermission() async {
     try {
       final permission = await _recorder.permission();
       if (mounted) setState(() => _permission = permission);
     } on VoiceRecorderException catch (error) {
       if (mounted) setState(() => _error = error.message);
     }
+  }
+
+  /// The user may grant access in System Settings and come straight back, so the
+  /// dialog re-reads the state instead of keeping a stale denial.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshPermission();
   }
 
   Future<void> _start() async {
@@ -74,13 +85,20 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
     });
     try {
       if (_permission != 'granted') {
-        await _checkPermission();
-        if (_permission != 'granted') {
-          setState(() {
-            _error =
-                'Microphone access is not granted. Allow it in System Settings → '
-                'Privacy & Security → Microphone, then try again.';
-          });
+        // First take asks macOS itself: the request is what creates the TCC
+        // entry, so the app appears under Privacy & Security → Microphone.
+        final permission = await _recorder.requestPermission();
+        if (mounted) setState(() => _permission = permission);
+        if (permission != 'granted') {
+          if (mounted) {
+            setState(() {
+              _error = permission == 'undetermined'
+                  ? 'macOS did not answer the microphone request. Try again.'
+                  : 'Microphone access is not granted. Allow Opencut Reinforced '
+                        'in System Settings → Privacy & Security → Microphone, '
+                        'then start again.';
+            });
+          }
           return;
         }
       }
@@ -105,7 +123,14 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
         });
       }
     } on VoiceRecorderException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _error = error.message;
+          // The native side is the authority: a revoked grant is a denial even
+          // if the dialog believed access was granted.
+          if (error.code == 'PERMISSION_DENIED') _permission = 'denied';
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _error = 'Recording could not start.');
     } finally {
@@ -145,6 +170,15 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
       await Process.run('afplay', [file.path]);
     } catch (_) {
       if (mounted) setState(() => _error = 'The preview could not play.');
+    }
+  }
+
+  /// Opens the microphone pane so a denial can be reversed without hunting.
+  Future<void> _openSettings() async {
+    try {
+      await _recorder.openSystemSettings();
+    } on VoiceRecorderException catch (error) {
+      if (mounted) setState(() => _error = error.message);
     }
   }
 
@@ -251,6 +285,13 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog> {
                   fontSize: OrType.tinySize,
                 ),
               ),
+              if (_permission == 'denied' || _permission == 'restricted')
+                TextButton.icon(
+                  key: const ValueKey('record-voice-open-settings'),
+                  onPressed: _busy ? null : _openSettings,
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Open microphone settings'),
+                ),
             ],
             if (_notice != null) ...[
               const SizedBox(height: OrSpacing.x2),

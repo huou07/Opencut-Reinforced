@@ -1,6 +1,6 @@
 # Local macOS Development and Verification
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: the concrete commands for this host — build, run, check, measure — and
 the traps that cost real time. Generic policy is in
@@ -65,6 +65,18 @@ DYLD_FALLBACK_LIBRARY_PATH="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-
 
 Without it the test binary aborts with `Library not loaded: @rpath/libavutil.60.dylib`.
 `cargo test -p or_core` needs no such variable.
+
+## Trap: microphone permission and the bundle identity
+
+macOS TCC records a grant against the bundle identity, and it only records one
+after the app asks with `AVCaptureDevice.requestAccess`. Two consequences:
+
+- `xcodebuild test` runs the app as a test host: the native test reads the
+  permission status and must never call the request method, or it blocks on a
+  system dialog.
+- Re-signing the Debug bundle (every `xcodebuild`/`flutter build`) changes an
+  ad-hoc build's code identity, so a grant may be asked for again. Clear a stale
+  entry with `tccutil reset Microphone io.github.huou07.orApp`.
 
 ## Trap: stale bridge hook cache
 

@@ -451,15 +451,83 @@ private final class PersistentScopedBookmarks {
 }
 
 
-/// Keychain-backed narration credentials.
+/// One decoded `or_narration` call.
+///
+/// Recording methods carry no credential, so the keychain account check belongs
+/// to the keychain methods only.
+enum NarrationRoute: Equatable {
+  case keychainGet(String)
+  case keychainSet(String)
+  case keychainDelete(String)
+  case keychainHas(String)
+  case recordPermission
+  case recordPermissionRequest
+  case recordPermissionSettings
+  case recordStart(String)
+  case recordStop
+  case invalidAccount
+  case invalidPath
+  case notImplemented
+
+  /// Decodes one call. Validation is per method: only the keychain methods need
+  /// a credential account, so a recording call is never rejected for lacking one.
+  static func decode(_ method: String, _ arguments: [String: Any]) -> NarrationRoute {
+    switch method {
+    case "keychainGet":
+      return credential(arguments).map(NarrationRoute.keychainGet) ?? .invalidAccount
+    case "keychainSet":
+      return credential(arguments).map(NarrationRoute.keychainSet) ?? .invalidAccount
+    case "keychainDelete":
+      return credential(arguments).map(NarrationRoute.keychainDelete) ?? .invalidAccount
+    case "keychainHas":
+      return credential(arguments).map(NarrationRoute.keychainHas) ?? .invalidAccount
+    case "recordPermission":
+      return .recordPermission
+    case "recordPermissionRequest":
+      return .recordPermissionRequest
+    case "recordPermissionSettings":
+      return .recordPermissionSettings
+    case "recordStart":
+      guard let path = arguments["path"] as? String, !path.isEmpty else {
+        return .invalidPath
+      }
+      return .recordStart(path)
+    case "recordStop":
+      return .recordStop
+    default:
+      return .notImplemented
+    }
+  }
+
+  private static func credential(_ arguments: [String: Any]) -> String? {
+    guard let account = arguments["account"] as? String,
+          !account.isEmpty,
+          account.count <= 128 else {
+      return nil
+    }
+    return account
+  }
+}
+
+/// Keychain-backed narration credentials and microphone capture.
 ///
 /// API keys never enter the project file, a preferences file or the Dart layer:
 /// Dart can write, delete and ask whether an account is configured, but it reads
 /// the secret back only through this channel when a request is made. The item is
 /// device-only and available when unlocked.
-private final class NarrationBridge: NSObject, FlutterPlugin {
+///
+/// Microphone capture asks macOS for TCC access before the first take, so the app
+/// appears under Privacy & Security → Microphone, and reports the grant state back
+/// so the UI can send the user there after a denial.
+final class NarrationBridge: NSObject, FlutterPlugin {
   private static let channelName = "or_narration"
   private static let service = "io.github.huou07.orApp.narration"
+  /// System Settings moved its privacy panes; keep the current URL first and the
+  /// pre-Ventura form as a fallback so a denial can always be reversed.
+  private static let microphoneSettingsURLs = [
+    "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone",
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+  ]
   private var recorder: AVAudioRecorder?
 
   static func register(with registrar: FlutterPluginRegistrar) {
@@ -473,21 +541,19 @@ private final class NarrationBridge: NSObject, FlutterPlugin {
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let arguments = call.arguments as? [String: Any],
-          let account = arguments["account"] as? String,
-          !account.isEmpty,
-          account.count <= 128 else {
-      result(FlutterError(
-        code: "INVALID_ACCOUNT",
-        message: "A narration credential needs a short account name.",
-        details: nil
-      ))
-      return
-    }
-    switch call.method {
-    case "keychainGet":
+    let arguments = call.arguments as? [String: Any] ?? [:]
+    dispatch(NarrationRoute.decode(call.method, arguments), arguments, result)
+  }
+
+  func dispatch(
+    _ route: NarrationRoute,
+    _ arguments: [String: Any],
+    _ result: @escaping FlutterResult
+  ) {
+    switch route {
+    case .keychainGet(let account):
       result(read(account))
-    case "keychainSet":
+    case .keychainSet(let account):
       guard let value = arguments["value"] as? String, !value.isEmpty else {
         result(FlutterError(
           code: "INVALID_SECRET",
@@ -506,50 +572,90 @@ private final class NarrationBridge: NSObject, FlutterPlugin {
           details: nil
         ))
       }
-    case "keychainDelete":
+    case .keychainDelete(let account):
       delete(account)
       result(true)
-    case "keychainHas":
+    case .keychainHas(let account):
       result(read(account)?.isEmpty == false)
-    case "recordPermission":
-      permission(result)
-    case "recordStart":
-      guard let path = arguments["path"] as? String, !path.isEmpty else {
-        result(FlutterError(
-          code: "INVALID_PATH",
-          message: "Recording needs an output path.",
-          details: nil
-        ))
-        return
-      }
+    case .recordPermission:
+      result(Self.permissionState())
+    case .recordPermissionRequest:
+      requestPermission(result)
+    case .recordPermissionSettings:
+      openMicrophoneSettings(result)
+    case .recordStart(let path):
       startRecording(path, result: result)
-    case "recordStop":
+    case .recordStop:
       stopRecording(result: result)
-    default:
+    case .invalidAccount:
+      result(FlutterError(
+        code: "INVALID_ACCOUNT",
+        message: "A narration credential needs a short account name.",
+        details: nil
+      ))
+    case .invalidPath:
+      result(FlutterError(
+        code: "INVALID_PATH",
+        message: "Recording needs an output path.",
+        details: nil
+      ))
+    case .notImplemented:
       result(FlutterMethodNotImplemented)
     }
   }
 
-  private func permission(_ result: @escaping FlutterResult) {
+  /// `granted`, `denied`, `restricted`, `undetermined` or `unknown`.
+  private static func permissionState() -> String {
     switch AVCaptureDevice.authorizationStatus(for: .audio) {
     case .authorized:
-      result("granted")
+      return "granted"
     case .denied:
-      result("denied")
+      return "denied"
     case .restricted:
-      result("restricted")
+      return "restricted"
     case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .audio) { granted in
-        DispatchQueue.main.async {
-          result(granted ? "granted" : "denied")
-        }
-      }
+      return "undetermined"
     @unknown default:
-      result("unknown")
+      return "unknown"
     }
   }
 
+  /// Presents the macOS microphone prompt the first time, then reports the state.
+  ///
+  /// `requestAccess` is what registers the app in Privacy & Security; reading the
+  /// status alone never does. A decided state is reported without asking again.
+  private func requestPermission(_ result: @escaping FlutterResult) {
+    guard AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined else {
+      result(Self.permissionState())
+      return
+    }
+    AVCaptureDevice.requestAccess(for: .audio) { _ in
+      DispatchQueue.main.async {
+        result(Self.permissionState())
+      }
+    }
+  }
+
+  private func openMicrophoneSettings(_ result: @escaping FlutterResult) {
+    for path in Self.microphoneSettingsURLs {
+      if let url = URL(string: path), NSWorkspace.shared.open(url) {
+        result(true)
+        return
+      }
+    }
+    result(false)
+  }
+
   private func startRecording(_ path: String, result: @escaping FlutterResult) {
+    guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+      result(FlutterError(
+        code: "PERMISSION_DENIED",
+        message: "Microphone access is not granted. Allow Opencut Reinforced in "
+          + "System Settings → Privacy & Security → Microphone, then try again.",
+        details: Self.permissionState()
+      ))
+      return
+    }
     let url = URL(fileURLWithPath: path)
     try? FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),
@@ -571,7 +677,7 @@ private final class NarrationBridge: NSObject, FlutterPlugin {
         result(FlutterError(
           code: "RECORDING_FAILED",
           message: "The microphone could not start recording.",
-          details: nil
+          details: Self.permissionState()
         ))
         return
       }
@@ -581,7 +687,7 @@ private final class NarrationBridge: NSObject, FlutterPlugin {
       result(FlutterError(
         code: "RECORDING_FAILED",
         message: "The microphone could not start recording.",
-        details: nil
+        details: error.localizedDescription
       ))
     }
   }

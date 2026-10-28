@@ -1,6 +1,6 @@
 # Platform Targets and Packaging
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: which platforms exist, how each stores projects and media, and what is
 proven versus assumed per platform.
@@ -20,6 +20,18 @@ target; other platforms are maintained but not acceptance targets.
 | macOS / Linux | Local `.orproj` file chosen by the user | Local files, bounded folder import |
 | Windows | Local `.orproj` file | Local files, bounded folder import |
 | Android | SAF document with an app-private canonical working copy and explicit synchronisation | Persistable SAF tree/document grants |
+
+macOS microphone rules that must hold:
+
+- The microphone is requested with `AVCaptureDevice.requestAccess(for: .audio)`
+  when the first take starts. Reading `authorizationStatus` alone never creates
+  the TCC entry, so an app that only reads it is missing from Privacy & Security
+  → Microphone and the user cannot grant access there.
+- `NSMicrophoneUsageDescription` stays in the bundle `Info.plist`, and both
+  entitlement sets carry `com.apple.security.device.audio-input`, so a return to
+  the sandbox would still capture.
+- A denial is reported as state plus a route into the microphone pane. The app
+  never records silently and never claims a take it did not capture.
 
 Android rules that must hold:
 
