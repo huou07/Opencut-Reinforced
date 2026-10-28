@@ -159,46 +159,18 @@
       }
     },
     {
+      "op": "wait_label",
+      "label_regex": "1 track · 1 clip",
+      "budget_ms": 20000
+    },
+    {
       "op": "shot",
-      "name": "after-insert"
+      "name": "motion-inserted"
     },
     {
       "op": "tree",
-      "name": "after-insert"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "editor-tool-motion"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "On timeline",
-      "budget_ms": 10000
-    },
-    {
-      "op": "shot",
-      "name": "motion-panel"
-    },
-    {
-      "op": "tree",
-      "name": "motion-panel"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "motion-scene-rerender"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Rendered",
-      "budget_ms": 120000
-    },
-    {
-      "op": "shot",
-      "name": "motion-rerendered"
+      "name": "motion-inserted"
     }
-  ]
+  ],
+  "description": "Render a Rust source file as a MotionScene illustration through the Illustration Video dialog, insert the rendered clip and prove it lands on the timeline."
 }

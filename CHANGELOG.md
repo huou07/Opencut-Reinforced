@@ -48,6 +48,10 @@ product still needs.
   missing track. The harness fixture picker now copies an `.orproj` fixture into
   the scenario directory so the open path is real, and
   `crates/or_core/tests/fixtures/null-rate-project.orproj` is that shape.
+- **Still-image insertion journey**: `scripts/ui_scenarios/image-import-timeline.json`
+  imports a PNG with no audio or video stream into a brand-new project and
+  proves it becomes a timeline clip and the first track, so the image path is
+  covered by a real journey instead of only by video fixtures.
 - **Assistant panel**: a right-rail tab connects to a locally installed
   DeepSeek Harness over ACP, lets the user pick the workspace and model, streams
   replies and tool calls, and renders permission prompts. The harness reads and

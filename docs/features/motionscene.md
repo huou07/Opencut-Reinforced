@@ -70,7 +70,7 @@ timeline-referenced materialised asset is not cache-only.
 
 ## Producers and surfaces
 
-- Authored in the app's Motion panel (render facts, insert, render again). A
+- Authored in the app's Motion panel (compose, edit and insert a rendered clip). A
   composed draft is editable on the canvas — move, text, colour, size, add and
   delete — through the typed operation set in `or_motion::edit`; see
   [motion-assets.md](motion-assets.md#editing-a-composed-scene).

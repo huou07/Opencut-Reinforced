@@ -25,6 +25,13 @@ On this Mac the default target is `macos`: it builds and launches the real
 desktop app through the Flutter integration test and reads artifacts from the
 host filesystem. A 1440x900 window launches in about twenty seconds.
 
+Run one scenario at a time: every run rewrites `apps/or_app/build/ui-harness/`,
+so two concurrent runs (or a run started while another is finishing) corrupt each
+other's transcript and report. When the tooling fails to foreground the app
+before the first step (`Failed to foreground app; open returned 1`), the harness
+retries the launch once with a clean artifact directory; a second failure is
+reported, never folded into a pass.
+
 `python3 scripts/or_tree_outline.py <tree-*.json>` prints one line per node with
 its global rect and actions — the fast way to read a screen.
 

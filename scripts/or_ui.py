@@ -298,9 +298,24 @@ def run_macos(payload: dict, report_dir: Path) -> int:
     completed = subprocess.run(command, cwd=str(APP), env=environment,
                                capture_output=True, text=True,
                                timeout=MACOS_BUDGET_SECONDS)
-    (report_dir / "run.log").write_text(
-        f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n",
-        encoding="utf-8")
+    log = f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n"
+    # The host tooling intermittently refuses to foreground the freshly built
+    # app ("open returned 1") and the run dies before the first step, which says
+    # nothing about the app or the scenario. Retry that launch failure once with a
+    # clean artifact directory instead of reporting it as the scenario's verdict.
+    if (
+        completed.returncode != 0
+        and "Failed to foreground app" in (completed.stderr + completed.stdout)
+        and not read_transcript(artifacts, payload["name"]).get("steps")
+    ):
+        shutil.rmtree(artifacts)
+        artifacts.mkdir(parents=True)
+        completed = subprocess.run(command, cwd=str(APP), env=environment,
+                                   capture_output=True, text=True,
+                                   timeout=MACOS_BUDGET_SECONDS)
+        log = (log + "\n--- retried after a launch failure ---\n"
+               f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n")
+    (report_dir / "run.log").write_text(log, encoding="utf-8")
     if completed.returncode != 0:
         # `flutter test` on macOS fails its teardown when the tool cannot bring the
         # host window forward ("Failed to foreground app; open returned 1"), which
@@ -318,14 +333,27 @@ def run_macos(payload: dict, report_dir: Path) -> int:
         if teardown_only:
             passed = finish(report_dir, artifacts, payload, "macos")
             return passed
-        reason = [line for line in (completed.stdout + completed.stderr).splitlines()
-                  if line.strip()][-8:]
+        steps = read_transcript(artifacts, payload["name"]).get("steps", [])
+        failing = [
+            (index, step) for index, step in enumerate(steps)
+            if step.get("status") != "ok"
+        ]
+        if failing:
+            index, step = failing[0]
+            detail = step.get("detail") or step.get("error") or step.get("reason") or ""
+            reason_text = (
+                f"step {index} ({step.get('op')}) {step.get('status')}: "
+                f"{step.get('selector')} - {detail}".strip()
+            )
+        else:
+            reason = [line for line in (completed.stdout + completed.stderr).splitlines()
+                      if line.strip()][-8:]
+            reason_text = "the scenario runner exited " + f"{completed.returncode}: " + " | ".join(reason)
         payload_out = {
             "harness": "or_ui", "target": "macos", "result": "FAIL",
-            "reason": "the scenario runner exited "
-                      f"{completed.returncode}: " + " | ".join(reason),
+            "reason": reason_text,
             "log": str(report_dir / "run.log"),
-            "steps": read_transcript(artifacts, payload["name"]).get("steps", []),
+            "steps": steps,
         }
         (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
         print(f"RESULT: OR_UI=FAIL ({payload['name']})")

@@ -64,6 +64,11 @@ One near-term delivery mission for the local macOS app, in this order:
    track (`scripts/ui_scenarios/existing-project-import.json`,
    `crates/or_core/tests/fixtures/null-rate-project.orproj`); the harness fixture
    picker now copies `.orproj` fixtures into the scenario directory.
+10. **Motion panel render record (open, 2026-10-28).** After a motion clip is
+    inserted, the panel keeps only a snackbar. A persistent "on timeline" row with
+    the last render's size/frames and a Render again action is not built; the
+    `illustration-video` journey now proves insertion through the timeline status
+    instead, and this row is the remaining UX addition.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.
