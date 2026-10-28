@@ -201,17 +201,19 @@ Future<String?> resolveOrCliPath({
   required AssistantSettings settings,
   Map<String, String>? environment,
   Directory? currentDirectory,
+  String? executablePath,
 }) async {
   final env = environment ?? Platform.environment;
   if (settings.orCliPath.isNotEmpty) {
     return await File(settings.orCliPath).exists() ? settings.orCliPath : null;
   }
+  final resolvedExecutable = executablePath ?? Platform.resolvedExecutable;
   final starts = <Directory>[
     (currentDirectory ?? Directory.current).absolute,
     // A packaged or `open`-launched app has `/` as its working directory, but
     // a development build still sits inside the checkout, so walk from the
     // executable too.
-    Directory(Platform.resolvedExecutable).parent.absolute,
+    Directory(resolvedExecutable).parent.absolute,
   ];
   for (final start in starts) {
     var directory = start;
@@ -228,6 +230,13 @@ Future<String?> resolveOrCliPath({
       directory = parent;
     }
   }
+  // A packaged OR bundle ships the CLI beside its executable, so the assistant
+  // keeps working after the app is moved out of the checkout.
+  final bundled = File(
+    '${Directory(resolvedExecutable).parent.path}'
+    '${Platform.pathSeparator}or',
+  );
+  if (await bundled.exists()) return bundled.path;
   const applicationCandidate =
       '/Applications/Opencut Reinforced.app/Contents/MacOS/or';
   if (await File(applicationCandidate).exists()) return applicationCandidate;

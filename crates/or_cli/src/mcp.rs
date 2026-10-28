@@ -217,17 +217,27 @@ impl Server {
         }
     }
 
+    /// Reads the project's identity and save state.
+    ///
+    /// `project summary` carries the name, ids and revision; the live session
+    /// description carries `dirty`, so both are merged rather than describing a
+    /// status the summary cannot answer.
     fn project_status(&self) -> Result<String, String> {
         let summary = self.run_or(&["project", "summary"])?;
+        let description = self.run_or(&["session", "describe"])?;
         let mut value = summary;
-        if let Some(object) = value.as_object_mut()
-            && let Some(pointer) = self.pointer_state()
-            && let Some(project_path) = pointer.get("project_path").and_then(Value::as_str)
-        {
-            object.insert(
-                "project_path".to_owned(),
-                Value::String(project_path.to_owned()),
-            );
+        if let Some(object) = value.as_object_mut() {
+            if let Some(dirty) = description.get("dirty") {
+                object.insert("dirty".to_owned(), dirty.clone());
+            }
+            if let Some(pointer) = self.pointer_state()
+                && let Some(project_path) = pointer.get("project_path").and_then(Value::as_str)
+            {
+                object.insert(
+                    "project_path".to_owned(),
+                    Value::String(project_path.to_owned()),
+                );
+            }
         }
         pretty(value)
     }
@@ -1087,7 +1097,7 @@ fn tool_definitions() -> Value {
     json!([
         {
             "name": "project_status",
-            "description": "Read the open project's identity: name, revision, dirty state and project file path. Call this first when you need to orient yourself.",
+            "description": "Read the open project's identity and save state: name, ids, revision, dirty (unsaved edits) and project file path. Call this first when you need to orient yourself; editing verbs are on the or CLI, which is the default surface.",
             "inputSchema": empty_schema(),
         },
         {

@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # shortcut: this local bundle omits third-party notices; use release packaging before distribution.
+script_dir="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(dirname "$script_dir")"
+
 fail() {
   echo "$*" >&2
   exit 1
@@ -47,6 +50,28 @@ for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib \
 done
 install -m 755 "$ffmpeg_bin_dir/ffmpeg" "$helpers/ffmpeg"
 install -m 755 "$ffmpeg_bin_dir/ffprobe" "$helpers/ffprobe"
+
+# The assistant edits the live project through the `or` CLI that sits beside the
+# app executable, so a packaged local build carries the same CLI the checkout
+# uses. The CLI links only system frameworks today; assert that here instead of
+# assuming it, because a stray library path would break a moved bundle.
+cli_source="${OR_CLI_BINARY:-}"
+if [[ -z "$cli_source" ]]; then
+  for candidate in "$repo_root/target/release/or" "$repo_root/target/debug/or"; do
+    if [[ -x "$candidate" ]]; then
+      cli_source="$candidate"
+      break
+    fi
+  done
+fi
+[[ -n "$cli_source" ]] || fail "the or CLI is missing; build it with cargo build -p or_cli --release or set OR_CLI_BINARY"
+install -m 755 "$cli_source" "$helpers/or"
+while IFS= read -r dependency; do
+  case "$dependency" in
+    @*|/usr/lib/*|/System/Library/*) ;;
+    *) fail "the or CLI has a non-system runtime dependency: $dependency" ;;
+  esac
+done < <(otool -L "$helpers/or" | awk 'NR > 1 {print $1}')
 
 remove_build_rpath() {
   local binary="$1"

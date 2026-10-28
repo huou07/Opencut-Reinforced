@@ -31,6 +31,9 @@ Release bundle, including packaging and codesigning:
 scripts/build_macos_release.sh --package io.github.huou07.orApp.local
 ```
 
+The packaged bundle carries the `or` CLI in `Contents/MacOS/or`, so the in-app
+assistant can edit the live project after the app leaves the checkout.
+
 Use an isolated profile/bundle identifier for destructive or repeatable runs, and
 close the app when a run ends.
 

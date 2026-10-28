@@ -37,6 +37,7 @@ test('the bundle carries the index, guides, skills and tools', async () => {
     'docs/motion-scenes.md',
     'docs/project-safety.md',
     'docs/script-and-voice.md',
+    'docs/audio-prep.md',
     'docs/troubleshooting.md',
     'tools/README.md',
     'tools/motion-scaffold.mjs',

@@ -180,6 +180,7 @@ fn mcp_lists_tools_and_edits_the_live_project() {
     let status: Value =
         serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
     assert_eq!(status["name"], "Assistant");
+    assert_eq!(status["dirty"], false, "a freshly opened project is clean");
     assert_eq!(
         status["project_path"],
         directory.project_path().display().to_string()
@@ -202,7 +203,19 @@ fn mcp_lists_tools_and_edits_the_live_project() {
 
     mcp.call("add_marker", json!({"at": "2", "label": "AI marker"}))
         .expect("add marker");
+    let dirty_status: Value =
+        serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
+    assert_eq!(
+        dirty_status["dirty"], true,
+        "an unsaved edit is visible in the status"
+    );
     mcp.call("save", json!({})).expect("save project");
+    let saved_status: Value =
+        serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
+    assert_eq!(
+        saved_status["dirty"], false,
+        "an explicit save clears dirty"
+    );
 
     // A fresh session reads the file, so the assertion is about persisted state
     // rather than the live host's cached document.

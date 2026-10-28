@@ -142,6 +142,11 @@ class AgentWorkspace {
     // tools can find non-secret app preferences (the narration voice) without
     // guessing a bundle identifier or duplicating a product constant.
     'app_support_path': directory.parent.path,
+    // The app-level motion library sits beside the workspace. The CLI resolves
+    // it from the pointer it attaches through, so carrying it here is what makes
+    // `tools/or motion asset ... --attach project.json` work without --library.
+    'motion_library_path':
+        '${directory.parent.path}${Platform.pathSeparator}motion-library',
   });
 
   /// Records the `or` CLI beside the app build for `tools/or`.

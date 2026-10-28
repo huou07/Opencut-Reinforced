@@ -16,7 +16,7 @@ scene clip.
 | Composition canvas | Select (click, shift-click, marquee), drag, resize, rotate, retitle, recolour, outline, resize text, nudge, add text, add a library object, delete, and undo/redo the draft — inline or in the expanded editor |
 | Timeline | Accepts a dragged asset card and appends the materialised clip at the end of the first unlocked video track |
 | `or mcp` | `motion_asset_list`, `motion_asset_insert` for the assistant — the fallback the CLI cannot replace |
-| `or motion asset` | `validate`, `save`, `list`, `instantiate`, `insert`, `remove`, `import`; `insert` renders and places a library asset in the open project |
+| `or motion asset` | `validate`, `save`, `list`, `instantiate`, `insert`, `remove`, `import`; every verb takes `--library`, and `insert` renders and places a library asset in the open project |
 | `or motion publish` | save a scene as an asset, render it, import it and insert it in one call |
 
 ## Asset document
@@ -174,12 +174,19 @@ validated before the bridge returns it.
 
 ## Agents
 
-`or motion asset list --attach project.json` pages the catalogue; `or motion
-asset insert --asset-id ... [--values JSON]` instantiates, prepares the image
-files, materialises through the app, imports and inserts. `or motion publish`
-saves an authored scene as a scene asset with a preview and inserts the render.
-The CLI resolves the library folder from the workspace `project.json`
-(`motion_library_path`), so no flag is needed; `--library` overrides it.
+`or motion asset list --attach project.json` pages the catalogue; `or motion asset
+insert --attach project.json --asset-id ... [--values JSON]` instantiates,
+prepares the image files, materialises through the app, imports and inserts; and
+`or motion asset save`, `instantiate`, `import`, `remove` and `validate` are pure
+reads and writes of the library directory, with no project and no render. `or
+motion publish --attach project.json` saves an authored scene as a scene asset
+with a preview, then renders and inserts it; `--no-library` skips the save.
+
+The library folder is `<application support>/motion-library`, and both pointers
+record it as `motion_library_path`: the workspace `project.json` the CLI attaches
+to, and the assistant session pointer (`<application support>/assistant/
+session-pointer.json`) that `or mcp` reads. Every asset verb therefore resolves the
+same folder from `--attach`, and `--library PATH` overrides it for one call.
 
 The MCP tools (`motion_asset_list`, `motion_asset_insert`, `motion_asset_save`,
 `motion_insert_scene`) remain as the fallback when a CLI verb is unavailable.

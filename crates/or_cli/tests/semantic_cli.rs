@@ -2880,6 +2880,62 @@ fn motion_asset_library_saves_lists_instantiates_and_removes() {
 }
 
 #[test]
+fn motion_asset_library_resolves_from_the_attached_pointer() {
+    let directory = TestDirectory::new();
+    let asset_id = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
+    let asset = write_motion_asset(
+        &directory,
+        "pointer.ormotionasset.json",
+        asset_id,
+        "Pointer asset",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["asset_id"], asset_id);
+
+    // The workspace project.json records the library, so every asset verb can
+    // resolve it from the pointer instead of repeating --library.
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1,
+            "motion_library_path": library.display().to_string(),
+            "app_support_path": directory.0.display().to_string(),
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--attach", &pointer)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 1);
+    assert_eq!(listed["entries"][0]["asset_id"], asset_id);
+    assert_eq!(listed["library"], library.display().to_string());
+
+    // Without either flag the verb refuses instead of guessing a folder.
+    let output = cli(words(&["motion", "asset", "list", "--json"]));
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("--library"),
+        "{error}"
+    );
+}
+
+#[test]
 fn motion_asset_save_refuses_an_invalid_document_and_writes_nothing() {
     let directory = TestDirectory::new();
     let asset = write_motion_asset(

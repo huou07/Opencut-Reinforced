@@ -125,6 +125,13 @@ void main() {
     );
     expect(marker['project_name'], 'Demo');
     expect(marker['project_path'], '/tmp/demo.orproj');
+    expect(marker['app_support_path'], root.parent.path);
+    // The CLI resolves the app-level motion library from this marker, so the
+    // project must carry the folder the app actually uses.
+    expect(
+      marker['motion_library_path'],
+      '${root.parent.path}${Platform.pathSeparator}motion-library',
+    );
 
     final cli = '/tmp/or build/or';
     await workspace.writeOrCli(cli);

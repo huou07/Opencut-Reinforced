@@ -1626,7 +1626,7 @@ fn run_motion_asset(args: &[OsString], json: bool) -> Result<String, CliError> {
 }
 
 fn run_motion_asset_list(args: &[OsString], json: bool) -> Result<String, CliError> {
-    let options = Options::parse(args, &["--library"], &[], json)?;
+    let options = Options::parse(args, &["--library", "--attach"], &[], json)?;
     let library = open_motion_library(&options, json)?;
     let entries = library
         .list()
@@ -1678,7 +1678,12 @@ fn run_motion_asset_validate(args: &[OsString], json: bool) -> Result<String, Cl
 }
 
 fn run_motion_asset_save(args: &[OsString], json: bool) -> Result<String, CliError> {
-    let options = Options::parse(args, &["--library", "--file", "--category"], &[], json)?;
+    let options = Options::parse(
+        args,
+        &["--library", "--attach", "--file", "--category"],
+        &[],
+        json,
+    )?;
     let asset = read_motion_asset(&options, json)?;
     let category = match options.value("--category") {
         Some(value) => Some(parse_motion_category(value, json)?),
@@ -1709,6 +1714,7 @@ fn run_motion_asset_instantiate(args: &[OsString], json: bool) -> Result<String,
         args,
         &[
             "--library",
+            "--attach",
             "--id",
             "--values",
             "--output",
@@ -1767,7 +1773,7 @@ fn run_motion_asset_instantiate(args: &[OsString], json: bool) -> Result<String,
 }
 
 fn run_motion_asset_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
-    let options = Options::parse(args, &["--library", "--id"], &[], json)?;
+    let options = Options::parse(args, &["--library", "--attach", "--id"], &[], json)?;
     let library = open_motion_library(&options, json)?;
     let asset_id = required_name(&options, "--id", json)?;
     let removed = library
@@ -1790,6 +1796,7 @@ fn run_motion_asset_import(args: &[OsString], json: bool) -> Result<String, CliE
         args,
         &[
             "--library",
+            "--attach",
             "--source",
             "--name",
             "--category",
@@ -1856,11 +1863,36 @@ fn run_motion_asset_import(args: &[OsString], json: bool) -> Result<String, CliE
     ))
 }
 
+/// Opens the app-level motion library.
+///
+/// `--library` names it directly; otherwise the pointer given with `--attach`
+/// supplies the recorded path, which is how the workspace `project.json` makes
+/// the asset verbs work without repeating the folder on every call.
 fn open_motion_library(
     options: &Options,
     json: bool,
 ) -> Result<or_motion::MotionLibrary, CliError> {
-    let path = required_path(options, "--library", json)?;
+    let path = match (
+        options.optional_path("--library"),
+        options.optional_path("--attach"),
+    ) {
+        (Some(path), _) => path,
+        (None, Some(attach)) => motion_library_from_pointer(&attach).ok_or_else(|| {
+            CliError::usage(
+                json,
+                format!(
+                    "{} records no motion library; pass --library PATH",
+                    attach.display()
+                ),
+            )
+        })?,
+        (None, None) => {
+            return Err(CliError::usage(
+                json,
+                "pass --library PATH, or --attach a session pointer that records the library",
+            ));
+        }
+    };
     or_motion::MotionLibrary::open(&path).map_err(|error| CliError::motion_library(error, json))
 }
 

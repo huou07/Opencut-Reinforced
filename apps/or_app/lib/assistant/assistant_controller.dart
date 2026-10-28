@@ -266,7 +266,7 @@ class AssistantController extends ChangeNotifier {
       if (orCli == null) {
         throw const AssistantHarnessFailure(
           'The or CLI was not found, so the assistant cannot edit the project.',
-          hint: 'Build it once with `cargo build -p or_cli`, or set its path in Assistant settings.',
+          hint: 'Use a packaged build that ships the CLI, build it once with `cargo build -p or_cli`, or set its path in Assistant settings.',
         );
       }
       _harnessPath = harness;

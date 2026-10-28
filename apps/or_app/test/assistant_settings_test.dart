@@ -92,6 +92,51 @@ void main() {
     },
   );
 
+  test('a packaged app finds the CLI beside its executable', () async {
+    final root = await Directory.systemTemp.createTemp('or-cli-bundle-');
+    addTearDown(() => root.delete(recursive: true));
+    final macos = Directory(
+      '${root.path}/Opencut Reinforced.app/Contents/MacOS',
+    )..createSync(recursive: true);
+    final executable = '${macos.path}/or_app';
+    File(executable).writeAsStringSync('');
+    final cli = File('${macos.path}/or')
+      ..writeAsStringSync('#!/bin/sh\nexit 0\n');
+
+    final resolved = await resolveOrCliPath(
+      settings: const AssistantSettings(),
+      environment: const {'PATH': ''},
+      currentDirectory: root,
+      executablePath: executable,
+    );
+    expect(resolved, cli.path);
+  });
+
+  test('an explicit CLI path wins and a missing one resolves to null', () async {
+    final root = await Directory.systemTemp.createTemp('or-cli-explicit-');
+    addTearDown(() => root.delete(recursive: true));
+    final cli = File('${root.path}/or')..writeAsStringSync('');
+
+    expect(
+      await resolveOrCliPath(
+        settings: AssistantSettings(orCliPath: cli.path),
+        environment: const {'PATH': ''},
+        currentDirectory: root,
+        executablePath: '${root.path}/or_app',
+      ),
+      cli.path,
+    );
+    expect(
+      await resolveOrCliPath(
+        settings: AssistantSettings(orCliPath: '${root.path}/missing-or'),
+        environment: const {'PATH': ''},
+        currentDirectory: root,
+        executablePath: '${root.path}/or_app',
+      ),
+      isNull,
+    );
+  });
+
   test('no overlay still yields a usable assistant persona patch', () {
     final patch = buildHarnessPatch(
       overlay: null,

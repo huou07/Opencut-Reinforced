@@ -1,10 +1,10 @@
 # Script, narration, captions and music
 
-Scope: turning a spoken idea into an OR edit — a written script, offline
-narration, exact caption clips, and a generated background-music bed — and
-captioning audio that already exists. Timeline mechanics are in
+Scope: turning a spoken idea into an OR edit — a written script, narration, exact
+caption clips, and a generated background-music bed. Timeline mechanics are in
 [timeline-editing.md](timeline-editing.md); importing files is in
-[media-and-import.md](media-and-import.md).
+[media-and-import.md](media-and-import.md); audio the user already has (recording,
+noise, speech models) is in [audio-prep.md](audio-prep.md).
 
 ## Order of work
 
@@ -57,13 +57,27 @@ shows (it defaults to the narration).
 | `marker` | optional timeline marker label for this scene boundary |
 | `duration_ms` | the planned visual length; only used by `--plan` |
 
-The script may contain at most 300 scenes. Every field except `scenes` is
-optional. When `voice` is omitted the tool uses the voice saved in the app's
-**Narration voice** dialog, then the first installed Vietnamese voice on the
-machine; it never falls back to a product constant such as `Linh`. `rate`
+A script may also set `voice` and `language` at the top level. The script may
+contain at most 300 scenes. Every field except `scenes` is optional. `rate`
 defaults to 180 words per minute and `gap_ms` to 250 milliseconds between lines.
 
-## Narration
+## Two narration surfaces
+
+The app and the workspace both narrate, and they are not the same path:
+
+- **Workspace, offline:** `tools/voiceover.mjs` speaks each line with the macOS
+  `say` voice, measures the real WAV duration, and derives exact caption times.
+  The voice is the script's `voice`, then the app's saved default from **Settings
+  → Narration** (`narration-settings.json`, read through `project.json`), then the
+  first installed Vietnamese voice on this machine. It never falls back to a
+  product constant such as `Linh`.
+- **App, optional cloud voices:** **Audio → Generate voiceover…** uses the voice
+  chosen in **Settings → Narration**, including cloud providers. That panel holds
+  the provider cards (save/test/remove a key, the Azure region, and ElevenLabs
+  personal-voice creation from a recorded WAV sample with its consent checkbox),
+  and the keys live in the macOS keychain. The workspace never sees a key and must
+  not ask for one; when the user wants a cloud voice, they run the app action and
+  the result arrives as ordinary media you can edit and save like any other.
 
 ```sh
 node tools/voiceover.mjs --script work/scripts/gioi-thieu.json --plan --json
@@ -71,11 +85,10 @@ node tools/voiceover.mjs --script work/scripts/gioi-thieu.json \
   --out work/voiceover/gioi-thieu --apply --attach project.json --json
 ```
 
-The tool uses the macOS `say` voice locally. It writes one 44.1 kHz mono PCM WAV
-per scene, measures the real duration from the WAV, and builds exact start/end
-times for every caption. `--apply`:
+The tool writes one 44.1 kHz mono PCM WAV per scene, measures its real duration
+from the WAV, and builds exact start/end times for every caption. `--apply`:
 
-- reuses the first unlocked audio track, or adds one;
+- reuses the first unlocked audio track that is empty, or adds one;
 - imports each WAV with `media add` and inserts it with `timeline insert-clip`;
 - imports `captions.srt` with `timeline import-captions`;
 - leaves the project unsaved, so you can review before `project save`.
@@ -111,7 +124,7 @@ visible in the editor.
 ## Captions from existing audio
 
 The narration path derives captions from the script. For audio or video the user
-already has, use the app's local multilingual transcription instead:
+already has, use the app's local multilingual transcription:
 
 ```sh
 tools/or captions transcribe --attach project.json --media MEDIA_ID \
@@ -120,17 +133,20 @@ tools/or timeline import-captions --attach project.json \
   --file work/captions/clip.srt --json
 ```
 
-Transcription detects Vietnamese or English automatically, runs locally, and
-never changes the project. Review the cues (the JSON carries `start_ms`,
-`end_ms`, `text`, and the detected `language`) before importing; the second
-command creates a new caption track and one editable caption clip per cue. Edit
-the SRT first if timing or wording needs correcting.
+This runs in the running app (a `--project` file is refused), detects Vietnamese
+or English automatically, and never changes the project. The model is the one the
+app has installed and selected (Base, Small, Medium, Large v3 Turbo q5 or Large
+v3 Turbo), so if it reports `TRANSCRIPTION_MODEL_UNAVAILABLE`, send the user to
+**Audio → Speech model…** instead of downloading anything here. Review the cues
+(the JSON carries `start_ms`, `end_ms`, `text`, and the detected `language`) before
+importing; the second command creates a new caption track and one editable
+caption clip per cue. Edit the SRT first if timing or wording needs correcting.
 
-The model and the `whisper-cli`/provider binaries are part of the packaged app,
-not the CLI. Install the model once by choosing **Generate Captions** on any
-media item in the app and accepting the download; `captions transcribe` then
-reuses that install. If it reports `TRANSCRIPTION_MODEL_UNAVAILABLE`, do not try
-to download the model from the workspace — send the user to that app action.
+Caption style — font, size, anchor, offset, background box and text opacity —
+travels with each clip and is edited in the app's Edit Caption dialog through
+`timeline.clip.update`; there is no CLI verb for it. Captions from transcription
+are ordinary caption clips, so the user can restyle every cue without recreating
+the track.
 
 ## Music
 
@@ -141,8 +157,10 @@ node tools/music.mjs --out work/music/bed.wav --duration 60 \
 
 Moods are `calm`, `warm`, `uplifting`, `tense`, and `minimal`. The bed is
 synthesised locally, differs by `--seed`, and is royalty-free. It is generated
-quiet (about −20 dB mean, −9 dB peak) so it sits under speech; change the clip
-gain in the inspector rather than regenerating louder. To place it:
+quiet (about −20 dB RMS, −9 dB peak) so it sits under speech; change the clip
+gain in the inspector rather than regenerating louder. The app's **Audio →
+Generate music…** produces the same kind of bed and can duck it under a voice
+track in one step. To place the workspace file:
 
 ```sh
 tools/or media add --attach project.json --source /absolute/path/work/music/bed.wav --json
@@ -155,18 +173,21 @@ audio` if the project has none.
 
 ## Rules and bounds
 
-- Everything here is offline: `say` is a system voice, the music is synthesised,
-  and the transcription model is the app's local model. No credentials are read
-  or written.
+- The workspace path is offline: `say` is a system voice, the music is
+  synthesised, and the transcription model is the app's local model. No cloud key
+  is read or written here; cloud voices belong to the app's Settings.
 - The script and generated media live under `work/`; they are not project state.
   Importing them is what makes them part of the project.
 - Never claim the narration or captions are recorded or transcribed when they
-  came from a written script; say which path produced them.
+  came from a written script, and never claim a cloud voice was used when the
+  system voice spoke. Say which path produced them.
 - One narration line should say one thing. Long paragraphs become one long
   caption and a slow clip; split them into scenes.
 - `say` is macOS-only. On another platform, say the offline voice path is
   unavailable and ask whether to use an installed voice tool, rather than
   pretending the command worked.
+- A `--apply` run is several commands, so it is several undo steps; report that
+  instead of calling it one undoable change.
 
 ## Verification
 

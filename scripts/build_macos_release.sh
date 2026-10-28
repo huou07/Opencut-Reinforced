@@ -51,6 +51,9 @@ fi
 printf '%s' "$rust_hash" > "$MARKER"
 
 if [[ -n "$package_id" ]]; then
+  # The packaged bundle carries the `or` CLI the assistant edits through, so it
+  # must match the app build rather than a stale binary from an earlier run.
+  (cd "$ROOT" && cargo build --release -p or_cli)
   staged="$(mktemp -d)/or_app.app"
   ditto "$APP/build/macos/Build/Products/Release/or_app.app" "$staged"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $package_id" "$staged/Contents/Info.plist"

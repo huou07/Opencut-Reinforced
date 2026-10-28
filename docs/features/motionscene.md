@@ -17,8 +17,9 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
 
 - Time is nonnegative finite `RationalTime` on a half-open `[0, duration)` local
   timeline with exact-time random access.
-- Primitives: `Group`, `Text`, `Rectangle`, `Ellipse`, `Line`/`Arrow`,
-  renderer-gated `Polyline`, `Image`.
+- Primitives: `Group`, `Text`, `Rectangle`, `Ellipse`, `Arrow`, `Image`. ADR
+  0007's `Polyline` is absent from V1 rather than accepted and ignored, so a
+  renderer-gated kind can never render as an empty node.
 - Animation: typed translation, scale, rotation, opacity, bounded geometry, and
   supported fill/stroke values with a small locked easing set.
 - Camera: optional `camera.keyframes` with `pan_x`, `pan_y`, `zoom` (0.25–4) and

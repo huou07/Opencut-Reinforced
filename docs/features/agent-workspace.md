@@ -1,6 +1,6 @@
 # Feature — Agent Workspace
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: the workspace the assistant opens by default, its `AGENTS.md` index,
 guides, skills and tools, and how the app installs and binds it to the open
@@ -15,12 +15,12 @@ write, organised like this repository's own routing:
 | Path | Holds |
 |---|---|
 | `AGENTS.md` | the index: one routing entry per guide, skill and tool, with the task trigger and the exact path |
-| `docs/` | one guide per operating concern: timeline, media, motion scenes, project safety, script/narration/music, troubleshooting |
+| `docs/` | one guide per operating concern: timeline, media/import, motion scenes, project safety, script/narration/music, audio prep (recording, clean-up, speech models) and troubleshooting |
 | `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`) |
-| `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs` |
+| `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs`; the CLI carries the file-level verbs the tools do not (clean-up, transcription, motion publish and the asset library) |
 | `scenes/` | scene sources the agent authors |
 | `work/` | scratch files and imported copies |
-| `project.json` | app-written marker: project name, project file, session descriptor |
+| `project.json` | app-written marker: project name, project file, session descriptor, `app_support_path`, `motion_library_path` |
 | `or-cli.json` | app-written marker: the `or` executable used by `tools/or` |
 
 The agent reads `AGENTS.md` automatically as its session instruction file. The
@@ -46,6 +46,10 @@ does not copy skills into a user-global directory.
 - `tools/or` is regenerated on every connection, so moving the checkout or
   rebuilding the CLI does not leave a stale path. It is quoted for paths with
   spaces and made executable where the platform supports it.
+- A packaged local bundle carries the `or` CLI in `Contents/MacOS/or`, beside the
+  app executable. The assistant resolves an explicit setting first, then a
+  checkout `target/{debug,release}/or`, then that sibling copy, so the assistant
+  keeps working after the `.app` is moved out of the repository.
 
 ## Workspace choice
 
@@ -75,6 +79,21 @@ guide repeats the rule that a `.orproj` file or the project directory is never
 edited directly. Importing an absolute path is the one file read outside the
 workspace, and it is a project command.
 
+`project.json` also carries `app_support_path` (the application-support folder that
+holds `narration-settings.json` and the cleanup output) and `motion_library_path`
+(the app-level motion library beside the workspace). The CLI resolves the library
+from the pointer it attaches through, so `or motion asset ... --attach
+project.json` and `or motion publish --attach project.json` use the same folder the
+app shows, and `--library` only overrides it for one call. The assistant session
+pointer carries the same path, so `or mcp` and the CLI agree.
+
+Some operations are deliberately app-only because they have no validated CLI
+verb: playback speed, reverse, freeze, clip volume and mute, title/caption
+styling, multi-clip group move, effects and transitions, export, microphone
+recording, cloud narration and the speech-model picker. The guides say so at the
+point of use instead of inventing a command, so an agent reports the owning
+surface and lets the user act.
+
 ## Bounds
 
 - The bundle is compiled into the app; installing it writes only inside
@@ -91,18 +110,24 @@ workspace, and it is a project command.
 - `cd tooling/or-agent-workspace && node --test test/bundle.test.mjs test/tools.test.mjs`
   — the checked-in bundle matches the source, every guide and skill is routed,
   skill frontmatter matches its directory, the scaffold emits a scene the real
-  validator accepts, `music.mjs` writes a valid PCM WAV, `voiceover.mjs --plan`
-  is side-effect free, and a macOS `say` run derives exact caption timings.
+  validator accepts (camera included), `music.mjs` writes a valid PCM WAV,
+  `voiceover.mjs --plan` is side-effect free, and a macOS `say` run derives exact
+  caption timings.
 - `cd apps/or_app && flutter test test/agent_workspace_test.dart
   test/assistant_workspace_test.dart test/assistant_settings_test.dart` — path
-  safety, versioned installation, runtime files, default resolution and settings
+  safety, versioned installation, runtime files (including `motion_library_path`),
+  default resolution, CLI resolution from a packaged bundle and settings
   migration.
+- `scripts/package_local_macos_app.sh` copies the `or` CLI into
+  `Contents/MacOS/or` and refuses a CLI with a non-system runtime dependency;
+  `scripts/check-repo.sh` and `codesign --verify --deep --strict` cover the
+  package.
 - With a project open, `tools/or project summary --attach project.json --json`
   run from the installed workspace resolves the pointer and reads the live
   revision (`crates/or_cli/tests/semantic_cli.rs` covers the pointer form).
 - The real-app journey: open the assistant in a packaged build, confirm the
   session workspace is the installed folder, and confirm the harness reports the
-  workspace `AGENTS.md` and the three skills.
+  workspace `AGENTS.md` and the four skills.
 
 ## Gaps
 
@@ -116,7 +141,12 @@ workspace, and it is a project command.
   every project this app opens.
 - The production tools are model-free except for transcription; narration uses
   the system `say` voice and music is synthesised, so quality is bounded by
-  those local providers.
+  those local providers. A cloud voice or a recorded take exists only in the app.
+- Speed, volume, freeze, styling, group move, effects, export, recording and
+  cloud narration are app-only; the workspace cannot express them, and a guide
+  may only route the user to the owning surface.
+- Transcription is a host service: `or captions transcribe` needs the running app
+  and the model the app installed.
 - A project-folder or chosen-folder workspace has no `project.json` pointer, so
   the CLI attach guidance only applies to the default agent workspace; those
   sessions fall back to the `mcp__or__*` tools.

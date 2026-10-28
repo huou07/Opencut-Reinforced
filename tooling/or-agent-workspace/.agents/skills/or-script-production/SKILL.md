@@ -1,18 +1,22 @@
 ---
 name: or-script-production
-description: Plan and produce a narrated OR edit offline — write an or-assistant-script, generate macOS say voiceover, derive exact caption clips, and add a generated music bed. Use when the user asks for a script, voiceover/dubbing, automatic subtitles for audio, or background music. Do NOT use for ordinary timeline edits (or-timeline-edit) or for changing OR's own implementation.
+description: Plan and produce a narrated OR edit offline — write an or-assistant-script, generate macOS say voiceover, derive exact caption clips, and add a generated music bed, while leaving cloud voices, recording and speech models to the app. Use when the user asks for a script, voiceover/dubbing, automatic subtitles for audio, or background music. Do NOT use for ordinary timeline edits (or-timeline-edit) or for changing OR's own implementation.
 ---
 
 # Script production
 
-Read `docs/script-and-voice.md` for the exact formats and command lines. This
-skill is the working order; the guide is the reference.
+Read `docs/script-and-voice.md` for the exact formats and command lines, and
+`docs/audio-prep.md` when the audio itself needs recording, clean-up or a speech
+model. This skill is the working order; the guides are the reference.
 
 ## 1. Fix the brief before writing
 
 Ask for, or confirm from the request: length in seconds, language (`vi` or
 `en`), audience, tone, voice, and music mood. If the user asked for a 30-second
-video, do not write a 90-second script.
+video, do not write a 90-second script. If the user names a cloud voice, say the
+app generates that one: **Audio → Generate voiceover…** uses the voice from
+**Settings → Narration**, whose provider keys live in the keychain and never
+enter this workspace.
 
 ## 2. Write one line per scene
 
@@ -41,7 +45,8 @@ node tools/voiceover.mjs --script work/scripts/<slug>.json \
 
 Without `--apply`, generate only, report the manifest/`captions.srt`, and let
 the user listen first. When you use `--apply`, confirm the result with `timeline
-tracks` and `timeline clips` before saving.
+tracks` and `timeline clips` before saving, and say it is several edits, not one
+undo step.
 
 ## 5. Add music
 
@@ -50,7 +55,9 @@ node tools/music.mjs --out work/music/<slug>.wav --duration <seconds> --mood <mo
 ```
 
 Import it, place it on an audio track, and tell the user the bed is intentionally
-quiet and adjustable in the inspector. Do not raise the generated level.
+quiet and adjustable in the inspector. Do not raise the generated level. Ducking
+under the voice is one `timeline duck-clip` command, or one click in the app's
+Music dialog.
 
 ## 6. Finish
 
@@ -60,18 +67,19 @@ transcription or generation, and what remains unverified.
 
 ## Existing audio instead of a script
 
-If the user already has audio or video and wants subtitles, use
-`tools/or captions transcribe --media MEDIA_ID --srt-out PATH`, review the cues,
-then `tools/or timeline import-captions --file PATH`. This is the only path that
-is "from audio"; the script path derives captions from the narration it wrote.
-The multilingual model is installed from the app's Generate Captions action, not
-from the workspace; if the command reports `TRANSCRIPTION_MODEL_UNAVAILABLE`,
-ask the user to run that action once instead of downloading a model yourself.
+If the user already has audio or video, use `tools/or captions transcribe
+--attach project.json --media MEDIA_ID --srt-out PATH`, review the cues, then
+`tools/or timeline import-captions --file PATH`. It needs the running app and the
+model the app has installed; if it reports `TRANSCRIPTION_MODEL_UNAVAILABLE`, ask
+the user to open **Audio → Speech model…** once instead of downloading a model
+yourself. Caption styling (font, size, anchor, offset, box, opacity) has no CLI
+verb; that is the app's Edit Caption dialog.
 
 ## Checks
 
 - `--plan` is side-effect free; use it after every script edit.
-- `say` and the music generator are offline; never claim a network call.
+- `say` and the music generator are offline; never claim a network call, and never
+  claim a cloud voice when the system voice spoke.
 - A `--apply` failure leaves an unsaved edit; inspect with `timeline tracks`
   before deciding whether to undo or retry.
 - Never save a stale revision: if a command reports a revision conflict, read

@@ -45,7 +45,9 @@ The agent's default editing surface is the `or` CLI bound to this build
 the workspace `project.json` pointer; the CLI follows its `descriptor_path` on
 each call, so the app, the CLI and the assistant share one session, one project
 and one history. The persona and the workspace guides route reads and mutations
-through the CLI and treat the MCP tools as a fallback.
+through the CLI and treat the MCP tools as a fallback. A packaged local bundle
+ships the CLI in `Contents/MacOS/or`, so the assistant does not depend on the
+checkout's `target/` after the app is installed.
 
 The harness still receives one MCP server named `or`; its tools appear to the
 model as `mcp__or__<tool>` and attach over the same local IPC. It exists for the
@@ -54,7 +56,7 @@ library, and a CLI failure its error does not explain:
 
 | CLI verb (`tools/or ...`) | MCP fallback | Effect |
 |---|---|---|
-| `project summary` | `project_status` | project name, revision, dirty state, project file |
+| `project summary` + `session describe` | `project_status` | project name, ids, revision, dirty state and the project file (the file comes from the pointer) |
 | `timeline tracks`, `timeline settings`, `timeline clips`, `timeline markers` | `timeline_overview` | frame rate, tracks with clips, markers (clips page by track) |
 | `media list` | `media_list` | media ids, sources, duration metadata (paged) |
 | `project save` | `save` | explicit project save |
@@ -94,7 +96,7 @@ writes a file, and the MCP insertion tool is its fallback.
 ## Script, narration, captions and music from chat
 
 The installed workspace carries the production tools, and its `AGENTS.md`
-routes them through `docs/script-and-voice.md`:
+routes them through `docs/script-and-voice.md` and `docs/audio-prep.md`:
 
 - `tools/voiceover.mjs` validates an `or-assistant-script`, speaks each scene
   with the macOS `say` voice, measures the real WAV duration, writes a timing
@@ -106,6 +108,10 @@ routes them through `docs/script-and-voice.md`:
   leaves the machine and no model is downloaded.
 - `tools/music.mjs` synthesises a quiet, royalty-free background bed from a mood,
   tempo and duration. It is deterministic per seed and has no network path.
+- `tools/or media clean-audio --source <file> --out <file>` runs the packaged
+  FFmpeg noise reduction on one file and writes another; the agent imports the
+  result as its own item, and the app's **Clean up Audio** menu action does the
+  same in one step. Recording a take and picking a speech model stay app-only.
 - `tools/or captions transcribe --media <id>` runs the app's **selected** local
   multilingual whisper model (Vietnamese and English are detected automatically)
   and returns bounded cues; `tools/or timeline import-captions` applies a
@@ -164,8 +170,10 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - The agent can call `undo`, but there is no grouped "revert this turn".
 - No in-panel model catalog editing; it reflects the harness configuration.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
-- The MCP server still exposes every CLI verb as a fallback; a smaller fallback
-  surface (motion insertion and the library only) is not yet enforced.
+- The MCP server's tool set is fixed and smaller than the CLI's: orientation, the
+  common timeline edits, transcription, ducking and motion insertion/library.
+  Verbs without an MCP twin (slip/roll/slide, track state, marker move/rename/
+  delete, clean-up, and importing a caption file) have no fallback surface.
 - Narration quality is the installed system `say` voice, or a configured cloud
   provider. The voice is selectable and previewable in Settings → Narration;
   ElevenLabs and Azure keys are stored in the keychain, and an ElevenLabs
