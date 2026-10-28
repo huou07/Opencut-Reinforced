@@ -1,7 +1,7 @@
 {
   "name": "clip-speed",
   "harness": "or_ui",
-  "description": "Clip speed through the real pointer and the real command path. A one second audio clip is sped to 2x from the inspector and the sequence end halves to 15 frames: the playhead is dragged to the end from the middle of the ruler, and the transport readout reports the clamped position, so a passing step means the speed reached the Rust command instead of only repainting the badge. Undo restores the original duration, and a sped clip survives save and reopen.",
+  "description": "Clip speed through the real pointer and the real command path. A one second audio clip is sped to 2x from the timeline selection strip and the sequence end halves to 15 frames: the playhead is dragged to the end from the middle of the ruler, and the transport readout reports the clamped position, so a passing step means the speed reached the Rust command instead of only repainting the badge. Undo restores the original duration, and a sped clip survives save and reopen.",
   "viewport": {
     "width": 1280,
     "height": 800
@@ -97,13 +97,19 @@
     {
       "op": "tap",
       "selector": {
-        "key": "inspector-playback-rate"
+        "key": "timeline-selection-speed"
       }
     },
     {
       "op": "tap",
       "selector": {
-        "text": "2×"
+        "key": "timeline-speed-preset-2-1"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-speed-save"
       }
     },
     {
@@ -159,13 +165,19 @@
     {
       "op": "tap",
       "selector": {
-        "key": "inspector-playback-rate"
+        "key": "timeline-selection-speed"
       }
     },
     {
       "op": "tap",
       "selector": {
-        "text": "2×"
+        "key": "timeline-speed-preset-2-1"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-speed-save"
       }
     },
     {

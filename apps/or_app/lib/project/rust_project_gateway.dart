@@ -1708,6 +1708,7 @@ class RustProjectGateway implements ProjectGateway {
   ) => ProjectTextFormatting(
     font: switch (value.font) {
       rust.FontIdentityView.bundledInter => ProjectFontIdentity.bundledInter,
+      rust.FontIdentityView.beVietnamPro => ProjectFontIdentity.beVietnamPro,
     },
     sizeMilliPoints: value.sizeMilliPoints,
     weight: switch (value.weight) {
@@ -1753,6 +1754,7 @@ class RustProjectGateway implements ProjectGateway {
   ) => rust.ProjectTextFormattingView(
     font: switch (value.font) {
       ProjectFontIdentity.bundledInter => rust.FontIdentityView.bundledInter,
+      ProjectFontIdentity.beVietnamPro => rust.FontIdentityView.beVietnamPro,
     },
     sizeMilliPoints: value.sizeMilliPoints,
     weight: switch (value.weight) {

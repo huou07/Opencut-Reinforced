@@ -407,6 +407,7 @@ pub enum TimelineClipContentKindView {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FontIdentityView {
     BundledInter,
+    BeVietnamPro,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -4383,6 +4384,7 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
     ProjectTextFormattingView {
         font: match formatting.font {
             FontIdentity::BundledInter => FontIdentityView::BundledInter,
+            FontIdentity::BeVietnamPro => FontIdentityView::BeVietnamPro,
         },
         size_milli_points: formatting.size_milli_points,
         weight: match formatting.weight {
@@ -4426,6 +4428,7 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
     TextFormatting {
         font: match view.font {
             FontIdentityView::BundledInter => FontIdentity::BundledInter,
+            FontIdentityView::BeVietnamPro => FontIdentity::BeVietnamPro,
         },
         size_milli_points: view.size_milli_points,
         weight: match view.weight {

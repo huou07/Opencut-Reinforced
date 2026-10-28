@@ -548,7 +548,7 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
 enum CaptionFileFormatView { srt, webVtt }
 
-enum FontIdentityView { bundledInter }
+enum FontIdentityView { bundledInter, beVietnamPro }
 
 class MediaArtifactBytesView {
   final Uint8List bytes;

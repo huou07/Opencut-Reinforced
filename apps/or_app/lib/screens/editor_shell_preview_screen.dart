@@ -69,6 +69,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onGenerateCaptions,
     this.onManageSpeechModel,
     this.onRecordVoice,
+    this.onAdjustClipVolume,
     this.onGenerateVoiceover,
     this.onGenerateMusic,
     this.onCleanUpAudio,
@@ -165,6 +166,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
   final VoidCallback? onManageSpeechModel;
   final VoidCallback? onRecordVoice;
+  final Future<void> Function(ProjectReadModel, String, String)?
+  onAdjustClipVolume;
   final VoidCallback? onGenerateVoiceover;
   final VoidCallback? onGenerateMusic;
   final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
@@ -1081,6 +1084,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onSetClipReversed: widget.onSetTimelineClipReversed,
             onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
+            onAdjustClipVolume: widget.onAdjustClipVolume,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -1172,6 +1176,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onSetClipReversed: widget.onSetTimelineClipReversed,
             onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
+            onAdjustClipVolume: widget.onAdjustClipVolume,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -5159,6 +5164,7 @@ class _TimelinePanel extends StatefulWidget {
     this.onSetClipReversed,
     this.onSetClipFrozen,
     this.onUpdatePlaybackRate,
+    this.onAdjustClipVolume,
     required this.onUpdateTextClip,
     required this.onAddMarker,
     required this.onMoveMarker,
@@ -5328,6 +5334,8 @@ class _TimelinePanel extends StatefulWidget {
     ProjectRationalRate rate,
   )?
   onUpdatePlaybackRate;
+  final Future<void> Function(ProjectReadModel, String, String)?
+  onAdjustClipVolume;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -6136,6 +6144,26 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                     : null,
                 icon: const Icon(Icons.delete_outline, size: 16),
               ),
+              if (selectedTrack != null &&
+                  selectedTrack.kind == ProjectTimelineTrackKind.audio &&
+                  selectedClip.contentKind ==
+                      ProjectTimelineClipContentKind.media &&
+                  widget.project != null &&
+                  widget.onAdjustClipVolume != null)
+                TextButton.icon(
+                  key: const ValueKey('timeline-selection-volume'),
+                  onPressed: widget.busy
+                      ? null
+                      : () => unawaited(
+                          widget.onAdjustClipVolume!(
+                            widget.project!,
+                            selectedTrack.trackId,
+                            selectedClip.clipId,
+                          ),
+                        ),
+                  icon: const Icon(Icons.volume_up_outlined, size: 15),
+                  label: const Text('Volume'),
+                ),
               if (selectedClip.contentKind ==
                       ProjectTimelineClipContentKind.media &&
                   selectedTrack != null &&
@@ -10068,6 +10096,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
         .toStringAsFixed(3)
         .replaceFirst(RegExp(r'\.?0+$'), ''),
   );
+  var font = formatting.font;
   var weight = formatting.weight;
   var alignment = formatting.alignment;
   final colors = <ProjectTextColor>[
@@ -10165,6 +10194,30 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                       isDense: true,
                     ),
                   ),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                DropdownButtonFormField<ProjectFontIdentity>(
+                  isExpanded: true,
+                  key: const ValueKey('timeline-text-font'),
+                  initialValue: font,
+                  decoration: const InputDecoration(
+                    labelText: 'Font',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ProjectFontIdentity.bundledInter,
+                      child: Text('Inter'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectFontIdentity.beVietnamPro,
+                      child: Text('Be Vietnam Pro'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => font = value);
+                  },
                 ),
                 const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextWeight>(
@@ -10364,7 +10417,7 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                           kind: contentKind,
                           text: textController.text,
                           formatting: ProjectTextFormatting(
-                            font: formatting.font,
+                            font: font,
                             sizeMilliPoints: (sizePoints * 1000).round(),
                             weight: weight,
                             alignment: alignment,

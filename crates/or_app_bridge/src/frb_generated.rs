@@ -5744,6 +5744,7 @@ impl SseDecode for crate::api::project::FontIdentityView {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::project::FontIdentityView::BundledInter,
+            1 => crate::api::project::FontIdentityView::BeVietnamPro,
             _ => unreachable!("Invalid variant for FontIdentityView: {}", inner),
         };
     }
@@ -8149,6 +8150,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::project::FontIdentityView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::BundledInter => 0.into_dart(),
+            Self::BeVietnamPro => 1.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -9871,6 +9873,7 @@ impl SseEncode for crate::api::project::FontIdentityView {
         <i32>::sse_encode(
             match self {
                 crate::api::project::FontIdentityView::BundledInter => 0,
+                crate::api::project::FontIdentityView::BeVietnamPro => 1,
                 _ => {
                     unimplemented!("");
                 }

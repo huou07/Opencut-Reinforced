@@ -1811,6 +1811,10 @@ void main() {
       'A manual caption',
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-text-font')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Be Vietnam Pro').last);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('timeline-text-background')),
     );
@@ -1838,6 +1842,7 @@ void main() {
     // Captions start low on the frame and the dialog can add a background box
     // and change opacity without a second command.
     expect(caption.formatting?.anchor, ProjectTextVerticalAnchor.bottom);
+    expect(caption.formatting?.font, ProjectFontIdentity.beVietnamPro);
     expect(caption.formatting?.background, isNotNull);
     expect(caption.formatting?.background?.color.alpha, greaterThan(0));
     expect(tester.takeException(), isNull);
@@ -3485,6 +3490,54 @@ void main() {
 
     expect(gateway.updatePlaybackRateCalls, 1);
     expect(gateway.lastPlaybackRate?.canonical, '2/1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selected audio clip volume is adjustable from the timeline', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'volume-toolbar-clip',
+      mediaId: 'volume-toolbar-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'volume-toolbar-track',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'volume-toolbar-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/volume-toolbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Volume toolbar');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-volume-toolbar-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-selection-volume')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clip volume'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-volume-slider')),
+      const Offset(-120, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-volume-save')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAudioSettingsCalls, 1);
+    expect(gateway.lastAudioSettings, isNotNull);
+    expect(gateway.lastAudioSettings!.gainMilliDecibels, lessThan(0));
     expect(tester.takeException(), isNull);
   });
 

@@ -27,8 +27,9 @@ justification and review.
   reuse the same slot over one project state instead of adding a region.
 - Bottom timeline with thumbnail/waveform clips, visible trim handles, context
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
-  Selecting a media clip adds its speed control to that strip; the same value
-  remains in the advanced inspector.
+  Selecting a media clip adds its speed control to that strip, and an audio clip
+  adds a volume (gain) control; both write the ordinary typed commands and keep
+  their values in the advanced inspector.
 - The Audio tool exposes **Record voice…**, **Generate voiceover…**,
   **Generate music…** and **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the

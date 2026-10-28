@@ -15,6 +15,8 @@ rather than adding a second text engine.
 Formatting also carries placement and legibility fields, all optional and
 defaulted so every project written before them renders unchanged:
 
+- `font` — Inter (the default, so old projects stay identical) or Be Vietnam Pro,
+  a display face designed for Vietnamese. Both are bundled OFL 1.1 assets.
 - `anchor` — top, centre or bottom of the frame; new caption clips start at the
   bottom, text clips at the centre.
 - `offset_x_basis_points` / `offset_y_basis_points` — a nudge from the anchor in

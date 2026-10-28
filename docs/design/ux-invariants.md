@@ -46,8 +46,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 
 Project create/open/save/reopen and cross-track move; import and library search;
 pointer trim/move/split/reorder, marquee select and group move with one undo;
-blade tool; speed badge and selection-strip speed (inspector speed remains in
-the advanced panel); copy/paste; reverse and freeze; text
+blade tool; speed badge and selection-strip speed/volume (the same values remain
+in the advanced panel); copy/paste; reverse and freeze; text
 and captions; effect presets; MotionScene render-and-insert; in-app scene
 editing (drag an object, retitle, recolour, resize text, add text, add a library
 object, delete) inline and in the expanded editor; assistant chat edits and

@@ -986,10 +986,12 @@ class _AppShellState extends State<AppShell> {
           ? EditorShellPreviewScreen(
               assistant: _assistant,
               onRecordVoice: _recordVoice,
+              onAdjustClipVolume: _adjustClipVolume,
             )
           : EditorShellPreviewScreen(
               assistant: _assistant,
               onRecordVoice: _recordVoice,
+              onAdjustClipVolume: _adjustClipVolume,
               key: _editorKey,
               isProjectWorkspace: true,
               project: _activeProject,
@@ -3005,7 +3007,9 @@ class _AppShellState extends State<AppShell> {
       await _refreshProjectState(session);
       if (!mounted) return;
       final seconds = (recording.durationMs / 1000).toStringAsFixed(1);
-      setState(() => _projectNotice = 'Added a recorded voice clip (${seconds}s).');
+      setState(
+        () => _projectNotice = 'Added a recorded voice clip (${seconds}s).',
+      );
     } on VoiceoverException catch (error) {
       if (mounted) _showUnavailable(error.message);
     } on ProjectGatewayException catch (error) {
@@ -3098,7 +3102,9 @@ class _AppShellState extends State<AppShell> {
                                 size: 20,
                               ),
                               title: Text(
-                                model.label.isEmpty ? model.modelId : model.label,
+                                model.label.isEmpty
+                                    ? model.modelId
+                                    : model.label,
                               ),
                               subtitle: Text(
                                 '${_speechModelSize(model)} · '
@@ -3119,7 +3125,9 @@ class _AppShellState extends State<AppShell> {
                                         final confirmed = await showDialog<bool>(
                                           context: dialogContext,
                                           builder: (confirmContext) => AlertDialog(
-                                            title: const Text('Remove speech model?'),
+                                            title: const Text(
+                                              'Remove speech model?',
+                                            ),
                                             content: Text(
                                               'Remove ${model.label.isEmpty ? model.modelId : model.label} '
                                               'and free ${_speechModelSize(model)}? '
@@ -3129,12 +3137,14 @@ class _AppShellState extends State<AppShell> {
                                             actions: [
                                               TextButton(
                                                 onPressed: () =>
-                                                    Navigator.of(confirmContext).pop(false),
+                                                    Navigator.of(confirmContext)
+                                                        .pop(false),
                                                 child: const Text('Cancel'),
                                               ),
                                               FilledButton(
                                                 onPressed: () =>
-                                                    Navigator.of(confirmContext).pop(true),
+                                                    Navigator.of(confirmContext)
+                                                        .pop(true),
                                                 child: const Text('Remove'),
                                               ),
                                             ],
@@ -3159,7 +3169,9 @@ class _AppShellState extends State<AppShell> {
                                             );
                                             errorText = '';
                                           });
-                                        } on ProjectGatewayException catch (error) {
+                                        } on ProjectGatewayException catch (
+                                          error
+                                        ) {
                                           if (!dialogContext.mounted) return;
                                           setDialogState(
                                             () => errorText = error.message,
@@ -3167,8 +3179,7 @@ class _AppShellState extends State<AppShell> {
                                         } catch (_) {
                                           if (!dialogContext.mounted) return;
                                           setDialogState(
-                                            () => errorText =
-                                                'The speech model could not be removed.',
+                                            () => errorText = 'The speech model could not be removed.',
                                           );
                                         }
                                       },
@@ -3221,9 +3232,7 @@ class _AppShellState extends State<AppShell> {
 
   String _speechModelBytes(BigInt bytes) {
     final mib = (bytes ~/ BigInt.from(1024 * 1024)).toInt();
-    return mib >= 1024
-        ? '${(mib / 1024).toStringAsFixed(1)} GiB'
-        : '$mib MiB';
+    return mib >= 1024 ? '${(mib / 1024).toStringAsFixed(1)} GiB' : '$mib MiB';
   }
 
   String _speechModelSize(ProjectTranscriptionModel model) =>
@@ -3705,10 +3714,9 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(context).pop((
-                  profile: selected,
-                  quality: quality,
-                )),
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop((profile: selected, quality: quality)),
                 child: const Text('Continue'),
               ),
             ],
@@ -3860,6 +3868,96 @@ class _AppShellState extends State<AppShell> {
       settings: settings,
     ),
   );
+
+  /// Opens one gain slider for the selected audio clip and writes it as the
+  /// ordinary audio command, preserving pan and fades read from the clip.
+  Future<void> _adjustClipVolume(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+  ) async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    ProjectTimelineAudioSettings current;
+    try {
+      current = await widget.projectGateway.getTimelineClipAudioSettings(
+        session,
+        project,
+        trackId: trackId,
+        clipId: clipId,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return;
+    }
+    if (!mounted) return;
+    var decibels = (current.gainMilliDecibels / 1000).clamp(-24.0, 12.0);
+    final chosen = await showDialog<double>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Clip volume'),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${decibels.toStringAsFixed(1)} dB',
+                  key: const ValueKey('timeline-volume-value'),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Slider(
+                  key: const ValueKey('timeline-volume-slider'),
+                  value: decibels,
+                  min: -24,
+                  max: 12,
+                  divisions: 72,
+                  label: '${decibels.toStringAsFixed(1)} dB',
+                  onChanged: (value) => setDialogState(() => decibels = value),
+                ),
+                Text(
+                  '0 dB is the original level. −12 dB is a quiet background.',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('timeline-volume-save'),
+              onPressed: () => Navigator.of(context).pop(decibels),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await _runProjectActionAtSnapshot(
+      project,
+      (session, currentProject) =>
+          widget.projectGateway.updateTimelineClipAudioSettings(
+            session,
+            currentProject,
+            trackId: trackId,
+            clipId: clipId,
+            settings: ProjectTimelineAudioSettings(
+              gainMilliDecibels: (chosen * 1000).round(),
+              panBasisPoints: current.panBasisPoints,
+              fadeIn: current.fadeIn,
+              fadeOut: current.fadeOut,
+            ),
+          ),
+    );
+  }
 
   Future<ProjectReadModel?> _updateTimelineClipPlaybackRate(
     ProjectReadModel expected,

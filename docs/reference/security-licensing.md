@@ -36,6 +36,8 @@ caches and build output out of tracked source.
 | `cosmic-text` | bundled-font shaping and rasterisation in `or_render` | MIT OR Apache-2.0 |
 | `subtitler` (srt, vtt) | bounded SRT/WebVTT codec | Apache-2.0 |
 | FFmpeg 8.1.3 | media runtime, LGPL-only build profile | LGPL (per configured components) |
+| Inter (bundled, `or_render/assets/fonts/inter`) | default text face | SIL OFL 1.1 |
+| Be Vietnam Pro (bundled, `or_render/assets/fonts/bevietnampro`) | Vietnamese display text face | SIL OFL 1.1 |
 
 Cargo and pub lockfiles record the resolved graph. Recheck transitive licences
 before distribution.

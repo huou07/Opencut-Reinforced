@@ -354,7 +354,7 @@ enum ProjectTimelineTrackKind { video, audio, text, caption }
 
 enum ProjectTimelineClipContentKind { media, text, caption }
 
-enum ProjectFontIdentity { bundledInter }
+enum ProjectFontIdentity { bundledInter, beVietnamPro }
 
 enum ProjectTextWeight { regular, medium, semibold, bold }
 

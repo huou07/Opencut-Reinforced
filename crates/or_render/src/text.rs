@@ -14,6 +14,14 @@ const INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Regular
 const INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Medium.ttf");
 const INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-SemiBold.ttf");
 const INTER_BOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Bold.ttf");
+const BE_VIETNAM_PRO_REGULAR: &[u8] =
+    include_bytes!("../assets/fonts/bevietnampro/BeVietnamPro-Regular.ttf");
+const BE_VIETNAM_PRO_MEDIUM: &[u8] =
+    include_bytes!("../assets/fonts/bevietnampro/BeVietnamPro-Medium.ttf");
+const BE_VIETNAM_PRO_SEMIBOLD: &[u8] =
+    include_bytes!("../assets/fonts/bevietnampro/BeVietnamPro-SemiBold.ttf");
+const BE_VIETNAM_PRO_BOLD: &[u8] =
+    include_bytes!("../assets/fonts/bevietnampro/BeVietnamPro-Bold.ttf");
 
 /// CPU text shaping and rasterization using only the bundled Inter faces.
 pub struct TextRasterizer {
@@ -24,7 +32,16 @@ pub struct TextRasterizer {
 impl TextRasterizer {
     pub fn new() -> Self {
         let mut font_db = cosmic_text::fontdb::Database::new();
-        for font in [INTER_REGULAR, INTER_MEDIUM, INTER_SEMIBOLD, INTER_BOLD] {
+        for font in [
+            INTER_REGULAR,
+            INTER_MEDIUM,
+            INTER_SEMIBOLD,
+            INTER_BOLD,
+            BE_VIETNAM_PRO_REGULAR,
+            BE_VIETNAM_PRO_MEDIUM,
+            BE_VIETNAM_PRO_SEMIBOLD,
+            BE_VIETNAM_PRO_BOLD,
+        ] {
             let _ = font_db.load_font_source(Source::Binary(Arc::new(font.to_vec())));
         }
         font_db.set_monospace_family("Inter");
@@ -66,6 +83,7 @@ impl TextRasterizer {
         buffer.set_wrap(Wrap::WordOrGlyph);
         let family = match formatting.font {
             FontIdentity::BundledInter => "Inter",
+            FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
         let attrs = Attrs::new()
             .family(Family::Name(family))
@@ -145,6 +163,7 @@ impl TextRasterizer {
         buffer.set_wrap(Wrap::WordOrGlyph);
         let family = match formatting.font {
             FontIdentity::BundledInter => "Inter",
+            FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
         let attrs = Attrs::new()
             .family(Family::Name(family))
@@ -360,7 +379,7 @@ mod tests {
     #[test]
     fn bundled_inter_rasterizes_deterministic_text_with_project_color() {
         let mut rasterizer = TextRasterizer::new();
-        assert_eq!(rasterizer.font_system.db().faces().count(), 4);
+        assert_eq!(rasterizer.font_system.db().faces().count(), 8);
         let formatting = TextFormatting {
             size_milli_points: 24_000,
             weight: TextWeight::Semibold,
@@ -455,6 +474,34 @@ mod tests {
             .find(|pixel| pixel[3] > 0 && pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
             .expect("the background box paints");
         assert_eq!(background[3], 127);
+    }
+
+    #[test]
+    fn be_vietnam_pro_renders_vietnamese_and_differs_from_inter() {
+        let mut rasterizer = TextRasterizer::new();
+        let inter = TextFormatting {
+            size_milli_points: 36_000,
+            ..TextFormatting::default()
+        };
+        let vietnamese = TextFormatting {
+            font: or_core::FontIdentity::BeVietnamPro,
+            ..inter
+        };
+        let inter_pixels = rasterizer
+            .rasterize("Tiếng Việt ếữỡ", inter, 480, 120)
+            .unwrap();
+        let vietnamese_pixels = rasterizer
+            .rasterize("Tiếng Việt ếữỡ", vietnamese, 480, 120)
+            .unwrap();
+        assert!(
+            vietnamese_pixels
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] > 0),
+            "the Vietnamese face must draw ink"
+        );
+        assert_ne!(inter_pixels, vietnamese_pixels);
     }
 
     #[test]

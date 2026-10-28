@@ -295,6 +295,8 @@ impl ClipContent {
 #[serde(rename_all = "snake_case")]
 pub enum FontIdentity {
     BundledInter,
+    /// Be Vietnam Pro (SIL OFL 1.1), a display face designed for Vietnamese.
+    BeVietnamPro,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
