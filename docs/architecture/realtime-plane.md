@@ -77,8 +77,16 @@ decode budgets.
 Desktop preview uses software FFmpeg decode plus the pixel-buffer texture
 adapter on macOS, Windows and Linux. Hardware decode (VideoToolbox, MediaCodec,
 NVDEC) and shared GPU surfaces are not approved; the vendored FFmpeg build has
-no `h264_videotoolbox` decoder. Android preview uses a separate software path
-with SAF descriptors and no audio output.
+no `h264_videotoolbox` decoder, and software 1080p decode measures about a tenth
+of one core on the local M5, so decode is not the preview bottleneck. Android
+preview uses a separate software path with SAF descriptors and no audio output.
+
+Export is the one place a frame leaves the GPU in a codec's own layout: the
+hardware H.264 profile receives NV12 planes converted on the GPU, so no CPU
+colour conversion runs per exported frame (ADR 0011). The lossless and VP9
+profiles still read back packed RGBA. Nothing shares a GPU surface with the
+encoder yet — that would need wgpu external-texture support or a second Metal
+compositor, which ADR 0011 refuses.
 
 ## Related
 

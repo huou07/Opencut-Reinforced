@@ -1057,6 +1057,41 @@ mod tests {
     }
 
     #[test]
+    fn removing_an_installed_model_deletes_it_and_falls_back_to_small() {
+        let root = temporary_model_root();
+        fs::create_dir_all(&root).unwrap();
+        let service = TranscriptionService::for_test(root.clone());
+        let manifest = or_ai::whisper_model("whisper-medium-multilingual").unwrap();
+        let installed = root.join(format!(
+            "{}-{}-{}-{}.model",
+            manifest.model_id.len(),
+            manifest.model_id,
+            manifest.version.len(),
+            manifest.version
+        ));
+        let file = File::create(&installed).unwrap();
+        file.set_len(manifest.size_bytes).unwrap();
+        drop(file);
+        assert!(or_ai::model_artifact_present(&root, &manifest));
+        service
+            .select_model("whisper-medium-multilingual")
+            .unwrap();
+        assert_eq!(
+            service.model_info().model_id,
+            "whisper-medium-multilingual"
+        );
+
+        let info = service.remove_model("whisper-medium-multilingual").unwrap();
+        assert_eq!(info.model_id, "whisper-small-multilingual");
+        assert!(!installed.exists());
+        assert!(matches!(
+            service.remove_model("whisper-medium-multilingual"),
+            Err(TranscriptionServiceError::ModelNotInstalled)
+        ));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn removing_an_uninstalled_or_unknown_model_is_refused() {
         let root = temporary_model_root();
         let service = TranscriptionService::for_test(root.clone());

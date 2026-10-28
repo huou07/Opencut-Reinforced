@@ -63,7 +63,7 @@ product still needs.
   one undo entry.
 - **Speech-model management**: the picker shows total installed size and can
   remove a downloaded model to free disk; removing the active model falls back
-  to Small.
+  to Small. The Audio tool links directly to the picker.
 - **Selectable speech models**: Base, Small, Medium, Large v3 Turbo q5 and
   Large v3 Turbo are listed in the app with their real sizes and licences; the
   user picks one, downloads it once, and the app and `or captions transcribe`
