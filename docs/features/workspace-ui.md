@@ -20,11 +20,15 @@ justification and review.
 - Tabbed library (Media / Text / Audio / Motion) instead of a placeholder icon
   rail. No dead entries: every control opens a real panel.
 - Centre viewer with transport, timecode and transform/crop affordances.
-- Right rail with **Inspector** and **Assistant** tabs. The inspector keeps human
-  units, presets and a sticky action row and shows project facts when nothing is
-  selected; the assistant reuses the same slot instead of adding a region.
+- Right rail with the **Assistant** and an optional advanced **Inspector** tab.
+  The assistant is the default surface; the inspector keeps human units, presets
+  and a sticky action row, and is hidden until **Settings → General → Show
+  inspector panel** or the palette's **Show Inspector Panel** reveals it. Both
+  reuse the same slot over one project state instead of adding a region.
 - Bottom timeline with thumbnail/waveform clips, visible trim handles, context
   menu, markers, snapping, and one control row (zoom, Fit, Snap, create menu).
+  Selecting a media clip adds its speed control to that strip; the same value
+  remains in the advanced inspector.
 - The Audio tool exposes **Generate voiceover…**, **Generate music…** and
   **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the

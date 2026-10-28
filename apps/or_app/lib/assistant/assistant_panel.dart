@@ -757,14 +757,10 @@ class _WaitingState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.6,
-                color: OrColors.ai,
-              ),
-            ),
+            // A static mark, not a spinner: this state can last as long as the
+            // harness takes to start, and a repeating animation makes the whole
+            // editor unable to settle (and is visual noise in a rail).
+            const Icon(Icons.auto_awesome, size: 16, color: OrColors.ai),
             const SizedBox(height: OrSpacing.x3),
             Text(
               controller.state == AssistantConnectionState.connecting

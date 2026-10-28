@@ -3445,6 +3445,49 @@ void main() {
     },
   );
 
+  testWidgets('selected clip speed is adjustable from the timeline toolbar', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'speed-toolbar-clip',
+      mediaId: 'speed-toolbar-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'speed-toolbar-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'speed-toolbar-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/speed-toolbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Speed toolbar');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-speed-toolbar-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-selection-speed')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clip speed'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('timeline-speed-preset-2-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-speed-save')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updatePlaybackRateCalls, 1);
+    expect(gateway.lastPlaybackRate?.canonical, '2/1');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('audio inspector writes gain, pan, and exact fades', (
     tester,
   ) async {

@@ -1,6 +1,6 @@
 # UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: behaviour that must not regress, and what counts as evidence for a UI
 change. Do not add an item here without a check that can fail.
@@ -34,9 +34,11 @@ journey. See [operations/verification.md](../operations/verification.md).
 - Every visible action works or is visibly unavailable — no dead-end controls, no
   clipped actions at supported window sizes.
 - Simple mode is a visibility setting over one state and command model.
-- The editor's right rail exposes Inspector and Assistant as two tabs over one
-  project state; switching tabs is presentation only, and the assistant never
-  writes project state outside the shared command path.
+- The editor's right rail exposes the Assistant by default and the advanced
+  Inspector as an optional second tab over one project state. The Inspector is
+  hidden unless the user enables **Show inspector panel** in Settings or opens
+  it from the palette. Switching tabs is presentation only, and the assistant
+  never writes project state outside the shared command path.
 - A shell shortcut never consumes a key a focused text field needs: the key map
   is split by focus, and native menu items carry no modifier-less equivalents.
 
@@ -44,7 +46,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 
 Project create/open/save/reopen and cross-track move; import and library search;
 pointer trim/move/split/reorder, marquee select and group move with one undo;
-blade tool; speed badge and inspector speed; copy/paste; reverse and freeze; text
+blade tool; speed badge and selection-strip speed (inspector speed remains in
+the advanced panel); copy/paste; reverse and freeze; text
 and captions; effect presets; MotionScene render-and-insert; in-app scene
 editing (drag an object, retitle, recolour, resize text, add text, add a library
 object, delete) inline and in the expanded editor; assistant chat edits and

@@ -16,6 +16,7 @@ import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../motion/motion_library_controller.dart';
+import '../production/editor_settings.dart';
 import '../motion/motion_library_models.dart';
 import '../motion/motion_library_panel.dart';
 import '../project/project_gateway.dart';
@@ -385,6 +386,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   String _selectedTool = 'Media';
   _RightPanelTab _rightPanelTab = _RightPanelTab.inspector;
+  final EditorSettingsStore _editorSettings = EditorSettingsStore();
+  bool _showInspectorPreference = false;
+  bool _inspectorRevealed = false;
+  bool _assistantReady = false;
+  bool _userChoseInspector = false;
   String? _selectedTrackId;
   String? _selectedClipId;
   ProjectTimelineTrackKind? _selectedTrackKind;
@@ -403,8 +409,34 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     super.initState();
     _motionLibrary = MotionLibraryController();
     _previewState = ValueNotifier(null);
+    _assistantReady = widget.assistant?.state == AssistantConnectionState.ready;
+    widget.assistant?.addListener(_onAssistantChanged);
+    _loadEditorSettings();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncAssistantContext();
+    });
+  }
+
+  Future<void> _loadEditorSettings() async {
+    final settings = await _editorSettings.load();
+    if (!mounted) return;
+    setState(() => _showInspectorPreference = settings.showInspector);
+  }
+
+  /// The inspector is the pre-connection fallback: while the harness starts,
+  /// there is nothing else useful in the rail. Once the assistant is ready the
+  /// advanced tab hides unless the user asked for it.
+  void _onAssistantChanged() {
+    final ready = widget.assistant?.state == AssistantConnectionState.ready;
+    if (ready == _assistantReady || !mounted) return;
+    setState(() {
+      _assistantReady = ready;
+      if (ready &&
+          !_showInspectorPreference &&
+          !_userChoseInspector &&
+          !_inspectorRevealed) {
+        _rightPanelTab = _RightPanelTab.assistant;
+      }
     });
   }
 
@@ -465,6 +497,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   /// Switches the right rail between clip settings and the assistant.
   void showAssistantPanel() {
     if (widget.assistant == null) return;
+    _userChoseInspector = false;
     if (_rightPanelTab == _RightPanelTab.assistant) return;
     setState(() => _rightPanelTab = _RightPanelTab.assistant);
     _syncAssistantContext();
@@ -472,7 +505,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void showInspectorPanel() {
     if (_rightPanelTab == _RightPanelTab.inspector) return;
-    setState(() => _rightPanelTab = _RightPanelTab.inspector);
+    // The palette can always reach the advanced surface; opening it once reveals
+    // its tab for this session without changing the stored preference.
+    setState(() {
+      _inspectorRevealed = true;
+      _userChoseInspector = true;
+      _rightPanelTab = _RightPanelTab.inspector;
+    });
   }
 
   void _scheduleMobileSheetRefresh() {
@@ -486,6 +525,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   @override
   void dispose() {
+    widget.assistant?.removeListener(_onAssistantChanged);
     _mediaSearchController.dispose();
     _previewState.dispose();
     _motionLibrary.dispose();
@@ -920,6 +960,10 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                     if (widget.assistant != null) ...[
                       _RightPanelTabs(
                         selected: _rightPanelTab,
+                        showInspector:
+                            _showInspectorPreference ||
+                            _inspectorRevealed ||
+                            !_assistantReady,
                         assistantBusy: widget.assistant!.busy,
                         onSelected: (tab) {
                           setState(() => _rightPanelTab = tab);
@@ -1033,6 +1077,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onSetClipReversed: widget.onSetTimelineClipReversed,
             onSetClipFrozen: widget.onSetTimelineClipFrozen,
+            onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -1123,6 +1168,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
             onSetClipReversed: widget.onSetTimelineClipReversed,
             onSetClipFrozen: widget.onSetTimelineClipFrozen,
+            onUpdatePlaybackRate: widget.onUpdateTimelineClipPlaybackRate,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -5100,6 +5146,7 @@ class _TimelinePanel extends StatefulWidget {
     required this.onRippleDeleteClip,
     this.onSetClipReversed,
     this.onSetClipFrozen,
+    this.onUpdatePlaybackRate,
     required this.onUpdateTextClip,
     required this.onAddMarker,
     required this.onMoveMarker,
@@ -5262,6 +5309,13 @@ class _TimelinePanel extends StatefulWidget {
     bool frozen,
   )?
   onSetClipFrozen;
+  final Future<ProjectReadModel?> Function(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+    ProjectRationalRate rate,
+  )?
+  onUpdatePlaybackRate;
   final Future<void> Function(
     ProjectReadModel,
     ProjectTimelineTrack,
@@ -6070,6 +6124,31 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                     : null,
                 icon: const Icon(Icons.delete_outline, size: 16),
               ),
+              if (selectedClip.contentKind ==
+                      ProjectTimelineClipContentKind.media &&
+                  selectedTrack != null &&
+                  widget.project != null &&
+                  widget.onUpdatePlaybackRate != null)
+                TextButton.icon(
+                  key: const ValueKey('timeline-selection-speed'),
+                  onPressed: widget.busy
+                      ? null
+                      : () async {
+                          final rate = await _showPlaybackSpeedDialog(
+                            context,
+                            selectedClip.playbackRate,
+                          );
+                          if (rate == null || !context.mounted) return;
+                          await widget.onUpdatePlaybackRate!(
+                            widget.project!,
+                            selectedTrack.trackId,
+                            selectedClip.clipId,
+                            rate,
+                          );
+                        },
+                  icon: const Icon(Icons.speed, size: 15),
+                  label: Text(_playbackSpeedLabel(selectedClip.playbackRate)),
+                ),
               Builder(
                 builder: (buttonContext) => IconButton(
                   key: const ValueKey('timeline-selection-actions'),
@@ -9820,6 +9899,110 @@ Future<void> _editTimelineTextClip({
   }
 }
 
+int _greatestCommonDivisor(int left, int right) {
+  var a = left.abs();
+  var b = right.abs();
+  while (b != 0) {
+    final remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return a == 0 ? 1 : a;
+}
+
+String _playbackSpeedLabel(ProjectRationalRate rate) {
+  final value = rate.numerator / rate.denominator;
+  if (rate.numerator == rate.denominator) return '1×';
+  return '${value.toStringAsFixed(value == value.roundToDouble() ? 0 : 2)}×';
+}
+
+Future<ProjectRationalRate?> _showPlaybackSpeedDialog(
+  BuildContext context,
+  ProjectRationalRate initial,
+) async {
+  const presets = [
+    ProjectRationalRate(1, 4),
+    ProjectRationalRate(1, 2),
+    ProjectRationalRate(1, 1),
+    ProjectRationalRate(3, 2),
+    ProjectRationalRate(2, 1),
+    ProjectRationalRate(4, 1),
+  ];
+  var value = initial.numerator / initial.denominator;
+  value = value.clamp(0.25, 4.0).toDouble();
+  return showDialog<ProjectRationalRate>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        title: const Text('Clip speed'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '${value.toStringAsFixed(2)}×',
+                key: const ValueKey('timeline-speed-value'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Slider(
+                key: const ValueKey('timeline-speed-slider'),
+                value: value,
+                min: 0.25,
+                max: 4,
+                divisions: 75,
+                label: '${value.toStringAsFixed(2)}×',
+                onChanged: (next) => setDialogState(() => value = next),
+              ),
+              Wrap(
+                spacing: OrSpacing.x1,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final rate in presets)
+                    ChoiceChip(
+                      key: ValueKey(
+                        'timeline-speed-preset-${rate.numerator}-${rate.denominator}',
+                      ),
+                      label: Text(_playbackSpeedLabel(rate)),
+                      selected:
+                          (rate.numerator / rate.denominator - value).abs() <
+                          0.001,
+                      onSelected: (_) => setDialogState(
+                        () => value = rate.numerator / rate.denominator,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('timeline-speed-save'),
+            onPressed: () {
+              final hundredths = (value * 100).round();
+              final divisor = _greatestCommonDivisor(hundredths, 100);
+              Navigator.of(
+                dialogContext,
+              ).pop(ProjectRationalRate(hundredths ~/ divisor, 100 ~/ divisor));
+            },
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Widget _textStyleSlider({
   required String keyName,
   required String label,
@@ -11032,11 +11215,13 @@ enum _RightPanelTab { inspector, assistant }
 class _RightPanelTabs extends StatelessWidget {
   const _RightPanelTabs({
     required this.selected,
+    required this.showInspector,
     required this.assistantBusy,
     required this.onSelected,
   });
 
   final _RightPanelTab selected;
+  final bool showInspector;
   final bool assistantBusy;
   final ValueChanged<_RightPanelTab> onSelected;
 

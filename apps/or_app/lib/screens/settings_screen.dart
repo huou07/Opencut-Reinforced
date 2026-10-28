@@ -4,6 +4,7 @@ import '../core_gateway.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../production/editor_settings.dart';
 import '../production/narration_settings.dart';
 import '../production/narration_settings_dialog.dart';
 import '../project/project_gateway.dart';
@@ -39,17 +40,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   _SettingsSection _selected = _SettingsSection.appearance;
   late Future<_Diagnostics> _diagnostics = _loadDiagnostics();
   final NarrationSettingsStore _narrationStore = NarrationSettingsStore();
+  final EditorSettingsStore _editorStore = EditorSettingsStore();
   NarrationSettings? _narration;
+  EditorSettings _editorSettings = const EditorSettings();
 
   @override
   void initState() {
     super.initState();
     _loadNarration();
+    _loadEditorSettings();
+  }
+
+  Future<void> _loadEditorSettings() async {
+    final settings = await _editorStore.load();
+    if (mounted) setState(() => _editorSettings = settings);
   }
 
   Future<void> _loadNarration() async {
     final settings = await _narrationStore.load();
     if (mounted) setState(() => _narration = settings);
+  }
+
+  Future<void> _setShowInspector(bool show) async {
+    final next = _editorSettings.copyWith(showInspector: show);
+    setState(() => _editorSettings = next);
+    try {
+      await _editorStore.save(next);
+    } catch (_) {
+      if (mounted) {
+        OrSnackBar.show(context, 'The editor preference could not be saved.');
+      }
+    }
   }
 
   /// The voice surface is app-level, so it is reachable without an open
@@ -232,6 +253,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: _chooseNarrationVoice,
             icon: const Icon(Icons.record_voice_over_outlined, size: 16),
             label: const Text('Choose voice…'),
+          ),
+          const Divider(height: OrSpacing.x6),
+          SwitchListTile(
+            key: const ValueKey('settings-show-inspector'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Show inspector panel'),
+            subtitle: const Text(
+              'Advanced clip settings. The timeline toolbar and clip dialogs '
+              'carry the frequent controls, so the tab starts hidden.',
+            ),
+            value: _editorSettings.showInspector,
+            onChanged: _setShowInspector,
           ),
         ],
       ),
