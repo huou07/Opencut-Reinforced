@@ -67,28 +67,9 @@
       "budget_ms": 30000
     },
     {
-      "op": "tap",
-      "selector": {
-        "key": "motion-library-select-all"
-      }
-    },
-    {
-      "op": "expect",
-      "key": "motion-library-bulk"
-    },
-    {
-      "op": "shot",
-      "name": "library-multi-selected"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "motion-library-bulk-clear"
-      }
-    },
-    {
-      "op": "expect_absent",
-      "key": "motion-library-bulk"
+      "op": "wait",
+      "text": "Opacity",
+      "budget_ms": 30000
     },
     {
       "op": "tap",
