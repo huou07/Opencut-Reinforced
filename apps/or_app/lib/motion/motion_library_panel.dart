@@ -10,6 +10,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../widgets/or_widgets.dart';
+import 'motion_insert_log.dart';
 import 'motion_library_controller.dart';
 import 'motion_library_models.dart';
 import 'motion_scene_editor.dart';
@@ -75,12 +76,14 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
   void initState() {
     super.initState();
     controller.addListener(_onChanged);
+    controller.insertLog?.addListener(_onChanged);
     unawaited(controller.initialize());
   }
 
   @override
   void dispose() {
     controller.removeListener(_onChanged);
+    controller.insertLog?.removeListener(_onChanged);
     _search.dispose();
     super.dispose();
   }
@@ -173,10 +176,51 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
       }
       final added = await widget.onInsertClip(view.outputPath);
       if (!mounted) return;
+      if (added) {
+        controller.recordInsert(
+          view,
+          draft ? MotionInsertSource.draft : MotionInsertSource.asset,
+        );
+      }
       widget.onNotice(
         added
             ? 'Motion clip added to the timeline.'
             : 'The rendered clip could not be inserted.',
+      );
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  /// Renders the same draft or selection again after the timeline copy exists.
+  Future<void> _renderAgain() async {
+    final record = controller.insertLog?.last;
+    if (record == null || !record.rerenderable) return;
+    final output = _outputPath('again');
+    if (output == null) {
+      widget.onNotice('Open a project before adding a motion clip.');
+      return;
+    }
+    setState(() => _working = true);
+    try {
+      final view = record.source == MotionInsertSource.asset
+          ? await controller.materializeSelected(output)
+          : await controller.materializeDraft(output);
+      if (!mounted) return;
+      if (view == null || !view.succeeded) {
+        widget.onNotice(
+          view?.message ??
+              (controller.error ?? 'The motion clip could not be rendered.'),
+        );
+        return;
+      }
+      final added = await widget.onInsertClip(view.outputPath);
+      if (!mounted) return;
+      if (added) controller.recordInsert(view, record.source);
+      widget.onNotice(
+        added
+            ? 'Motion clip rendered again.'
+            : 'The re-rendered clip could not be inserted.',
       );
     } finally {
       if (mounted) setState(() => _working = false);
@@ -297,6 +341,7 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                     child: _sceneEditor(),
                   ),
                 ),
+              _renderRow(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   OrSpacing.x3,
@@ -309,6 +354,42 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// The facts of the clip this panel last put on the timeline, plus a way to
+  /// render it again. A dialog-produced clip can be shown but not re-rendered
+  /// here, because this panel cannot reproduce it.
+  Widget _renderRow() {
+    final record = controller.insertLog?.last;
+    if (record == null) return const SizedBox.shrink();
+    return Padding(
+      key: const ValueKey('motion-scene-on-timeline'),
+      padding: const EdgeInsets.fromLTRB(OrSpacing.x3, 0, OrSpacing.x1, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.movie_outlined, size: 14, color: OrColors.textMuted),
+          const SizedBox(width: OrSpacing.x1),
+          Expanded(
+            child: Text(
+              'On timeline · ${record.width}×${record.height} · '
+              '${record.frameCount} frames',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+          ),
+          if (record.rerenderable)
+            TextButton(
+              key: const ValueKey('motion-scene-rerender'),
+              onPressed: controller.busy || _working ? null : _renderAgain,
+              child: const Text('Render again'),
+            ),
+        ],
       ),
     );
   }

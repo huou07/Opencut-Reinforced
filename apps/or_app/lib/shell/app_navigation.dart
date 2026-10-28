@@ -5,38 +5,23 @@ import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../widgets/or_widgets.dart';
 
-enum AppDestination {
-  home,
-  projects,
-  templates,
-  assets,
-  settings,
-  editorPreview,
-}
+enum AppDestination { home, projects, settings, editorPreview }
 
 extension AppDestinationPresentation on AppDestination {
   String get label => switch (this) {
     AppDestination.home => 'Home',
     AppDestination.projects => 'Projects',
-    AppDestination.templates => 'Templates',
-    AppDestination.assets => 'Asset Library',
     AppDestination.settings => 'Settings',
     AppDestination.editorPreview => 'Editor Shell Preview',
   };
 
-  /// The compact bottom bar gives each destination 64 px at 320 wide;
-  /// "Asset Library" ellipsized to "Asset Li..." there. The desktop sidebar
-  /// keeps the full name.
-  String get shortLabel => switch (this) {
-    AppDestination.assets => 'Assets',
-    _ => label,
-  };
+  /// The compact bottom bar gives each destination an equal share; the label
+  /// is already short enough for 64 px.
+  String get shortLabel => label;
 
   IconData get icon => switch (this) {
     AppDestination.home => Icons.home_outlined,
     AppDestination.projects => Icons.folder_outlined,
-    AppDestination.templates => Icons.dashboard_outlined,
-    AppDestination.assets => Icons.video_library_outlined,
     AppDestination.settings => Icons.settings_outlined,
     AppDestination.editorPreview => Icons.view_quilt_outlined,
   };
@@ -46,8 +31,6 @@ extension AppDestinationPresentation on AppDestination {
   static const primary = [
     AppDestination.home,
     AppDestination.projects,
-    AppDestination.templates,
-    AppDestination.assets,
     AppDestination.settings,
   ];
 }
@@ -84,8 +67,8 @@ class DesktopNavigation extends StatelessWidget {
               ),
               child: _NavigationHeading('WORKSPACE'),
             ),
-            for (final destination in AppDestinationPresentation.primary.take(
-              4,
+            for (final destination in AppDestinationPresentation.primary.where(
+              (destination) => destination != AppDestination.settings,
             ))
               _DesktopDestination(
                 destination: destination,

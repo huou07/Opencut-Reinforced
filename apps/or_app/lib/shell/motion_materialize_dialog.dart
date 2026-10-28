@@ -39,7 +39,8 @@ Future<void> showMotionMaterializeDialog({
     MotionMaterializeRequest,
   )
   render,
-  required Future<bool> Function(String path) addToTimeline,
+  required Future<bool> Function(MotionMaterializationOutcome outcome)
+  addToTimeline,
 }) {
   return showDialog<void>(
     context: context,
@@ -64,7 +65,8 @@ class _MotionMaterializeDialog extends StatefulWidget {
   final Future<String?> Function(String suggestedName) chooseDestination;
   final Future<MotionMaterializationOutcome> Function(MotionMaterializeRequest)
   render;
-  final Future<bool> Function(String path) addToTimeline;
+  final Future<bool> Function(MotionMaterializationOutcome outcome)
+  addToTimeline;
 
   @override
   State<_MotionMaterializeDialog> createState() =>
@@ -233,8 +235,7 @@ class _MotionMaterializeDialogState extends State<_MotionMaterializeDialog> {
   }
 
   Future<void> _addToTimeline() async {
-    final path = _outcome?.destinationPath;
-    if (path == null) return;
+    if (_outcome == null) return;
     setState(() {
       _busy = true;
       _failed = false;
@@ -242,7 +243,7 @@ class _MotionMaterializeDialogState extends State<_MotionMaterializeDialog> {
     });
     var added = false;
     try {
-      added = await widget.addToTimeline(path);
+      added = await widget.addToTimeline(_outcome!);
     } catch (_) {
       // The rendered file stays at its selected destination for manual import.
     }

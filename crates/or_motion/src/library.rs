@@ -302,6 +302,8 @@ impl MotionLibrary {
             return Ok(false);
         };
         let entry = catalog.entries.remove(index);
+        // Capture the asset's own image files while its document still reads.
+        let removed_images = self.images_named_by(asset_id);
         let asset_path = self.asset_path(asset_id);
         if asset_path.exists() {
             fs::remove_file(&asset_path)
@@ -314,8 +316,56 @@ impl MotionLibrary {
                 let _ = fs::remove_file(preview_path);
             }
         }
+        // Adopted or imported images live in the shared `images/` directory. Only
+        // the removed asset's own copies are candidates: an image another saved
+        // asset still names is kept, and a draft that was never saved references
+        // only its own copies, so an unrelated removal cannot break it.
         self.write_catalog(&catalog)?;
+        for relative in removed_images {
+            if !self.referenced_images()?.contains(&relative) {
+                if let Ok(path) = self.resolve_relative(&relative) {
+                    let _ = fs::remove_file(path);
+                }
+            }
+        }
         Ok(true)
+    }
+
+    /// Library-relative image files a saved asset names, if its document reads.
+    ///
+    /// An unreadable document yields no candidates: a corrupt entry must not let
+    /// removal guess which shared files are safe to delete.
+    fn images_named_by(&self, asset_id: &str) -> Vec<String> {
+        let Ok(document) = self.load(asset_id) else {
+            return Vec::new();
+        };
+        let Some(scene) = document.scene else {
+            return Vec::new();
+        };
+        scene
+            .assets
+            .into_iter()
+            .map(|asset| asset.path)
+            .filter(|path| path.starts_with("images/"))
+            .collect()
+    }
+
+    /// Every image file the catalog still names, across every saved asset.
+    fn referenced_images(&self) -> Result<std::collections::HashSet<String>, MotionLibraryError> {
+        let catalog = self.read_catalog()?;
+        let mut referenced = std::collections::HashSet::new();
+        for entry in &catalog.entries {
+            if let Ok(document) = self.load(&entry.asset_id) {
+                if let Some(scene) = document.scene {
+                    for asset in scene.assets {
+                        if asset.path.starts_with("images/") {
+                            referenced.insert(asset.path);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(referenced)
     }
 
     /// Resolves a document-relative path under the library root.
@@ -854,6 +904,113 @@ mod tests {
                 .unwrap_err(),
             MotionLibraryError::UnsafePath("../outside.png".to_owned())
         );
+    }
+
+    #[test]
+    fn removing_an_imported_image_deletes_its_copy() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("logo.png");
+        fs::write(&source, b"\x89PNG\r\n\x1a\nlogo").unwrap();
+        let asset = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Logo",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap();
+        let image = asset.scene.as_ref().unwrap().assets[0].path.clone();
+        assert!(directory.0.join(&image).exists());
+
+        assert!(library.remove(&asset.asset_id).unwrap());
+        assert!(!directory.0.join(&image).exists());
+    }
+
+    #[test]
+    fn removing_an_asset_keeps_an_image_another_asset_still_names() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("logo.png");
+        fs::write(&source, b"\x89PNG\r\n\x1a\nlogo").unwrap();
+        let image_asset = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Logo",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap();
+        let image = image_asset.scene.as_ref().unwrap().assets[0].path.clone();
+        let scene_id = new_motion_asset_id();
+        let scene = MotionAssetDocument {
+            format: crate::MOTION_ASSET_FORMAT.to_owned(),
+            schema_version: crate::MOTION_ASSET_SCHEMA_VERSION,
+            asset_id: scene_id.clone(),
+            name: "Shared image".to_owned(),
+            category: MotionAssetCategory::Object,
+            category_source: MotionAssetCategorySource::Default,
+            tags: vec![],
+            kind: MotionAssetKind::Scene,
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            duration: RationalTime::new(4, 1).unwrap(),
+            parameters: vec![],
+            scene: Some(MotionAssetPayload {
+                assets: vec![MotionAsset {
+                    asset_id: "logo".to_owned(),
+                    sha256: None,
+                    path: image.clone(),
+                }],
+                nodes: vec![MotionNode {
+                    node_id: "logo".to_owned(),
+                    kind: MotionNodeKind::Image,
+                    children: None,
+                    text: None,
+                    position: Some(MotionPoint { x: 0.0, y: 0.0 }),
+                    size: Some(MotionSize {
+                        width: 1920.0,
+                        height: 1080.0,
+                    }),
+                    end: None,
+                    fill: None,
+                    stroke: None,
+                    stroke_width: None,
+                    font_size: None,
+                    asset_id: Some("logo".to_owned()),
+                    opacity: Some(1.0),
+                    rotation_degrees: Some(0.0),
+                    spans: None,
+                }],
+                animations: vec![],
+                camera: None,
+            }),
+            preset: None,
+            image: None,
+            preview: None,
+        };
+        library.save(&scene, None).unwrap();
+
+        assert!(library.remove(&image_asset.asset_id).unwrap());
+        assert!(
+            directory.0.join(&image).exists(),
+            "the scene still names it"
+        );
+
+        assert!(library.remove(&scene_id).unwrap());
+        assert!(!directory.0.join(&image).exists());
     }
 
     #[test]

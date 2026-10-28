@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app_bridge/or_app_bridge.dart';
 import 'package:or_app/design/or_theme.dart';
+import 'package:or_app/motion/motion_insert_log.dart';
 import 'package:or_app/motion/motion_library_controller.dart';
 import 'package:or_app/motion/motion_library_models.dart';
 import 'package:or_app/motion/motion_library_panel.dart';
@@ -1416,5 +1417,84 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('motion-redo')));
     await tester.pump();
     expect(controller.nodeById('panel')!.x, greaterThan(before));
+  });
+
+  testWidgets('a rendered clip stays visible and can be rendered again', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final log = MotionInsertLog();
+    late MotionLibraryController controller;
+    late _FakeMotionGateway gateway;
+    late Directory supportDir;
+    await tester.runAsync(() async {
+      supportDir = await Directory.systemTemp.createTemp('or-motion-row-');
+      gateway = _FakeMotionGateway();
+      controller = MotionLibraryController(
+        gateway: gateway,
+        supportDirectory: () async => supportDir,
+        insertLog: log,
+      );
+      await controller.initialize();
+    });
+    addTearDown(() async {
+      controller.dispose();
+      await supportDir.delete(recursive: true);
+    });
+    await controller.select(controller.entries.first);
+    await controller.addSelectedToScene();
+
+    var inserted = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: SizedBox(
+            width: 340,
+            height: 2000,
+            child: MotionLibraryPanel(
+              controller: controller,
+              outputDirectory: supportDir.path,
+              onInsertClip: (_) async {
+                inserted += 1;
+                return true;
+              },
+              onNotice: (_) {},
+              onOpenCodeMotion: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('motion-scene-on-timeline')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('motion-insert-draft')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(inserted, 1);
+    expect(
+      find.byKey(const ValueKey('motion-scene-on-timeline')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'On timeline \u00b7 1920\u00d71080 \u00b7 150 frames',
+      ),
+      findsOneWidget,
+    );
+
+    final firstOutput = log.last!.outputPath;
+    await tester.tap(find.byKey(const ValueKey('motion-scene-rerender')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(inserted, 2);
+    expect(log.last!.outputPath, isNot(firstOutput));
+    expect(log.last!.frameCount, 150);
   });
 }

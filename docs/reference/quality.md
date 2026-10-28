@@ -175,6 +175,13 @@ their own increments with their own evidence.
 4. Representative camera-media compatibility, large libraries and
    physical-device performance are unproven.
 5. Clean-machine install/upgrade/uninstall is unverified.
+6. The largest sources are still single files — `apps/or_app/lib/shell/app_shell.dart`,
+   `apps/or_app/lib/screens/editor_shell_preview_screen.dart`,
+   `crates/or_core/src/application.rs` and `crates/or_app_bridge/src/api/project.rs`.
+   Extraction into focused modules has started (`apps/or_app/lib/shell/platform_menus.dart`
+   holds the macOS menu bar, `apps/or_app/lib/motion/motion_insert_log.dart` holds the
+   motion insert record) but the rest has no moving plan beyond a mechanical split
+   under the existing tests; nothing about the split may change behaviour.
 
 ## Evidence rules
 

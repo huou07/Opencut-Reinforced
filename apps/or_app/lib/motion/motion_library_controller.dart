@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:or_app_bridge/or_app_bridge.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'motion_insert_log.dart';
 import 'motion_library_models.dart';
 
 /// The bridge calls the library surface needs. A fake implements this in tests.
@@ -284,11 +285,16 @@ class MotionLibraryController extends ChangeNotifier {
   MotionLibraryController({
     MotionLibraryGateway? gateway,
     Future<Directory> Function()? supportDirectory,
+    this.insertLog,
   }) : _gateway = gateway ?? const RustMotionLibraryGateway(),
        _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
 
   final MotionLibraryGateway _gateway;
   final Future<Directory> Function() _supportDirectory;
+
+  /// Records clips this controller puts on the timeline, for the panel's
+  /// "on timeline" row. Optional so tests and other surfaces can omit it.
+  final MotionInsertLog? insertLog;
 
   String _root = '';
   List<MotionAssetEntryView> _entries = const [];
@@ -1369,6 +1375,22 @@ class MotionLibraryController extends ChangeNotifier {
       _busy = false;
       _notify();
     }
+  }
+
+  /// Records a materialisation this controller put on the timeline. The
+  /// panel's "on timeline" row reads it; a failed render records nothing.
+  void recordInsert(MotionMaterializationView view, MotionInsertSource source) {
+    if (!view.succeeded) return;
+    insertLog?.record(
+      MotionInsertRecord(
+        outputPath: view.outputPath,
+        sceneName: view.sceneName,
+        width: view.width,
+        height: view.height,
+        frameCount: view.frameCount.toInt(),
+        source: source,
+      ),
+    );
   }
 
   Future<void> _renderAssetPreview({bool refresh = false}) async {

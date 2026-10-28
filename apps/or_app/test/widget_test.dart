@@ -93,20 +93,15 @@ void main() {
     expect(find.text('Archived'), findsNothing);
   });
 
-  testWidgets('compact shell reaches all five primary destinations', (
+  testWidgets('compact shell reaches every primary destination', (
     tester,
   ) async {
     _setViewport(tester, const Size(390, 844));
     await _mount(tester);
     expect(find.byKey(const ValueKey('compact-navigation')), findsOneWidget);
-    // 320 px cannot hold "Asset Library"; the compact bar names it "Assets".
-    expect(find.text('Assets'), findsOneWidget);
-    expect(find.text('Asset Library'), findsNothing);
 
     final destinations = [
       (AppDestination.projects, 'No active project'),
-      (AppDestination.templates, 'No templates available'),
-      (AppDestination.assets, 'No assets available'),
       (AppDestination.settings, 'Focused Monochrome'),
       (AppDestination.home, 'No recent projects yet'),
     ];
@@ -715,8 +710,8 @@ void main() {
             message: 'Materialised 24 frames.',
           );
         },
-        addToTimeline: (path) async {
-          addedPath = path;
+        addToTimeline: (outcome) async {
+          addedPath = outcome.destinationPath;
           return true;
         },
       );

@@ -180,7 +180,11 @@ validated before the bridge returns it.
   1920×1080/30 fps into `<project>/generated/`, then imports and inserts it with
   the ordinary media and timeline commands.
 - Re-rendering never silently replaces a clip: inserting a new render is an
-  explicit action.
+  explicit action. The panel keeps the last insert as an **On timeline ·
+  W×H · N frames** row with **Render again**, which re-materialises the same
+  source and appends a second clip. The row belongs to the panel's session
+  (`apps/or_app/lib/motion/motion_insert_log.dart`) and is cleared when a project
+  is attached or closed; it is not project state and does not survive a restart.
 - A successful materialisation writes `<output>.provenance.json` beside the
   video: kind (`motion-scene` or `motion-asset`), scene id and name, asset ids,
   parameter values, canvas, frame rate and a scene digest. It is a sidecar, not

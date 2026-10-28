@@ -357,6 +357,8 @@ class OrBadge extends StatelessWidget {
   }
 }
 
+/// A control for work the product does not perform yet. It is not disabled:
+/// pressing it explains the boundary, so a dead control never looks like a bug.
 class OrUnavailableButton extends StatelessWidget {
   const OrUnavailableButton({
     super.key,
@@ -371,75 +373,26 @@ class OrUnavailableButton extends StatelessWidget {
   final String reason;
   final VoidCallback onPressed;
   final IconData? icon;
+
+  /// Matches the filled weight of the action it stands in for.
   final bool primary;
 
   @override
   Widget build(BuildContext context) {
+    final iconWidget = Icon(icon ?? Icons.info_outline, size: 16);
     return Tooltip(
       message: reason,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon ?? Icons.info_outline, size: 18),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: primary ? OrColors.textSecondary : OrColors.text,
-          backgroundColor: primary ? OrColors.surface : Colors.transparent,
-          side: BorderSide(
-            color: primary ? OrColors.border : OrColors.borderStrong,
-          ),
-          minimumSize: const Size(0, OrControlSizes.buttonTouch),
-          textStyle: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
-}
-
-class OrDisabledChip extends StatelessWidget {
-  const OrDisabledChip(this.label, {super.key});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Unavailable in this Developer Preview',
-      child: OutlinedButton(
-        onPressed: null,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: OrColors.textMuted,
-          disabledForegroundColor: OrColors.textMuted,
-          side: const BorderSide(color: OrColors.border),
-          minimumSize: const Size(0, OrControlSizes.button),
-          padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-          textStyle: const TextStyle(fontSize: OrType.metadataCompactSize),
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-}
-
-class OrSearchField extends StatelessWidget {
-  const OrSearchField({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 260,
-      child: TextField(
-        enabled: false,
-        decoration: InputDecoration(
-          prefixIcon: const Icon(Icons.search_outlined, size: 18),
-          hintText: label,
-          suffixIcon: const Tooltip(
-            message: 'Catalog search is unavailable in this Developer Preview',
-            child: Icon(Icons.info_outline, size: 16),
-          ),
-        ),
-      ),
+      child: primary
+          ? FilledButton.icon(
+              onPressed: onPressed,
+              icon: iconWidget,
+              label: Text(label),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: iconWidget,
+              label: Text(label),
+            ),
     );
   }
 }

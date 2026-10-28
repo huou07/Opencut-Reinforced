@@ -124,7 +124,20 @@ product still needs.
   product requirements, with the run, job, evidence class and limitations each
   one does and does not establish.
 
+- **Motion panel render record**: after a motion clip is inserted, the Motion
+  panel keeps an "On timeline · W×H · N frames" row naming the last render and a
+  **Render again** action that re-materialises the same scene (draft or library
+  asset) and appends the new clip. The record follows the open project — it is
+  cleared on attach and close — and the panel still notices a draft edited after
+  the render.
+
 ### Changed
+
+- **Templates and Asset Library destinations removed**: both surfaced shields and
+  filter chips for catalogs the product does not ship (cloud/community assets are
+  deferred by the owner), which read as broken controls. The shell now lists only
+  Home, Projects, Settings and the developer Editor preview; the dead screens,
+  their disabled chips and the `OrSearchField` widget are gone.
 
 - **Assistant edits the project through the `or` CLI by default.** The installed
   workspace and persona attach `tools/or` through the workspace `project.json`

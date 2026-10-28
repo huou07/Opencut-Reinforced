@@ -15,6 +15,7 @@ import '../assistant/assistant_panel.dart';
 import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
+import '../motion/motion_insert_log.dart';
 import '../motion/motion_library_controller.dart';
 import '../production/editor_settings.dart';
 import '../motion/motion_library_models.dart';
@@ -62,6 +63,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onCopyClip,
     this.onPasteClip,
     this.motionOutputDirectory,
+    this.motionInsertLog,
     this.onInsertMotionClip,
     this.pickMotionImage,
     this.pickMotionScene,
@@ -160,6 +162,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
 
   /// A project-adjacent folder where materialised motion clips are written.
   final String? motionOutputDirectory;
+
+  /// The last motion clip the Motion panel put on the timeline.
+  final MotionInsertLog? motionInsertLog;
   final Future<bool> Function(String path)? onInsertMotionClip;
   final Future<String?> Function()? pickMotionImage;
 
@@ -416,7 +421,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _motionLibrary = MotionLibraryController();
+    _motionLibrary = MotionLibraryController(insertLog: widget.motionInsertLog);
     _previewState = ValueNotifier(null);
     _assistantReady = widget.assistant?.state == AssistantConnectionState.ready;
     widget.assistant?.addListener(_onAssistantChanged);
@@ -569,6 +574,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     final added =
         await widget.onInsertMotionClip?.call(view.outputPath) ?? false;
     if (!mounted) return;
+    if (added) {
+      _motionLibrary.recordInsert(view, MotionInsertSource.asset);
+    }
     OrSnackBar.show(
       context,
       added
@@ -938,6 +946,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onOpenMotion: widget.busy ? null : widget.onOpenMotion,
                   motionLibrary: _motionLibrary,
                   motionOutputDirectory: widget.motionOutputDirectory,
+                  motionInsertLog: widget.motionInsertLog,
                   onInsertMotionClip: widget.onInsertMotionClip,
                   pickMotionImage: widget.pickMotionImage,
                   pickMotionScene: widget.pickMotionScene,
@@ -1281,6 +1290,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
               child: _EditorToolPanel(
                 motionLibrary: _motionLibrary,
                 motionOutputDirectory: widget.motionOutputDirectory,
+                motionInsertLog: widget.motionInsertLog,
                 onInsertMotionClip: widget.onInsertMotionClip,
                 pickMotionImage: widget.pickMotionImage,
                 pickMotionScene: widget.pickMotionScene,
@@ -1624,6 +1634,7 @@ class _EditorToolPanel extends StatelessWidget {
     this.onOpenMotion,
     required this.motionLibrary,
     this.motionOutputDirectory,
+    this.motionInsertLog,
     this.onInsertMotionClip,
     this.pickMotionImage,
     this.pickMotionScene,
@@ -1677,6 +1688,9 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onOpenMotion;
   final MotionLibraryController motionLibrary;
   final String? motionOutputDirectory;
+
+  /// The last motion clip the Motion panel put on the timeline.
+  final MotionInsertLog? motionInsertLog;
   final Future<bool> Function(String path)? onInsertMotionClip;
   final Future<String?> Function()? pickMotionImage;
   final Future<String?> Function()? pickMotionScene;

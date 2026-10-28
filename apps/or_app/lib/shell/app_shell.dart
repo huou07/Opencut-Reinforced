@@ -26,19 +26,19 @@ import '../production/music_dialog.dart';
 import '../production/record_voice_dialog.dart';
 import '../production/voiceover_dialog.dart';
 import '../production/voiceover_service.dart';
-import '../screens/asset_library_screen.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
 import '../screens/settings_screen.dart';
-import '../screens/templates_screen.dart';
 import '../assistant/assistant_controller.dart';
 import '../widgets/or_widgets.dart';
 import 'app_navigation.dart';
+import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
 import 'motion_materialize_dialog.dart';
+import '../motion/motion_insert_log.dart';
 
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
@@ -187,288 +187,6 @@ Map<ShortcutActivator, Intent> orShellShortcuts({
     ? _alwaysShortcuts
     : {..._alwaysShortcuts, ..._editingShortcuts};
 
-/// The macOS menu bar. Every item routes to the same callback the on-screen
-/// control uses, so the menu can never drift from the visible surface.
-/// Non-Apple platforms get the child unchanged: a menu bar that only exists on
-/// one platform should not change the widget tree anywhere else.
-class _PlatformMenus extends StatelessWidget {
-  const _PlatformMenus({
-    required this.isEditor,
-    required this.textInputFocused,
-    required this.canExport,
-    required this.canEditProject,
-    required this.onNewProject,
-    required this.onOpenProject,
-    required this.onSaveProject,
-    required this.onExport,
-    required this.onUndo,
-    required this.onRedo,
-    required this.onCloseProject,
-    required this.onHome,
-    required this.onProjects,
-    required this.onSettings,
-    required this.onCommandPalette,
-    required this.onSplit,
-    required this.onDuplicate,
-    required this.onCopy,
-    required this.onPaste,
-    required this.onDelete,
-    required this.onRippleDelete,
-    required this.onAddMarker,
-    required this.onToggleSnapping,
-    required this.onReverseClip,
-    required this.onFreezeClip,
-    required this.canImport,
-    required this.onImportMedia,
-    required this.onImportFolder,
-    required this.child,
-  });
-
-  final bool isEditor;
-  final bool textInputFocused;
-  final bool canExport;
-  final bool canEditProject;
-  final VoidCallback onNewProject;
-  final VoidCallback onOpenProject;
-  final VoidCallback onSaveProject;
-  final VoidCallback onExport;
-  final VoidCallback onUndo;
-  final VoidCallback onRedo;
-  final VoidCallback onCloseProject;
-  final VoidCallback onHome;
-  final VoidCallback onProjects;
-  final VoidCallback onSettings;
-  final VoidCallback onCommandPalette;
-  final VoidCallback onSplit;
-  final VoidCallback onDuplicate;
-  final VoidCallback onCopy;
-  final VoidCallback onPaste;
-  final VoidCallback onDelete;
-  final VoidCallback onRippleDelete;
-  final VoidCallback onAddMarker;
-  final VoidCallback onToggleSnapping;
-  final VoidCallback onReverseClip;
-
-  /// Holds the selected clip's first frame, or releases it.
-  final VoidCallback onFreezeClip;
-  final bool canImport;
-  final VoidCallback? onImportMedia;
-  final VoidCallback? onImportFolder;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!Platform.isMacOS) return child;
-    return PlatformMenuBar(
-      menus: [
-        // macOS owns the first menu slot and titles it with the application
-        // name; without an app menu of our own the File menu is swallowed into
-        // that slot and never appears (observed: bar read "or_app, Edit, View,
-        // OR" while File's items lived under "or_app").
-        // `PlatformProvidedMenuItem` refuses to exist on a target without that
-        // built-in item, and `flutter test` reports an android target even on a
-        // macOS host, so the app menu is added only for a real macOS target.
-        if (defaultTargetPlatform == TargetPlatform.macOS)
-          PlatformMenu(
-            label: 'Opencut Reinforced',
-            menus: [
-              PlatformProvidedMenuItem(
-                type: PlatformProvidedMenuItemType.about,
-              ),
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.hide,
-                  ),
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.hideOtherApplications,
-                  ),
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.showAllApplications,
-                  ),
-                ],
-              ),
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.quit,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        PlatformMenu(
-          label: 'File',
-          menus: [
-            PlatformMenuItem(
-              label: 'New Project…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyN,
-                meta: true,
-              ),
-              onSelected: onNewProject,
-            ),
-            PlatformMenuItem(
-              label: 'Open Project…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyO,
-                meta: true,
-              ),
-              onSelected: onOpenProject,
-            ),
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Save',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyS,
-                    meta: true,
-                  ),
-                  onSelected: canEditProject ? onSaveProject : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Import Media…',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyI,
-                    meta: true,
-                  ),
-                  onSelected: onImportMedia,
-                ),
-                PlatformMenuItem(
-                  label: 'Import Folder…',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyI,
-                    meta: true,
-                    shift: true,
-                  ),
-                  onSelected: onImportFolder,
-                ),
-                PlatformMenuItem(
-                  label: 'Export Video…',
-                  shortcut: const SingleActivator(
-                    LogicalKeyboardKey.keyE,
-                    meta: true,
-                  ),
-                  onSelected: canExport ? onExport : null,
-                ),
-              ],
-            ),
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Close Project',
-                  onSelected: canEditProject ? onCloseProject : null,
-                ),
-              ],
-            ),
-          ],
-        ),
-        PlatformMenu(
-          label: 'Edit',
-          menus: [
-            // Editing verbs carry no native key equivalent. macOS routes a
-            // menu equivalent before the focused text field, so ⌘Z/⌘C/⌘V in a
-            // menu would steal text editing. The Flutter shortcut map owns
-            // these keys and disables them while a field is focused.
-            PlatformMenuItem(
-              label: 'Undo',
-              onSelected: !textInputFocused && canEditProject ? onUndo : null,
-            ),
-            PlatformMenuItem(
-              label: 'Redo',
-              onSelected: !textInputFocused && canEditProject ? onRedo : null,
-            ),
-            PlatformMenuItemGroup(
-              members: [
-                PlatformMenuItem(
-                  label: 'Split at Playhead',
-                  onSelected: !textInputFocused && isEditor ? onSplit : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Duplicate Clip',
-                  onSelected: !textInputFocused && isEditor
-                      ? onDuplicate
-                      : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Copy Clip',
-                  onSelected: !textInputFocused && isEditor ? onCopy : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Paste Clip',
-                  onSelected: !textInputFocused && isEditor ? onPaste : null,
-                ),
-                // No key equivalent: macOS treats a modifier-less menu
-                // equivalent as a typing key (Delete is Backspace, M is "m"),
-                // so the menu would steal text editing from every field. The
-                // Flutter shortcut map owns these verbs and is disabled while a
-                // text field is focused.
-                PlatformMenuItem(
-                  label: 'Delete Clip',
-                  onSelected: !textInputFocused && isEditor ? onDelete : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Ripple Delete Clip',
-                  onSelected: !textInputFocused && isEditor
-                      ? onRippleDelete
-                      : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Add Marker',
-                  onSelected: !textInputFocused && isEditor
-                      ? onAddMarker
-                      : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Toggle Snapping',
-                  onSelected: isEditor ? onToggleSnapping : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Reverse Selected Clip',
-                  onSelected: isEditor ? onReverseClip : null,
-                ),
-                PlatformMenuItem(
-                  label: 'Freeze Selected Clip',
-                  onSelected: isEditor ? onFreezeClip : null,
-                ),
-              ],
-            ),
-          ],
-        ),
-        PlatformMenu(
-          label: 'View',
-          menus: [
-            PlatformMenuItem(label: 'Home', onSelected: onHome),
-            PlatformMenuItem(label: 'Projects', onSelected: onProjects),
-            PlatformMenuItem(
-              label: 'Command Palette…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.keyK,
-                meta: true,
-              ),
-              onSelected: onCommandPalette,
-            ),
-          ],
-        ),
-        PlatformMenu(
-          label: 'OR',
-          menus: [
-            PlatformMenuItem(
-              label: 'Settings…',
-              shortcut: const SingleActivator(
-                LogicalKeyboardKey.comma,
-                meta: true,
-              ),
-              onSelected: onSettings,
-            ),
-          ],
-        ),
-      ],
-      child: child,
-    );
-  }
-}
-
 class _AppShellState extends State<AppShell> {
   late final AssistantController _assistant =
       widget.assistantController ?? AssistantController();
@@ -547,8 +265,13 @@ class _AppShellState extends State<AppShell> {
     unawaited(_loadRecentProjects());
   }
 
+  /// The last motion clip the Motion panel put on the timeline. Owned here so
+  /// it survives panel rebuilds and resets when the project changes.
+  final MotionInsertLog _motionInsertLog = MotionInsertLog();
+
   @override
   void dispose() {
+    _motionInsertLog.dispose();
     FocusManager.instance.removeListener(_handleFocusChange);
     _autosaveTimer?.cancel();
     _exportPollTimer?.cancel();
@@ -798,7 +521,7 @@ class _AppShellState extends State<AppShell> {
             },
             child: Focus(
               autofocus: true,
-              child: _PlatformMenus(
+              child: PlatformMenus(
                 isEditor: editor,
                 textInputFocused: _textInputFocused,
                 canExport:
@@ -981,12 +704,6 @@ class _AppShellState extends State<AppShell> {
       onSaveProject: _saveProject,
       onCloseProject: _closeProject,
     ),
-    AppDestination.templates => TemplatesScreen(
-      onUnavailable: _showUnavailable,
-    ),
-    AppDestination.assets => AssetLibraryScreen(
-      onUnavailable: _showUnavailable,
-    ),
     AppDestination.settings => SettingsScreen(
       gateway: widget.gateway,
       project: _activeProject,
@@ -1054,6 +771,7 @@ class _AppShellState extends State<AppShell> {
               onCopyClip: _copyTimelineClip,
               onPasteClip: _pasteTimelineClip,
               motionOutputDirectory: _motionOutputDirectory,
+              motionInsertLog: _motionInsertLog,
               onInsertMotionClip: _addMaterializedIllustration,
               pickMotionImage: _pickMotionImage,
               pickMotionScene: _pickMotionScene,
@@ -1283,7 +1001,7 @@ class _AppShellState extends State<AppShell> {
         );
         return outcome;
       },
-      addToTimeline: _addMaterializedIllustration,
+      addToTimeline: _addMaterializedIllustrationOutcome,
     );
   }
 
@@ -1329,6 +1047,26 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('An output location could not be selected.');
       return null;
     }
+  }
+
+  /// The dialog owns the rendered outcome, so it records the clip it inserted.
+  Future<bool> _addMaterializedIllustrationOutcome(
+    MotionMaterializationOutcome outcome,
+  ) async {
+    final added = await _addMaterializedIllustration(outcome.destinationPath);
+    if (added) {
+      _motionInsertLog.record(
+        MotionInsertRecord(
+          outputPath: outcome.destinationPath,
+          sceneName: outcome.destinationPath.split(Platform.pathSeparator).last,
+          width: outcome.width,
+          height: outcome.height,
+          frameCount: outcome.frameCount,
+          source: MotionInsertSource.dialog,
+        ),
+      );
+    }
+    return added;
   }
 
   Future<bool> _addMaterializedIllustration(String path) async {
@@ -2024,6 +1762,7 @@ class _AppShellState extends State<AppShell> {
     _earlyMediaArtifactEvents.clear();
     _activeMediaPreviewRequests = 0;
     _mediaPreviewSubmissionsInFlight = 0;
+    _motionInsertLog.clear();
     setState(() {
       _activeSession = session;
       _activeProject = null;
@@ -5637,6 +5376,7 @@ class _AppShellState extends State<AppShell> {
     _activeMediaPreviewRequests = 0;
     _mediaPreviewSubmissionsInFlight = 0;
     _lastMediaArtifactSequence = BigInt.zero;
+    _motionInsertLog.clear();
     if (!mounted) return;
     setState(() {
       _eventSubscription = null;
