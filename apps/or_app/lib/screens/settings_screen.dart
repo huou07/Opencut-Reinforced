@@ -283,16 +283,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (settings) => unawaited(_saveNarration(settings)),
           ),
           const Divider(height: OrSpacing.x6),
-          SwitchListTile(
-            key: const ValueKey('settings-show-inspector'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Show inspector panel'),
-            subtitle: const Text(
-              'Advanced clip settings. The timeline toolbar and clip dialogs '
-              'carry the frequent controls, so the tab starts hidden.',
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              key: const ValueKey('settings-show-inspector'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Show inspector panel'),
+              subtitle: const Text(
+                'Advanced clip settings. The timeline toolbar and clip dialogs '
+                'carry the frequent controls, so the tab starts hidden.',
+              ),
+              value: _editorSettings.showInspector,
+              onChanged: _setShowInspector,
             ),
-            value: _editorSettings.showInspector,
-            onChanged: _setShowInspector,
           ),
         ],
       ),

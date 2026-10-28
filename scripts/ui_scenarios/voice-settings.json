@@ -1,0 +1,68 @@
+{
+  "name": "voice-settings",
+  "harness": "or_ui",
+  "description": "Settings → Narration exposes the device voice, the two cloud provider cards with keychain-backed key fields, and the personal-voice consent. No key is written: the journey proves the surface and its unconfigured state.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-settings"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "settings-section-general"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Narration",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key": "settings-choose-narration-voice"
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "settings-general"
+      },
+      "dy": -420
+    },
+    {
+      "op": "expect",
+      "key": "cloud-voice-elevenlabs"
+    },
+    {
+      "op": "expect",
+      "key": "cloud-voice-azure"
+    },
+    {
+      "op": "expect",
+      "key": "cloud-voice-key-elevenlabs"
+    },
+    {
+      "op": "expect",
+      "key": "cloud-voice-clone-consent"
+    },
+    {
+      "op": "shot",
+      "name": "cloud-voice-cards"
+    },
+    {
+      "op": "tree",
+      "name": "cloud-voice-cards"
+    }
+  ]
+}
