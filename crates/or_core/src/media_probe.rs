@@ -119,7 +119,15 @@ impl MediaProbeError {
 
 impl fmt::Display for MediaProbeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.message())
+        formatter.write_str(self.message())?;
+        // The probe backend's own bounded, path-sanitised diagnostic is the only
+        // evidence a user or an agent has for *why* ffprobe refused a file. A
+        // generic "ffprobe failed" sentence hides the difference between an
+        // unfinished recording, a truncated download and a missing demuxer.
+        if let Some(diagnostic) = &self.diagnostic {
+            write!(formatter, ": {diagnostic}")?;
+        }
+        Ok(())
     }
 }
 
@@ -1304,6 +1312,12 @@ mod tests {
         let diagnostic = error.diagnostic().unwrap();
         assert!(diagnostic.chars().count() <= MAX_DIAGNOSTIC_CHARS);
         assert!(!diagnostic.contains(&directory.0.to_string_lossy().to_string()));
+        // The user-facing sentence carries the backend diagnostic; a generic
+        // failure sentence would leave an agent unable to tell why a file failed.
+        assert_eq!(
+            error.to_string(),
+            format!("{}: {diagnostic}", error.message())
+        );
     }
 
     #[test]

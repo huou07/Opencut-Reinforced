@@ -57,7 +57,10 @@ impl MediaImportError {
 
 impl fmt::Display for MediaImportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.message())
+        match self {
+            Self::Probe(error) => fmt::Display::fmt(error, formatter),
+            _ => formatter.write_str(self.message()),
+        }
     }
 }
 
