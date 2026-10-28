@@ -1120,6 +1120,33 @@ void main() {
     expect(find.text('second.mkv'), findsOneWidget);
   });
 
+  testWidgets('Import reports batch progress in the top bar', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..importGates.addAll([Completer<void>(), Completer<void>()]);
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-progress.orproj'
+      ..mediaPaths = ['/tmp/first.mkv', '/tmp/second.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import progress');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Importing 1 of 2 · first.mkv'), findsOneWidget);
+
+    gateway.importGates[0].complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Importing 2 of 2 · second.mkv'), findsOneWidget);
+
+    gateway.importGates[1].complete();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Importing'), findsNothing);
+    expect(find.text('Imported 2 selected files.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('media search filters the library without touching the project', (
     tester,
   ) async {
@@ -8242,6 +8269,10 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectSessionHandle handle,
   ) => _session(handle).mediaArtifactEvents.stream;
 
+  /// Gates that hold one import call each, so a test can observe the batch
+  /// progress line between files instead of only its final state.
+  final List<Completer<void>> importGates = [];
+
   @override
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle handle,
@@ -8252,6 +8283,10 @@ class _FakeProjectGateway implements ProjectGateway {
     lastImportSource = source;
     lastImportedPath = source;
     importMediaSources.add(source);
+    final gateIndex = importMediaCalls - 1;
+    if (gateIndex < importGates.length) {
+      await importGates[gateIndex].future;
+    }
     if (nextImportBackendUnavailable ||
         failedImportCalls.contains(importMediaCalls)) {
       nextImportBackendUnavailable = false;

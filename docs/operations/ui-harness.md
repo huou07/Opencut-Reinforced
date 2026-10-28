@@ -33,7 +33,10 @@ its global rect and actions — the fast way to read a screen.
 A step is one JSON object. Notable ops: `tap`, `secondary_tap` (opens clip
 context menus), `drag` (selector + `dx`/`dy` + optional `steps`), `resize`
 (`width`, `height`), and `fixtures` (including `copy:<path>`, which imports a real
-file through the real picker).
+file through the real picker). A `copy:` fixture ending in `.orproj` becomes the
+project the scenario opens (copied to `scenario.orproj` in the scenario
+directory, so a save never writes into the repository fixture); other `copy:`
+fixtures are media.
 
 Right-click a clip by its own label rather than a key regex with
 `allow_multiple`: the first clip in the lane is rarely the one under test.

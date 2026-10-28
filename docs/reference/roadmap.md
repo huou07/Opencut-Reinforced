@@ -56,6 +56,13 @@ One near-term delivery mission for the local macOS app, in this order:
    library and edit it on the existing canvas; a saved scene reopens from its
    library row. Delivered with the `motion_scene_read`/`motion_scene_from_asset`
    bridge functions and `scripts/ui_scenarios/motion-scene-import.json`.
+9. **Import feedback and existing-project coverage (owner request, 2026-10-28).**
+   The top bar reports per-file batch import progress and a completion line for
+   multi-file batches. A new journey opens a project saved without a sequence
+   frame rate, imports a real clip, and proves the insert creates the missing
+   track (`scripts/ui_scenarios/existing-project-import.json`,
+   `crates/or_core/tests/fixtures/null-rate-project.orproj`); the harness fixture
+   picker now copies `.orproj` fixtures into the scenario directory.
 
 macOS on the owner's MacBook Air is the only required runtime target. Complete
 supporting work only when it unblocks one of these two journeys.

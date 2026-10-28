@@ -34,6 +34,16 @@ product still needs.
 - `scripts/ui_scenarios/motion-scene-import.json` — imports a scene fixture,
   proves its objects reach the canvas, nudges one, and inserts the edited scene
   on the timeline.
+- **Import batch progress**: while a batch runs, the top bar shows
+  `Importing 2 of 5 · name…` with an import glyph, and a completed multi-file
+  batch reports its count. A slow single file is visibly in flight instead of
+  leaving the surface silent.
+- **Existing-project import journey**: `scripts/ui_scenarios/existing-project-import.json`
+  opens a project saved without a sequence frame rate (the shape a new project
+  can be saved in), imports a real clip and proves inserting it creates the
+  missing track. The harness fixture picker now copies an `.orproj` fixture into
+  the scenario directory so the open path is real, and
+  `crates/or_core/tests/fixtures/null-rate-project.orproj` is that shape.
 - **Assistant panel**: a right-rail tab connects to a locally installed
   DeepSeek Harness over ACP, lets the user pick the workspace and model, streams
   replies and tool calls, and renders permission prompts. The harness reads and

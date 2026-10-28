@@ -498,6 +498,11 @@ class _AppShellState extends State<AppShell> {
   ProjectExportJob? _exportJob;
   String? _exportDestinationPath;
   String? _exportStatus;
+
+  /// Non-null only while a batch import is running. It owns the top bar's
+  /// transient slot so a slow import reports its own progress instead of an
+  /// unrelated autosave line or nothing at all.
+  String? _importStatus;
   ProjectMediaPage? _mediaPage;
   final Map<String, ProjectMediaPreview> _mediaPreviews = {};
   final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
@@ -849,12 +854,19 @@ class _AppShellState extends State<AppShell> {
                         AppTopBar(
                           title: title,
                           compact: compact,
-                          statusLabel: editor
-                              ? (_exportStatus ?? _autosaveStatus)
+                          statusLabel:
+                              _importStatus ??
+                              (editor
+                                  ? (_exportStatus ?? _autosaveStatus)
+                                  : null),
+                          statusIsError: _importStatus != null
+                              ? false
+                              : (_exportStatus != null
+                                    ? _exportFailed
+                                    : _autosaveFailed),
+                          statusIcon: _importStatus != null
+                              ? Icons.download_outlined
                               : null,
-                          statusIsError: _exportStatus != null
-                              ? _exportFailed
-                              : _autosaveFailed,
                           // The bar is the workspace's only title row: it also
                           // owns save state, history and the project menu.
                           projectDirty: editor && _activeSession != null
@@ -4492,37 +4504,45 @@ class _AppShellState extends State<AppShell> {
 
     var imported = 0;
     final failures = <String>[];
-    for (final source in sources) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      if (Platform.isAndroid) {
-        final failure = await registerAndroidMediaSource(
-          source,
-          register: OrViewerTexture.registerMediaSourceForImport,
+    try {
+      for (final source in sources) {
+        if (!mounted || !identical(session, _activeSession)) return;
+        _setImportStatus(
+          _importStatusLabel(imported + 1, sources.length, source),
         );
-        if (failure != null) {
-          failures.add(failure);
+        if (Platform.isAndroid) {
+          final failure = await registerAndroidMediaSource(
+            source,
+            register: OrViewerTexture.registerMediaSourceForImport,
+          );
+          if (failure != null) {
+            failures.add(failure);
+            continue;
+          }
+          if (!mounted || !identical(session, _activeSession)) return;
+        }
+        final updated = await _runProjectAction((session, _) async {
+          // Capture identity and revision immediately before Rust probes each
+          // file.
+          final current = await widget.projectGateway.summary(session);
+          if (!mounted || !identical(session, _activeSession)) {
+            return const ProjectActionResult(
+              succeeded: false,
+              errorCode: 'PROJECT_CLOSING',
+              message: 'The project is closing.',
+            );
+          }
+          setState(() => _activeProject = current);
+          return widget.projectGateway.importMedia(session, current, source);
+        }, onFailure: failures.add);
+        if (updated == null) {
+          if (!mounted || !identical(session, _activeSession)) return;
           continue;
         }
-        if (!mounted || !identical(session, _activeSession)) return;
+        imported++;
       }
-      final updated = await _runProjectAction((session, _) async {
-        // Capture identity and revision immediately before Rust probes each file.
-        final current = await widget.projectGateway.summary(session);
-        if (!mounted || !identical(session, _activeSession)) {
-          return const ProjectActionResult(
-            succeeded: false,
-            errorCode: 'PROJECT_CLOSING',
-            message: 'The project is closing.',
-          );
-        }
-        setState(() => _activeProject = current);
-        return widget.projectGateway.importMedia(session, current, source);
-      }, onFailure: failures.add);
-      if (updated == null) {
-        if (!mounted || !identical(session, _activeSession)) return;
-        continue;
-      }
-      imported++;
+    } finally {
+      _setImportStatus(null);
     }
     if (failures.isNotEmpty) {
       final failureSummary = failures.first.length > 180
@@ -4532,7 +4552,31 @@ class _AppShellState extends State<AppShell> {
         'Imported $imported of ${sources.length} ${folder ? 'folder files' : 'selected files'}. '
         '${failures.length} could not be imported. $failureSummary',
       );
+    } else if (sources.length > 1 && mounted) {
+      // One file is its own confirmation (it appears in the library); a batch
+      // of ten otherwise finished with no statement that anything happened.
+      _showUnavailable(
+        'Imported $imported ${folder ? 'folder files' : 'selected files'}.',
+      );
     }
+  }
+
+  /// One line for the top bar's transient slot while files are probed and
+  /// added one at a time.
+  String _importStatusLabel(int position, int total, String source) {
+    final segments = source.replaceAll('\\', '/').split('/');
+    final name = segments.isEmpty || segments.last.isEmpty
+        ? source
+        : segments.last;
+    final shown = name.length > 32 ? '${name.substring(0, 29)}…' : name;
+    return total <= 1
+        ? 'Importing $shown…'
+        : 'Importing $position of $total · $shown';
+  }
+
+  void _setImportStatus(String? value) {
+    if (!mounted || _importStatus == value) return;
+    setState(() => _importStatus = value);
   }
 
   /// Reduces noise in one media item's audio and imports the result as a new item.

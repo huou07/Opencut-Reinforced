@@ -13,6 +13,13 @@ user precisely what is wrong when it cannot be used.
 - Each successful source enters canonical state only through `media.add`.
 - Sources are probed independently: a failed item leaves project state unchanged
   while successful items remain imported, and the user gets a combined result.
+- While a batch runs, the top bar reports `Importing 2 of 5 · name…` with an
+  import glyph, so a slow file is visibly in flight instead of leaving the
+  surface silent. A completed multi-file batch reports the count.
+- Opening an existing project and importing into it is proven end to end by
+  `scripts/ui_scenarios/existing-project-import.json`: the project is saved
+  without a sequence frame rate (the shape a new project can be saved in), the
+  real clip imports, and inserting it creates the missing track.
 - Folder import accepts at most 64 supported files, does not follow desktop
   symlinks, and reports an empty or oversized selection before mutating anything.
 - Unsupported media is reported as unsupported (container or codec), never as

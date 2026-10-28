@@ -19,6 +19,7 @@ class AppTopBar extends StatelessWidget {
     this.exportIsActive = false,
     this.statusLabel,
     this.statusIsError = false,
+    this.statusIcon,
     this.projectDirty,
     this.onUndo,
     this.onRedo,
@@ -37,6 +38,10 @@ class AppTopBar extends StatelessWidget {
   final bool exportIsActive;
   final String? statusLabel;
   final bool statusIsError;
+
+  /// Overrides the status glyph for a transient statement that is not a save or
+  /// export message (an import batch reports progress through the same slot).
+  final IconData? statusIcon;
 
   /// Non-null while a project is open. The bar then owns the project's save
   /// state, its history controls and the project menu, so the workspace below
@@ -294,7 +299,7 @@ class AppTopBar extends StatelessWidget {
                   child: Icon(
                     statusIsError
                         ? Icons.warning_amber_outlined
-                        : Icons.save_outlined,
+                        : (statusIcon ?? Icons.save_outlined),
                     size: 15,
                     color: statusIsError
                         ? OrColors.warning

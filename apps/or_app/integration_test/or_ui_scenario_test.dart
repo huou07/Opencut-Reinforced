@@ -540,7 +540,10 @@ class _Runner {
           matching: find.byType(EditableText),
         );
         if (editable.evaluate().isEmpty) {
-          throw _StepFailure('not_found', 'no text field matched ${_selector(step)}');
+          throw _StepFailure(
+            'not_found',
+            'no text field matched ${_selector(step)}',
+          );
         }
         final actual = tester
             .widget<EditableText>(editable.first)
@@ -716,9 +719,7 @@ class _Runner {
   ///
   /// This reads the engine's own timings rather than a widget's clock, so a
   /// stutter shows up as a long interval instead of being averaged away.
-  Future<Map<String, Object?>> _measureFrames(
-    Map<String, Object?> step,
-  ) async {
+  Future<Map<String, Object?>> _measureFrames(Map<String, Object?> step) async {
     final durationMs = (step['duration_ms'] as num?)?.toInt() ?? 3000;
     final submitted = <FrameTiming>[];
     void collect(List<FrameTiming> timings) => submitted.addAll(timings);
@@ -737,7 +738,9 @@ class _Runner {
       SchedulerBinding.instance.removeTimingsCallback(collect);
     }
 
-    final frames = submitted.where((t) => t.totalSpan.inMicroseconds > 0).toList();
+    final frames = submitted
+        .where((t) => t.totalSpan.inMicroseconds > 0)
+        .toList();
     if (frames.isEmpty) {
       return {
         'name': '${step['name'] ?? 'frames'}',
@@ -745,9 +748,14 @@ class _Runner {
         'limits': 'no frame timings were reported for this window',
       };
     }
-    final builds = frames.map((t) => t.buildDuration.inMicroseconds / 1000.0).toList()..sort();
-    final rasters = frames.map((t) => t.rasterDuration.inMicroseconds / 1000.0).toList()..sort();
-    final spans = frames.map((t) => t.totalSpan.inMicroseconds / 1000.0).toList()..sort();
+    final builds =
+        frames.map((t) => t.buildDuration.inMicroseconds / 1000.0).toList()
+          ..sort();
+    final rasters =
+        frames.map((t) => t.rasterDuration.inMicroseconds / 1000.0).toList()
+          ..sort();
+    final spans =
+        frames.map((t) => t.totalSpan.inMicroseconds / 1000.0).toList()..sort();
     final intervals = <double>[];
     for (var index = 1; index < frames.length; index += 1) {
       final gap =
@@ -758,8 +766,12 @@ class _Runner {
     intervals.sort();
     double percentile(List<double> sorted, double fraction) =>
         sorted[((sorted.length - 1) * fraction).round()];
-    final firstStamp = frames.first.timestampInMicroseconds(ui.FramePhase.vsyncStart);
-    final lastStamp = frames.last.timestampInMicroseconds(ui.FramePhase.vsyncStart);
+    final firstStamp = frames.first.timestampInMicroseconds(
+      ui.FramePhase.vsyncStart,
+    );
+    final lastStamp = frames.last.timestampInMicroseconds(
+      ui.FramePhase.vsyncStart,
+    );
     final elapsedSeconds = lastStamp > firstStamp
         ? (lastStamp - firstStamp) / 1000000.0
         : 0.0;
@@ -767,11 +779,15 @@ class _Runner {
       'name': '${step['name'] ?? 'frames'}',
       'frames': frames.length,
       'fps': elapsedSeconds > 0
-          ? double.parse(((frames.length - 1) / elapsedSeconds).toStringAsFixed(2))
+          ? double.parse(
+              ((frames.length - 1) / elapsedSeconds).toStringAsFixed(2),
+            )
           : 0,
       'build_p50_ms': double.parse(percentile(builds, 0.50).toStringAsFixed(2)),
       'build_p95_ms': double.parse(percentile(builds, 0.95).toStringAsFixed(2)),
-      'raster_p95_ms': double.parse(percentile(rasters, 0.95).toStringAsFixed(2)),
+      'raster_p95_ms': double.parse(
+        percentile(rasters, 0.95).toStringAsFixed(2),
+      ),
       'span_p95_ms': double.parse(percentile(spans, 0.95).toStringAsFixed(2)),
       'gap_p95_ms': intervals.isEmpty
           ? 0
@@ -1146,7 +1162,9 @@ class _Runner {
     // user actually sees, so accumulate the transform chain from the root.
     void visit(SemanticsNode node, Matrix4 parentTransform) {
       final data = node.getSemanticsData();
-      final transform = parentTransform.multiplied(node.transform ?? Matrix4.identity());
+      final transform = parentTransform.multiplied(
+        node.transform ?? Matrix4.identity(),
+      );
       final rect = MatrixUtils.transformRect(transform, node.rect);
       nodes.add({
         'id': node.id,
@@ -1265,14 +1283,22 @@ class _FixturePicker extends FileSelectorProjectPicker {
     // file is copied into the scenario directory and treated as the picked
     // media, which keeps the import path (picker -> Rust probe) real.
     String? copied;
+    String? projectFixture;
     for (final fixture in fixtures) {
       if (!fixture.startsWith('copy:')) continue;
       final source = File(fixture.substring('copy:'.length));
       if (!source.existsSync()) continue;
+      // A copied `.orproj` fixture is the project the scenario opens; it lives
+      // in the scenario directory so a save writes there, not into the
+      // repository fixture.
+      if (source.path.toLowerCase().endsWith('.orproj')) {
+        projectFixture ??= source.path;
+        continue;
+      }
+      if (copied != null) continue;
       final target = '${directory.path}/${source.uri.pathSegments.last}';
       source.copySync(target);
       copied = target;
-      break;
     }
     // A `noisy` fixture carries signal: the silent one cannot exercise anything
     // that measures or filters audio, because digital silence has no noise floor.
@@ -1288,6 +1314,9 @@ class _FixturePicker extends FileSelectorProjectPicker {
       badMedia = media;
     }
     project = '${directory.path}/scenario.orproj';
+    if (projectFixture != null) {
+      File(projectFixture).copySync(project);
+    }
   }
 
   final Directory directory;
