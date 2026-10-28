@@ -196,89 +196,17 @@ pub(crate) fn probe(
 ) -> Result<Vec<u8>, ffmpeg_the_third::Error> {
     use ffmpeg_the_third as ffmpeg;
 
-    const MAX_STREAMS: usize = 64;
     ffmpeg::init()?;
     let cancellation = CancellationToken::new();
-    let (input, _io) = CapabilityIo::open_until(
+    let (mut input, _io) = CapabilityIo::open_until(
         Arc::clone(&capability.file),
         capability.length,
         &cancellation,
         Some(Instant::now() + Duration::from_secs(15)),
     )?;
-    if input.nb_streams() as usize > MAX_STREAMS {
-        return Err(ffmpeg::Error::Other { errno: EINVAL });
-    }
-    let streams = input
-        .streams()
-        .map(|stream| {
-            let parameters = stream.parameters();
-            let codec_name = parameters.id().name();
-            let duration = decimal_time(stream.duration(), stream.time_base());
-            let mut value = serde_json::json!({
-                "index": stream.index(),
-                "codec_name": (codec_name != "none").then_some(codec_name),
-                "duration": duration,
-                "disposition": {
-                    "attached_pic": stream.disposition().contains(
-                        ffmpeg::format::stream::Disposition::ATTACHED_PIC
-                    ),
-                },
-            });
-            let fields = value.as_object_mut().expect("JSON object");
-            match parameters.medium() {
-                ffmpeg::media::Type::Video => {
-                    fields.insert("codec_type".to_owned(), "video".into());
-                    fields.insert("width".to_owned(), parameters.width().into());
-                    fields.insert("height".to_owned(), parameters.height().into());
-                    let rate = stream.avg_frame_rate();
-                    fields.insert(
-                        "avg_frame_rate".to_owned(),
-                        if rate.numerator() > 0 && rate.denominator() > 0 {
-                            format!("{}/{}", rate.numerator(), rate.denominator()).into()
-                        } else {
-                            "0/0".into()
-                        },
-                    );
-                }
-                ffmpeg::media::Type::Audio => {
-                    fields.insert("codec_type".to_owned(), "audio".into());
-                    fields.insert("sample_rate".to_owned(), parameters.sample_rate().into());
-                    fields.insert(
-                        "channels".to_owned(),
-                        parameters.ch_layout().channels().into(),
-                    );
-                }
-                _ => {
-                    fields.insert("codec_type".to_owned(), "other".into());
-                }
-            }
-            value
-        })
-        .collect::<Vec<_>>();
-    let format_names = input.format().name();
-    let duration = input.duration();
-    let duration =
-        (duration >= 0).then(|| format!("{}.{:06}", duration / 1_000_000, duration % 1_000_000));
-    serde_json::to_vec(&serde_json::json!({
-        "format": { "format_name": format_names, "duration": duration },
-        "streams": streams,
-    }))
-    .map_err(|_| ffmpeg::Error::Other { errno: EINVAL })
+    crate::probe::from_input(&mut input)
 }
 
-fn decimal_time(value: i64, time_base: ffmpeg_the_third::Rational) -> Option<String> {
-    if value < 0 || time_base.numerator() <= 0 || time_base.denominator() <= 0 {
-        return None;
-    }
-    let denominator = i128::from(time_base.denominator());
-    let micros = i128::from(value)
-        .checked_mul(i128::from(time_base.numerator()))?
-        .checked_mul(1_000_000)?
-        .checked_add(denominator / 2)?
-        .checked_div(denominator)?;
-    let micros = u64::try_from(micros).ok()?;
-    Some(format!("{}.{:06}", micros / 1_000_000, micros % 1_000_000))
-}
 
 impl Drop for CapabilityIo {
     fn drop(&mut self) {

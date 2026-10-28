@@ -1,8 +1,9 @@
 mod decoder;
 mod encoder;
+mod probe;
+mod snapshot_queue;
 #[cfg(unix)]
 mod seekable_io;
-mod snapshot_queue;
 
 #[cfg(unix)]
 pub use decoder::SeekableMediaIoCapability;
@@ -16,7 +17,8 @@ pub use encoder::{
 };
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
-#[cfg(unix)]
+pub use probe::probe_media_path;
+
 pub fn probe_seekable_media(
     capability: &SeekableMediaIoCapability,
 ) -> Result<Vec<u8>, ffmpeg_the_third::Error> {

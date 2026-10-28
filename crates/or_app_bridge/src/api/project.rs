@@ -22,6 +22,7 @@ use or_core::{
     TransitionKind, TransitionReference, VisualSettings, apply_project_recovery,
     discard_project_recovery, encode_caption_file, ffmpeg_executable_from_environment,
     inspect_project_recovery, parse_caption_file, prepare_media_import,
+    prepare_media_import_with_probe,
 };
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
@@ -3938,7 +3939,35 @@ fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImport
             .map_err(|_| or_core::MediaImportError::SourceUnavailable)?;
         return prepare_media_import_from_probe(source, &probe_output, capability.len());
     }
-    prepare_media_import(Path::new(source))
+    let path = Path::new(source);
+    match prepare_media_import(path) {
+        Ok(item) => Ok(item),
+        // The packaged helper is a separate executable. If it cannot start or
+        // exits without reading the file, fall back to the libavformat this
+        // process already links for playback and export. A file the helper
+        // rejects on its import matrix is not retried: the fallback would refuse
+        // it for the same reason and the helper's diagnostic is the better one.
+        Err(error) => {
+            let helper_failed = matches!(
+                &error,
+                or_core::MediaImportError::Probe(probe)
+                    if matches!(
+                        probe.code(),
+                        or_core::MediaProbeErrorCode::ProbeFailed
+                            | or_core::MediaProbeErrorCode::ProbeBackendUnavailable
+                            | or_core::MediaProbeErrorCode::InvalidProbeOutput
+                    )
+            );
+            if !helper_failed {
+                return Err(error);
+            }
+            match or_media::probe_media_path(path) {
+                Ok(probe_output) => prepare_media_import_with_probe(path, &probe_output)
+                    .map_err(|_| error),
+                Err(_) => Err(error),
+            }
+        }
+    }
 }
 
 impl MediaArtifactRequestView {

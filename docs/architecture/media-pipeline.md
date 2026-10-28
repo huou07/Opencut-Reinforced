@@ -1,6 +1,6 @@
 # Media Pipeline — Probe, Decode, Cache, Jobs, Encode
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-28
 
 Scope: how media enters the project, how frames and audio are produced, what is
 cached, and how bounded background work is scheduled.
@@ -16,6 +16,11 @@ use explicit overrides.
 - Probing: `or_core::probe_media_file(&Path)` runs the packaged-first `ffprobe`
   helper directly (no shell), requests a bounded JSON field set, and enforces a
   timeout, output limits, process cleanup and metadata validation.
+- Helper fallback: when the helper cannot start or exits without reading the
+  file (`PROBE_FAILED`, `PROBE_BACKEND_UNAVAILABLE`, `INVALID_PROBE_OUTPUT`), the
+  bridge probes the same path through the libavformat it already links for
+  playback and export, then applies the identical import matrix. A file the
+  helper rejected on its matrix is not retried; the helper's diagnostic wins.
 - Decoding: `or_media` uses `ffmpeg-the-third` for demux, software decode and
   seek, with bounded queues and exact timestamps.
 - Android probes granted SAF descriptors through the in-process FFmpeg boundary;
