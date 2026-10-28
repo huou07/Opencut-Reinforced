@@ -52,6 +52,24 @@ agent can adjust the generated scene first.
 <absolute .mkv>` renders to disk through the live app but does not import or
 insert the result; use it only when a file is wanted, never as an insertion path.
 
+## Design rules (learned from the slideshow failure)
+
+- **Flat colour only.** Pick three to five flat fills and reuse them; do not
+  fake a gradient with stacked bands. The format has no gradient and reviewers
+  read bands as a mistake.
+- **Never a dead frame.** Keep two or three animations running across the whole
+  duration — a slow drift, a pulse, a wipe — not only entrance fades. If the
+  middle of the scene is static, it reads as a slide.
+- **Type first.** Titles are at most six or seven words per line at 1080p, at
+  least 28 px, with a 5 % margin. The renderer now shrinks a long line to fit,
+  but wrapping/shrinking is a safety net, not a layout choice. Vietnamese needs
+  its diacritics: use NFC text, never strip marks to fit, and keep the bundled
+  Inter face (it covers Vietnamese).
+- **Cut on movement.** Overlap the end of one idea with the start of the next;
+  avoid a fully empty frame between beats.
+- Read the result with `tools/or motion layout --file ... --at MID --json`; the
+  boxes are what a viewer sees, so check that text stays inside its canvas.
+
 ## Envelope
 
 ```json

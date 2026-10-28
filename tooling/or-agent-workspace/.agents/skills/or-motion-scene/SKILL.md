@@ -31,6 +31,10 @@ Workspace guide: `docs/motion-scenes.md`.
 
 - The scene is declarative and bounded: no expressions, scripts, network assets
   or provider calls. Refer to assets by scene-local or project-relative path.
+- Flat colour only (3–5 fills), at least two animations running across the whole
+  scene, short Vietnamese titles with their diacritics intact, and no empty
+  static middle. The scaffold starts from that shape. Read the boxes with
+  `motion layout` instead of trusting a still.
 - Text is literal; changing the title means changing the `text` field.
 - A re-render never replaces the existing clip. Insert the new render and remove
   the old clip only when the user asks.

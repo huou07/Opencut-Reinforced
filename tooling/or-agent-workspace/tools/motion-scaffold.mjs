@@ -54,6 +54,9 @@ const seconds = positiveInteger(values, 'seconds', 4);
 const duration = { numerator: seconds, denominator: 1 };
 const fadeEnd = { numerator: 1, denominator: 2 };
 
+// A flat, continuously-moving starter: three colours, a shape that travels for
+// the whole scene, and type that rises rather than appearing all at once. The
+// renderer auto-fits a long title to the canvas, but keep titles short anyway.
 const scene = {
   format: 'opencut-reinforced-motion-scene',
   schema_version: 1,
@@ -68,15 +71,29 @@ const scene = {
       kind: 'rectangle',
       position: { x: 0, y: 0 },
       size: { width, height },
-      fill: { red: 24, green: 26, blue: 31, alpha: 255 },
+      fill: { red: 17, green: 20, blue: 26, alpha: 255 },
+    },
+    {
+      node_id: 'accent-bar',
+      kind: 'rectangle',
+      position: { x: Math.round(width * 0.06), y: Math.round(height * 0.72) },
+      size: { width: Math.round(width * 0.18), height: Math.max(6, Math.round(height * 0.008)) },
+      fill: { red: 242, green: 193, blue: 78, alpha: 255 },
+    },
+    {
+      node_id: 'orb',
+      kind: 'ellipse',
+      position: { x: Math.round(width * 0.72), y: Math.round(height * 0.18) },
+      size: { width: Math.round(height * 0.34), height: Math.round(height * 0.34) },
+      fill: { red: 63, green: 199, blue: 255, alpha: 46 },
     },
     {
       node_id: 'title',
       kind: 'text',
       text: name,
-      position: { x: Math.round(width * 0.06), y: Math.round(height * 0.16) },
-      font_size: Math.round(height * 0.09),
-      fill: { red: 236, green: 238, blue: 242, alpha: 255 },
+      position: { x: Math.round(width * 0.06), y: Math.round(height * 0.36) },
+      font_size: Math.round(height * 0.1),
+      fill: { red: 245, green: 245, blue: 245, alpha: 255 },
     },
   ],
   animations: [
@@ -88,6 +105,34 @@ const scene = {
         { at: fadeEnd, value: 1 },
       ],
       easing: 'ease_out',
+    },
+    {
+      node_id: 'title',
+      property: 'translation_y',
+      keyframes: [
+        { at: { numerator: 0, denominator: 1 }, value: Math.round(height * 0.03) },
+        { at: fadeEnd, value: 0 },
+      ],
+      easing: 'ease_out',
+    },
+    {
+      node_id: 'accent-bar',
+      property: 'scale',
+      keyframes: [
+        { at: { numerator: 0, denominator: 1 }, value: 0.05 },
+        { at: { numerator: 3, denominator: 4 }, value: 1 },
+      ],
+      easing: 'ease_out',
+    },
+    {
+      // The orb keeps moving for the whole scene, so no frame is a dead slide.
+      node_id: 'orb',
+      property: 'translation_x',
+      keyframes: [
+        { at: { numerator: 0, denominator: 1 }, value: 0 },
+        { at: duration, value: Math.round(width * -0.08) },
+      ],
+      easing: 'linear',
     },
   ],
 };

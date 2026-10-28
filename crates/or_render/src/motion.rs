@@ -378,12 +378,15 @@ fn draw_instruction(
             if content.is_empty() {
                 return Ok(());
             }
-            let size = instruction.font_size.unwrap_or(32.0).max(1.0);
-            let milli_points = (size * 750.0).round();
+            let requested_size = instruction.font_size.unwrap_or(32.0).max(1.0);
+            let mut size = requested_size;
+            let max_width = (canvas.width as f64 - instruction.position.x - 16.0)
+                .clamp(32.0, canvas.width as f64) as f32;
+            let mut milli_points = (size * 750.0).round();
             if !(1.0..=1_000_000.0).contains(&milli_points) {
                 return Err(MotionRasterError::InvalidTextSize);
             }
-            let formatting = TextFormatting {
+            let mut formatting = TextFormatting {
                 size_milli_points: milli_points as u32,
                 weight: TextWeight::Regular,
                 alignment: TextAlignment::Start,
@@ -398,15 +401,26 @@ fn draw_instruction(
                     .unwrap_or(TextColor::WHITE),
                 ..TextFormatting::DEFAULT
             };
-            // The box the text is laid out in: as wide as the canvas allows from the
-            // node's position, and **one line** tall. The rasteriser centres its
-            // layout inside the box it is given, so a taller box would push the text
-            // down from the position the scene names — a node's position is where its
-            // text starts, not the top of an invisible block. V1 renders one line per
-            // text node and clips it to the canvas; wrapping is a later step.
-            let box_width = (canvas.width as f64 - instruction.position.x)
-                .clamp(16.0, canvas.width as f64) as u32;
-            let box_height = (size * 1.25).clamp(8.0, canvas.height as f64) as u32;
+            // Fit the line to the canvas instead of letting a long sentence run
+            // off it: shrink the type down to 60 % of the requested size, then
+            // allow wrapping if even that does not fit. Vietnamese diacritics need
+            // the extra line height, so the box is measured, not guessed.
+            let mut measured = text.measure(content, formatting, max_width);
+            let minimum_size = (requested_size * 0.6).max(10.0);
+            while (measured.width > max_width || measured.lines > 1)
+                && size > minimum_size
+            {
+                size = (size - 1.0).max(minimum_size);
+                milli_points = (size * 750.0).round();
+                formatting.size_milli_points = milli_points as u32;
+                measured = text.measure(content, formatting, max_width);
+            }
+            let box_width = max_width.ceil() as u32;
+            let box_height = measured
+                .height
+                .max((size * 1.35) as f32)
+                .ceil()
+                .clamp(8.0, canvas.height as f32) as u32;
             // Highlighted runs go through the same layout with more than one colour;
             // a node without spans takes the single-colour path.
             let spans = instruction

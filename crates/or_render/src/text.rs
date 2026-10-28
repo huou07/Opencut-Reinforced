@@ -9,6 +9,7 @@ use or_core::{
 use std::{error::Error, fmt, sync::Arc};
 
 const MAX_RGBA_BYTES: usize = 256 * 1024 * 1024;
+const LINE_HEIGHT_FACTOR: f32 = 1.32;
 const INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Regular.ttf");
 const INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Medium.ttf");
 const INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-SemiBold.ttf");
@@ -44,6 +45,51 @@ impl TextRasterizer {
         height: u32,
     ) -> Result<Vec<u8>, TextRasterError> {
         self.rasterize_spans(text, &[], formatting, width, height)
+    }
+
+    /// Measures shaped text without rasterising it.
+    ///
+    /// MotionScene uses this to shrink a line until it fits the canvas instead of
+    /// letting long Vietnamese sentences run off the frame.
+    pub fn measure(
+        &mut self,
+        text: &str,
+        formatting: TextFormatting,
+        max_width: f32,
+    ) -> TextMeasure {
+        let font_size = formatting.size_milli_points as f32 / 1_000.0 * (4.0 / 3.0);
+        let mut buffer = Buffer::new(
+            &mut self.font_system,
+            Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR),
+        );
+        buffer.set_size(Some(max_width.max(1.0)), Some(1_000_000.0));
+        buffer.set_wrap(Wrap::WordOrGlyph);
+        let family = match formatting.font {
+            FontIdentity::BundledInter => "Inter",
+        };
+        let attrs = Attrs::new()
+            .family(Family::Name(family))
+            .weight(match formatting.weight {
+                TextWeight::Regular => Weight(400),
+                TextWeight::Medium => Weight(500),
+                TextWeight::Semibold => Weight(600),
+                TextWeight::Bold => Weight(700),
+            });
+        buffer.set_text(text, &attrs, Shaping::Advanced, Some(Align::Left));
+        buffer.shape_until_scroll(&mut self.font_system, false);
+        let mut width = 0.0_f32;
+        let mut lines = 0_usize;
+        let mut height = 0.0_f32;
+        for run in buffer.layout_runs() {
+            lines += 1;
+            width = width.max(run.line_w);
+            height += run.line_height;
+        }
+        TextMeasure {
+            width,
+            height,
+            lines,
+        }
     }
 
     /// Rasterizes one bounded text layer with per-span colours.
@@ -90,7 +136,7 @@ impl TextRasterizer {
         let font_size = formatting.size_milli_points as f32 / 1000.0 * (4.0 / 3.0);
         let mut buffer = Buffer::new(
             &mut self.font_system,
-            Metrics::new(font_size, font_size * 1.2),
+            Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR),
         );
         buffer.set_size(
             Some(width_f - 2.0 * margin_x),
@@ -269,6 +315,14 @@ impl Default for TextRasterizer {
     }
 }
 
+/// The shaped extent of one text block.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextMeasure {
+    pub width: f32,
+    pub height: f32,
+    pub lines: usize,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TextRasterError {
     InvalidDimensions,
@@ -401,6 +455,27 @@ mod tests {
             .find(|pixel| pixel[3] > 0 && pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
             .expect("the background box paints");
         assert_eq!(background[3], 127);
+    }
+
+    #[test]
+    fn measured_vietnamese_text_wraps_and_stays_inside_the_given_width() {
+        let mut rasterizer = TextRasterizer::new();
+        let formatting = TextFormatting {
+            size_milli_points: 32_000,
+            ..TextFormatting::default()
+        };
+        let one_line = rasterizer.measure("Tiếng Việt có dấu", formatting, 800.0);
+        assert_eq!(one_line.lines, 1);
+        assert!(one_line.width > 0.0);
+        assert!(one_line.height >= 32.0);
+
+        let long = rasterizer.measure(
+            "Một câu tiếng Việt rất dài cần được xuống dòng thay vì tràn ra khỏi khung hình",
+            formatting,
+            120.0,
+        );
+        assert!(long.lines > 1);
+        assert!(long.width <= 121.0, "{}", long.width);
     }
 
     #[test]
