@@ -1727,6 +1727,25 @@ class RustProjectGateway implements ProjectGateway {
       blue: value.color.blue,
       alpha: value.color.alpha,
     ),
+    anchor: switch (value.anchor) {
+      rust.TextVerticalAnchorView.top => ProjectTextVerticalAnchor.top,
+      rust.TextVerticalAnchorView.center => ProjectTextVerticalAnchor.center,
+      rust.TextVerticalAnchorView.bottom => ProjectTextVerticalAnchor.bottom,
+    },
+    offsetXBasisPoints: value.offsetXBasisPoints,
+    offsetYBasisPoints: value.offsetYBasisPoints,
+    background: value.background == null
+        ? null
+        : ProjectTextBackground(
+            color: ProjectTextColor(
+              red: value.background!.color.red,
+              green: value.background!.color.green,
+              blue: value.background!.color.blue,
+              alpha: value.background!.color.alpha,
+            ),
+            paddingMilliPoints: value.background!.paddingMilliPoints,
+          ),
+    opacityBasisPoints: value.opacityBasisPoints,
   );
 
   static rust.ProjectTextFormattingView _rustTextFormatting(
@@ -1753,6 +1772,25 @@ class RustProjectGateway implements ProjectGateway {
       blue: value.color.blue,
       alpha: value.color.alpha,
     ),
+    anchor: switch (value.anchor) {
+      ProjectTextVerticalAnchor.top => rust.TextVerticalAnchorView.top,
+      ProjectTextVerticalAnchor.center => rust.TextVerticalAnchorView.center,
+      ProjectTextVerticalAnchor.bottom => rust.TextVerticalAnchorView.bottom,
+    },
+    offsetXBasisPoints: value.offsetXBasisPoints,
+    offsetYBasisPoints: value.offsetYBasisPoints,
+    background: value.background == null
+        ? null
+        : rust.ProjectTextBackgroundView(
+            color: rust.ProjectTextColorView(
+              red: value.background!.color.red,
+              green: value.background!.color.green,
+              blue: value.background!.color.blue,
+              alpha: value.background!.color.alpha,
+            ),
+            paddingMilliPoints: value.background!.paddingMilliPoints,
+          ),
+    opacityBasisPoints: value.opacityBasisPoints,
   );
 
   static rust.TimelineClipContentKindView _rustClipContentKind(

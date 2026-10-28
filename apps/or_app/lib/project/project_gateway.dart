@@ -381,6 +381,18 @@ class ProjectTextColor {
   final int alpha;
 }
 
+enum ProjectTextVerticalAnchor { top, center, bottom }
+
+class ProjectTextBackground {
+  const ProjectTextBackground({
+    required this.color,
+    this.paddingMilliPoints = 8000,
+  });
+
+  final ProjectTextColor color;
+  final int paddingMilliPoints;
+}
+
 class ProjectTextFormatting {
   const ProjectTextFormatting({
     required this.font,
@@ -388,6 +400,11 @@ class ProjectTextFormatting {
     required this.weight,
     required this.alignment,
     required this.color,
+    this.anchor = ProjectTextVerticalAnchor.center,
+    this.offsetXBasisPoints = 0,
+    this.offsetYBasisPoints = 0,
+    this.background,
+    this.opacityBasisPoints = 10000,
   });
 
   static const defaults = ProjectTextFormatting(
@@ -398,11 +415,35 @@ class ProjectTextFormatting {
     color: ProjectTextColor.white,
   );
 
+  /// Captions start low on the frame where a viewer expects them.
+  static const captionDefaults = ProjectTextFormatting(
+    font: ProjectFontIdentity.bundledInter,
+    sizeMilliPoints: 48000,
+    weight: ProjectTextWeight.regular,
+    alignment: ProjectTextAlignment.center,
+    color: ProjectTextColor.white,
+    anchor: ProjectTextVerticalAnchor.bottom,
+  );
+
   final ProjectFontIdentity font;
   final int sizeMilliPoints;
   final ProjectTextWeight weight;
   final ProjectTextAlignment alignment;
   final ProjectTextColor color;
+
+  /// Vertical placement of the block on the canvas.
+  final ProjectTextVerticalAnchor anchor;
+
+  /// Horizontal and vertical nudge from the anchored position, in basis points
+  /// of the canvas, so a caller can place a caption anywhere.
+  final int offsetXBasisPoints;
+  final int offsetYBasisPoints;
+
+  /// Optional filled box behind the text.
+  final ProjectTextBackground? background;
+
+  /// Whole-block opacity; 10000 is fully opaque.
+  final int opacityBasisPoints;
 }
 
 class ProjectTimelineTextContent {

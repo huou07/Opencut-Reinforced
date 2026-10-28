@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-10-27
+Last reviewed: 2026-10-28
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -12,6 +12,22 @@ rendered by the shared `or_render` text path on top of `cosmic-text` with bundle
 fonts. There is exactly one text rasteriser; MotionScene and captions reuse it
 rather than adding a second text engine.
 
+Formatting also carries placement and legibility fields, all optional and
+defaulted so every project written before them renders unchanged:
+
+- `anchor` — top, centre or bottom of the frame; new caption clips start at the
+  bottom, text clips at the centre.
+- `offset_x_basis_points` / `offset_y_basis_points` — a nudge from the anchor in
+  basis points of the canvas, so a caption can sit anywhere without a new schema.
+- `background` — an optional filled box behind the shaped glyph bounds, with a
+  colour (including alpha) and padding in milli-points.
+- `opacity_basis_points` — whole-block opacity, independent of the clip's visual
+  opacity.
+
+The Edit Title/Caption dialog writes all of these through the existing
+`timeline.clip.update` command; the renderer measures the shaped text, so the
+box follows real advances rather than a character-count estimate.
+
 ## Captions
 
 - Manual caption clips on Caption tracks, with typed content and exact timing.
@@ -20,6 +36,9 @@ rather than adding a second text engine.
   explicit diagnostics; cue/style loss must be understood before relying on a
   round trip.
 - Imported captions become normal editable clips, not a hidden overlay.
+- **Caption style** is per clip: position, size, weight, alignment, colour, text
+  opacity and an optional background box travel with the clip, so a reviewed
+  transcription can be restyled without recreating it.
 - **Local transcription** turns one media item's audio into a bounded transcript
   proposal: the app decodes a managed 16 kHz mono WAV, runs the pinned
   whisper.cpp runtime with the downloaded multilingual model, and detects

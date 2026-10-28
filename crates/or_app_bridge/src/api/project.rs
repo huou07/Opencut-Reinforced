@@ -433,12 +433,30 @@ pub struct ProjectTextColorView {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextVerticalAnchorView {
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectTextBackgroundView {
+    pub color: ProjectTextColorView,
+    pub padding_milli_points: u32,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProjectTextFormattingView {
     pub font: FontIdentityView,
     pub size_milli_points: u32,
     pub weight: TextWeightView,
     pub alignment: TextAlignmentView,
     pub color: ProjectTextColorView,
+    pub anchor: TextVerticalAnchorView,
+    pub offset_x_basis_points: i16,
+    pub offset_y_basis_points: i16,
+    pub background: Option<ProjectTextBackgroundView>,
+    pub opacity_basis_points: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -1517,7 +1535,7 @@ impl ProjectHostHandle {
                 timeline_duration,
                 content: ClipContent::Caption {
                     text: cue.text,
-                    formatting: TextFormatting::DEFAULT,
+                    formatting: TextFormatting::CAPTION_DEFAULT,
                 },
                 settings: ClipSettings::Visual(VisualSettings::default()),
             });
@@ -2250,7 +2268,7 @@ impl ProjectHostHandle {
                 timeline_duration: caption.duration,
                 content: ClipContent::Caption {
                     text: caption.text,
-                    formatting: TextFormatting::DEFAULT,
+                    formatting: TextFormatting::CAPTION_DEFAULT,
                 },
                 settings: ClipSettings::Visual(VisualSettings::default()),
             })
@@ -4384,6 +4402,23 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
             blue: formatting.color.blue,
             alpha: formatting.color.alpha,
         },
+        anchor: match formatting.anchor {
+            or_core::TextVerticalAnchor::Top => TextVerticalAnchorView::Top,
+            or_core::TextVerticalAnchor::Center => TextVerticalAnchorView::Center,
+            or_core::TextVerticalAnchor::Bottom => TextVerticalAnchorView::Bottom,
+        },
+        offset_x_basis_points: formatting.offset_x_basis_points,
+        offset_y_basis_points: formatting.offset_y_basis_points,
+        background: formatting.background.map(|background| ProjectTextBackgroundView {
+            color: ProjectTextColorView {
+                red: background.color.red,
+                green: background.color.green,
+                blue: background.color.blue,
+                alpha: background.color.alpha,
+            },
+            padding_milli_points: background.padding_milli_points,
+        }),
+        opacity_basis_points: formatting.opacity_basis_points,
     }
 }
 
@@ -4410,6 +4445,23 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
             blue: view.color.blue,
             alpha: view.color.alpha,
         },
+        anchor: match view.anchor {
+            TextVerticalAnchorView::Top => or_core::TextVerticalAnchor::Top,
+            TextVerticalAnchorView::Center => or_core::TextVerticalAnchor::Center,
+            TextVerticalAnchorView::Bottom => or_core::TextVerticalAnchor::Bottom,
+        },
+        offset_x_basis_points: view.offset_x_basis_points,
+        offset_y_basis_points: view.offset_y_basis_points,
+        background: view.background.map(|background| or_core::TextBackground {
+            color: TextColor {
+                red: background.color.red,
+                green: background.color.green,
+                blue: background.color.blue,
+                alpha: background.color.alpha,
+            },
+            padding_milli_points: background.padding_milli_points,
+        }),
+        opacity_basis_points: view.opacity_basis_points,
     }
 }
 

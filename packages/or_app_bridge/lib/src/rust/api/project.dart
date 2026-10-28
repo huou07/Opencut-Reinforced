@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `configured_media_artifact_cache_root`, `create_media_artifact_service`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `failure`, `find_audio_clip`, `find_timeline_clip_state`, `find_visual_clip`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `job_state_name`, `media_artifact_cache_root`, `media_artifact_event_receiver`, `media_artifact_event_view`, `media_item_view`, `model_download_view`, `non_empty_environment_path`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `preview_bridge_error`, `preview_state_view`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_identity`, `request_media_artifact`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_error`, `transcription_failure`, `transcription_job_view`, `transcription_job`, `transcription_model_option_view`, `transcription_model_view`, `transcription_proposal_view`, `transcription_service_failure`, `transcription_service`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `BridgeTranscriptionHandler`, `CachePlatform`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `handle_transcription_request`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `drop`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `handle_transcription_request`
 
 Future<ProjectHostHandle> createProject({
   required String path,
@@ -1136,6 +1136,27 @@ class ProjectPreviewStateView {
           errorMessage == other.errorMessage;
 }
 
+class ProjectTextBackgroundView {
+  final ProjectTextColorView color;
+  final int paddingMilliPoints;
+
+  const ProjectTextBackgroundView({
+    required this.color,
+    required this.paddingMilliPoints,
+  });
+
+  @override
+  int get hashCode => color.hashCode ^ paddingMilliPoints.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProjectTextBackgroundView &&
+          runtimeType == other.runtimeType &&
+          color == other.color &&
+          paddingMilliPoints == other.paddingMilliPoints;
+}
+
 class ProjectTextColorView {
   final int red;
   final int green;
@@ -1170,6 +1191,11 @@ class ProjectTextFormattingView {
   final TextWeightView weight;
   final TextAlignmentView alignment;
   final ProjectTextColorView color;
+  final TextVerticalAnchorView anchor;
+  final int offsetXBasisPoints;
+  final int offsetYBasisPoints;
+  final ProjectTextBackgroundView? background;
+  final int opacityBasisPoints;
 
   const ProjectTextFormattingView({
     required this.font,
@@ -1177,6 +1203,11 @@ class ProjectTextFormattingView {
     required this.weight,
     required this.alignment,
     required this.color,
+    required this.anchor,
+    required this.offsetXBasisPoints,
+    required this.offsetYBasisPoints,
+    this.background,
+    required this.opacityBasisPoints,
   });
 
   @override
@@ -1185,7 +1216,12 @@ class ProjectTextFormattingView {
       sizeMilliPoints.hashCode ^
       weight.hashCode ^
       alignment.hashCode ^
-      color.hashCode;
+      color.hashCode ^
+      anchor.hashCode ^
+      offsetXBasisPoints.hashCode ^
+      offsetYBasisPoints.hashCode ^
+      background.hashCode ^
+      opacityBasisPoints.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1196,7 +1232,12 @@ class ProjectTextFormattingView {
           sizeMilliPoints == other.sizeMilliPoints &&
           weight == other.weight &&
           alignment == other.alignment &&
-          color == other.color;
+          color == other.color &&
+          anchor == other.anchor &&
+          offsetXBasisPoints == other.offsetXBasisPoints &&
+          offsetYBasisPoints == other.offsetYBasisPoints &&
+          background == other.background &&
+          opacityBasisPoints == other.opacityBasisPoints;
 }
 
 class ProjectTimelineAudioSettingsView {
@@ -2090,6 +2131,8 @@ class RecoveryInspectionView {
 }
 
 enum TextAlignmentView { start, center, end }
+
+enum TextVerticalAnchorView { top, center, bottom }
 
 enum TextWeightView { regular, medium, semibold, bold }
 

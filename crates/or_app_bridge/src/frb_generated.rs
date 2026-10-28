@@ -6415,6 +6415,19 @@ impl SseDecode for Option<crate::api::project::MediaArtifactBytesView> {
     }
 }
 
+impl SseDecode for Option<crate::api::project::ProjectTextBackgroundView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::project::ProjectTextBackgroundView>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::project::ProjectTextFormattingView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6748,6 +6761,18 @@ impl SseDecode for crate::api::project::ProjectPreviewStateView {
     }
 }
 
+impl SseDecode for crate::api::project::ProjectTextBackgroundView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_color = <crate::api::project::ProjectTextColorView>::sse_decode(deserializer);
+        let mut var_paddingMilliPoints = <u32>::sse_decode(deserializer);
+        return crate::api::project::ProjectTextBackgroundView {
+            color: var_color,
+            padding_milli_points: var_paddingMilliPoints,
+        };
+    }
+}
+
 impl SseDecode for crate::api::project::ProjectTextColorView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6772,12 +6797,24 @@ impl SseDecode for crate::api::project::ProjectTextFormattingView {
         let mut var_weight = <crate::api::project::TextWeightView>::sse_decode(deserializer);
         let mut var_alignment = <crate::api::project::TextAlignmentView>::sse_decode(deserializer);
         let mut var_color = <crate::api::project::ProjectTextColorView>::sse_decode(deserializer);
+        let mut var_anchor =
+            <crate::api::project::TextVerticalAnchorView>::sse_decode(deserializer);
+        let mut var_offsetXBasisPoints = <i16>::sse_decode(deserializer);
+        let mut var_offsetYBasisPoints = <i16>::sse_decode(deserializer);
+        let mut var_background =
+            <Option<crate::api::project::ProjectTextBackgroundView>>::sse_decode(deserializer);
+        let mut var_opacityBasisPoints = <u16>::sse_decode(deserializer);
         return crate::api::project::ProjectTextFormattingView {
             font: var_font,
             size_milli_points: var_sizeMilliPoints,
             weight: var_weight,
             alignment: var_alignment,
             color: var_color,
+            anchor: var_anchor,
+            offset_x_basis_points: var_offsetXBasisPoints,
+            offset_y_basis_points: var_offsetYBasisPoints,
+            background: var_background,
+            opacity_basis_points: var_opacityBasisPoints,
         };
     }
 }
@@ -7276,6 +7313,19 @@ impl SseDecode for crate::api::project::TextAlignmentView {
             1 => crate::api::project::TextAlignmentView::Center,
             2 => crate::api::project::TextAlignmentView::End,
             _ => unreachable!("Invalid variant for TextAlignmentView: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::project::TextVerticalAnchorView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::project::TextVerticalAnchorView::Top,
+            1 => crate::api::project::TextVerticalAnchorView::Center,
+            2 => crate::api::project::TextVerticalAnchorView::Bottom,
+            _ => unreachable!("Invalid variant for TextVerticalAnchorView: {}", inner),
         };
     }
 }
@@ -8883,6 +8933,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectPreviewStateV
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTextBackgroundView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.color.into_into_dart().into_dart(),
+            self.padding_milli_points.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::ProjectTextBackgroundView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::ProjectTextBackgroundView>
+    for crate::api::project::ProjectTextBackgroundView
+{
+    fn into_into_dart(self) -> crate::api::project::ProjectTextBackgroundView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTextColorView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -8914,6 +8985,11 @@ impl flutter_rust_bridge::IntoDart for crate::api::project::ProjectTextFormattin
             self.weight.into_into_dart().into_dart(),
             self.alignment.into_into_dart().into_dart(),
             self.color.into_into_dart().into_dart(),
+            self.anchor.into_into_dart().into_dart(),
+            self.offset_x_basis_points.into_into_dart().into_dart(),
+            self.offset_y_basis_points.into_into_dart().into_dart(),
+            self.background.into_into_dart().into_dart(),
+            self.opacity_basis_points.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -9496,6 +9572,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TextAlignmentView>
     for crate::api::project::TextAlignmentView
 {
     fn into_into_dart(self) -> crate::api::project::TextAlignmentView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project::TextVerticalAnchorView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Top => 0.into_dart(),
+            Self::Center => 1.into_dart(),
+            Self::Bottom => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project::TextVerticalAnchorView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project::TextVerticalAnchorView>
+    for crate::api::project::TextVerticalAnchorView
+{
+    fn into_into_dart(self) -> crate::api::project::TextVerticalAnchorView {
         self
     }
 }
@@ -10260,6 +10358,16 @@ impl SseEncode for Option<crate::api::project::MediaArtifactBytesView> {
     }
 }
 
+impl SseEncode for Option<crate::api::project::ProjectTextBackgroundView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::project::ProjectTextBackgroundView>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::project::ProjectTextFormattingView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10502,6 +10610,14 @@ impl SseEncode for crate::api::project::ProjectPreviewStateView {
     }
 }
 
+impl SseEncode for crate::api::project::ProjectTextBackgroundView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::project::ProjectTextColorView>::sse_encode(self.color, serializer);
+        <u32>::sse_encode(self.padding_milli_points, serializer);
+    }
+}
+
 impl SseEncode for crate::api::project::ProjectTextColorView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10520,6 +10636,14 @@ impl SseEncode for crate::api::project::ProjectTextFormattingView {
         <crate::api::project::TextWeightView>::sse_encode(self.weight, serializer);
         <crate::api::project::TextAlignmentView>::sse_encode(self.alignment, serializer);
         <crate::api::project::ProjectTextColorView>::sse_encode(self.color, serializer);
+        <crate::api::project::TextVerticalAnchorView>::sse_encode(self.anchor, serializer);
+        <i16>::sse_encode(self.offset_x_basis_points, serializer);
+        <i16>::sse_encode(self.offset_y_basis_points, serializer);
+        <Option<crate::api::project::ProjectTextBackgroundView>>::sse_encode(
+            self.background,
+            serializer,
+        );
+        <u16>::sse_encode(self.opacity_basis_points, serializer);
     }
 }
 
@@ -10827,6 +10951,23 @@ impl SseEncode for crate::api::project::TextAlignmentView {
                 crate::api::project::TextAlignmentView::Start => 0,
                 crate::api::project::TextAlignmentView::Center => 1,
                 crate::api::project::TextAlignmentView::End => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::project::TextVerticalAnchorView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::project::TextVerticalAnchorView::Top => 0,
+                crate::api::project::TextVerticalAnchorView::Center => 1,
+                crate::api::project::TextVerticalAnchorView::Bottom => 2,
                 _ => {
                     unimplemented!("");
                 }

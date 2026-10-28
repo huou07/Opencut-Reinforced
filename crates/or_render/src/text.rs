@@ -4,7 +4,7 @@ use cosmic_text::{
 };
 use or_core::{
     FontIdentity, MAX_TEXT_SIZE_MILLI_POINTS, MIN_TEXT_SIZE_MILLI_POINTS, TextAlignment, TextColor,
-    TextFormatting, TextWeight,
+    TextFormatting, TextVerticalAnchor, TextWeight,
 };
 use std::{error::Error, fmt, sync::Arc};
 
@@ -85,6 +85,8 @@ impl TextRasterizer {
         let height_f = height as f32;
         let margin_x = width_f * 0.05;
         let margin_y = height_f * 0.05;
+        let shift_x = width_f * f32::from(formatting.offset_x_basis_points) / 10_000.0;
+        let shift_y = height_f * f32::from(formatting.offset_y_basis_points) / 10_000.0;
         let font_size = formatting.size_milli_points as f32 / 1000.0 * (4.0 / 3.0);
         let mut buffer = Buffer::new(
             &mut self.font_system,
@@ -155,8 +157,60 @@ impl TextRasterizer {
             });
         }
         let vertical_offset = layout_bounds.map_or(0.0, |(top, bottom)| {
-            margin_y + ((height_f - 2.0 * margin_y) - (bottom - top)) / 2.0 - top
+            let anchored = match formatting.anchor {
+                TextVerticalAnchor::Top => margin_y - top,
+                TextVerticalAnchor::Center => {
+                    margin_y + ((height_f - 2.0 * margin_y) - (bottom - top)) / 2.0 - top
+                }
+                TextVerticalAnchor::Bottom => height_f - margin_y - bottom,
+            };
+            anchored + shift_y
         });
+
+        // The background is one box behind the whole block, sized from the real
+        // shaped glyph bounds rather than from a character-count estimate.
+        if let Some(background) = formatting.background {
+            let mut bounds: Option<(f32, f32, f32, f32)> = None;
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs {
+                    let physical =
+                        glyph.physical((margin_x + shift_x, run.line_y + vertical_offset), 1.0);
+                    let left = physical.x as f32;
+                    let top = physical.y as f32;
+                    let right = left + glyph.w;
+                    let bottom = top + run.line_height;
+                    bounds = Some(match bounds {
+                        Some((min_x, min_y, max_x, max_y)) => (
+                            min_x.min(left),
+                            min_y.min(top),
+                            max_x.max(right),
+                            max_y.max(bottom),
+                        ),
+                        None => (left, top, right, bottom),
+                    });
+                }
+            }
+            if let Some((min_x, min_y, max_x, max_y)) = bounds {
+                let padding = background.padding_milli_points as f32 / 1_000.0 * (4.0 / 3.0);
+                let left = (min_x - padding).floor().clamp(0.0, width_f) as usize;
+                let top = (min_y - padding).floor().clamp(0.0, height_f) as usize;
+                let right = (max_x + padding).ceil().clamp(0.0, width_f) as usize;
+                let bottom = (max_y + padding).ceil().clamp(0.0, height_f) as usize;
+                let background_alpha = (u32::from(background.color.alpha) * u32::from(formatting.opacity_basis_points)
+                    / 10_000) as u8;
+                if background_alpha > 0 {
+                    for y in top..bottom {
+                        for x in left..right {
+                            let index = (y * width + x) * 4;
+                            pixels[index] = background.color.red;
+                            pixels[index + 1] = background.color.green;
+                            pixels[index + 2] = background.color.blue;
+                            pixels[index + 3] = background_alpha;
+                        }
+                    }
+                }
+            }
+        }
 
         let text_color = Color::rgb(
             formatting.color.red,
@@ -165,7 +219,10 @@ impl TextRasterizer {
         );
         for run in buffer.layout_runs() {
             for glyph in run.glyphs {
-                let physical = glyph.physical((margin_x, run.line_y + vertical_offset), 1.0);
+                let physical = glyph.physical(
+                    (margin_x + shift_x, run.line_y + vertical_offset),
+                    1.0,
+                );
                 let origin_x = physical.x;
                 let origin_y = physical.y;
                 let pixels = &mut pixels;
@@ -184,8 +241,10 @@ impl TextRasterizer {
                             return;
                         }
                         let [red, green, blue, coverage] = color.as_rgba();
-                        let source_alpha =
-                            u16::from(coverage) * u16::from(formatting.color.alpha) / 255;
+                        let source_alpha = (u32::from(coverage)
+                            * u32::from(formatting.color.alpha)
+                            * u32::from(formatting.opacity_basis_points)
+                            / (255 * 10_000)) as u16;
                         if source_alpha == 0 {
                             return;
                         }
@@ -240,7 +299,9 @@ impl Error for TextRasterError {}
 #[cfg(test)]
 mod tests {
     use super::{TextRasterError, TextRasterizer};
-    use or_core::{TextAlignment, TextColor, TextFormatting, TextWeight};
+    use or_core::{
+        TextAlignment, TextColor, TextFormatting, TextVerticalAnchor, TextWeight,
+    };
 
     #[test]
     fn bundled_inter_rasterizes_deterministic_text_with_project_color() {
@@ -275,6 +336,71 @@ mod tests {
         assert!(drawn.iter().all(|pixel| pixel[1] == 40));
         assert!(drawn.iter().all(|pixel| pixel[2] == 10));
         assert!(drawn.iter().all(|pixel| pixel[3] <= 128));
+    }
+
+    fn alpha_centroid(pixels: &[u8], width: usize) -> (f32, f32) {
+        let mut weight = 0.0f32;
+        let mut x_sum = 0.0f32;
+        let mut y_sum = 0.0f32;
+        for (index, pixel) in pixels.as_chunks::<4>().0.iter().enumerate() {
+            let alpha = f32::from(pixel[3]);
+            if alpha == 0.0 {
+                continue;
+            }
+            weight += alpha;
+            x_sum += (index % width) as f32 * alpha;
+            y_sum += (index / width) as f32 * alpha;
+        }
+        (x_sum / weight, y_sum / weight)
+    }
+
+    #[test]
+    fn the_vertical_anchor_and_offset_move_the_block() {
+        let mut rasterizer = TextRasterizer::new();
+        let centered = TextFormatting::default();
+        let bottom = TextFormatting {
+            anchor: TextVerticalAnchor::Bottom,
+            ..TextFormatting::default()
+        };
+        let shifted = TextFormatting {
+            anchor: TextVerticalAnchor::Bottom,
+            offset_y_basis_points: -2_000,
+            ..TextFormatting::default()
+        };
+        let center = rasterizer.rasterize("A", centered, 160, 120).unwrap();
+        let low = rasterizer.rasterize("A", bottom, 160, 120).unwrap();
+        let raised = rasterizer.rasterize("A", shifted, 160, 120).unwrap();
+        let center_y = alpha_centroid(&center, 160).1;
+        let low_y = alpha_centroid(&low, 160).1;
+        let raised_y = alpha_centroid(&raised, 160).1;
+        assert!(low_y > center_y + 10.0, "{low_y} vs {center_y}");
+        assert!(raised_y < low_y - 10.0, "{raised_y} vs {low_y}");
+    }
+
+    #[test]
+    fn a_background_box_paints_behind_the_glyphs_and_opacity_scales_alpha() {
+        let mut rasterizer = TextRasterizer::new();
+        let formatting = TextFormatting {
+            anchor: TextVerticalAnchor::Bottom,
+            background: Some(or_core::TextBackground {
+                color: TextColor {
+                    red: 0,
+                    green: 0,
+                    blue: 0,
+                    alpha: 255,
+                },
+                padding_milli_points: 12_000,
+            }),
+            opacity_basis_points: 5_000,
+            ..TextFormatting::default()
+        };
+        let pixels = rasterizer.rasterize("A", formatting, 160, 120).unwrap();
+        let all = pixels.as_chunks::<4>().0;
+        let background = all
+            .iter()
+            .find(|pixel| pixel[3] > 0 && pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0)
+            .expect("the background box paints");
+        assert_eq!(background[3], 127);
     }
 
     #[test]

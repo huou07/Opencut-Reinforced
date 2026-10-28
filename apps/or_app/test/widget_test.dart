@@ -846,7 +846,10 @@ void main() {
       // reachable from it.
       await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('motion-library-panel')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('motion-library-panel')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('motion-open-code')), findsOneWidget);
     },
   );
@@ -1764,6 +1767,9 @@ void main() {
     expect(title.formatting?.color.green, 255);
     expect(title.formatting?.color.blue, 255);
     expect(title.formatting?.color.alpha, 255);
+    expect(title.formatting?.anchor, ProjectTextVerticalAnchor.center);
+    expect(title.formatting?.opacityBasisPoints, 10000);
+    expect(title.formatting?.background, isNull);
     expect(gateway.insertTimelineTextClipCalls, 1);
 
     await _openAdvancedClipActions(
@@ -1806,6 +1812,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-text-background')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-text-background')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
       find.byKey(const ValueKey('timeline-save-text')),
     );
     expect(
@@ -1824,6 +1835,11 @@ void main() {
         gateway.lastSession!.clips[gateway.lastTextTrackId!]!.single;
     expect(caption.contentKind, ProjectTimelineClipContentKind.caption);
     expect(caption.text, 'A manual caption');
+    // Captions start low on the frame and the dialog can add a background box
+    // and change opacity without a second command.
+    expect(caption.formatting?.anchor, ProjectTextVerticalAnchor.bottom);
+    expect(caption.formatting?.background, isNotNull);
+    expect(caption.formatting?.background?.color.alpha, greaterThan(0));
     expect(tester.takeException(), isNull);
   });
 
@@ -1868,9 +1884,7 @@ void main() {
     expect(find.text('00:00:01.250 – 00:00:03.000'), findsOneWidget);
     expect(find.byKey(const ValueKey('caption-import-text-0')), findsOneWidget);
     // The floated field label must not sit on top of the cue's timing line.
-    final timestamp = tester.getRect(
-      find.text('00:00:01.250 – 00:00:03.000'),
-    );
+    final timestamp = tester.getRect(find.text('00:00:01.250 – 00:00:03.000'));
     final floatedLabel = tester.getRect(find.text('Caption 1 text'));
     expect(
       floatedLabel.top,
@@ -5521,53 +5535,56 @@ void main() {
     },
   );
 
-  test('ThemeData exposes the docs/design/design-language.md typography scale', () {
-    final textTheme = OrTheme.dark.textTheme;
-    final scale = <String, TextStyle?>{
-      'displayLarge': textTheme.displayLarge,
-      'headlineSmall': textTheme.headlineSmall,
-      'titleMedium': textTheme.titleMedium,
-      'labelLarge': textTheme.labelLarge,
-      'bodyMedium': textTheme.bodyMedium,
-      'bodySmall': textTheme.bodySmall,
-      'labelSmall': textTheme.labelSmall,
-    };
-    // docs/design/design-language.md:154-162 suggested hierarchy.
-    const bounds = <String, (double, double)>{
-      'displayLarge': (36, 48),
-      'headlineSmall': (28, 32),
-      'titleMedium': (18, 20),
-      'labelLarge': (14, 15),
-      'bodyMedium': (14, 15),
-      'bodySmall': (12, 13),
-      'labelSmall': (11, 12),
-    };
+  test(
+    'ThemeData exposes the docs/design/design-language.md typography scale',
+    () {
+      final textTheme = OrTheme.dark.textTheme;
+      final scale = <String, TextStyle?>{
+        'displayLarge': textTheme.displayLarge,
+        'headlineSmall': textTheme.headlineSmall,
+        'titleMedium': textTheme.titleMedium,
+        'labelLarge': textTheme.labelLarge,
+        'bodyMedium': textTheme.bodyMedium,
+        'bodySmall': textTheme.bodySmall,
+        'labelSmall': textTheme.labelSmall,
+      };
+      // docs/design/design-language.md:154-162 suggested hierarchy.
+      const bounds = <String, (double, double)>{
+        'displayLarge': (36, 48),
+        'headlineSmall': (28, 32),
+        'titleMedium': (18, 20),
+        'labelLarge': (14, 15),
+        'bodyMedium': (14, 15),
+        'bodySmall': (12, 13),
+        'labelSmall': (11, 12),
+      };
 
-    final failures = <String>[];
-    for (final entry in scale.entries) {
-      final style = entry.value;
-      final range = bounds[entry.key]!;
-      if (style == null || style.fontSize == null) {
-        failures.add('${entry.key} has no font size');
-        continue;
+      final failures = <String>[];
+      for (final entry in scale.entries) {
+        final style = entry.value;
+        final range = bounds[entry.key]!;
+        if (style == null || style.fontSize == null) {
+          failures.add('${entry.key} has no font size');
+          continue;
+        }
+        final size = style.fontSize!;
+        if (size < range.$1 || size > range.$2) {
+          failures.add(
+            '${entry.key} is $size px (docs/design/design-language.md wants '
+            '${range.$1.toInt()}-${range.$2.toInt()} px)',
+          );
+        }
       }
-      final size = style.fontSize!;
-      if (size < range.$1 || size > range.$2) {
-        failures.add(
-          '${entry.key} is $size px (docs/design/design-language.md wants '
-          '${range.$1.toInt()}-${range.$2.toInt()} px)',
-        );
-      }
-    }
 
-    expect(
-      failures,
-      isEmpty,
-      reason:
-          'the theme must carry the docs/design/design-language.md scale:\n'
-          '${failures.join('\n')}',
-    );
-  });
+      expect(
+        failures,
+        isEmpty,
+        reason:
+            'the theme must carry the docs/design/design-language.md scale:\n'
+            '${failures.join('\n')}',
+      );
+    },
+  );
 
   test('no UI TextStyle uses a font size below the docs/design/design-language.md 11 px floor', () {
     final offenders = <String>[];

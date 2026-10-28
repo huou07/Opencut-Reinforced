@@ -87,6 +87,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextBackgroundView dco_decode_box_autoadd_project_text_background_view(
+    dynamic raw,
+  );
+
+  @protected
   ProjectTextFormattingView dco_decode_box_autoadd_project_text_formatting_view(
     dynamic raw,
   );
@@ -277,6 +282,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextBackgroundView?
+  dco_decode_opt_box_autoadd_project_text_background_view(dynamic raw);
+
+  @protected
   ProjectTextFormattingView?
   dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw);
 
@@ -339,6 +348,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectPreviewStateView dco_decode_project_preview_state_view(dynamic raw);
+
+  @protected
+  ProjectTextBackgroundView dco_decode_project_text_background_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectTextColorView dco_decode_project_text_color_view(dynamic raw);
@@ -435,6 +449,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextAlignmentView dco_decode_text_alignment_view(dynamic raw);
+
+  @protected
+  TextVerticalAnchorView dco_decode_text_vertical_anchor_view(dynamic raw);
 
   @protected
   TextWeightView dco_decode_text_weight_view(dynamic raw);
@@ -542,6 +559,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextBackgroundView sse_decode_box_autoadd_project_text_background_view(
     SseDeserializer deserializer,
   );
 
@@ -778,6 +800,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextBackgroundView?
+  sse_decode_opt_box_autoadd_project_text_background_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTextFormattingView?
   sse_decode_opt_box_autoadd_project_text_formatting_view(
     SseDeserializer deserializer,
@@ -868,6 +896,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectPreviewStateView sse_decode_project_preview_state_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextBackgroundView sse_decode_project_text_background_view(
     SseDeserializer deserializer,
   );
 
@@ -984,6 +1017,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextAlignmentView sse_decode_text_alignment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TextVerticalAnchorView sse_decode_text_vertical_anchor_view(
     SseDeserializer deserializer,
   );
 
@@ -1105,6 +1143,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_media_artifact_bytes_view(
     MediaArtifactBytesView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView self,
     SseSerializer serializer,
   );
 
@@ -1394,6 +1438,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_project_text_formatting_view(
     ProjectTextFormattingView? self,
     SseSerializer serializer,
@@ -1501,6 +1551,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_preview_state_view(
     ProjectPreviewStateView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_text_background_view(
+    ProjectTextBackgroundView self,
     SseSerializer serializer,
   );
 
@@ -1642,6 +1698,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_text_alignment_view(
     TextAlignmentView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_vertical_anchor_view(
+    TextVerticalAnchorView self,
     SseSerializer serializer,
   );
 

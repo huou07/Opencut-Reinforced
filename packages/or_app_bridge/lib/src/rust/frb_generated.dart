@@ -6171,6 +6171,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView dco_decode_box_autoadd_project_text_background_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_project_text_background_view(raw);
+  }
+
+  @protected
   ProjectTextFormattingView dco_decode_box_autoadd_project_text_formatting_view(
     dynamic raw,
   ) {
@@ -6732,6 +6740,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView?
+  dco_decode_opt_box_autoadd_project_text_background_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_project_text_background_view(raw);
+  }
+
+  @protected
   ProjectTextFormattingView?
   dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -6967,6 +6984,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView dco_decode_project_text_background_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ProjectTextBackgroundView(
+      color: dco_decode_project_text_color_view(arr[0]),
+      paddingMilliPoints: dco_decode_u_32(arr[1]),
+    );
+  }
+
+  @protected
   ProjectTextColorView dco_decode_project_text_color_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -6986,14 +7017,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProjectTextFormattingView(
       font: dco_decode_font_identity_view(arr[0]),
       sizeMilliPoints: dco_decode_u_32(arr[1]),
       weight: dco_decode_text_weight_view(arr[2]),
       alignment: dco_decode_text_alignment_view(arr[3]),
       color: dco_decode_project_text_color_view(arr[4]),
+      anchor: dco_decode_text_vertical_anchor_view(arr[5]),
+      offsetXBasisPoints: dco_decode_i_16(arr[6]),
+      offsetYBasisPoints: dco_decode_i_16(arr[7]),
+      background: dco_decode_opt_box_autoadd_project_text_background_view(
+        arr[8],
+      ),
+      opacityBasisPoints: dco_decode_u_16(arr[9]),
     );
   }
 
@@ -7387,6 +7425,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TextVerticalAnchorView dco_decode_text_vertical_anchor_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TextVerticalAnchorView.values[raw as int];
+  }
+
+  @protected
   TextWeightView dco_decode_text_weight_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return TextWeightView.values[raw as int];
@@ -7595,6 +7639,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_media_artifact_bytes_view(deserializer));
+  }
+
+  @protected
+  ProjectTextBackgroundView sse_decode_box_autoadd_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_project_text_background_view(deserializer));
   }
 
   @protected
@@ -8362,6 +8414,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView?
+  sse_decode_opt_box_autoadd_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_project_text_background_view(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ProjectTextFormattingView?
   sse_decode_opt_box_autoadd_project_text_formatting_view(
     SseDeserializer deserializer,
@@ -8701,6 +8769,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView sse_decode_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_color = sse_decode_project_text_color_view(deserializer);
+    var var_paddingMilliPoints = sse_decode_u_32(deserializer);
+    return ProjectTextBackgroundView(
+      color: var_color,
+      paddingMilliPoints: var_paddingMilliPoints,
+    );
+  }
+
+  @protected
   ProjectTextColorView sse_decode_project_text_color_view(
     SseDeserializer deserializer,
   ) {
@@ -8727,12 +8808,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_weight = sse_decode_text_weight_view(deserializer);
     var var_alignment = sse_decode_text_alignment_view(deserializer);
     var var_color = sse_decode_project_text_color_view(deserializer);
+    var var_anchor = sse_decode_text_vertical_anchor_view(deserializer);
+    var var_offsetXBasisPoints = sse_decode_i_16(deserializer);
+    var var_offsetYBasisPoints = sse_decode_i_16(deserializer);
+    var var_background =
+        sse_decode_opt_box_autoadd_project_text_background_view(deserializer);
+    var var_opacityBasisPoints = sse_decode_u_16(deserializer);
     return ProjectTextFormattingView(
       font: var_font,
       sizeMilliPoints: var_sizeMilliPoints,
       weight: var_weight,
       alignment: var_alignment,
       color: var_color,
+      anchor: var_anchor,
+      offsetXBasisPoints: var_offsetXBasisPoints,
+      offsetYBasisPoints: var_offsetYBasisPoints,
+      background: var_background,
+      opacityBasisPoints: var_opacityBasisPoints,
     );
   }
 
@@ -9244,6 +9336,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TextVerticalAnchorView sse_decode_text_vertical_anchor_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TextVerticalAnchorView.values[inner];
+  }
+
+  @protected
   TextWeightView sse_decode_text_weight_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -9479,6 +9580,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_media_artifact_bytes_view(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_text_background_view(self, serializer);
   }
 
   @protected
@@ -10100,6 +10210,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_project_text_background_view(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_project_text_formatting_view(
     ProjectTextFormattingView? self,
     SseSerializer serializer,
@@ -10362,6 +10485,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_project_text_background_view(
+    ProjectTextBackgroundView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_text_color_view(self.color, serializer);
+    sse_encode_u_32(self.paddingMilliPoints, serializer);
+  }
+
+  @protected
   void sse_encode_project_text_color_view(
     ProjectTextColorView self,
     SseSerializer serializer,
@@ -10384,6 +10517,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_text_weight_view(self.weight, serializer);
     sse_encode_text_alignment_view(self.alignment, serializer);
     sse_encode_project_text_color_view(self.color, serializer);
+    sse_encode_text_vertical_anchor_view(self.anchor, serializer);
+    sse_encode_i_16(self.offsetXBasisPoints, serializer);
+    sse_encode_i_16(self.offsetYBasisPoints, serializer);
+    sse_encode_opt_box_autoadd_project_text_background_view(
+      self.background,
+      serializer,
+    );
+    sse_encode_u_16(self.opacityBasisPoints, serializer);
   }
 
   @protected
@@ -10709,6 +10850,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_text_alignment_view(
     TextAlignmentView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_text_vertical_anchor_view(
+    TextVerticalAnchorView self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs

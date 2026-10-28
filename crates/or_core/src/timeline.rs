@@ -332,6 +332,46 @@ impl TextColor {
     };
 }
 
+/// Where a text block sits vertically on the canvas.
+///
+/// The horizontal axis stays with [`TextAlignment`] so a block keeps its reading
+/// alignment; a caller moves it with the offset fields. `Center` is the default
+/// so every project written before this field existed renders exactly as before.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextVerticalAnchor {
+    Top,
+    #[default]
+    Center,
+    Bottom,
+}
+
+/// A filled box behind one text block, in the caption style the editor offers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TextBackground {
+    pub color: TextColor,
+    /// Space between the text bounds and the box, in milli-points.
+    #[serde(default = "default_text_background_padding")]
+    pub padding_milli_points: u32,
+}
+
+const fn default_text_background_padding() -> u32 {
+    8_000
+}
+
+const fn default_text_opacity() -> u16 {
+    10_000
+}
+
+const fn is_full_text_opacity(value: &u16) -> bool {
+    *value == 10_000
+}
+
+const fn is_zero_i16(value: &i16) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TextFormatting {
@@ -340,6 +380,21 @@ pub struct TextFormatting {
     pub weight: TextWeight,
     pub alignment: TextAlignment,
     pub color: TextColor,
+    /// Vertical placement of the block; defaults to the historical centre.
+    #[serde(default)]
+    pub anchor: TextVerticalAnchor,
+    /// Horizontal offset from the anchored position, in basis points of width.
+    #[serde(default, skip_serializing_if = "is_zero_i16")]
+    pub offset_x_basis_points: i16,
+    /// Vertical offset from the anchored position, in basis points of height.
+    #[serde(default, skip_serializing_if = "is_zero_i16")]
+    pub offset_y_basis_points: i16,
+    /// Optional filled box behind the text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<TextBackground>,
+    /// Whole-block opacity, independent of the clip's visual opacity.
+    #[serde(default = "default_text_opacity", skip_serializing_if = "is_full_text_opacity")]
+    pub opacity_basis_points: u16,
 }
 
 impl TextFormatting {
@@ -349,10 +404,28 @@ impl TextFormatting {
         weight: TextWeight::Regular,
         alignment: TextAlignment::Center,
         color: TextColor::WHITE,
+        anchor: TextVerticalAnchor::Center,
+        offset_x_basis_points: 0,
+        offset_y_basis_points: 0,
+        background: None,
+        opacity_basis_points: 10_000,
+    };
+
+    /// Captions start where a viewer expects them: low on the frame, still
+    /// centred, with the same typography otherwise.
+    pub const CAPTION_DEFAULT: Self = Self {
+        anchor: TextVerticalAnchor::Bottom,
+        ..Self::DEFAULT
     };
 
     pub(crate) fn is_valid(self) -> bool {
         (MIN_TEXT_SIZE_MILLI_POINTS..=MAX_TEXT_SIZE_MILLI_POINTS).contains(&self.size_milli_points)
+            && (-10_000..=10_000).contains(&self.offset_x_basis_points)
+            && (-10_000..=10_000).contains(&self.offset_y_basis_points)
+            && self.opacity_basis_points <= 10_000
+            && self
+                .background
+                .is_none_or(|background| background.padding_milli_points <= 200_000)
     }
 }
 
@@ -1388,7 +1461,8 @@ mod tests {
     use super::{
         ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
         MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,
-        ProjectTimeline, SequenceTimingError, TextFormatting, TimelineClip, TimelineMarker,
+        ProjectTimeline, SequenceTimingError, TextBackground, TextColor, TextFormatting,
+        TextVerticalAnchor, TimelineClip, TimelineMarker,
         TimelineTrack, TrackId, TrackKind, TrackState, VisualSettings,
     };
     use crate::{
@@ -1464,6 +1538,63 @@ mod tests {
 
     fn track(id: &str, kind: TrackKind, clips: Vec<TimelineClip>) -> TimelineTrack {
         TimelineTrack::from_parts_for_codec(TrackId::from_str(id).unwrap(), kind, clips)
+    }
+
+    #[test]
+    fn text_style_fields_default_for_old_projects_and_round_trip_when_set() {
+        let old = serde_json::json!({
+            "font": "bundled_inter",
+            "size_milli_points": 48000,
+            "weight": "regular",
+            "alignment": "center",
+            "color": {"red": 255, "green": 255, "blue": 255, "alpha": 255}
+        });
+        let parsed: TextFormatting = serde_json::from_value(old).unwrap();
+        assert_eq!(parsed.anchor, TextVerticalAnchor::Center);
+        assert_eq!(parsed.offset_x_basis_points, 0);
+        assert_eq!(parsed.offset_y_basis_points, 0);
+        assert_eq!(parsed.opacity_basis_points, 10_000);
+        assert!(parsed.background.is_none());
+        assert!(parsed.is_valid());
+
+        let styled = TextFormatting {
+            anchor: TextVerticalAnchor::Bottom,
+            offset_x_basis_points: -2_500,
+            offset_y_basis_points: 1_250,
+            opacity_basis_points: 5_000,
+            background: Some(TextBackground {
+                color: TextColor {
+                    red: 0,
+                    green: 0,
+                    blue: 0,
+                    alpha: 170,
+                },
+                padding_milli_points: 12_000,
+            }),
+            ..TextFormatting::DEFAULT
+        };
+        assert!(styled.is_valid());
+        let encoded = serde_json::to_value(styled).unwrap();
+        let decoded: TextFormatting = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded, styled);
+        assert_eq!(
+            TextFormatting::CAPTION_DEFAULT.anchor,
+            TextVerticalAnchor::Bottom
+        );
+        assert!(
+            !TextFormatting {
+                offset_x_basis_points: 10_001,
+                ..TextFormatting::DEFAULT
+            }
+            .is_valid()
+        );
+        assert!(
+            !TextFormatting {
+                opacity_basis_points: 10_001,
+                ..TextFormatting::DEFAULT
+            }
+            .is_valid()
+        );
     }
 
     #[test]

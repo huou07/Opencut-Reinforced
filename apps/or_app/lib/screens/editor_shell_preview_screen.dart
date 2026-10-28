@@ -153,6 +153,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     ProjectRationalTime position,
   )?
   onPasteClip;
+
   /// A project-adjacent folder where materialised motion clips are written.
   final String? motionOutputDirectory;
   final Future<bool> Function(String path)? onInsertMotionClip;
@@ -500,7 +501,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       return;
     }
     final safe = data.name.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '-');
-    final output = '$directory${Platform.pathSeparator}motion-$safe-'
+    final output =
+        '$directory${Platform.pathSeparator}motion-$safe-'
         '${DateTime.now().millisecondsSinceEpoch}.mkv';
     final view = await _motionLibrary.materializeDrag(data, output);
     if (!mounted) return;
@@ -510,11 +512,13 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         context,
         message.isNotEmpty
             ? message
-            : (_motionLibrary.error ?? 'The motion clip could not be rendered.'),
+            : (_motionLibrary.error ??
+                  'The motion clip could not be rendered.'),
       );
       return;
     }
-    final added = await widget.onInsertMotionClip?.call(view.outputPath) ?? false;
+    final added =
+        await widget.onInsertMotionClip?.call(view.outputPath) ?? false;
     if (!mounted) return;
     OrSnackBar.show(
       context,
@@ -565,6 +569,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   final TextEditingController _mediaSearchController = TextEditingController();
   ProjectTimelineVisualSettings? _selectedVisualSettings;
   int _visualSettingsGeneration = 0;
+
   /// Serializes viewer gestures and nudges; see [_queueSelectedTransform].
   Future<void> _transformQueue = Future<void>.value();
   int _transformCommitSeq = 0;
@@ -627,9 +632,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   /// One committed command per viewer gesture.
-  Future<void> _commitSelectedTransform(
-    ProjectTimelineVisualSettings next,
-  ) => _queueSelectedTransform(next);
+  Future<void> _commitSelectedTransform(ProjectTimelineVisualSettings next) =>
+      _queueSelectedTransform(next);
 
   /// Repeating a nudge faster than a command round-trips used to send a second
   /// command built on the revision the first one had already replaced, so the
@@ -643,12 +647,17 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     return chained;
   }
 
-  Future<void> _sendSelectedTransform(ProjectTimelineVisualSettings next) async {
+  Future<void> _sendSelectedTransform(
+    ProjectTimelineVisualSettings next,
+  ) async {
     final project = widget.project;
     final trackId = _selectedTrackId;
     final clipId = _selectedClipId;
     final update = widget.onUpdateTimelineClipVisualSettings;
-    if (project == null || trackId == null || clipId == null || update == null) {
+    if (project == null ||
+        trackId == null ||
+        clipId == null ||
+        update == null) {
       return;
     }
     final seq = ++_transformCommitSeq;
@@ -956,9 +965,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                                   widget.onSetSequenceFrameRate,
                               trackCount:
                                   widget.timelineTracks?.items.length ?? 0,
-                              clipCount: widget.timelineClipPages.values.fold<
-                                int
-                              >(0, (total, page) => total + page.totalCount),
+                              clipCount: widget.timelineClipPages.values
+                                  .fold<int>(
+                                    0,
+                                    (total, page) => total + page.totalCount,
+                                  ),
                               onUpdate:
                                   widget.onUpdateTimelineClipVisualSettings,
                               onUpdateAudio:
@@ -1020,8 +1031,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRollClip: widget.onRollTimelineClip,
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
-                  onSetClipReversed: widget.onSetTimelineClipReversed,
-                  onSetClipFrozen: widget.onSetTimelineClipFrozen,
+            onSetClipReversed: widget.onSetTimelineClipReversed,
+            onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -1110,8 +1121,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onRollClip: widget.onRollTimelineClip,
             onSlideClip: widget.onSlideTimelineClip,
             onRippleDeleteClip: widget.onRippleDeleteTimelineClip,
-                  onSetClipReversed: widget.onSetTimelineClipReversed,
-                  onSetClipFrozen: widget.onSetTimelineClipFrozen,
+            onSetClipReversed: widget.onSetTimelineClipReversed,
+            onSetClipFrozen: widget.onSetTimelineClipFrozen,
             onUpdateTextClip: widget.onUpdateTimelineTextClip,
             onAddMarker: widget.onAddTimelineMarker,
             onMoveMarker: widget.onMoveTimelineMarker,
@@ -1328,7 +1339,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
       context: context,
       contentKind: contentKind,
       duration: ProjectRationalTime(BigInt.from(5), 1),
-      formatting: ProjectTextFormatting.defaults,
+      formatting: contentKind == ProjectTimelineClipContentKind.caption
+          ? ProjectTextFormatting.captionDefaults
+          : ProjectTextFormatting.defaults,
     );
     if (edit != null && mounted) {
       await onInsert(project, track, start, edit.duration, edit.content);
@@ -1938,9 +1951,9 @@ class _MediaLibraryPanel extends StatelessWidget {
         : library
               .where(
                 (item) =>
-                    _mediaDisplayName(item.sourceUri).toLowerCase().contains(
-                      needle,
-                    ),
+                    _mediaDisplayName(item.sourceUri)
+                        .toLowerCase()
+                        .contains(needle),
               )
               .toList(growable: false);
     final filtering = needle.isNotEmpty;
@@ -3491,7 +3504,10 @@ String _rateLabel(ProjectRationalRate rate) {
   final value = rate.numerator / rate.denominator;
   final text = value == value.roundToDouble()
       ? value.round().toString()
-      : value.toStringAsFixed(2).replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+      : value
+            .toStringAsFixed(2)
+            .replaceAll(RegExp(r'0+$'), '')
+            .replaceAll(RegExp(r'\.$'), '');
   return text;
 }
 
@@ -4157,7 +4173,10 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           Expanded(
             child: Text(
               'Play backwards',
-              style: TextStyle(color: OrColors.textSecondary, fontSize: OrType.tinySize),
+              style: TextStyle(
+                color: OrColors.textSecondary,
+                fontSize: OrType.tinySize,
+              ),
             ),
           ),
           Switch(
@@ -4201,7 +4220,10 @@ class _InspectorPanelState extends State<_InspectorPanel> {
           Expanded(
             child: Text(
               'Hold this frame',
-              style: TextStyle(color: OrColors.textSecondary, fontSize: OrType.tinySize),
+              style: TextStyle(
+                color: OrColors.textSecondary,
+                fontSize: OrType.tinySize,
+              ),
             ),
           ),
           Switch(
@@ -4774,16 +4796,16 @@ class _InspectorPanelState extends State<_InspectorPanel> {
         children: [
           if (widget.showHeader)
             _PanelHeader(
-            title: 'Inspector',
-            trailing: widget.onClose == null
-                ? null
-                : IconButton(
-                    key: const ValueKey('mobile-tool-sheet-close'),
-                    tooltip: 'Close tool panel',
-                    onPressed: widget.onClose,
-                    icon: const Icon(Icons.close_outlined),
-                  ),
-          ),
+              title: 'Inspector',
+              trailing: widget.onClose == null
+                  ? null
+                  : IconButton(
+                      key: const ValueKey('mobile-tool-sheet-close'),
+                      tooltip: 'Close tool panel',
+                      onPressed: widget.onClose,
+                      icon: const Icon(Icons.close_outlined),
+                    ),
+            ),
           const Divider(height: 1),
           if (!canEdit && widget.isProjectWorkspace && !hasSelection)
             Expanded(child: _projectInspector())
@@ -5223,6 +5245,7 @@ class _TimelinePanel extends StatefulWidget {
   onSlideClip;
   final Future<void> Function(ProjectReadModel, ProjectTimelineClip)?
   onRippleDeleteClip;
+
   /// Flips the direction of one media clip; the clip menu offers it beside
   /// Duplicate so reversal does not require opening the inspector.
   final Future<ProjectReadModel?> Function(
@@ -5825,12 +5848,13 @@ class _TimelinePanelState extends State<_TimelinePanel> {
                                                 _marqueeCurrent!,
                                               )
                                             : null,
-                                        onMarqueeStart: (local) => _beginMarquee(
-                                          track.trackId,
-                                          local,
-                                        ),
+                                        onMarqueeStart: (local) =>
+                                            _beginMarquee(track.trackId, local),
                                         onMarqueeUpdate: (local) =>
-                                            _updateMarquee(track.trackId, local),
+                                            _updateMarquee(
+                                              track.trackId,
+                                              local,
+                                            ),
                                         onMarqueeEnd: () => _endMarquee(track),
                                         // Pressing empty lane space moves the
                                         // playhead, and the playhead line is
@@ -6804,7 +6828,6 @@ class _TimelinePanelState extends State<_TimelinePanel> {
   }
 
   void _beginMarquee(String trackId, Offset local) {
-
     if (trackId != _marqueeTrackId) {
       setState(() {
         _marqueeTrackId = trackId;
@@ -8001,7 +8024,15 @@ class _TimelineLoadMoreLane extends StatelessWidget {
   );
 }
 
-enum _ClipMenuChoice { split, duplicate, reverse, freeze, delete, rippleDelete, advanced }
+enum _ClipMenuChoice {
+  split,
+  duplicate,
+  reverse,
+  freeze,
+  delete,
+  rippleDelete,
+  advanced,
+}
 
 /// One context-menu row: label on the left, shortcut on the right.
 class _ClipMenuItem extends StatelessWidget {
@@ -8448,8 +8479,9 @@ class _TimelineTrackLane extends StatelessWidget {
       onTap: bladeMode ? null : () => onOpenClip(clip),
       onTapPosition: bladeMode && bladeSplit != null
           ? (local) {
-              final seconds = start + (local.dx + math.min(6.0, clipWidth / 2)) /
-                  pixelsPerSecond;
+              final seconds =
+                  start +
+                  (local.dx + math.min(6.0, clipWidth / 2)) / pixelsPerSecond;
               bladeSplit(clip, _timeFromSeconds(seconds));
             }
           : null,
@@ -9788,6 +9820,44 @@ Future<void> _editTimelineTextClip({
   }
 }
 
+Widget _textStyleSlider({
+  required String keyName,
+  required String label,
+  required double value,
+  required double min,
+  required double max,
+  required String display,
+  required ValueChanged<double> onChanged,
+}) => Row(
+  children: [
+    SizedBox(
+      width: 104,
+      child: Text(label, style: const TextStyle(fontSize: OrType.tinySize)),
+    ),
+    Expanded(
+      child: Slider(
+        key: ValueKey(keyName),
+        value: value.clamp(min, max),
+        min: min,
+        max: max,
+        divisions: (max - min).round(),
+        onChanged: onChanged,
+      ),
+    ),
+    SizedBox(
+      width: 48,
+      child: Text(
+        display,
+        textAlign: TextAlign.end,
+        style: TextStyle(
+          color: OrColors.textSecondary,
+          fontSize: OrType.tinySize,
+        ),
+      ),
+    ),
+  ],
+);
+
 Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
   required BuildContext context,
   required ProjectTimelineClipContentKind contentKind,
@@ -9821,6 +9891,12 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
     colors.add(formatting.color);
     colorIndex = colors.length - 1;
   }
+  var anchor = formatting.anchor;
+  var offsetX = formatting.offsetXBasisPoints.toDouble();
+  var offsetY = formatting.offsetYBasisPoints.toDouble();
+  var opacityPercent = formatting.opacityBasisPoints / 100.0;
+  var backgroundEnabled = formatting.background != null;
+  var backgroundPercent = (formatting.background?.color.alpha ?? 170) / 2.55;
   bool fieldsAreValid() {
     final durationValue = ProjectRationalTime.tryParse(durationController.text);
     final sizePoints = double.tryParse(sizeController.text.trim());
@@ -9982,6 +10058,82 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                     updateValidity();
                   },
                 ),
+                const SizedBox(height: OrSpacing.x2),
+                DropdownButtonFormField<ProjectTextVerticalAnchor>(
+                  isExpanded: true,
+                  key: const ValueKey('timeline-text-anchor'),
+                  initialValue: anchor,
+                  decoration: const InputDecoration(
+                    labelText: 'Position',
+                    isDense: true,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: ProjectTextVerticalAnchor.top,
+                      child: Text('Top'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextVerticalAnchor.center,
+                      child: Text('Middle'),
+                    ),
+                    DropdownMenuItem(
+                      value: ProjectTextVerticalAnchor.bottom,
+                      child: Text('Bottom'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setDialogState(() => anchor = value);
+                  },
+                ),
+                _textStyleSlider(
+                  keyName: 'timeline-text-offset-x',
+                  label: 'Horizontal',
+                  value: offsetX,
+                  min: -100,
+                  max: 100,
+                  display: '${offsetX.round()}%',
+                  onChanged: (value) => setDialogState(() => offsetX = value),
+                ),
+                _textStyleSlider(
+                  keyName: 'timeline-text-offset-y',
+                  label: 'Vertical',
+                  value: offsetY,
+                  min: -100,
+                  max: 100,
+                  display: '${offsetY.round()}%',
+                  onChanged: (value) => setDialogState(() => offsetY = value),
+                ),
+                _textStyleSlider(
+                  keyName: 'timeline-text-opacity',
+                  label: 'Text opacity',
+                  value: opacityPercent,
+                  min: 0,
+                  max: 100,
+                  display: '${opacityPercent.round()}%',
+                  onChanged: (value) =>
+                      setDialogState(() => opacityPercent = value),
+                ),
+                SwitchListTile(
+                  key: const ValueKey('timeline-text-background'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text('Background box'),
+                  value: backgroundEnabled,
+                  onChanged: (value) =>
+                      setDialogState(() => backgroundEnabled = value),
+                ),
+                if (backgroundEnabled)
+                  _textStyleSlider(
+                    keyName: 'timeline-text-background-opacity',
+                    label: 'Box opacity',
+                    value: backgroundPercent,
+                    min: 0,
+                    max: 100,
+                    display: '${backgroundPercent.round()}%',
+                    onChanged: (value) =>
+                        setDialogState(() => backgroundPercent = value),
+                  ),
                 const SizedBox(height: OrSpacing.x1),
                 const Text(
                   'New clips start at the preview playhead.',
@@ -10022,6 +10174,20 @@ Future<_TimelineTextClipEdit?> _showTimelineTextClipDialog({
                             weight: weight,
                             alignment: alignment,
                             color: colors[colorIndex],
+                            anchor: anchor,
+                            offsetXBasisPoints: offsetX.round(),
+                            offsetYBasisPoints: offsetY.round(),
+                            opacityBasisPoints: opacityPercent.round() * 100,
+                            background: backgroundEnabled
+                                ? ProjectTextBackground(
+                                    color: ProjectTextColor(
+                                      red: 0,
+                                      green: 0,
+                                      blue: 0,
+                                      alpha: (backgroundPercent * 2.55).round(),
+                                    ),
+                                  )
+                                : null,
                           ),
                         );
                         Navigator.of(dialogContext).pop(
@@ -10963,9 +11129,7 @@ class _RightPanelTabButton extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    color: selected
-                        ? OrColors.text
-                        : OrColors.textSecondary,
+                    color: selected ? OrColors.text : OrColors.textSecondary,
                     fontSize: OrType.tinySize,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                   ),
