@@ -97,6 +97,10 @@ class EditorMediaItemPreview extends StatelessWidget {
               child: Image.memory(
                 bytes,
                 key: ValueKey('media-preview-image-${item.mediaId}'),
+                // The tile is 52 wide; decoding a 4K thumbnail at full size
+                // costs tens of megabytes per library page.
+                cacheWidth: (52 * MediaQuery.devicePixelRatioOf(context)).round(),
+                cacheHeight: (36 * MediaQuery.devicePixelRatioOf(context)).round(),
                 fit: BoxFit.contain,
                 semanticLabel: label,
                 errorBuilder: (context, error, stackTrace) => const Center(

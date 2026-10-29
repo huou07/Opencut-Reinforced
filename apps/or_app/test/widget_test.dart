@@ -1063,6 +1063,13 @@ void main() {
       find.byKey(const ValueKey('media-preview-image-media-audio')),
       findsOneWidget,
     );
+    // A 52x36 tile must not decode the thumbnail at full resolution.
+    final image = tester.widget<Image>(
+      find.byKey(const ValueKey('media-preview-image-media-video')),
+    );
+    final provider = image.image;
+    expect(provider, isA<ResizeImage>());
+    expect((provider as ResizeImage).width, isNotNull);
     expect(gateway.thumbnailRequests, 2);
     expect(gateway.waveformRequests, 1);
     expect(gateway.lastSession!.view.revision, BigInt.zero);
