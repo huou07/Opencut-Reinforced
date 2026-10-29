@@ -183,6 +183,14 @@ product still needs.
 
 ### Fixed
 
+- **A local voice-cloning run could re-clone a voice whose consent had been
+  withdrawn.** The local-server path heals a restarted server by re-enrolling
+  the saved reference clip, but that automatic enrolment ignored the rights
+  acknowledgement and then wrote `local_clone_acknowledged: true` back into the
+  narration settings. Re-enrolment now requires the acknowledgement that is on
+  record and a clip to enrol; a run without it stops with "tick the rights
+  acknowledgement, then press Enrol voice" instead of silently cloning, and a
+  re-enrolment records the new voice id and clip without touching consent.
 - **The editor could look frozen after a native file panel.** macOS open/save
   panels are now sheets attached to the editor window with a single-flight guard
   and focus restoration after dismissal. A panel that previously ended up behind

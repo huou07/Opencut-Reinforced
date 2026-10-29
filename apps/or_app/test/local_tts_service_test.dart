@@ -344,4 +344,64 @@ void main() {
     );
   });
 
+  test('an automatic re-enrolment needs consent and a reference clip', () {
+    expect(
+      mayReEnrollClonedVoice(
+        acknowledged: true,
+        referencePath: '/tmp/ref.wav',
+      ),
+      isTrue,
+    );
+    // Consent withdrawn: the clip is still on disk, but re-cloning it is not
+    // this run's decision to make.
+    expect(
+      mayReEnrollClonedVoice(
+        acknowledged: false,
+        referencePath: '/tmp/ref.wav',
+      ),
+      isFalse,
+    );
+    expect(
+      mayReEnrollClonedVoice(acknowledged: true, referencePath: '  '),
+      isFalse,
+    );
+  });
+
+  test('a forgotten voice without consent names the missing step', () {
+    const unknown = LocalTtsException('HTTP_404', 'Voice not found');
+    LocalTtsException explain({
+      required bool canReEnrol,
+      String referencePath = '/tmp/ref.wav',
+      LocalTtsException error = unknown,
+    }) {
+      return explainLocalFailure(
+        error: error,
+        canReEnrol: canReEnrol,
+        referencePath: referencePath,
+      );
+    }
+
+    final advice = explain(canReEnrol: false);
+    expect(advice.code, 'CLONE_CONSENT');
+    expect(advice.message, contains('rights acknowledgement'));
+    expect(advice.message, contains('Enrol voice'));
+
+    // With consent the recovery helper heals the line, so the failure is not
+    // rewritten into advice the user cannot act on.
+    expect(identical(explain(canReEnrol: true), unknown), isTrue);
+    // No clip means nothing to enrol: the server's own answer stands.
+    expect(
+      identical(explain(canReEnrol: false, referencePath: ''), unknown),
+      isTrue,
+    );
+    // A wedged server is not a consent problem.
+    const offline = LocalTtsException(
+      'OFFLINE',
+      'No local speech server answered at 127.0.0.1:8000.',
+    );
+    expect(
+      identical(explain(canReEnrol: false, error: offline), offline),
+      isTrue,
+    );
+  });
 }

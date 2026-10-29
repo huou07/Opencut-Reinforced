@@ -156,6 +156,41 @@ void main() {
     expect(changed.localCloneAcknowledged, isTrue);
   });
 
+  test('a re-enrolment records the voice but never invents consent', () {
+    const base = NarrationSettings(
+      provider: 'local',
+      localBaseUrl: 'http://127.0.0.1:8000',
+      localVoiceId: 'old',
+      localVoiceName: 'old name',
+      localReferencePath: '/tmp/old.wav',
+    );
+    final recorded = base.rememberEnrolment(
+      baseUrl: 'http://127.0.0.1:9000',
+      voiceId: 'Mai Anh',
+      voiceName: 'Mai Anh',
+      referencePath: '/tmp/ref.wav',
+    );
+    // What the server just learned is written back...
+    expect(recorded.localBaseUrl, 'http://127.0.0.1:9000');
+    expect(recorded.localVoiceId, 'Mai Anh');
+    expect(recorded.localVoiceName, 'Mai Anh');
+    expect(recorded.localReferencePath, '/tmp/ref.wav');
+    // ...and consent is the user's answer, not something a recovery run can
+    // grant. A server restart used to launder a withdrawn acknowledgement here.
+    expect(recorded.localCloneAcknowledged, isFalse);
+    expect(recorded.provider, 'local');
+    // An acknowledgement that is on record survives the same write.
+    final kept = base
+        .copyWith(localCloneAcknowledged: true)
+        .rememberEnrolment(
+          baseUrl: 'http://127.0.0.1:9000',
+          voiceId: 'Mai Anh',
+          voiceName: 'Mai Anh',
+          referencePath: '/tmp/ref.wav',
+        );
+    expect(kept.localCloneAcknowledged, isTrue);
+  });
+
   test('the local provider is accepted and an unknown one falls back', () {
     final local = NarrationSettings.fromJson({
       'provider': 'local',

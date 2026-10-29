@@ -98,6 +98,25 @@ class NarrationSettings {
         localCloneAcknowledged ?? this.localCloneAcknowledged,
   );
 
+  /// The settings a successful enrolment writes back.
+  ///
+  /// It records what the server now knows — the base URL, the voice id it
+  /// handed out, the name and the clip — and nothing else. Consent is the
+  /// user's answer, so [localCloneAcknowledged] is carried forward untouched:
+  /// an automatic re-enrolment after a server restart must never manufacture
+  /// the agreement a manual enrolment asks for.
+  NarrationSettings rememberEnrolment({
+    required String baseUrl,
+    required String voiceId,
+    required String voiceName,
+    required String referencePath,
+  }) => copyWith(
+    localBaseUrl: baseUrl,
+    localVoiceId: voiceId,
+    localVoiceName: voiceName,
+    localReferencePath: referencePath,
+  );
+
   Map<String, Object?> toJson() => {
     'version': 3,
     'voice': voice,

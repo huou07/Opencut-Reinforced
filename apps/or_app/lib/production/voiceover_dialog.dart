@@ -371,13 +371,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     );
     _localVoiceId = id;
     // The server only remembers enrolments for the life of its process, so the
-    // id it just handed back is the one the next launch must ask for.
-    final saved = _saved.copyWith(
-      localBaseUrl: base,
-      localVoiceId: id,
-      localVoiceName: name,
-      localReferencePath: _localReferencePath,
-      localCloneAcknowledged: true,
+    // id it just handed back is the one the next launch must ask for. The
+    // acknowledgement is not part of what enrolment learned, so it is carried
+    // forward instead of being written as `true` here.
+    final saved = _saved.rememberEnrolment(
+      baseUrl: base,
+      voiceId: id,
+      voiceName: name,
+      referencePath: _localReferencePath,
     );
     _saved = saved;
     await _settings.save(saved);
@@ -400,6 +401,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       }
     }
     await directory.create(recursive: true);
+    // Healing a forgotten voice re-clones the reference clip, so it is only
+    // allowed while the rights acknowledgement is on record.
+    final canReEnrol = mayReEnrollClonedVoice(
+      acknowledged: _localCloneAcknowledged,
+      referencePath: _localReferencePath,
+    );
     final results = <VoiceoverLine>[];
     var cursor = 0;
     for (var index = 0; index < lines.length; index += 1) {
@@ -408,21 +415,32 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       // The server keeps enrolled voices in process memory only; after a
       // restart it answers "unknown voice". The helper re-enrols the saved clip
       // to the endpoint that just failed and retries once.
-      final duration = await synthesizeWithVoiceRecovery(
-        base: base,
-        hasReferenceClip: _localReferencePath.isNotEmpty,
-        reEnroll: (recoveryBase) async {
-          await _reEnrollLocal(recoveryBase);
-          return _localVoiceId;
-        },
-        attempt: () => _local.synthesize(
-          baseUrl: base,
-          text: text,
-          voiceId: _localVoiceId,
-          outputPath: path,
-          sampleRate: _localHealth?.sampleRate ?? 0,
-        ),
-      );
+      final int duration;
+      try {
+        duration = await synthesizeWithVoiceRecovery(
+          base: base,
+          hasReferenceClip: canReEnrol,
+          reEnroll: (recoveryBase) async {
+            await _reEnrollLocal(recoveryBase);
+            return _localVoiceId;
+          },
+          attempt: () => _local.synthesize(
+            baseUrl: base,
+            text: text,
+            voiceId: _localVoiceId,
+            outputPath: path,
+            sampleRate: _localHealth?.sampleRate ?? 0,
+          ),
+        );
+      } on LocalTtsException catch (error) {
+        // Without consent (or without a clip) the server's "unknown voice"
+        // answer is not the interesting fact: say what the run is missing.
+        throw explainLocalFailure(
+          error: error,
+          canReEnrol: canReEnrol,
+          referencePath: _localReferencePath,
+        );
+      }
       final start = cursor;
       final end = start + duration;
       results.add(

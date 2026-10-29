@@ -266,6 +266,27 @@ its `Linh (vi_VN)` wait timed out. Scenarios that assume a default provider must
 select it explicitly (`voiceover-provider-system`). A tree captured right
 after a tap also raced the build; the runner now settles before `tree`.
 
+## Local speech server stand-in (2026-10-30)
+
+The local narration path can be exercised without the real clone server: preset
+the saved narration settings to a fake HTTP server on a spare port that answers
+`/health`, `GET /v1/voices` and `/v1/audio/speech`, and give the settings a
+`local_voice_id` plus a `local_reference_path` (the harness may then open with
+the local provider already connected). A fake that answers `404 Voice not found`
+stands in for a server that restarted and forgot its enrolment.
+
+Two directions were verified this way on the harness app, with the settings file
+restored afterwards:
+
+- `local_clone_acknowledged: false` produced the "tick the rights
+  acknowledgement" guidance, **zero** `POST /v1/voices` requests and the settings
+  file still `false` — the run refused to re-clone.
+- The acknowledgement on record produced exactly one enrolment POST and then a
+  successful retried line ("Added 1 narration"), so the recovery still works when
+  consent is there.
+
+The fake server and its scenario are throwaway files; they are not committed.
+
 ## Verification ideas not yet built
 - The inspector's validation line (`inspector-error`, a live region) is still not
   asserted end to end: its rule now lives in `inspector_audio_validation.dart`

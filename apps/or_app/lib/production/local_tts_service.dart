@@ -457,6 +457,42 @@ LocalHttpRequest localVoiceEnrollmentRequest({
   );
 }
 
+/// Whether [`synthesizeWithVoiceRecovery`] may re-enrol the saved reference
+/// clip without asking again.
+///
+/// The recovery exists because a local server keeps enrolled voices in its
+/// process; after a restart the dialog's saved clip can heal a run on its own.
+/// That healing is still a clone, so it asks the same two things a manual
+/// enrolment asks: the rights acknowledgement on record, and a clip to enrol.
+bool mayReEnrollClonedVoice({
+  required bool acknowledged,
+  required String referencePath,
+}) => acknowledged && referencePath.trim().isNotEmpty;
+
+/// The instruction shown when a server forgot a cloned voice this run may not
+/// re-enrol, so the raw "unknown voice" answer does not read as a server fault.
+const cloneRecoveryNeedsConsent =
+    'The local server no longer knows this cloned voice. Tick the rights '
+    'acknowledgement, then press Enrol voice, before generating again.';
+
+/// Turns a failed local line into the message the user can act on.
+///
+/// A server that forgot an enrolled voice is recoverable only while this run
+/// may re-enrol it. Without consent on record (or without a clip) the server's
+/// "unknown voice" answer names the wrong problem: what is missing is the
+/// acknowledgement and a fresh enrolment. Every other failure — a wedged
+/// server, a refused request, a missing clip — is passed through unchanged.
+LocalTtsException explainLocalFailure({
+  required LocalTtsException error,
+  required bool canReEnrol,
+  required String referencePath,
+}) {
+  final recoverableButForbidden =
+      !canReEnrol && referencePath.isNotEmpty && retryAfterReEnroll(error);
+  if (!recoverableButForbidden) return error;
+  return const LocalTtsException('CLONE_CONSENT', cloneRecoveryNeedsConsent);
+}
+
 /// One recovery attempt for a server that forgot an enrolled voice.
 ///
 /// [attempt] and the re-enrolment both target [base], so a voice is never
