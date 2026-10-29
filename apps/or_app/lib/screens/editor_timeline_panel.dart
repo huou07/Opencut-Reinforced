@@ -365,7 +365,10 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
     }
     if (previousProject?.projectId != nextProject?.projectId ||
         previousProject?.projectInstanceId != nextProject?.projectInstanceId) {
+      // Clip ids are project-scoped, so a different project must not inherit
+      // the previous one's multi-selection.
       _selectedClipId = null;
+      _selectedClipIds.clear();
       _timelineZoom = 1;
       _fitTimelineToView = false;
       if (_horizontalController.hasClients) _horizontalController.jumpTo(0);
