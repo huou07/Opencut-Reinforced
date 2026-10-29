@@ -214,10 +214,11 @@ their own increments with their own evidence.
    music workflows, `crates/or_core/src/application/types.rs` the command and
    query descriptors, envelopes, change sets, result records and error types, and
    `crates/or_core/src/application/timeline.rs` the timeline track, clip and
-   marker commands. Next seams, in order: the timeline panel, then the tool
-   panels and the audio tools' state in `app_shell.dart`, then the remaining Rust
-   command and query groups in `crates/or_core/src/application/mod.rs` by owner.
-   The split may not change behaviour and lands under the existing tests.
+   marker commands, and `crates/or_core/src/application/queries.rs` the read
+   queries. Next seams, in order: the timeline panel, then the tool panels and
+   the audio tools' state in `app_shell.dart`, then the remaining Rust command
+   groups in `crates/or_core/src/application/mod.rs` by owner. The split may not
+   change behaviour and lands under the existing tests.
 
 ## Evidence rules
 
