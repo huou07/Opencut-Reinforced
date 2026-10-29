@@ -271,7 +271,10 @@ after a tap also raced the build; the runner now settles before `tree`.
    `tap recent -> empty timeline` at **1454 ms**. The difference is the debug
    test binding: semantics lookups, `pump` loops and `wait` polling. Quote the
    harness numbers as a relative regression signal, never as user latency, and
-   use in-app timers before claiming an open-path cost.
+   use in-app timers before claiming an open-path cost. Write those timers to a
+   sandbox-writable sink (`path_provider` temp), not `/tmp`: the packaged app is
+   sandboxed and a `/tmp` write fails silently, which looked like 'no timings'
+   until the sink moved (round 157).
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
