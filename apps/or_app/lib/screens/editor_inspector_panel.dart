@@ -828,7 +828,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       labelText: label,
       isDense: true,
       counterText: '',
-      helperText: 'Seconds, e.g. 0.5',
+      helperText: 'Seconds or a fraction, e.g. 0.5 or 1/4',
       helperMaxLines: 1,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: OrSpacing.x2,
