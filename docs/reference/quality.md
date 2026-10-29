@@ -202,6 +202,16 @@ session is still identical. Any new owner of a session-scoped listener must be
 reset in the same two sites, or the counter and the early-event map leak across
 projects.
 
+## macOS keychain bridge
+
+`NarrationBridge` runs every keychain route (`get`, `has`, `set`, `delete`) on a
+global queue and replies on the main thread: `SecItemCopyMatching` blocks the
+caller while macOS asks for keychain access, and running it on the platform
+thread froze the whole app when the prompt was never answered (traced with
+`sample` on the hung process). The Dart side bounds each call to ten seconds and
+fails with `KEYCHAIN_TIMEOUT`, so an unanswered prompt reads as a check that is
+still pending instead of a frozen window.
+
 ## Known gaps
 
 1. Pacing has engine frame timings and now fails a scenario when a `frames`
