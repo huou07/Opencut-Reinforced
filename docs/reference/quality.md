@@ -262,8 +262,9 @@ Tracked so a future round can tell whether a seam grew back:
 | `apps/or_app/lib/screens/editor_timeline_panel.dart` | 4217 |
 | `apps/or_app/lib/screens/editor_shell_preview_screen.dart` | 2277 |
 | `apps/or_app/lib/screens/editor_inspector_panel.dart` | 1446 |
-| `crates/or_app_bridge/src/api/project.rs` | 3476 |
+| `crates/or_app_bridge/src/api/project.rs` | 3083 |
 | `crates/or_app_bridge/src/api/timeline.rs` | 835 |
+| `crates/or_app_bridge/src/api/project_clip_settings.rs` | 402 |
 | `crates/or_app_bridge/src/api/project_preview.rs` | 148 |
 ## Session-scoped invariants
 
@@ -447,8 +448,10 @@ The fake server and its scenario are throwaway files; they are not committed.
    transcription surface to `crates/or_app_bridge/src/api/project_transcription.rs`
    and media import/relink/removal to `crates/or_app_bridge/src/api/project_media.rs`, and
    the timeline structure commands (tracks, clips, text clips, markers) to
-   `crates/or_app_bridge/src/api/timeline.rs`, and the preview transport and
-   preparation calls to `crates/or_app_bridge/src/api/project_preview.rs` — and
+   `crates/or_app_bridge/src/api/timeline.rs`, the preview transport and
+   preparation calls to `crates/or_app_bridge/src/api/project_preview.rs`, and
+   the clip settings commands (visual, audio, speed, reverse, freeze) to
+   `crates/or_app_bridge/src/api/project_clip_settings.rs` — and
    `crates/or_core/src/application` is a
    module whose `mod.rs` still carries request dispatch and the command catalog,
    while the suite is split into `crates/or_core/src/application/tests/` with one
@@ -524,10 +527,11 @@ The fake server and its scenario are throwaway files; they are not committed.
    `crates/or_app_bridge/src/api/project.rs` (they interleave with the export
    job), then the remaining dispatch catalog in
    `crates/or_core/src/application/mod.rs`. The timeline structure commands
-   left `project.rs` for `crates/or_app_bridge/src/api/timeline.rs` and the
-   preview transport for `crates/or_app_bridge/src/api/project_preview.rs`,
-   each sharing the identity, revision and dispatch helpers through
-   `pub(crate)` plumbing. The split may not change behaviour and lands under the
+   left `project.rs` for `crates/or_app_bridge/src/api/timeline.rs`, the
+   preview transport for `crates/or_app_bridge/src/api/project_preview.rs`
+   and the clip settings commands for
+   `crates/or_app_bridge/src/api/project_clip_settings.rs`, each sharing the
+   identity, revision and dispatch helpers through `pub(crate)` plumbing. The split may not change behaviour and lands under the
    existing tests.
 
 ## Evidence rules
