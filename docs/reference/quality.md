@@ -288,6 +288,9 @@ after a tap also raced the build; the runner now settles before `tree`.
    row (`export-long`, 5 s 720p30 fixture) measured **3083 ms for 150 frames
    (~49 fps)** end to end including the dialog and probe: h264+aac, 5.013 s,
    2.6 MB. Encoding, not decoding (903-1151 fps), is the throughput owner.
+   Feeding swscale RGBA instead of swapping channels per pixel measured 3079 ms
+   (no change), so the cost is compositing/VideoToolbox, not the frame copy —
+   don't optimise that loop again on a hunch.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
