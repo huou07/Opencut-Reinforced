@@ -18,6 +18,7 @@ import 'editor_panel_header.dart';
 import 'editor_rational_time.dart';
 import 'editor_timeline_actions.dart';
 import 'editor_timeline_dialogs.dart';
+import 'timeline_project_identity.dart';
 import 'editor_timeline_painters.dart';
 import 'editor_timeline_shared.dart';
 
@@ -356,15 +357,18 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
     }
     final previousProject = oldWidget.project;
     final nextProject = widget.project;
-    if (previousProject?.projectId != nextProject?.projectId ||
-        previousProject?.projectInstanceId != nextProject?.projectInstanceId ||
-        previousProject?.revision != nextProject?.revision) {
+    final projectChanged =
+        previousProject?.revision != nextProject?.revision;
+    final projectIdentityChanged = timelineProjectIdentityChanged(
+      previousProject,
+      nextProject,
+    );
+    if (projectChanged) {
       _cancelGesture();
       _scrubPosition = null;
       _scrubbing = false;
     }
-    if (previousProject?.projectId != nextProject?.projectId ||
-        previousProject?.projectInstanceId != nextProject?.projectInstanceId) {
+    if (projectIdentityChanged) {
       // Clip ids are project-scoped, so a different project must not inherit
       // the previous one's multi-selection.
       _selectedClipId = null;
