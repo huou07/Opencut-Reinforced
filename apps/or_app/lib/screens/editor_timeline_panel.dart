@@ -5762,8 +5762,8 @@ Future<void> _confirmDeleteTimelineClip({
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('Delete clip?'),
-      content: Text(
-        'Delete clip ${clip.clipId}? Later clips and other tracks stay in place. The media remains in the project.',
+      content: const Text(
+        'Later clips and other tracks stay in place. The media remains in the project.',
       ),
       actions: [
         TextButton(
