@@ -23,6 +23,7 @@ import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
 import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
+import '../production/media_artifact_mailbox.dart';
 import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -231,10 +232,8 @@ class _AppShellState extends State<AppShell> {
       ValueNotifier<Map<String, ProjectMediaPreview>>(const {});
   final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
   final Set<String> _queuedMediaPreviewIds = {};
-  final List<MediaPreviewTicket> _pendingMediaPreviewTickets = [];
-  final Map<String, ProjectMediaArtifactEvent> _earlyMediaArtifactEvents = {};
+  final MediaArtifactMailbox _mediaArtifactMailbox = MediaArtifactMailbox();
   int _activeMediaPreviewRequests = 0;
-  int _mediaPreviewSubmissionsInFlight = 0;
   BigInt _lastMediaArtifactSequence = BigInt.zero;
   bool _mediaLoading = false;
   bool _mediaLoadingMore = false;
@@ -1772,10 +1771,8 @@ class _AppShellState extends State<AppShell> {
     _timelineRefreshGeneration++;
     _mediaPreviewQueue.clear();
     _queuedMediaPreviewIds.clear();
-    _pendingMediaPreviewTickets.clear();
-    _earlyMediaArtifactEvents.clear();
+    _mediaArtifactMailbox.reset();
     _activeMediaPreviewRequests = 0;
-    _mediaPreviewSubmissionsInFlight = 0;
     _motionInsertLog.clear();
     setState(() {
       _activeSession = session;
@@ -4640,7 +4637,7 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaItem item,
     ProjectMediaArtifactKind kind,
   ) async {
-    _mediaPreviewSubmissionsInFlight++;
+    _mediaArtifactMailbox.beginSubmission();
     try {
       final request = switch (kind) {
         ProjectMediaArtifactKind.thumbnail =>
@@ -4716,13 +4713,10 @@ class _AppShellState extends State<AppShell> {
               cacheKey: cacheKey,
               jobId: jobId,
             );
-            _pendingMediaPreviewTickets.add(ticket);
-            final earlyEvent =
-                _earlyMediaArtifactEvents[mediaArtifactEventKey(
-                  kind,
-                  cacheKey,
-                  jobId,
-                )];
+            _mediaArtifactMailbox.add(ticket);
+            final earlyEvent = _mediaArtifactMailbox.earlyFor(
+              mediaArtifactEventKey(kind, cacheKey, jobId),
+            );
             if (earlyEvent != null) {
               unawaited(_processMediaArtifactEvent(session, earlyEvent));
             }
@@ -4746,10 +4740,7 @@ class _AppShellState extends State<AppShell> {
       }
     } finally {
       if (identical(session, _activeSession)) {
-        _mediaPreviewSubmissionsInFlight--;
-        if (_mediaPreviewSubmissionsInFlight == 0) {
-          _earlyMediaArtifactEvents.clear();
-        }
+        _mediaArtifactMailbox.endSubmission();
       }
     }
   }
@@ -4854,25 +4845,11 @@ class _AppShellState extends State<AppShell> {
     ProjectSessionHandle session,
     ProjectMediaArtifactEvent event,
   ) {
-    if (_mediaPreviewSubmissionsInFlight > 0) {
-      _earlyMediaArtifactEvents[mediaArtifactEventKey(
-            event.kind,
-            event.cacheKey,
-            event.jobId,
-          )] =
-          event;
-    }
-    final matching = _pendingMediaPreviewTickets
-        .where(
-          (ticket) =>
-              ticket.kind == event.kind &&
-              ticket.cacheKey == event.cacheKey &&
-              ticket.jobId == event.jobId,
-        )
-        .toList(growable: false);
-    if (matching.isEmpty) {
-      return;
-    }
+    _mediaArtifactMailbox.rememberEarly(
+      mediaArtifactEventKey(event.kind, event.cacheKey, event.jobId),
+      event,
+    );
+    if (_mediaArtifactMailbox.matching(event).isEmpty) return;
     unawaited(_processMediaArtifactEvent(session, event));
   }
 
@@ -4881,16 +4858,8 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaArtifactEvent event,
   ) async {
     if (!mounted || !identical(session, _activeSession)) return;
-    final matching = _pendingMediaPreviewTickets
-        .where(
-          (ticket) =>
-              ticket.kind == event.kind &&
-              ticket.cacheKey == event.cacheKey &&
-              ticket.jobId == event.jobId,
-        )
-        .toList(growable: false);
+    final matching = _mediaArtifactMailbox.takeMatching(event);
     if (matching.isEmpty) return;
-    _pendingMediaPreviewTickets.removeWhere(matching.contains);
     _activeMediaPreviewRequests = _activeMediaPreviewRequests >= matching.length
         ? _activeMediaPreviewRequests - matching.length
         : 0;
@@ -5028,10 +4997,8 @@ class _AppShellState extends State<AppShell> {
     unawaited(_mediaArtifactSubscription?.cancel());
     _mediaPreviewQueue.clear();
     _queuedMediaPreviewIds.clear();
-    _pendingMediaPreviewTickets.clear();
-    _earlyMediaArtifactEvents.clear();
+    _mediaArtifactMailbox.reset();
     _activeMediaPreviewRequests = 0;
-    _mediaPreviewSubmissionsInFlight = 0;
     _lastMediaArtifactSequence = BigInt.zero;
     _motionInsertLog.clear();
     if (!mounted) return;
