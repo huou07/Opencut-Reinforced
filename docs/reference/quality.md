@@ -274,7 +274,10 @@ after a tap also raced the build; the runner now settles before `tree`.
    use in-app timers before claiming an open-path cost. Write those timers to a
    sandbox-writable sink (`path_provider` temp), not `/tmp`: the packaged app is
    sandboxed and a `/tmp` write fails silently, which looked like 'no timings'
-   until the sink moved (round 157).
+   until the sink moved (round 157). The follow-up also showed the timer must
+   sit in the *paging* function (`_refreshMediaPage`), not in a helper such as
+   `_findMaterializedMedia` that only runs on one path — a timer in the wrong
+   function produces "no numbers", which reads exactly like "no cost".
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
