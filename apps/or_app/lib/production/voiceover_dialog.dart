@@ -890,7 +890,11 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     key: ValueKey('voiceover-local-voice-$_localVoiceId'),
-                    initialValue: _localVoiceId.isEmpty ? null : _localVoiceId,
+                    initialValue: _localVoices.any(
+                      (voice) => voice.id == _localVoiceId,
+                    )
+                        ? _localVoiceId
+                        : null,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -1105,9 +1109,11 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                             key: ValueKey(
                               'voiceover-cloud-voice-$_cloudVoiceId',
                             ),
-                            initialValue: _cloudVoiceId.isEmpty
-                                ? null
-                                : _cloudVoiceId,
+                            initialValue: _cloudVoices.any(
+                              (voice) => voice.id == _cloudVoiceId,
+                            )
+                                ? _cloudVoiceId
+                                : null,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
