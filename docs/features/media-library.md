@@ -60,7 +60,13 @@ snapshot of previews it paints.
 
 A preview that fails leaves a retry control in its place rather than a muted
 placeholder that never resolves; retrying re-queues that one item instead of
-refreshing the whole library.
+refreshing the whole library. The whole tile is the retry target, not the
+sixteen-pixel glyph inside it.
+
+A page of the library that fails says so in a footer with its own Retry, which
+reloads the open project state rather than appending a second page; the footer
+Retry is unavailable while a page is in flight so one press cannot queue a
+duplicate request over a page that was just appended.
 
 ## Where
 
