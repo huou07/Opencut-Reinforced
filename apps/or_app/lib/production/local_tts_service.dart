@@ -435,6 +435,27 @@ LocalHttpRequest localVoiceEnrollmentRequest({
   );
 }
 
+/// One recovery attempt for a server that forgot an enrolled voice.
+///
+/// [attempt] and the re-enrolment both target [base], so a voice is never
+/// created on one endpoint and spoken from another. Without a reference clip
+/// there is nothing to re-enrol, so the original failure is rethrown.
+Future<int> synthesizeWithVoiceRecovery({
+  required String base,
+  required Future<int> Function() attempt,
+  required Future<String?> Function(String base) reEnroll,
+  required bool hasReferenceClip,
+}) async {
+  try {
+    return await attempt();
+  } on LocalTtsException catch (error) {
+    if (!hasReferenceClip || !retryAfterReEnroll(error)) rethrow;
+    final enrolled = await reEnroll(base);
+    if (enrolled == null || enrolled.isEmpty) rethrow;
+    return attempt();
+  }
+}
+
 Future<void> _playWithAfplay(String path) async {
   await Process.run('afplay', [path]);
 }

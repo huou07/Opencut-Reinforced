@@ -205,4 +205,61 @@ void main() {
     );
     // The dialog's own guards still win: no clip, no retry.
   });
+
+  test('a forgotten voice re-enrols against the endpoint that failed', () async {
+    final bases = <String>[];
+    var attempts = 0;
+    var enrolled = 0;
+    final duration = await synthesizeWithVoiceRecovery(
+      base: 'http://127.0.0.1:9000',
+      hasReferenceClip: true,
+      reEnroll: (base) async {
+        bases.add(base);
+        enrolled += 1;
+        return 'recovered';
+      },
+      attempt: () async {
+        attempts += 1;
+        if (attempts == 1) {
+          throw const LocalTtsException('HTTP_404', 'unknown voice');
+        }
+        return 420;
+      },
+    );
+    expect(duration, 420);
+    expect(bases, ['http://127.0.0.1:9000']);
+    expect(enrolled, 1);
+    expect(attempts, 2);
+  });
+
+  test('without a reference clip the failure is not retried', () async {
+    expect(
+      () => synthesizeWithVoiceRecovery(
+        base: 'http://127.0.0.1:9000',
+        hasReferenceClip: false,
+        reEnroll: (base) async {
+          fail('must not re-enrol');
+        },
+        attempt: () async {
+          throw const LocalTtsException('HTTP_404', 'unknown voice');
+        },
+      ),
+      throwsA(isA<LocalTtsException>()),
+    );
+  });
+
+  test('a non-voice failure is rethrown unchanged', () async {
+    expect(
+      () => synthesizeWithVoiceRecovery(
+        base: 'http://127.0.0.1:9000',
+        hasReferenceClip: true,
+        reEnroll: (base) async => fail('must not re-enrol'),
+        attempt: () async {
+          throw const LocalTtsException('HTTP_500', 'the server failed');
+        },
+      ),
+      throwsA(isA<LocalTtsException>()),
+    );
+  });
+
 }

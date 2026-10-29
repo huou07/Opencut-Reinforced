@@ -380,30 +380,24 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     for (var index = 0; index < lines.length; index += 1) {
       final text = lines[index];
       final path = '${directory.path}/local-line-${index + 1}.wav';
-      int duration;
-      try {
-        duration = await _local.synthesize(
+      // The server keeps enrolled voices in process memory only; after a
+      // restart it answers "unknown voice". The helper re-enrols the saved clip
+      // to the endpoint that just failed and retries once.
+      final duration = await synthesizeWithVoiceRecovery(
+        base: base,
+        hasReferenceClip: _localReferencePath.isNotEmpty,
+        reEnroll: (recoveryBase) async {
+          await _reEnrollLocal(recoveryBase);
+          return _localVoiceId;
+        },
+        attempt: () => _local.synthesize(
           baseUrl: base,
           text: text,
           voiceId: _localVoiceId,
           outputPath: path,
           sampleRate: _localHealth?.sampleRate ?? 0,
-        );
-      } on LocalTtsException catch (error) {
-        if (_localReferencePath.isEmpty || !retryAfterReEnroll(error)) {
-          rethrow;
-        }
-        // The server keeps enrolled voices in process memory only; after a
-        // restart it answers "unknown voice". Enrol the saved clip and retry.
-        await _reEnrollLocal(base);
-        duration = await _local.synthesize(
-          baseUrl: base,
-          text: text,
-          voiceId: _localVoiceId,
-          outputPath: path,
-          sampleRate: _localHealth?.sampleRate ?? 0,
-        );
-      }
+        ),
+      );
       final start = cursor;
       final end = start + duration;
       results.add(
