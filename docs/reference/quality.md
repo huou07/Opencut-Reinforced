@@ -197,7 +197,8 @@ their own increments with their own evidence.
 6. The largest sources are still single files — `apps/or_app/lib/shell/app_shell.dart`,
    `apps/or_app/lib/screens/editor_shell_preview_screen.dart` and
    `crates/or_app_bridge/src/api/project.rs` — and `crates/or_core/src/application` is a
-   module whose `mod.rs` still carries the command and query implementations.
+   module whose `mod.rs` still carries request dispatch, the command catalog and
+   the inline test module.
    Extraction follows feature ownership, not line counts: `apps/or_app/lib/shell/platform_menus.dart`
    holds the macOS menu bar, `apps/or_app/lib/motion/motion_insert_log.dart` the
    motion insert record, `apps/or_app/lib/screens/editor_tool_actions.dart` the tool
@@ -212,13 +213,16 @@ their own increments with their own evidence.
    the seconds → canonical time conversion, and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
    music workflows, `crates/or_core/src/application/types.rs` the command and
-   query descriptors, envelopes, change sets, result records and error types, and
+   query descriptors, envelopes, change sets, result records and error types,
    `crates/or_core/src/application/timeline.rs` the timeline track, clip and
-   marker commands, and `crates/or_core/src/application/queries.rs` the read
-   queries. Next seams, in order: the timeline panel, then the tool panels and
-   the audio tools' state in `app_shell.dart`, then the remaining Rust command
-   groups in `crates/or_core/src/application/mod.rs` by owner. The split may not
-   change behaviour and lands under the existing tests.
+   marker commands with their staging helpers, `crates/or_core/src/application/queries.rs`
+   the read queries, `crates/or_core/src/application/media.rs` the media add,
+   remove and relink commands, and `crates/or_core/src/application/history.rs`
+   the undo and redo command. Next seams, in order: the timeline panel, then the
+   tool panels and the audio tools' state in `app_shell.dart`, then splitting the
+   inline test module of `crates/or_core/src/application/mod.rs` along the same
+   owner boundaries. The split may not change behaviour and lands under the
+   existing tests.
 
 ## Evidence rules
 

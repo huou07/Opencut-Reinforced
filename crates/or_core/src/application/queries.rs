@@ -1,6 +1,7 @@
 use crate::{MediaItem, TrackKind};
 use serde_json::Value;
 
+use super::timeline::*;
 use super::*;
 
 impl ProjectSession {
@@ -52,7 +53,10 @@ impl ProjectSession {
             .collect())
     }
 
-    pub(super) fn timeline_clips(&self, arguments: Value) -> Result<TimelineClipPage, OperationError> {
+    pub(super) fn timeline_clips(
+        &self,
+        arguments: Value,
+    ) -> Result<TimelineClipPage, OperationError> {
         let arguments: TimelineClipsQueryArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
         let offset = usize::try_from(arguments.offset)
@@ -92,7 +96,10 @@ impl ProjectSession {
         })
     }
 
-    pub(super) fn timeline_clips_v2(&self, arguments: Value) -> Result<TimelineClipPageV2, OperationError> {
+    pub(super) fn timeline_clips_v2(
+        &self,
+        arguments: Value,
+    ) -> Result<TimelineClipPageV2, OperationError> {
         let arguments: TimelineClipsQueryArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
         let offset = usize::try_from(arguments.offset)
@@ -126,7 +133,10 @@ impl ProjectSession {
         })
     }
 
-    pub(super) fn timeline_markers(&self, arguments: Value) -> Result<TimelineMarkerPage, OperationError> {
+    pub(super) fn timeline_markers(
+        &self,
+        arguments: Value,
+    ) -> Result<TimelineMarkerPage, OperationError> {
         let arguments: TimelineMarkersQueryArguments = serde_json::from_value(arguments)
             .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
         let offset = usize::try_from(arguments.offset)
@@ -247,4 +257,42 @@ impl ProjectSession {
             .cloned()
             .ok_or_else(|| OperationError::new(OperationErrorCode::MediaNotFound))
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaListArguments {
+    offset: u64,
+    limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MediaGetArguments {
+    media_id: MediaId,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineClipsQueryArguments {
+    track_id: TrackId,
+    offset: u64,
+    limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineMarkersQueryArguments {
+    offset: u64,
+    limit: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineSnapQueryArguments {
+    operation: TimelineSnapOperation,
+    clip_id: ClipId,
+    #[serde(default)]
+    target_track_id: Option<TrackId>,
+    target_time: RationalTimeArguments,
 }

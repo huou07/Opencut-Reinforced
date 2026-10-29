@@ -1,13 +1,14 @@
 use crate::{
-    ClipContent, ClipId, ClipSettings,
-    MarkerId, MediaId, MediaItem, ProjectDocument, ProjectId, ProjectInstanceId, ProjectRevision,
-    RationalRate, RationalTime, TimeRange, TimelineClip, TimelineMarker, TimelineTrack, TrackId,
-    TrackKind, TrackState,
+    ClipContent, ClipId, ClipSettings, MarkerId, MediaId, MediaItem, ProjectDocument, ProjectId,
+    ProjectInstanceId, ProjectRevision, RationalRate, RationalTime, TimeRange, TimelineClip,
+    TimelineMarker, TimelineTrack, TrackId, TrackKind, TrackState,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{error::Error, fmt};
 
+use super::timeline::ensure_media_matches_at;
+use super::timeline::*;
 use super::*;
 
 /// Static discovery information for a command implemented by the core.
@@ -2165,9 +2166,7 @@ impl fmt::Display for OperationError {
                 "timeline clip ID already exists in the project"
             }
             OperationErrorCode::TimelineClipNotFound => "timeline clip was not found",
-            OperationErrorCode::TimelineNothingToDuck => {
-                "no voice clip overlaps the music clip"
-            }
+            OperationErrorCode::TimelineNothingToDuck => "no voice clip overlaps the music clip",
             OperationErrorCode::TimelineMediaIncompatible => {
                 "media has no stream compatible with the timeline track"
             }
