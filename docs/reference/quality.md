@@ -242,7 +242,10 @@ their own increments with their own evidence.
    `apps/or_app/lib/screens/editor_timeline_shared.dart` the track labels, exact
    rational comparison and unit field the panel and its dialogs share,
    `apps/or_app/lib/screens/editor_timeline_painters.dart` the ruler, grid and
-   placeholder painting, and
+   placeholder painting,
+   `apps/or_app/lib/screens/editor_media_preview.dart` the media library preview
+   surface with its failed-state retry,
+   and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
    music workflows, `apps/or_app/lib/shell/export_flow.dart` the export job, its
    polling timer, the chosen destination and publishing the finished file,
@@ -258,14 +261,21 @@ their own increments with their own evidence.
    remove and relink commands, and `crates/or_core/src/application/history.rs`
    the undo and redo command, and `crates/or_core/src/application/tests/` one
    module per owner file over a shared support module, and
+   `apps/or_app/lib/production/media_preview_kinds.dart` the preview kind and
+   artifact-event vocabulary, `apps/or_app/lib/shell/speech_model_messages.dart`
+   the speech-model failure explanations,
+   `crates/or_app_bridge/src/api/views.rs` the bridge view types,
+   `crates/or_app_bridge/src/api/project_artifacts.rs` artifact requests, early
+   events and subscriptions, `crates/or_app_bridge/src/api/project_media.rs` the
+   import walk, relink and removal, `crates/or_app_bridge/src/api/project_transcription.rs`
+   the transcription model and job calls, and
    `crates/or_app_bridge/src/api/media_artifact_config.rs` the artifact cache
    location, worker-pool sizing and service construction. Next seams, in order:
-   the project lifecycle and the queue behind the new
-   `apps/or_app/lib/production/media_preview_kinds.dart` helpers in
-   `app_shell.dart`, then
-   the artifact event forwarding and request path in
-   `crates/or_app_bridge/src/api/project.rs`, then the remaining dispatch
-   catalog in `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
+   the project lifecycle and the queue behind the `media_preview_kinds.dart`
+   helpers in `app_shell.dart`, then the timeline bridge methods in
+   `crates/or_app_bridge/src/api/project.rs` (they interleave with stateful
+   dispatch), then the remaining dispatch catalog in
+   `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
    existing tests.
 
 ## Evidence rules
