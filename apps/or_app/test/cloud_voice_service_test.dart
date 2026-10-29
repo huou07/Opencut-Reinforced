@@ -146,6 +146,33 @@ void main() {
     );
   });
 
+  test('a keychain save that never answers fails with a named error', () async {
+    const channel = MethodChannel('or_narration');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          return Completer<bool>().future;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    const keychain = NarrationKeychain(timeout: Duration(milliseconds: 30));
+    await expectLater(
+      keychain.write('elevenlabs', 'key'),
+      throwsA(
+        isA<CloudVoiceException>()
+            .having((error) => error.code, 'code', 'KEYCHAIN_TIMEOUT')
+            .having(
+              (error) => error.message,
+              'message',
+              'macOS did not answer the keychain save. Unlock the login '
+                  'keychain and try again.',
+            ),
+      ),
+    );
+  });
+
   testWidgets('cloud settings saves a key, tests it, and removes it', (
     tester,
   ) async {

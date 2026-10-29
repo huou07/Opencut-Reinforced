@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -98,10 +99,17 @@ class NarrationKeychain {
 
   Future<void> write(String account, String value) async {
     try {
-      await _channel.invokeMethod<bool>('keychainSet', {
-        'account': account,
-        'value': value,
-      });
+      await _channel
+          .invokeMethod<bool>('keychainSet', {
+            'account': account,
+            'value': value,
+          })
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const CloudVoiceException(
+        'KEYCHAIN_TIMEOUT',
+        'macOS did not answer the keychain save. Unlock the login keychain and try again.',
+      );
     } on PlatformException catch (error) {
       throw CloudVoiceException(
         error.code,
@@ -117,7 +125,14 @@ class NarrationKeychain {
 
   Future<void> delete(String account) async {
     try {
-      await _channel.invokeMethod<bool>('keychainDelete', {'account': account});
+      await _channel
+          .invokeMethod<bool>('keychainDelete', {'account': account})
+          .timeout(timeout);
+    } on TimeoutException {
+      throw const CloudVoiceException(
+        'KEYCHAIN_TIMEOUT',
+        'macOS did not answer the keychain removal. Unlock the login keychain and try again.',
+      );
     } on PlatformException catch (error) {
       throw CloudVoiceException(
         error.code,
