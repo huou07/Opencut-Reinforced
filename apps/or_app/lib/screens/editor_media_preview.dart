@@ -31,8 +31,9 @@ class EditorMediaItemPreview extends StatelessWidget {
         ? ProjectMediaArtifactKind.waveform
         : null;
     final failed = preview?.state == ProjectMediaArtifactRequestState.failed;
-    final running = preview?.kind == kind &&
-        preview?.state == ProjectMediaArtifactRequestState.running;
+    final generating = preview?.kind == kind &&
+        (preview?.state == ProjectMediaArtifactRequestState.running ||
+            preview?.state == ProjectMediaArtifactRequestState.queued);
     final bytes = preview?.kind == kind && !failed ? preview?.bytes : null;
     final label = kind == ProjectMediaArtifactKind.thumbnail
         ? 'Thumbnail preview for ${mediaDisplayName(item.sourceUri)}'
@@ -67,7 +68,7 @@ class EditorMediaItemPreview extends StatelessWidget {
               ),
             )
           : bytes == null
-          ? running
+          ? generating
                 ? Center(
                     key: ValueKey('media-preview-progress-${item.mediaId}'),
                     child: Semantics(

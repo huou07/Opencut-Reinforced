@@ -1072,6 +1072,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a queued preview also shows the generating state', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-queued', '/tmp/queued.mp4')]
+      ..artifactRequestResponses['media-queued:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-queued',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.queued,
+            cacheKey: 'queued-cache',
+            jobId: 'queued-job',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/queued-preview.orproj',
+    );
+    await _createProject(tester, 'Queued Preview');
+    expect(
+      find.byKey(const ValueKey('media-preview-progress-media-queued')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the whole failed preview tile is the retry target', (
     tester,
   ) async {

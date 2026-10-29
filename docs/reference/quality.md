@@ -193,6 +193,15 @@ What is left for the GPU is MotionScene rasterisation, which is still a CPU
 rasteriser, and zero-copy surfaces between the renderer and the encoder. Both are
 their own increments with their own evidence.
 
+## Session-scoped invariants
+
+`MediaPreviewQueue` and `MediaArtifactMailbox` belong to one project session:
+both reset on every session swap (open, close, reopen), and
+`_requestMediaPreview`'s `finally` only settles the submission counter when the
+session is still identical. Any new owner of a session-scoped listener must be
+reset in the same two sites, or the counter and the early-event map leak across
+projects.
+
 ## Known gaps
 
 1. Pacing has engine frame timings and now fails a scenario when a `frames`
