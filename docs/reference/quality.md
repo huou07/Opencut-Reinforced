@@ -217,6 +217,16 @@ newer refresh owns the page, tracks and error. Clearing them (or reporting the
 race) emptied the library or flashed an empty timeline, which rounds 106, 111
 and 112 removed.
 
+## Verification ideas not yet built
+
+- A generation-gated fake (`summaryGate`, `mediaPageGate`) can pin the
+  superseded-refresh branches behind a stale `listMediaPage`/`getProject` reply,
+  which is the only way to assert the round 112 rule ("a losing refresh touches
+  no state") end to end.
+- The retry-disabled-while-loading guard now has run-time feedback (round 110)
+  but no direct assertion; a gated `summary()` holds the reload state long
+  enough to check it.
+
 ## Known gaps
 
 0. The media page-two failure path is covered by a widget test
