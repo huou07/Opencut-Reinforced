@@ -4142,7 +4142,12 @@ class _AppShellState extends State<AppShell> {
       // here was the visible part of "every edit looks like a project reopen".
       _timelineLoadingMoreTracks.clear();
       _timelineLoadingMoreMarkers = false;
-      if (_timelineTracks == null) _timelineLoading = true;
+      // A retry after a failed load has no visible progress otherwise: the
+      // error stays on screen and the button stays tappable while the refresh
+      // runs.
+      if (_timelineTracks == null || _timelineLoadError != null) {
+        _timelineLoading = true;
+      }
       _timelineLoadError = null;
     });
 
@@ -4258,14 +4263,8 @@ class _AppShellState extends State<AppShell> {
     }
 
     if (!_timelineRequestIsCurrent(session, generation)) return;
-    setState(() {
-      _activeProject = current;
-      _timelineTracks = null;
-      _timelineClipPages.clear();
-      _timelineMarkerPage = null;
-      _timelineLoading = false;
-      _timelineLoadError = 'The timeline changed while it was refreshing.';
-    });
+    // A newer refresh owns the timeline now. Dropping the tracks or showing an
+    // error here would flash an empty timeline and fight the newer result.
     if (current.revision != project.revision) {
       await _refreshMediaPage(
         session,
