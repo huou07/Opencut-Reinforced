@@ -58,7 +58,9 @@ waits for `Export complete`; the produced file lands in
 2639 bytes** — matching the fixture, so the lane is checked by a probe and not
 by the job's own success flag. `python3 scripts/or_export_probe.py` repeats that
 probe (finds the newest artifact, uses the packaged `ffprobe`, fails unless it
-sees h264 + aac with positive duration and size).
+sees h264 + aac with positive duration and size, and fails when the video
+stream's frame count does not cover the container duration — a job can report
+success and still write a short clip).
 
 ## Interchange
 

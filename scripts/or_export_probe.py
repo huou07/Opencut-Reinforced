@@ -54,7 +54,7 @@ def main() -> int:
     env = dict(os.environ)
     probe = subprocess.run(
         [ffprobe, "-v", "error", "-show_entries",
-         "format=duration,size:stream=codec_name,width,height,nb_frames",
+         "format=duration,size:stream=codec_name,width,height,nb_frames,avg_frame_rate,r_frame_rate",
          "-of", "json", path],
         capture_output=True, text=True, env=env, check=False,
     )
@@ -62,14 +62,54 @@ def main() -> int:
         print(probe.stderr or "ffprobe failed", file=sys.stderr)
         return 1
     data = json.loads(probe.stdout)
-    streams = [s.get("codec_name", "") for s in data.get("streams", [])]
+    raw_streams = data.get("streams", [])
+    streams = [s.get("codec_name", "") for s in raw_streams]
     duration = float(data.get("format", {}).get("duration", 0) or 0)
     size = int(data.get("format", {}).get("size", 0) or 0)
-    print(f"{os.path.basename(path)} codecs={streams} duration={duration:.3f}s size={size}B")
+    video = next(
+        (s for s in raw_streams if s.get("codec_name") == "h264" and s.get("width")),
+        None,
+    )
+    print(
+        f"{os.path.basename(path)} codecs={streams} duration={duration:.3f}s size={size}B"
+        + (
+            f" video={video.get('width')}x{video.get('height')} "
+            f"frames={video.get('nb_frames')} fps={ratio(video.get('r_frame_rate'))}"
+            if video
+            else ""
+        )
+    )
     if "h264" not in streams or "aac" not in streams or duration <= 0 or size <= 0:
         print("probe mismatch: expected h264 + aac with positive duration/size", file=sys.stderr)
         return 1
+    # A job that reports success but writes a short clip still fails here: the
+    # stream's own frame count has to cover the container duration.
+    if video:
+        fps = ratio(video.get("r_frame_rate"))
+        frames = int(video.get("nb_frames") or 0)
+        if fps and fps > 1:
+            expected = duration * fps
+            if frames <= 0 or abs(frames - expected) > max(2.0, expected * 0.02):
+                print(
+                    f"probe mismatch: {frames} frames at {fps:.2f} fps does not cover "
+                    f"{duration:.3f}s (expected about {expected:.1f})",
+                    file=sys.stderr,
+                )
+                return 1
     return 0
+
+
+def ratio(value):
+    """Parse ffprobe's 'num/den' frame rate into a float."""
+    if not value:
+        return 0.0
+    head, _, tail = value.partition("/")
+    try:
+        numerator = float(head)
+        denominator = float(tail) if tail else 1.0
+    except ValueError:
+        return 0.0
+    return numerator / denominator if denominator else 0.0
 
 
 if __name__ == "__main__":
