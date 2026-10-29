@@ -820,6 +820,20 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                           onSubmitted: (_) {
                             if (!_busy && !_localLoading) _loadLocalVoices();
                           },
+                          // Health and voices belong to the server that answered
+                          // them: typing a different address must not leave a stale
+                          // sample rate or a voice list from another process.
+                          onChanged: (value) {
+                            if (LocalTtsService.normalizeBaseUrl(value) ==
+                                _localBaseUrl) {
+                              return;
+                            }
+                            setState(() {
+                              _localHealth = null;
+                              _localVoices = const [];
+                              _connectError = null;
+                            });
+                          },
                           decoration: const InputDecoration(
                             border: OutlineInputBorder(),
                             labelText: 'Local server',
