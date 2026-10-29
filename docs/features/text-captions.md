@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -53,7 +53,9 @@ box follows real advances rather than a character-count estimate.
   Base (141 MiB), Small (465 MiB), Medium (1.43 GiB), Large v3 Turbo q5
   (547 MiB) and Large v3 Turbo (1.51 GiB). One is downloaded at a time only
   after explicit consent, verified by size and SHA-256, and stored in the app's
-  private model folder; the licence and source are shown before download. The
+  private model folder; the licence and source are shown before download. A
+  refused source, a truncated transfer or an unreachable network states that
+  reason instead of a generic failure. The
   chosen model is persisted app-side and is the one both the app and
   `or captions transcribe` use. A picker changes it; only the installed models
   need disk space. Listing a model checks its presence and size, and the

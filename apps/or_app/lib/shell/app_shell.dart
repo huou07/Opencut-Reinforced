@@ -37,6 +37,7 @@ import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
 import 'export_flow.dart';
+import 'speech_model_messages.dart';
 import 'motion_materialize_dialog.dart';
 import '../motion/motion_insert_log.dart';
 
@@ -2783,8 +2784,11 @@ class _AppShellState extends State<AppShell> {
       }
     } on ProjectGatewayException catch (error) {
       _showUnavailable(error.message);
-    } catch (_) {
-      _showUnavailable('The speech model could not be changed.');
+    } catch (error) {
+      // A refused download (non-HTTPS source, truncated transfer, unreachable
+      // network) used to collapse into 'could not be changed', which hides
+      // whether retrying is even useful.
+      _showUnavailable(speechModelFailureMessage(error));
     } finally {
       if (mounted && _busy) setState(() => _busy = false);
     }
