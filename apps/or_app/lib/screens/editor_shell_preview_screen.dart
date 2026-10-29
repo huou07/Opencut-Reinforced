@@ -15,6 +15,7 @@ import 'editor_media_library.dart';
 import 'editor_viewer_panel.dart';
 import 'editor_inspector_panel.dart';
 import 'editor_panel_header.dart';
+import 'editor_timeline_dialogs.dart';
 import 'editor_timeline_panel.dart';
 import 'editor_tool_actions.dart';
 import '../motion/motion_library_controller.dart';

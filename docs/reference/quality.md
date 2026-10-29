@@ -225,7 +225,11 @@ their own increments with their own evidence.
    speed and shortcut labels, `apps/or_app/lib/screens/editor_rational_time.dart`
    the seconds → canonical time conversion,
    `apps/or_app/lib/screens/editor_timeline_panel.dart` the timeline panel, its
-   pointer/scrub gestures, clip context menu and text-clip editing,
+   pointer/scrub gestures and clip context menu,
+   `apps/or_app/lib/screens/editor_timeline_dialogs.dart` the trim, split, slip,
+   boundary, move, speed and delete dialogs plus the text-clip editor,
+   `apps/or_app/lib/screens/editor_timeline_shared.dart` the track labels, exact
+   rational comparison and unit field the panel and its dialogs share,
    `apps/or_app/lib/screens/editor_timeline_painters.dart` the ruler, grid and
    placeholder painting, and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
