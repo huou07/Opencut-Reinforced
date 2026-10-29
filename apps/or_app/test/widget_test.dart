@@ -918,6 +918,7 @@ void main() {
       find.byKey(const ValueKey('media-library-retry')),
     );
     await tester.pumpAndSettle();
+
     await tester.tap(find.byKey(const ValueKey('media-library-retry')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('media-library-error')), findsNothing);

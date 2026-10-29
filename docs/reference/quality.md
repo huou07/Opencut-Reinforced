@@ -218,9 +218,10 @@ still pending instead of a frozen window.
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
    it drags the keyed `media-list` until `media-load-more` is built, fails the
    second page, asserts the footer error, then retries and asserts the error is
-   cleared. The retry-disabled-while-loading guard itself still has no direct
-   assertion; reaching it means holding a page request with `mediaPageGate` and
-   tapping twice, which the fake now supports.
+   cleared. The retry is also disabled while a load-more request is in flight,
+   so a second tap cannot queue the same page twice; that state has no direct
+   widget assertion yet (the retry button sits in the lazily built list and is
+   disposed once the list scrolls past it while the request is held open).
 
 1. Pacing has engine frame timings and now fails a scenario when a `frames`
    step crosses its `max_build_p95_ms` / `max_span_p95_ms` budget

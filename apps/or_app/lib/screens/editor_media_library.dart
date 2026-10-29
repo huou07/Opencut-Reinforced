@@ -376,9 +376,9 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                     ),
                     TextButton(
                       key: const ValueKey('media-library-retry'),
-                      // A second tap while the retry is in flight would queue
-                      // the same page request twice.
-                      onPressed: loading ? null : onRefresh,
+                      // A retry while another page request is in flight would
+                      // queue the same load twice and reset the appended page.
+                      onPressed: loading || loadingMore ? null : onRefresh,
                       child: const Text('Retry'),
                     ),
                   ],
