@@ -49,7 +49,7 @@ class ExportFlow extends ChangeNotifier {
 
   /// True while a job runs or a finished file is being published; the shell
   /// disables export and close in that window.
-  bool get isActive => (_job?.isActive ?? false) || _publishing;
+  bool get isActive => ((_job?.isActive ?? false) && !_failed) || _publishing;
 
   /// Whether this host can start an export at all.
   bool get enabled => picker.supportsExport;
@@ -59,6 +59,9 @@ class ExportFlow extends ChangeNotifier {
   Future<void> start(ProjectSessionHandle session) async {
     if (!picker.supportsExport || isActive) return;
     _session = session;
+    // Each export gets a fresh polling budget: the counter belongs to a
+    // running job, not to this flow object.
+    _statusFailures = 0;
     String? destination;
     try {
       final current = await gateway.summary(session);
