@@ -34,6 +34,7 @@ import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'export_flow.dart';
 import 'motion_materialize_dialog.dart';
 import '../motion/motion_insert_log.dart';
 
@@ -200,19 +201,13 @@ class _AppShellState extends State<AppShell> {
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
   Timer? _autosaveTimer;
-  Timer? _exportPollTimer;
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
   bool _autosaveInFlight = false;
   String? _autosaveStatus;
   bool _autosaveFailed = false;
-  bool _exportPollInFlight = false;
-  bool _exportPublishing = false;
-  bool _exportFailed = false;
-  ProjectExportJob? _exportJob;
-  String? _exportDestinationPath;
-  String? _exportStatus;
+  late final ExportFlow _export;
 
   /// Non-null only while a batch import is running. It owns the top bar's
   /// transient slot so a slow import reports its own progress instead of an
@@ -251,6 +246,15 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _ownsAssistant = widget.assistantController == null;
+    _export = ExportFlow(
+      gateway: widget.projectGateway,
+      picker: widget.projectFilePicker,
+      chooseOptions: _chooseExportOptions,
+      onProjectSummary: (current) {
+        if (mounted) setState(() => _activeProject = current);
+      },
+      onExported: (path) => unawaited(_showExportReceipt(path)),
+    )..addListener(_handleExportChanged);
     FocusManager.instance.addListener(_handleFocusChange);
     _autosaveTimer = Timer.periodic(
       _autosaveInterval,
@@ -271,7 +275,7 @@ class _AppShellState extends State<AppShell> {
     _motionInsertLog.dispose();
     FocusManager.instance.removeListener(_handleFocusChange);
     _autosaveTimer?.cancel();
-    _exportPollTimer?.cancel();
+    _export.dispose();
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
@@ -500,8 +504,7 @@ class _AppShellState extends State<AppShell> {
                       !_textInputFocused &&
                       _activeSession != null &&
                       widget.projectFilePicker.supportsExport &&
-                      !(_exportJob?.isActive ?? false) &&
-                      !_exportPublishing) {
+                      !_export.isActive) {
                     unawaited(_startExport());
                   }
                   return null;
@@ -525,8 +528,7 @@ class _AppShellState extends State<AppShell> {
                     editor &&
                     _activeSession != null &&
                     widget.projectFilePicker.supportsExport &&
-                    !(_exportJob?.isActive ?? false) &&
-                    !_exportPublishing,
+                    !_export.isActive,
                 canEditProject: editor && _activeSession != null,
                 canImport:
                     editor && widget.projectFilePicker.supportsMediaImport,
@@ -577,12 +579,12 @@ class _AppShellState extends State<AppShell> {
                           statusLabel:
                               _importStatus ??
                               (editor
-                                  ? (_exportStatus ?? _autosaveStatus)
+                                  ? (_export.status ?? _autosaveStatus)
                                   : null),
                           statusIsError: _importStatus != null
                               ? false
-                              : (_exportStatus != null
-                                    ? _exportFailed
+                              : (_export.status != null
+                                    ? _export.failed
                                     : _autosaveFailed),
                           statusIcon: _importStatus != null
                               ? Icons.download_outlined
@@ -601,17 +603,13 @@ class _AppShellState extends State<AppShell> {
                               editor &&
                                   _activeSession != null &&
                                   widget.projectFilePicker.supportsExport &&
-                                  !(_exportJob?.isActive ?? false) &&
-                                  !_exportPublishing
+                                  !_export.isActive
                               ? _startExport
                               : null,
-                          onCancelExport:
-                              _exportJob?.isActive == true || _exportPublishing
+                          onCancelExport: _export.isActive
                               ? _cancelExport
                               : null,
-                          exportIsActive:
-                              (_exportJob?.isActive ?? false) ||
-                              _exportPublishing,
+                          exportIsActive: _export.isActive,
                           onHome: () => _select(AppDestination.home),
                           onOpenCommandPalette: _openCommandPalette,
                           onExitEditorPreview: editor
@@ -1638,7 +1636,7 @@ class _AppShellState extends State<AppShell> {
   Future<bool> _leaveCurrentProject({
     Future<bool> Function()? beforeClose,
   }) async {
-    if (_exportJob?.isActive == true || _exportPublishing) {
+    if (_export.isActive) {
       _showUnavailable(
         'Wait for the export to finish or cancel it before closing the project.',
       );
@@ -2088,71 +2086,15 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _startExport() async {
     final session = _activeSession;
-    if (session == null || !widget.projectFilePicker.supportsExport) return;
-    String? destination;
-    try {
-      final current = await widget.projectGateway.summary(session);
-      if (!mounted || !identical(session, _activeSession)) return;
-      final choice = await _chooseExportOptions();
-      if (choice == null || !mounted || !identical(session, _activeSession)) {
-        return;
-      }
-      final profile = choice.profile;
-      destination = await widget.projectFilePicker.saveExportPath(
-        suggestedName: profile.suggestedName(current.name),
-        profile: profile,
-      );
-      if (destination == null) {
-        return;
-      }
-      if (!mounted || !identical(session, _activeSession)) {
-        await _discardExportDestination(destination);
-        return;
-      }
-      final result = await widget.projectGateway.startExport(
-        session,
-        current,
-        destination,
-        quality: profile.hasQualityChoice ? choice.quality.wireName : null,
-      );
-      if (!mounted || !identical(session, _activeSession)) {
-        await _discardExportDestination(destination);
-        return;
-      }
-      setState(() {
-        _activeProject = current;
-        _exportJob = result;
-        _exportDestinationPath = destination;
-        _exportFailed = !result.succeeded;
-        _exportStatus = _exportJobLabel(result);
-      });
-      if (result.succeeded && result.isActive) {
-        _exportPollTimer?.cancel();
-        _exportPollTimer = Timer.periodic(
-          const Duration(milliseconds: 400),
-          (_) => unawaited(_pollExport()),
-        );
-      } else if (!result.succeeded) {
-        await _discardExportDestination(destination);
-      }
-    } on ProjectGatewayException catch (error) {
-      if (destination != null) await _discardExportDestination(destination);
-      if (mounted && identical(session, _activeSession)) {
-        setState(() {
-          _exportStatus = error.message;
-          _exportFailed = true;
-        });
-      }
-    } catch (_) {
-      if (destination != null) await _discardExportDestination(destination);
-      if (mounted && identical(session, _activeSession)) {
-        setState(() {
-          _exportStatus = 'Export could not start';
-          _exportFailed = true;
-        });
-      }
-    }
+    if (session == null) return;
+    await _export.start(session);
   }
+
+  void _handleExportChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _cancelExport() => _export.cancel();
 
   /// A finished export is a file, not a message: name it, size it, and let the
   /// owner take the path without hunting through Finder.
@@ -2200,162 +2142,6 @@ class _AppShellState extends State<AppShell> {
             : Clipboard.setData(ClipboardData(text: destination)),
       ),
     );
-  }
-
-  Future<void> _pollExport() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    final job = _exportJob;
-    if (session == null ||
-        project == null ||
-        job == null ||
-        _exportPollInFlight) {
-      return;
-    }
-    _exportPollInFlight = true;
-    try {
-      final status = await widget.projectGateway.exportStatus(
-        session,
-        project,
-        job.jobId,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      if (status.succeeded && status.state == 'succeeded') {
-        final destination = _exportDestinationPath;
-        if (destination != null) {
-          setState(() {
-            _exportJob = status;
-            _exportPublishing = true;
-            _exportFailed = false;
-            _exportStatus = 'Saving export to the selected location…';
-          });
-          try {
-            await widget.projectFilePicker.publishExportPath(destination);
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() => _exportStatus = 'Export complete');
-            // The status line is two words; the file itself is what the owner
-            // needs, so the receipt carries its name, size and a copy action.
-            unawaited(_showExportReceipt(destination));
-          } on ProjectSafStorageException catch (error) {
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() {
-              _exportStatus = error.message;
-              _exportFailed = true;
-            });
-            await _discardExportDestination(destination);
-          } catch (_) {
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() {
-              _exportStatus =
-                  'The export could not be saved to the selected location.';
-              _exportFailed = true;
-            });
-            await _discardExportDestination(destination);
-          } finally {
-            _exportDestinationPath = null;
-            if (mounted) setState(() => _exportPublishing = false);
-            _exportPollTimer?.cancel();
-          }
-          return;
-        }
-      }
-      setState(() {
-        _exportJob = status;
-        _exportFailed = !status.succeeded || status.state == 'failed';
-        _exportStatus = _exportJobLabel(status);
-      });
-      if (!status.succeeded || !status.isActive) {
-        _exportPollTimer?.cancel();
-        if (!status.succeeded || status.state == 'cancelled') {
-          final destination = _exportDestinationPath;
-          _exportDestinationPath = null;
-          if (destination != null) await _discardExportDestination(destination);
-        }
-      }
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportStatus = 'Export status unavailable';
-        _exportFailed = true;
-      });
-      _exportPollTimer?.cancel();
-    } finally {
-      _exportPollInFlight = false;
-    }
-  }
-
-  Future<void> _cancelExport() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    final job = _exportJob;
-    final destination = _exportDestinationPath;
-    if (_exportPublishing && destination != null) {
-      try {
-        await widget.projectFilePicker.cancelExportPublish(destination);
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _exportStatus = 'Export cancellation failed';
-            _exportFailed = true;
-          });
-        }
-      }
-      return;
-    }
-    if (session == null || project == null || job == null || !job.isActive) {
-      return;
-    }
-    try {
-      final result = await widget.projectGateway.cancelExport(
-        session,
-        project,
-        job.jobId,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportJob = result;
-        _exportFailed = !result.succeeded;
-        _exportStatus = _exportJobLabel(result);
-      });
-      if (!result.succeeded || !result.isActive) {
-        _exportPollTimer?.cancel();
-        if (result.state == 'cancelled') {
-          _exportDestinationPath = null;
-          if (destination != null) await _discardExportDestination(destination);
-        }
-      }
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportStatus = 'Export cancellation failed';
-        _exportFailed = true;
-      });
-    }
-  }
-
-  Future<void> _discardExportDestination(String path) async {
-    try {
-      await widget.projectFilePicker.discardExportPath(path);
-    } catch (_) {
-      // Preserve the primary export result if cleanup fails.
-    }
-  }
-
-  static String _exportJobLabel(ProjectExportJob job) {
-    if (!job.succeeded) {
-      return job.message.isEmpty ? 'Export failed' : job.message;
-    }
-    return switch (job.state) {
-      'queued' => 'Export queued',
-      'running' =>
-        job.progressCompleted != null && job.progressTotal != null
-            ? 'Export ${job.progressCompleted}/${job.progressTotal}'
-            : 'Exporting',
-      'succeeded' => 'Export complete',
-      'failed' => job.failureMessage ?? 'Export failed',
-      'cancelled' => 'Export cancelled',
-      _ => job.message,
-    };
   }
 
   Future<void> _autosaveProject() async {
@@ -5285,7 +5071,7 @@ class _AppShellState extends State<AppShell> {
   void _clearActiveProject(ProjectSessionHandle session) {
     if (!identical(session, _activeSession)) return;
     _mediaRefreshGeneration++;
-    _exportPollTimer?.cancel();
+    _export.detach();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
     _mediaPreviewQueue.clear();
@@ -5318,9 +5104,6 @@ class _AppShellState extends State<AppShell> {
       _projectNotice = null;
       _autosaveStatus = null;
       _autosaveFailed = false;
-      _exportJob = null;
-      _exportStatus = null;
-      _exportFailed = false;
     });
   }
 
