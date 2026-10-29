@@ -6986,6 +6986,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int renameCalls = 0;
   int mediaListCalls = 0;
   String? mediaPageError;
+  Completer<void>? mediaPageGate;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
   int getVisualSettingsCalls = 0;
@@ -7373,6 +7374,8 @@ class _FakeProjectGateway implements ProjectGateway {
     required int limit,
   }) async {
     mediaListCalls++;
+    final gate = mediaPageGate;
+    if (gate != null) await gate.future;
     mediaListOffsets.add(offset);
     final failure = mediaPageError;
     if (failure != null) {
