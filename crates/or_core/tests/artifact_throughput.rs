@@ -14,7 +14,7 @@
 
 use or_core::{
     CacheStoreConfig, JobManagerConfig, MediaArtifactRequestState, MediaArtifactService,
-    MediaArtifactServiceConfig, MediaItem, ProjectFileSession, ProjectRevision,
+    MediaArtifactServiceConfig, MediaItem, ProjectFileSession,
 };
 use std::{
     fs,
