@@ -281,7 +281,10 @@ after a tap also raced the build; the runner now settles before `tree`.
    probe finally in `_refreshMediaPage`, the page fetch is **0-6 ms** in app
    (17 calls over `editor-journey`: 0 ms once warm, 5-6 ms cold, library
    of 0-1 items). Paging is not a bottleneck; the harness-inflated numbers are
-   a test-binding artifact, not UI cost.
+   a test-binding artifact, not UI cost. The export path now has its own
+   end-to-end row (`export-encode`): dialog + real encode of the 1 s fixture
+   measured 2933 ms (n=1, debug lane) through to `Export complete`, so a
+   regression in the export lane finally has a scenario that fails.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):

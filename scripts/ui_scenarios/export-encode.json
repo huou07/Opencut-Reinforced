@@ -1,0 +1,130 @@
+{
+ "name": "export-encode",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Packaged export"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-add-video"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-save"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Saved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "measure",
+   "name": "export-end-to-end",
+   "repeat": 1,
+   "steps": [
+    {
+     "op": "tap",
+     "selector": {
+      "key": "export-project"
+     }
+    },
+    {
+     "op": "wait",
+     "text": "Export video",
+     "budget_ms": 10000
+    },
+    {
+     "op": "tap",
+     "selector": {
+      "text": "Continue"
+     }
+    },
+    {
+     "op": "wait",
+     "text": "Export complete",
+     "budget_ms": 180000
+    }
+   ]
+  }
+ ]
+}
