@@ -214,12 +214,13 @@ still pending instead of a frozen window.
 
 ## Known gaps
 
-0. The media footer retry guard (retry disabled while a load is in flight) has
-   no direct widget test: the load-more control sits below a lazily built list,
-   so a `scrollUntilVisible` over the panel's first `Scrollable` never reaches
-   it, and a page-one failure renders the empty state instead of the footer.
-   Covering it needs either a harness scenario or a keyed scrollable inside the
-   media panel.
+0. The media page-two failure path is covered by a widget test
+   (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
+   it drags the keyed `media-list` until `media-load-more` is built, fails the
+   second page, asserts the footer error, then retries and asserts the error is
+   cleared. The retry-disabled-while-loading guard itself still has no direct
+   assertion; reaching it means holding a page request with `mediaPageGate` and
+   tapping twice, which the fake now supports.
 
 1. Pacing has engine frame timings and now fails a scenario when a `frames`
    step crosses its `max_build_p95_ms` / `max_span_p95_ms` budget

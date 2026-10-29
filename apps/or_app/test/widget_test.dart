@@ -880,6 +880,49 @@ void main() {
     expect(gateway.illustrationRequests, isEmpty);
   });
 
+  testWidgets('a failed media page offers a retry that reloads it', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        for (var index = 0; index < 60; index += 1)
+          _mediaFixture('media-$index', '/tmp/clip $index.mp4'),
+      ];
+    final picker = _FakeProjectPicker()..savePath = '/tmp/paged.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Paged library');
+
+    for (var attempt = 0; attempt < 14; attempt += 1) {
+      if (find.byKey(const ValueKey('media-load-more')).evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.drag(
+        find.byKey(const ValueKey('media-list')),
+        const Offset(0, -600),
+      );
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('media-load-more')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    gateway.mediaPageError = 'The library is offline right now.';
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListOffsets.last, 50);
+    expect(find.byKey(const ValueKey('media-library-error')), findsOneWidget);
+
+    gateway.mediaPageError = null;
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('media-library-retry')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('media-library-retry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('media-library-error')), findsNothing);
+  });
+
   testWidgets('active project requests previews for supported media only', (
     tester,
   ) async {
