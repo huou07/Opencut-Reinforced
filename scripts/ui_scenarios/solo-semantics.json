@@ -1,0 +1,81 @@
+{
+  "name": "solo-semantics",
+  "description": "A track silenced by another track's solo says so in its accessibility label",
+  "budget_ms": 90000,
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Solo journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^editor-tool-audio$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-add-audio-track"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Audio track",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "index": 1,
+      "selector": {
+        "key_regex": "^timeline-track-solo-.*$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "silenced by solo",
+      "budget_ms": 15000
+    },
+    {
+      "op": "shot",
+      "name": "solo-active"
+    }
+  ]
+}

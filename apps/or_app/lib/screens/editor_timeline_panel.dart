@@ -2806,7 +2806,10 @@ class _TimelineTrackHeader extends StatelessWidget {
                 size: 15,
               ),
             ),
-            IconButton(
+            Semantics(
+              button: true,
+              label: 'Solo track ${trackIndex + 1}',
+              child: IconButton(
               key: ValueKey('timeline-track-solo-${track.trackId}'),
               tooltip: track.state.solo ? 'Unsolo track' : 'Solo track',
               onPressed: busy || project == null || onSetState == null
@@ -2819,6 +2822,7 @@ class _TimelineTrackHeader extends StatelessWidget {
                 track.state.solo ? Icons.headphones : Icons.hearing,
                 size: 15,
               ),
+            ),
             ),
             Tooltip(
               message: track.clipCount == 0
