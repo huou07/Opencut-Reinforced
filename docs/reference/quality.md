@@ -212,6 +212,11 @@ thread froze the whole app when the prompt was never answered (traced with
 fails with `KEYCHAIN_TIMEOUT`, so an unanswered prompt reads as a check that is
 still pending instead of a frozen window.
 
+A refresh that loses a generation race **returns without touching state**: the
+newer refresh owns the page, tracks and error. Clearing them (or reporting the
+race) emptied the library or flashed an empty timeline, which rounds 106, 111
+and 112 removed.
+
 ## Known gaps
 
 0. The media page-two failure path is covered by a widget test
