@@ -219,9 +219,12 @@ still pending instead of a frozen window.
    it drags the keyed `media-list` until `media-load-more` is built, fails the
    second page, asserts the footer error, then retries and asserts the error is
    cleared. The retry is also disabled while a load-more request is in flight,
-   so a second tap cannot queue the same page twice; that state has no direct
-   widget assertion yet (the retry button sits in the lazily built list and is
-   disposed once the list scrolls past it while the request is held open).
+   so a second tap cannot queue the same page twice; that state has no reachable
+   widget assertion: a page-one failure keeps a page object (so the panel never
+   reports `loading` while the footer renders) and the load-more case needs a
+   list long enough to dispose the retry button. The guard stays as defence; if
+   a future change makes `loading` true while the footer is visible, assert it
+   then.
 
 1. Pacing has engine frame timings and now fails a scenario when a `frames`
    step crosses its `max_build_p95_ms` / `max_span_p95_ms` budget

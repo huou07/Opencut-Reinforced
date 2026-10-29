@@ -7042,6 +7042,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int mediaListCalls = 0;
   String? mediaPageError;
   Completer<void>? mediaPageGate;
+  Completer<void>? summaryGate;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
   int getVisualSettingsCalls = 0;
@@ -7222,6 +7223,11 @@ class _FakeProjectGateway implements ProjectGateway {
 
   @override
   Future<ProjectReadModel> summary(ProjectSessionHandle handle) async {
+    final gate = summaryGate;
+    if (gate != null) {
+      summaryGate = null;
+      await gate.future;
+    }
     summaryCalls++;
     return _session(handle).view;
   }
