@@ -45,6 +45,11 @@ p95 0.56 ms, gap p95 33.33 ms (vsync spacing) with a 50 ms worst gap. The build
 and span stay two orders of magnitude under the budget, so pacing there is owned
 by presentation, not by Flutter work.
 
+Measured 2026-10-29 (`editor-frames`, Debug lane, 30 fps sequence): editor-open,
+audio-panel and text-panel each presented 90-91 frames at 30.0 fps with UI
+build p95 0.21-0.25 ms, frame span p95 0.32-0.37 ms and vsync gap p95 33.33 ms,
+so the editor's own widget work stays under half a millisecond per frame.
+
 ## Known gaps
 
 No hardware decode path is approved; 1080p software decode is the current path.
