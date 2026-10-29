@@ -185,6 +185,9 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
       localVoiceId: widget.initial.localVoiceId,
       localVoiceName: widget.initial.localVoiceName,
       localReferencePath: widget.initial.localReferencePath,
+      // The acknowledgement belongs to the user, not to one screen: saving
+      // here must not silently withdraw it.
+      localCloneAcknowledged: widget.initial.localCloneAcknowledged,
     );
     try {
       await _store.save(settings);
