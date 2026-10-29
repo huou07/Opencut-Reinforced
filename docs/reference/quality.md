@@ -277,7 +277,11 @@ after a tap also raced the build; the runner now settles before `tree`.
    until the sink moved (round 157). The follow-up also showed the timer must
    sit in the *paging* function (`_refreshMediaPage`), not in a helper such as
    `_findMaterializedMedia` that only runs on one path — a timer in the wrong
-   function produces "no numbers", which reads exactly like "no cost".
+   function produces "no numbers", which reads exactly like "no cost". With the
+   probe finally in `_refreshMediaPage`, the page fetch is **0-6 ms** in app
+   (17 calls over `editor-journey`: 0 ms once warm, 5-6 ms cold, library
+   of 0-1 items). Paging is not a bottleneck; the harness-inflated numbers are
+   a test-binding artifact, not UI cost.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
