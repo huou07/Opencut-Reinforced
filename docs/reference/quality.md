@@ -202,6 +202,15 @@ session is still identical. Any new owner of a session-scoped listener must be
 reset in the same two sites, or the counter and the early-event map leak across
 projects.
 
+## Job slots fade with their job
+
+`ExportFlow.isActive` is false once the flow has given up polling
+(`_failed`), even though the client never saw a terminal job state: otherwise a
+dead job keeps Export disabled and makes closing the project wait for work that
+will never finish (round 137). The polling budget is also per job — `start()`
+resets it. The same rule applies to any future job host: a superseded or
+abandoned attempt releases the slot it claimed.
+
 ## macOS keychain bridge
 
 `NarrationBridge` runs every keychain route (`get`, `has`, `set`, `delete`) on a
