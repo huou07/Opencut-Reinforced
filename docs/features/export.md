@@ -56,7 +56,9 @@ waits for `Export complete`; the produced file lands in
 `apps/or_app/build/ui-harness/artifacts/replacements/export.mp4`. On 2026-10-29
 `ffprobe` from the packaged app read it as **h264 32x24, 15 frames, aac, 0.512 s,
 2639 bytes** — matching the fixture, so the lane is checked by a probe and not
-by the job's own success flag.
+by the job's own success flag. `python3 scripts/or_export_probe.py` repeats that
+probe (finds the newest artifact, uses the packaged `ffprobe`, fails unless it
+sees h264 + aac with positive duration and size).
 
 ## Interchange
 
