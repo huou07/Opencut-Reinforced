@@ -1248,11 +1248,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 8),
-                  Text(
-                    _error!,
-                    key: const ValueKey('voiceover-error'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _error!,
+                      key: const ValueKey('voiceover-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
                 ],
