@@ -68,6 +68,34 @@ void main() {
     );
   });
 
+  test('a system voice that never answers fails instead of hanging', () async {
+    final directory = await Directory.systemTemp.createTemp('or_say_timeout');
+    addTearDown(() => directory.delete(recursive: true));
+    final script = File('${directory.path}/slow_say.sh');
+    await script.writeAsString('#!/bin/sh\nsleep 5\n');
+    await Process.run('chmod', ['+x', script.path]);
+
+    final service = VoiceoverService(
+      sayExecutable: script.path,
+      processTimeout: const Duration(milliseconds: 80),
+    );
+    await expectLater(
+      service.preview(
+        voice: 'Daniel',
+        rate: 180,
+        text: 'Hello.',
+        directory: directory,
+      ),
+      throwsA(
+        isA<VoiceoverException>().having(
+          (error) => error.message,
+          'message',
+          contains('did not speak the preview in time'),
+        ),
+      ),
+    );
+  });
+
   test(
     'lists the Vietnamese voice with a short display label',
     () async {

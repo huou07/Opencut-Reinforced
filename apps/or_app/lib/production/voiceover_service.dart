@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
@@ -70,16 +71,26 @@ class VoiceoverException implements Exception {
 /// The app is unsandboxed (ADR 0009), so spawning the system voice is the same
 /// local provider boundary the assistant uses. Nothing leaves the machine.
 class VoiceoverService {
-  VoiceoverService({this.sayExecutable = 'say'});
+  VoiceoverService({
+    this.sayExecutable = 'say',
+    this.processTimeout = const Duration(minutes: 2),
+  });
 
   final String sayExecutable;
+
+  /// A wedged audio device or a hung `say` must surface as an error instead of
+  /// a spinner that never stops.
+  final Duration processTimeout;
 
   /// Lists the installed voices. A missing `say` is reported as a setup error,
   /// never as an empty picker.
   Future<List<VoiceOption>> listVoices() async {
     final ProcessResult result;
     try {
-      result = await Process.run(sayExecutable, ['-v', '?']);
+      result = await Process.run(
+        sayExecutable,
+        ['-v', '?'],
+      ).timeout(processTimeout);
     } on ProcessException catch (error) {
       throw VoiceoverException(
         'The macOS say command is unavailable (${error.message}).',
@@ -157,7 +168,14 @@ class VoiceoverService {
       ];
       final ProcessResult result;
       try {
-        result = await Process.run(sayExecutable, arguments);
+        result = await Process.run(
+          sayExecutable,
+          arguments,
+        ).timeout(processTimeout);
+      } on TimeoutException {
+        throw VoiceoverException(
+          'The macOS voice did not finish line ${index + 1} in time.',
+        );
       } on ProcessException catch (error) {
         throw VoiceoverException(
           'The macOS say command is unavailable (${error.message}).',
@@ -213,7 +231,14 @@ class VoiceoverService {
     );
     final ProcessResult result;
     try {
-      result = await Process.run(sayExecutable, arguments);
+      result = await Process.run(
+        sayExecutable,
+        arguments,
+      ).timeout(processTimeout);
+    } on TimeoutException {
+      throw const VoiceoverException(
+        'The macOS voice did not speak the preview in time.',
+      );
     } on ProcessException catch (error) {
       throw VoiceoverException(
         'The macOS say command is unavailable (${error.message}).',
