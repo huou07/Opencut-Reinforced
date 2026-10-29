@@ -1,6 +1,6 @@
 # UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: behaviour that must not regress, and what counts as evidence for a UI
 change. Do not add an item here without a check that can fail.
@@ -26,6 +26,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 - A divider is either backed by a working resize handler or renders only the
   structural rule; a drag-looking grip without a handler is a defect.
 - Every transient message goes through the shared snackbar.
+- User-facing copy never states an internal identifier (clip id, media id,
+  job id, artifact key, checkpoint path); it names the consequence instead.
 - Transport and timeline keys resolve through the single shell
   `Shortcuts`/`Actions` map, dispatch the same gateway calls as the pointer
   controls, and do not fire while a text field holds focus.
