@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -8,11 +9,15 @@ import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
 import 'editor_panel_header.dart';
 
+/// Number of `EditorMediaLibraryPanel` builds, for rebuild-cost tests.
+int mediaLibraryPanelBuilds = 0;
+
 class EditorMediaLibraryPanel extends StatelessWidget {
   const EditorMediaLibraryPanel({
     super.key,
     required this.page,
     required this.previews,
+    this.previewUpdates,
     required this.loading,
     required this.loadingMore,
     required this.error,
@@ -33,6 +38,9 @@ class EditorMediaLibraryPanel extends StatelessWidget {
 
   final ProjectMediaPage? page;
   final Map<String, ProjectMediaPreview> previews;
+
+  /// Live previews painted without waiting for a shell rebuild.
+  final ValueListenable<Map<String, ProjectMediaPreview>>? previewUpdates;
   final bool loading;
   final bool loadingMore;
   final String? error;
@@ -58,14 +66,39 @@ class EditorMediaLibraryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = searchController;
-    if (controller == null) return _panel(context, '');
+    final updates = previewUpdates;
+    if (controller == null) {
+      if (updates == null) return _panel(context, '');
+      return ValueListenableBuilder<Map<String, ProjectMediaPreview>>(
+        valueListenable: updates,
+        builder: (context, live, _) => _panel(context, '', live),
+      );
+    }
+    if (updates == null) {
+      return ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, _) => _panel(context, value.text),
+      );
+    }
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
-      builder: (context, value, _) => _panel(context, value.text),
+      builder: (context, value, _) =>
+          ValueListenableBuilder<Map<String, ProjectMediaPreview>>(
+            valueListenable: updates,
+            builder: (context, live, _) => _panel(context, value.text, live),
+          ),
     );
   }
 
-  Widget _panel(BuildContext context, String searchQuery) {
+  Widget _panel(
+    BuildContext context,
+    String searchQuery, [
+    Map<String, ProjectMediaPreview> liveUpdates = const {},
+  ]) {
+    assert(() {
+      mediaLibraryPanelBuilds += 1;
+      return true;
+    }());
     final library = page?.items ?? const <ProjectMediaItem>[];
     final needle = searchQuery.trim().toLowerCase();
     final items = needle.isEmpty
@@ -276,7 +309,8 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: OrSpacing.x2),
                       child: EditorMediaLibraryItem(
                         item: item,
-                        preview: previews[item.mediaId],
+                        preview:
+                            liveUpdates[item.mediaId] ?? previews[item.mediaId],
                         onAddToTimeline: onInsertMedia == null
                             ? null
                             : () => unawaited(onInsertMedia!(item)),

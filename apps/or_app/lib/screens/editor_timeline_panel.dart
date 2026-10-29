@@ -19,6 +19,9 @@ import 'editor_panel_header.dart';
 import 'editor_rational_time.dart';
 import 'editor_timeline_painters.dart';
 
+/// Number of `EditorTimelinePanel` builds, for rebuild-cost tests.
+int timelinePanelBuilds = 0;
+
 class EditorTimelinePanel extends StatefulWidget {
   const EditorTimelinePanel({
     super.key,
@@ -378,6 +381,10 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
 
   @override
   Widget build(BuildContext context) {
+    assert(() {
+      timelinePanelBuilds += 1;
+      return true;
+    }());
     final timeline = ValueListenableBuilder<ProjectPreviewState?>(
       valueListenable: widget.previewState,
       builder: (context, preview, _) => _buildTimeline(context, preview),

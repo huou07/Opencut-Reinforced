@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../assistant/assistant_controller.dart';
@@ -39,6 +40,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.busy = false,
     this.mediaPage,
     this.mediaPreviews = const {},
+    this.mediaPreviewUpdates,
     this.mediaLoading = false,
     this.mediaLoadingMore = false,
     this.mediaLoadError,
@@ -126,6 +128,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final bool busy;
   final ProjectMediaPage? mediaPage;
   final Map<String, ProjectMediaPreview> mediaPreviews;
+  final ValueListenable<Map<String, ProjectMediaPreview>>? mediaPreviewUpdates;
   final bool mediaLoading;
   final bool mediaLoadingMore;
   final String? mediaLoadError;
@@ -902,6 +905,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   mediaPage: widget.mediaPage,
                   timelineTracks: widget.timelineTracks,
                   mediaPreviews: widget.mediaPreviews,
+                  mediaPreviewUpdates: widget.mediaPreviewUpdates,
                   mediaLoading: widget.mediaLoading,
                   mediaLoadingMore: widget.mediaLoadingMore,
                   mediaLoadError: widget.mediaLoadError,
@@ -1305,6 +1309,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 mediaPage: widget.mediaPage,
                 timelineTracks: widget.timelineTracks,
                 mediaPreviews: widget.mediaPreviews,
+                mediaPreviewUpdates: widget.mediaPreviewUpdates,
                 mediaLoading: widget.mediaLoading,
                 mediaLoadingMore: widget.mediaLoadingMore,
                 mediaLoadError: widget.mediaLoadError,
@@ -1609,6 +1614,7 @@ class _EditorToolPanel extends StatelessWidget {
     required this.mediaPage,
     required this.timelineTracks,
     required this.mediaPreviews,
+    this.mediaPreviewUpdates,
     required this.mediaLoading,
     required this.mediaLoadingMore,
     required this.mediaLoadError,
@@ -1651,6 +1657,7 @@ class _EditorToolPanel extends StatelessWidget {
   final ProjectMediaPage? mediaPage;
   final ProjectTimelineTracks? timelineTracks;
   final Map<String, ProjectMediaPreview> mediaPreviews;
+  final ValueListenable<Map<String, ProjectMediaPreview>>? mediaPreviewUpdates;
   final bool mediaLoading;
   final bool mediaLoadingMore;
   final String? mediaLoadError;
@@ -1738,6 +1745,7 @@ class _EditorToolPanel extends StatelessWidget {
         searchController: mediaSearchController,
         page: page,
         previews: mediaPreviews,
+        previewUpdates: mediaPreviewUpdates,
         loading: mediaLoading,
         loadingMore: mediaLoadingMore,
         error: mediaLoadError,

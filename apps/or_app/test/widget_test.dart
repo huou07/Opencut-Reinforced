@@ -18,6 +18,8 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/screens/editor_media_library.dart';
+import 'package:or_app/screens/editor_timeline_panel.dart';
 import 'package:or_app/shell/app_shell.dart';
 import 'package:or_app/shell/motion_materialize_dialog.dart';
 import 'package:or_app/project/recent_projects.dart';
@@ -1108,6 +1110,73 @@ void main() {
     expect(gateway.lastSession!.view.revision, BigInt.zero);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a preview for media that is not on the timeline repaints only the media pane',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final png = await _tinyPngBytes();
+      final gateway = _FakeProjectGateway();
+      const count = 6;
+      for (var index = 0; index < count; index += 1) {
+        final id = 'quiet-$index';
+        gateway.initialMedia.add(_mediaFixture(id, '/tmp/$id.mp4'));
+        gateway.artifactRequestResponses['$id:thumbnail'] =
+            ProjectMediaArtifactRequest(
+              mediaId: id,
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'quiet-cache-$id',
+              jobId: 'quiet-job-$id',
+            );
+        gateway.artifactResponses['quiet-cache-$id'] = ProjectMediaArtifact(
+          bytes: png,
+          mimeType: 'image/png',
+        );
+      }
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/quiet-preview.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Quiet Preview');
+      var sequence = BigInt.zero;
+      Future<void> finishPreview(String id) async {
+        gateway.emitMediaArtifact(
+          gateway.lastSession!,
+          ProjectMediaArtifactEvent(
+            sequence: sequence += BigInt.one,
+            mediaId: id,
+            kind: ProjectMediaArtifactKind.thumbnail,
+            cacheKey: 'quiet-cache-$id',
+            jobId: 'quiet-job-$id',
+            state: ProjectMediaArtifactEventState.succeeded,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      for (var index = 0; index < 3; index += 1) {
+        await finishPreview('quiet-$index');
+      }
+      await tester.pumpAndSettle();
+      final timelineBuilds = timelinePanelBuilds;
+      final paneBuilds = mediaLibraryPanelBuilds;
+      for (var index = 3; index < count; index += 1) {
+        await finishPreview('quiet-$index');
+      }
+      await tester.pumpAndSettle();
+
+      // Every thumbnail painted into the media pane without a timeline
+      // rebuild: the shell setStates only for previews a clip can show.
+      expect(mediaLibraryPanelBuilds, greaterThan(paneBuilds));
+      expect(timelinePanelBuilds, timelineBuilds);
+      expect(
+        find.byKey(const ValueKey('media-preview-image-quiet-3')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Import Media calls the gateway and refreshes the page', (
     tester,

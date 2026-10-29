@@ -122,6 +122,17 @@ change:
   path is structural evidence (one seek, texture kept) plus the widget contract,
   not a separate wall-clock row yet.
 
+### Media preview repaint scope (2026-10-29)
+
+- Workload: the widget test `a preview for media that is not on the timeline
+  repaints only the media pane` (six library-only items, three thumbnails
+  finishing after a baseline).
+- Result: the media pane repainted for every finished thumbnail while the
+  timeline panel build count stayed flat, so library-only previews no longer
+  rebuild the editor. Media used by a clip still repaints through the shell.
+- Caveat: widget-test build instrumentation, not frame timing; it bounds the
+  rebuild scope, not the paint cost.
+
 ### Hardware export from GPU NV12 planes (2026-10-27)
 
 - Workload: the ignored `a_hardware_export_writes_from_gpu_nv12_planes` — a blank

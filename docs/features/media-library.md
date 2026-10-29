@@ -51,6 +51,12 @@ cache storage with a persistent LRU index. They are regenerable and never part
 of the project. Proxy generation exists as a cache foundation, not as an exposed
 workflow.
 
+A preview that finishes for media no timeline clip shows repaints only the media
+pane, through a value listenable; media a clip shows still publishes through the
+editor state so the clip filmstrip updates. The pane therefore fills in without
+rebuilding the editor for every thumbnail, and the timeline keeps the only
+snapshot of previews it paints.
+
 ## Where
 
 - `crates/or_core/src/` — media identity, probe, cache, jobs

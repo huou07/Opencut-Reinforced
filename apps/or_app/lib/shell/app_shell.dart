@@ -216,6 +216,12 @@ class _AppShellState extends State<AppShell> {
   String? _importStatus;
   ProjectMediaPage? _mediaPage;
   final Map<String, ProjectMediaPreview> _mediaPreviews = {};
+
+  /// Preview updates published without a shell rebuild. The media pane listens
+  /// to this value so a thumbnail finishing for media that is not on the
+  /// timeline never rebuilds the whole editor.
+  final ValueNotifier<Map<String, ProjectMediaPreview>> _mediaPreviewUpdates =
+      ValueNotifier<Map<String, ProjectMediaPreview>>(const {});
   final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
   final Set<String> _queuedMediaPreviewIds = {};
   final List<_MediaPreviewTicket> _pendingMediaPreviewTickets = [];
@@ -274,6 +280,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _motionInsertLog.dispose();
+    _mediaPreviewUpdates.dispose();
     FocusManager.instance.removeListener(_handleFocusChange);
     _autosaveTimer?.cancel();
     _export.dispose();
@@ -733,6 +740,7 @@ class _AppShellState extends State<AppShell> {
               busy: _busy,
               mediaPage: _mediaPage,
               mediaPreviews: Map.unmodifiable(_mediaPreviews),
+              mediaPreviewUpdates: _mediaPreviewUpdates,
               mediaLoading: _mediaLoading,
               mediaLoadingMore: _mediaLoadingMore,
               mediaLoadError: _mediaLoadError,
@@ -1764,6 +1772,7 @@ class _AppShellState extends State<AppShell> {
       _activeProject = null;
       _mediaPage = null;
       _mediaPreviews.clear();
+      _mediaPreviewUpdates.value = const {};
       _mediaLoading = true;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
@@ -4649,6 +4658,18 @@ class _AppShellState extends State<AppShell> {
     _queuedMediaPreviewIds.removeWhere(
       (mediaId) => !visibleIds.contains(mediaId),
     );
+    if (_mediaPreviewUpdates.value.keys.any(
+      (mediaId) => !visibleIds.contains(mediaId),
+    )) {
+      _mediaPreviewUpdates.value =
+          Map<String, ProjectMediaPreview>.unmodifiable(
+            Map.fromEntries(
+              _mediaPreviewUpdates.value.entries.where(
+                (entry) => visibleIds.contains(entry.key),
+              ),
+            ),
+          );
+    }
 
     for (final item in items) {
       final kind = _mediaPreviewKind(item);
@@ -4856,13 +4877,35 @@ class _AppShellState extends State<AppShell> {
     ProjectSessionHandle session,
     String mediaId,
     ProjectMediaPreview preview,
+  ) => _publishMediaPreview(session, mediaId, preview);
+
+  /// Stores one preview and repaints only what shows it.
+  ///
+  /// The timeline paints clip filmstrips from the preview map, so a preview for
+  /// media that is on the timeline still needs a shell rebuild; every other
+  /// preview is published through [_mediaPreviewUpdates] and repaints just the
+  /// media pane.
+  void _publishMediaPreview(
+    ProjectSessionHandle session,
+    String mediaId,
+    ProjectMediaPreview preview,
   ) {
     if (!mounted ||
         !identical(session, _activeSession) ||
         !_mediaPreviews.containsKey(mediaId)) {
       return;
     }
-    setState(() => _mediaPreviews[mediaId] = preview);
+    _mediaPreviews[mediaId] = preview;
+    final onTimeline = _timelineClipPages.values.any(
+      (page) => page.items.any((clip) => clip.mediaId == mediaId),
+    );
+    if (onTimeline) {
+      setState(() {});
+    }
+    _mediaPreviewUpdates.value = Map<String, ProjectMediaPreview>.unmodifiable({
+      ..._mediaPreviewUpdates.value,
+      mediaId: preview,
+    });
   }
 
   void _finishMediaPreviewRequest(ProjectSessionHandle session) {
@@ -4934,18 +4977,20 @@ class _AppShellState extends State<AppShell> {
           preview.jobId == event.jobId;
     }).toSet();
     if (event.state != ProjectMediaArtifactEventState.succeeded) {
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId]!;
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId]!;
+        _publishMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: ProjectMediaArtifactRequestState.failed,
             cacheKey: current.cacheKey,
             jobId: current.jobId,
             errorCode: event.errorCode ?? 'PREVIEW_UNAVAILABLE',
-          );
-        }
-      });
+          ),
+        );
+      }
       _scheduleMediaPreviewRequests(session);
       return;
     }
@@ -4960,15 +5005,17 @@ class _AppShellState extends State<AppShell> {
       );
       if (!mounted || !identical(session, _activeSession)) return;
       final hasPng = artifact?.mimeType == 'image/png';
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId];
-          if (current == null ||
-              current.cacheKey != event.cacheKey ||
-              current.jobId != event.jobId) {
-            continue;
-          }
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId];
+        if (current == null ||
+            current.cacheKey != event.cacheKey ||
+            current.jobId != event.jobId) {
+          continue;
+        }
+        _publishMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: hasPng
                 ? ProjectMediaArtifactRequestState.ready
@@ -4977,24 +5024,26 @@ class _AppShellState extends State<AppShell> {
             jobId: current.jobId,
             bytes: hasPng ? artifact?.bytes : null,
             errorCode: hasPng ? null : 'ARTIFACT_READ_FAILED',
-          );
-        }
-      });
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId];
-          if (current == null || current.cacheKey != event.cacheKey) continue;
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId];
+        if (current == null || current.cacheKey != event.cacheKey) continue;
+        _publishMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: ProjectMediaArtifactRequestState.failed,
             cacheKey: current.cacheKey,
             jobId: current.jobId,
             errorCode: 'ARTIFACT_READ_FAILED',
-          );
-        }
-      });
+          ),
+        );
+      }
     }
   }
 
@@ -5066,6 +5115,7 @@ class _AppShellState extends State<AppShell> {
       _activeProject = null;
       _mediaPage = null;
       _mediaPreviews.clear();
+      _mediaPreviewUpdates.value = const {};
       _mediaLoading = false;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
