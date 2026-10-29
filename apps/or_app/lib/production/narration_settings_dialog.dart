@@ -111,6 +111,14 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
           _error = error.message;
         });
       }
+    } on Object catch (error) {
+      // An unexpected failure must not leave the dialog loading forever.
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'The voice list could not be loaded: $error';
+        });
+      }
     }
   }
   VoiceoverService get _effectiveVoiceover => widget.voiceover ?? _voiceover;
