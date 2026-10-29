@@ -73,6 +73,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onExportCaptions,
     this.onGenerateCaptions,
     this.onManageSpeechModel,
+    this.onRetryMediaPreview,
     this.onRecordVoice,
     this.onAdjustClipVolume,
     this.onGenerateVoiceover,
@@ -177,6 +178,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final VoidCallback? onExportCaptions;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
   final VoidCallback? onManageSpeechModel;
+  final ValueChanged<ProjectMediaItem>? onRetryMediaPreview;
   final VoidCallback? onRecordVoice;
   final Future<void> Function(ProjectReadModel, String, String)?
   onAdjustClipVolume;
@@ -922,6 +924,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                       : widget.onImportMediaFolder,
                   onLoadMoreMedia: widget.onLoadMoreMedia,
                   onRefreshMedia: widget.onRefreshMedia,
+                  onRetryMediaPreview: widget.onRetryMediaPreview,
                   onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
                   onRelinkMedia: widget.busy ? null : widget.onRelinkMedia,
                   onGenerateCaptions: widget.busy
@@ -1319,6 +1322,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                     : widget.onImportMediaFolder,
                 onLoadMoreMedia: widget.onLoadMoreMedia,
                 onRefreshMedia: widget.onRefreshMedia,
+                  onRetryMediaPreview: widget.onRetryMediaPreview,
                 onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
                 onRelinkMedia: widget.busy ? null : widget.onRelinkMedia,
                 onGenerateCaptions: widget.busy
@@ -1630,6 +1634,7 @@ class _EditorToolPanel extends StatelessWidget {
     this.onGenerateVoiceover,
     this.onGenerateMusic,
     required this.onCleanUpAudio,
+    this.onRetryMediaPreview,
     required this.onAddMediaToTimeline,
     this.onEnsureTrack,
     this.onAddTextTrack,
@@ -1673,6 +1678,7 @@ class _EditorToolPanel extends StatelessWidget {
   final VoidCallback? onGenerateVoiceover;
   final VoidCallback? onGenerateMusic;
   final Future<void> Function(ProjectMediaItem media)? onCleanUpAudio;
+  final ValueChanged<ProjectMediaItem>? onRetryMediaPreview;
   final Future<void> Function(
     ProjectReadModel project,
     ProjectMediaItem media,
@@ -1753,6 +1759,7 @@ class _EditorToolPanel extends StatelessWidget {
         onImportFolder: onImportMediaFolder,
         onLoadMore: onLoadMoreMedia,
         onRefresh: onRefreshMedia,
+        onRetryPreview: onRetryMediaPreview,
         onRemove: onRemoveMedia,
         onRelink: onRelinkMedia,
         onGenerateCaptions: onGenerateCaptions,

@@ -787,6 +787,7 @@ class _AppShellState extends State<AppShell> {
               onGenerateVoiceover: _generateVoiceover,
               onGenerateMusic: _generateMusic,
               onCleanUpAudio: _cleanUpMediaAudio,
+              onRetryMediaPreview: _retryMediaPreview,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onMoveTimelineTrack: _moveTimelineTrack,
@@ -4642,6 +4643,36 @@ class _AppShellState extends State<AppShell> {
         });
       }
     }
+  }
+
+  /// Re-requests the preview for one item whose artifact failed.
+  ///
+  /// The failed state stays visible until a new request replaces it, so the
+  /// library offers the retry instead of a silent placeholder that never
+  /// resolves.
+  void _retryMediaPreview(ProjectMediaItem item) {
+    final session = _activeSession;
+    if (session == null || !mounted) return;
+    final kind = mediaPreviewKind(item);
+    final current = _mediaPreviews[item.mediaId];
+    if (kind == null ||
+        current == null ||
+        current.kind != kind ||
+        current.state != ProjectMediaArtifactRequestState.failed) {
+      return;
+    }
+    _updateMediaPreview(
+      session,
+      item.mediaId,
+      ProjectMediaPreview(
+        kind: kind,
+        state: ProjectMediaArtifactRequestState.queued,
+      ),
+    );
+    _mediaPreviewQueue.removeWhere((queued) => queued.mediaId == item.mediaId);
+    _mediaPreviewQueue.addLast(item);
+    _queuedMediaPreviewIds.add(item.mediaId);
+    _scheduleMediaPreviewRequests(session);
   }
 
   void _queueMediaPreviews(

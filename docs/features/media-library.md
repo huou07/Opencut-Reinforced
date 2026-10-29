@@ -57,6 +57,10 @@ editor state so the clip filmstrip updates. The pane therefore fills in without
 rebuilding the editor for every thumbnail, and the timeline keeps the only
 snapshot of previews it paints.
 
+A preview that fails leaves a retry control in its place rather than a muted
+placeholder that never resolves; retrying re-queues that one item instead of
+refreshing the whole library.
+
 ## Where
 
 - `crates/or_core/src/` — media identity, probe, cache, jobs

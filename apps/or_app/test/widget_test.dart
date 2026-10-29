@@ -1008,6 +1008,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a failed preview offers a retry that asks again', (
+    tester,
+  ) async {
+    // A thumbnail that cannot be produced left the library with a plain muted
+    // glyph and no way forward. The failed state now names the retry.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-broken', '/tmp/broken.mp4')]
+      ..artifactRequestResponses['media-broken:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-broken',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'PREVIEW_UNAVAILABLE',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/broken-preview.orproj',
+    );
+    await _createProject(tester, 'Broken Preview');
+
+    final retry = find.byKey(
+      const ValueKey('media-preview-retry-media-broken'),
+    );
+    expect(retry, findsOneWidget);
+    final before = gateway.thumbnailRequests;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(gateway.thumbnailRequests, before + 1);
+    expect(find.byKey(retry.evaluate().single.widget.key!), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'an artifact event that arrives during another preview request still lands',
     (tester) async {

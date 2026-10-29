@@ -25,6 +25,7 @@ class EditorMediaLibraryPanel extends StatelessWidget {
     required this.onImportFolder,
     required this.onLoadMore,
     required this.onRefresh,
+    this.onRetryPreview,
     required this.onRemove,
     required this.onRelink,
     required this.onGenerateCaptions,
@@ -48,6 +49,9 @@ class EditorMediaLibraryPanel extends StatelessWidget {
   final VoidCallback? onImportFolder;
   final VoidCallback? onLoadMore;
   final VoidCallback? onRefresh;
+
+  /// Re-requests one failed preview instead of waiting for a full refresh.
+  final ValueChanged<ProjectMediaItem>? onRetryPreview;
   final ValueChanged<ProjectMediaItem>? onRemove;
   final ValueChanged<ProjectMediaItem>? onRelink;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
@@ -311,6 +315,9 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                         item: item,
                         preview:
                             liveUpdates[item.mediaId] ?? previews[item.mediaId],
+                        onRetry: onRetryPreview == null
+                            ? null
+                            : () => onRetryPreview!(item),
                         onAddToTimeline: onInsertMedia == null
                             ? null
                             : () => unawaited(onInsertMedia!(item)),
@@ -374,6 +381,7 @@ class EditorMediaLibraryItem extends StatelessWidget {
     super.key,
     required this.item,
     required this.preview,
+    this.onRetry,
     required this.onAddToTimeline,
     required this.onRelink,
     required this.onRemove,
@@ -384,6 +392,9 @@ class EditorMediaLibraryItem extends StatelessWidget {
 
   final ProjectMediaItem item;
   final ProjectMediaPreview? preview;
+
+  /// Retries the preview after it failed.
+  final VoidCallback? onRetry;
   final VoidCallback? onAddToTimeline;
   final VoidCallback? onRelink;
   final VoidCallback? onRemove;
@@ -555,7 +566,11 @@ class EditorMediaLibraryItem extends StatelessWidget {
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 270;
             final leading = [
-              EditorMediaItemPreview(item: item, preview: preview),
+              EditorMediaItemPreview(
+                item: item,
+                preview: preview,
+                onRetry: onRetry,
+              ),
               const SizedBox(width: OrSpacing.x2),
               metadata(),
             ];
@@ -582,10 +597,12 @@ class EditorMediaItemPreview extends StatelessWidget {
     super.key,
     required this.item,
     required this.preview,
+    this.onRetry,
   });
 
   final ProjectMediaItem item;
   final ProjectMediaPreview? preview;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -595,7 +612,8 @@ class EditorMediaItemPreview extends StatelessWidget {
         : item.audioDetails != null
         ? ProjectMediaArtifactKind.waveform
         : null;
-    final bytes = preview?.kind == kind ? preview?.bytes : null;
+    final failed = preview?.state == ProjectMediaArtifactRequestState.failed;
+    final bytes = preview?.kind == kind && !failed ? preview?.bytes : null;
     final label = kind == ProjectMediaArtifactKind.thumbnail
         ? 'Thumbnail preview for ${mediaDisplayName(item.sourceUri)}'
         : 'Waveform preview for ${mediaDisplayName(item.sourceUri)}';
@@ -603,7 +621,20 @@ class EditorMediaItemPreview extends StatelessWidget {
       key: ValueKey('media-preview-${item.mediaId}'),
       width: 52,
       height: 36,
-      child: bytes == null
+      child: failed
+          ? Center(
+              child: IconButton(
+                key: ValueKey('media-preview-retry-${item.mediaId}'),
+                tooltip: 'Preview unavailable. Retry.',
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                color: OrColors.textMuted,
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+              ),
+            )
+          : bytes == null
           ? Center(
               child: Icon(
                 hasVideo
