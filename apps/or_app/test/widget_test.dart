@@ -3070,7 +3070,8 @@ void main() {
     expect(gateway.closeCalls, 0);
     expect(
       find.text(
-        'Wait for the export to finish or cancel it before closing the project.',
+        'Wait for the export to finish, or cancel it from the top bar, before '
+        'closing the project.',
       ),
       findsOneWidget,
     );
