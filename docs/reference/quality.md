@@ -284,7 +284,10 @@ after a tap also raced the build; the runner now settles before `tree`.
    a test-binding artifact, not UI cost. The export path now has its own
    end-to-end row (`export-encode`): dialog + real encode of the 1 s fixture
    measured 2933 ms (n=1, debug lane) through to `Export complete`, so a
-   regression in the export lane finally has a scenario that fails.
+   regression in the export lane finally has a scenario that fails. A second
+   row (`export-long`, 5 s 720p30 fixture) measured **3083 ms for 150 frames
+   (~49 fps)** end to end including the dialog and probe: h264+aac, 5.013 s,
+   2.6 MB. Encoding, not decoding (903-1151 fps), is the throughput owner.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
