@@ -48,8 +48,9 @@ justification and review.
   voiceover dialog also picks the source: installed voices, a cloud provider, or
   a **Local server** with voice cloning; a local server needs no key and can
   enrol a recorded or chosen 3–8 s reference clip as a cloned voice after a
-  rights acknowledgement. The
-  dialog previews the chosen voice with one sample line (the first script line,
+  rights acknowledgement. **Settings → Narration** keeps governing the
+  installed-voice fallback and says so when the active source is a local server
+  or a cloud provider. The dialog previews the chosen voice with one sample line (the first script line,
   or a short Vietnamese default) before a full run, for installed and local
   voices alike. Switching
   the source keeps the last voice chosen for each source, and a choice made in
