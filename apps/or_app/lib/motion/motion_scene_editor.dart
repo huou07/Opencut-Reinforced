@@ -237,6 +237,14 @@ class _MotionSceneCanvasState extends State<MotionSceneCanvas> {
                           preview,
                           fit: BoxFit.fill,
                           gaplessPlayback: true,
+                          // Scrubbing re-renders the scene; each frame must not
+                          // decode the PNG at full canvas resolution.
+                          cacheWidth: (width *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round(),
+                          cacheHeight: (height *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .round(),
                         ),
                       ),
                     )
