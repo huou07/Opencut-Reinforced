@@ -51,6 +51,13 @@ An export is proven by an independent probe/playback of the actual file
 (container, streams, duration, dimensions, expected frames), not by the export
 job reporting success. See [operations/verification.md](../operations/verification.md).
 
+`scripts/ui_scenarios/export-encode.json` drives the dialog + a real encode and
+waits for `Export complete`; the produced file lands in
+`apps/or_app/build/ui-harness/artifacts/replacements/export.mp4`. On 2026-10-29
+`ffprobe` from the packaged app read it as **h264 32x24, 15 frames, aac, 0.512 s,
+2639 bytes** — matching the fixture, so the lane is checked by a probe and not
+by the job's own success flag.
+
 ## Interchange
 
 SRT/WebVTT subtitles are supported. OpenTimelineIO is a bounded Rust/serde JSON
