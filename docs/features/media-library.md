@@ -1,6 +1,6 @@
 # Feature — Media Library and Import
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: bringing media into a project, showing it, replacing it, and telling the
 user precisely what is wrong when it cannot be used.
@@ -55,7 +55,8 @@ workflow.
 
 - `crates/or_core/src/` — media identity, probe, cache, jobs
 - `crates/or_app_bridge/` — artifact service wiring
-- `apps/or_app/lib/` — library panel, import flow
+- `apps/or_app/lib/screens/editor_media_library.dart` — library pane, item rows, previews
+- `apps/or_app/lib/` — import, relink and artifact loading flows
 
 ## Known gaps
 
