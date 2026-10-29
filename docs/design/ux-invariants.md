@@ -54,6 +54,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 - **A field that refuses a keystroke names its accepted range.** Silent clamping
   reads as a broken field. Where the field cannot yet reject with a message, it
   shows the range as helper text (round 175, inspector audio fields).
+  The hint and the formatter must read the same computed bound; a parallel
+  table drifted by 10x once (rounds 177-180).
 
 
 ## Proven interaction surfaces
