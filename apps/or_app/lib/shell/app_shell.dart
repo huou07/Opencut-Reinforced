@@ -2173,17 +2173,20 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void _showExportReceipt(String destination) {
+  Future<void> _showExportReceipt(String destination) async {
     final name = destination.split(Platform.pathSeparator).last;
     var size = '';
     try {
-      final bytes = File(destination).lengthSync();
+      // The file can be gigabytes on a slow volume; a synchronous stat on the
+      // UI isolate would stall the frame that reports a finished export.
+      final bytes = await File(destination).length();
       size = bytes >= 1024 * 1024
           ? ' · ${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
           : ' · ${(bytes / 1024).toStringAsFixed(0)} KB';
     } on FileSystemException {
       size = '';
     }
+    if (!mounted) return;
     OrSnackBar.show(
       context,
       'Exported $name$size',
@@ -2232,7 +2235,7 @@ class _AppShellState extends State<AppShell> {
             setState(() => _exportStatus = 'Export complete');
             // The status line is two words; the file itself is what the owner
             // needs, so the receipt carries its name, size and a copy action.
-            _showExportReceipt(destination);
+            unawaited(_showExportReceipt(destination));
           } on ProjectSafStorageException catch (error) {
             if (!mounted || !identical(session, _activeSession)) return;
             setState(() {
