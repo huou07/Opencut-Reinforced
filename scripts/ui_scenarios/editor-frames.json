@@ -1,0 +1,18 @@
+{
+  "description": "Measures editor frame cost opening a project and switching tool panels.",
+  "target": "macos",
+  "steps": [
+    {"op": "expect", "selector": {"key": "home-new-project"}, "role": "button"},
+    {"op": "tap", "selector": {"key": "nav-projects"}},
+    {"op": "tap", "selector": {"key": "projects-new-project"}},
+    {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Frame budget"},
+    {"op": "tap", "selector": {"key": "confirm-new-project"}},
+    {"op": "wait", "text": "No timeline tracks", "budget_ms": 20000},
+    {"op": "frames", "name": "editor-open", "count": 30},
+    {"op": "tap", "selector": {"key": "editor-tool-audio"}},
+    {"op": "frames", "name": "audio-panel", "count": 30},
+    {"op": "tap", "selector": {"key": "editor-tool-text"}},
+    {"op": "frames", "name": "text-panel", "count": 30},
+    {"op": "shot", "name": "editor-frames"}
+  ]
+}

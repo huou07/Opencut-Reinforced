@@ -198,8 +198,10 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - `apps/or_app/lib/screens/editor_shell_preview_screen.dart` — right-rail tabs
 - `crates/or_cli/src/commands.rs` — CLI verbs and session-pointer attach
 - `crates/or_cli/src/mcp.rs` — `or mcp` fallback tools
-- `crates/or_core/src/application.rs` — `MotionMaterialize` and `Transcription`
-  runtime requests
+- `crates/or_core/src/application/types.rs` — `ApplicationRequest` and its
+  `MotionMaterialize` and `Transcription` variants
+- `crates/or_core/src/application/mod.rs` — `TranscriptionRequest` and
+  `TranscriptionResponse`
 - `crates/or_ipc/src/live_host.rs` — runtime handler traits and routing
 - `crates/or_app_bridge/src/preview.rs` — materialisation handler
 - `crates/or_app_bridge/src/transcription.rs` — local transcription job and model store
