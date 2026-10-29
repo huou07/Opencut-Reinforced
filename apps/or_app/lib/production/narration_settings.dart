@@ -23,6 +23,7 @@ class NarrationSettings {
     this.localVoiceId = '',
     this.localVoiceName = '',
     this.localReferencePath = '',
+    this.localCloneAcknowledged = false,
   });
 
   /// The installed macOS voice name, for example `Linh`. Empty means "let the
@@ -63,6 +64,11 @@ class NarrationSettings {
   /// re-enrolled without asking for the file again.
   final String localReferencePath;
 
+  /// The user confirmed they have the right to clone the reference clip's
+  /// voice. The cloud panel asks the same before an instant clone; the local
+  /// path must not be the quiet exception.
+  final bool localCloneAcknowledged;
+
   NarrationSettings copyWith({
     String? voice,
     String? locale,
@@ -75,6 +81,7 @@ class NarrationSettings {
     String? localVoiceId,
     String? localVoiceName,
     String? localReferencePath,
+    bool? localCloneAcknowledged,
   }) => NarrationSettings(
     voice: voice ?? this.voice,
     locale: locale ?? this.locale,
@@ -87,6 +94,8 @@ class NarrationSettings {
     localVoiceId: localVoiceId ?? this.localVoiceId,
     localVoiceName: localVoiceName ?? this.localVoiceName,
     localReferencePath: localReferencePath ?? this.localReferencePath,
+    localCloneAcknowledged:
+        localCloneAcknowledged ?? this.localCloneAcknowledged,
   );
 
   Map<String, Object?> toJson() => {
@@ -102,6 +111,7 @@ class NarrationSettings {
     'local_voice_id': localVoiceId,
     'local_voice_name': localVoiceName,
     'local_reference_path': localReferencePath,
+    'local_clone_acknowledged': localCloneAcknowledged,
   };
 
   static NarrationSettings fromJson(Object? value) {
@@ -138,6 +148,7 @@ class NarrationSettings {
       localVoiceId: text('local_voice_id'),
       localVoiceName: text('local_voice_name'),
       localReferencePath: path('local_reference_path'),
+      localCloneAcknowledged: value['local_clone_acknowledged'] == true,
     );
   }
 

@@ -2,29 +2,145 @@
   "name": "voiceover-local",
   "description": "Local (keyless) narration: a typed server URL that does not answer is probed before the voice check, so the dialog reports the server's own message; reopening the dialog recovers and narrates.",
   "steps": [
-    {"op": "expect", "key": "home-new-project", "role": "button"},
-    {"op": "tap", "selector": {"key": "nav-projects"}},
-    {"op": "tap", "selector": {"key": "projects-new-project"}},
-    {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Local voice journey"},
-    {"op": "tap", "selector": {"key": "confirm-new-project"}},
-    {"op": "wait", "text": "No timeline tracks", "budget_ms": 20000},
-    {"op": "tap", "selector": {"key": "editor-tool-audio"}},
-    {"op": "tap", "selector": {"key": "tool-generate-voiceover"}},
-    {"op": "wait", "text": "Generate voiceover", "budget_ms": 10000},
-    {"op": "tap", "selector": {"key": "voiceover-provider-local"}},
-    {"op": "expect", "key": "voiceover-local-url"},
-    {"op": "enter_text", "selector": {"key": "voiceover-local-url"}, "value": "127.0.0.1:9"},
-    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
-    {"op": "tap", "selector": {"key": "voiceover-generate"}},
-    {"op": "wait_label", "label_regex": "No local speech server|did not answer", "budget_ms": 20000},
-    {"op": "tap", "selector": {"text": "Cancel"}},
-    {"op": "wait_absent", "text": "Generate voiceover", "budget_ms": 10000},
-    {"op": "tap", "selector": {"key": "tool-generate-voiceover"}},
-    {"op": "wait", "text": "Generate voiceover", "budget_ms": 10000},
-    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 20000},
-    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
-    {"op": "tap", "selector": {"key": "voiceover-generate"}},
-    {"op": "wait_label", "label_regex": "Added 1 narration", "budget_ms": 60000},
-    {"op": "shot", "name": "after-local-narration"}
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Local voice journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-generate-voiceover"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Generate voiceover",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-provider-local"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "voiceover-local-url"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "voiceover-local-url"
+      },
+      "value": "127.0.0.1:9"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "voiceover-script"
+      },
+      "value": "Xin chao, day la giong doc cuc bo."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-generate"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No local speech server|did not answer",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Cancel"
+      }
+    },
+    {
+      "op": "wait_absent",
+      "text": "Generate voiceover",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-generate-voiceover"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Generate voiceover",
+      "budget_ms": 10000
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Connected",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key": "voiceover-local-clone-ack"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "voiceover-script"
+      },
+      "value": "Xin chao, day la giong doc cuc bo."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-generate"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Added 1 narration",
+      "budget_ms": 60000
+    },
+    {
+      "op": "shot",
+      "name": "after-local-narration"
+    }
   ]
 }

@@ -62,6 +62,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   /// survives a switch to another source and back.
   String _localSelection = '';
   String _localReferencePath = '';
+  bool _localCloneAcknowledged = false;
   List<LocalTtsVoice> _localVoices = const [];
   LocalTtsHealth? _localHealth;
   bool _localLoading = false;
@@ -121,6 +122,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         _localVoiceId = saved.localVoiceId;
         _localVoiceName.text = saved.localVoiceName;
         _localReferencePath = saved.localReferencePath;
+        _localCloneAcknowledged = saved.localCloneAcknowledged;
       });
       if (_provider == 'local' && mounted) {
         await _loadLocalVoices();
@@ -280,6 +282,13 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       );
       return;
     }
+    if (!_localCloneAcknowledged) {
+      setState(
+        () => _cloneError =
+            'Confirm you have the right to clone this voice before enrolling.',
+      );
+      return;
+    }
     setState(() {
       _localEnrolling = true;
       _cloneError = null;
@@ -343,6 +352,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       localVoiceId: id,
       localVoiceName: name,
       localReferencePath: _localReferencePath,
+      localCloneAcknowledged: true,
     );
     _saved = saved;
     await _settings.save(saved);
@@ -471,6 +481,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       localVoiceId: _localVoiceId,
       localVoiceName: _localVoiceName.text.trim(),
       localReferencePath: _localReferencePath,
+      localCloneAcknowledged: _localCloneAcknowledged,
     );
     final chosen = await showDialog<NarrationSettings>(
       context: context,
@@ -622,6 +633,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           localVoiceId: _localVoiceId,
           localVoiceName: _localVoiceName.text.trim(),
           localReferencePath: _localReferencePath,
+          localCloneAcknowledged: _localCloneAcknowledged,
         ),
       );
     } catch (_) {
@@ -955,6 +967,25 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                     ],
                   ),
                   const SizedBox(height: 6),
+                  CheckboxListTile(
+                    key: const ValueKey('voiceover-local-clone-ack'),
+                    value: _localCloneAcknowledged,
+                    onChanged: _busy || _localEnrolling
+                        ? null
+                        : (value) => setState(
+                            () => _localCloneAcknowledged = value ?? false,
+                          ),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(
+                      'I have the right to use this voice and clip.',
+                      style: TextStyle(
+                        color: OrColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                   Row(
                     children: [
                       Expanded(

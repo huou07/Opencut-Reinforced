@@ -189,7 +189,9 @@ them. Android has no assistant: the desktop process boundary is explicit.
   does not answer fails with its own message instead of falling back silently.
   Enrolment lives in the server process, so a restart forgets the cloned voice;
   the dialog keeps the clip path, recognises a missing-voice answer (404/400 or
-  voice-worded text), re-enrols once and retries that line.
+  voice-worded text), re-enrols once and retries that line. Enrolment asks the
+  same rights acknowledgement the cloud clone consent asks, and refuses to enrol
+  until it is checked.
   The offline `tools/voiceover.mjs` path still uses the system voice.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.

@@ -108,6 +108,7 @@ void main() {
         localVoiceId: 'cloned',
         localVoiceName: 'My voice',
         localReferencePath: '/tmp/ref.wav',
+        localCloneAcknowledged: true,
       ),
     );
     final loaded = await store.load();
@@ -120,6 +121,7 @@ void main() {
     expect(loaded.localVoiceId, 'cloned');
     expect(loaded.localVoiceName, 'My voice');
     expect(loaded.localReferencePath, '/tmp/ref.wav');
+    expect(loaded.localCloneAcknowledged, isTrue);
   });
 
   test('the local provider is accepted and an unknown one falls back', () {
