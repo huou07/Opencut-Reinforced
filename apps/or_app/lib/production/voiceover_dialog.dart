@@ -461,22 +461,29 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     return results;
   }
 
+  /// The settings the dialog's inline choices currently amount to.
+  ///
+  /// Built from the stored settings with copyWith so a field this dialog does
+  /// not edit is carried forward instead of being rebuilt by hand (a
+  /// hand-built instance is how the acknowledgement went missing once).
+  NarrationSettings _draftSettings({String? voice}) => _saved.copyWith(
+    voice: voice ?? _voice ?? _saved.voice,
+    locale: _localeOf(voice ?? _voice) ?? _saved.locale,
+    rate: _rate.round(),
+    gapMs: _gapMs.round(),
+    provider: _provider,
+    cloudVoiceId: _cloudVoiceId,
+    azureRegion: _azureRegion,
+    localBaseUrl: _localBaseUrl,
+    localVoiceId: _localVoiceId,
+    localVoiceName: _localVoiceName.text.trim(),
+    localReferencePath: _localReferencePath,
+    localCloneAcknowledged: _localCloneAcknowledged,
+  );
+
   /// Opens the full voice surface, then adopts and persists its result.
   Future<void> _openVoiceSettings() async {
-    final current = NarrationSettings(
-      voice: _voice ?? _saved.voice,
-      locale: _localeOf(_voice) ?? _saved.locale,
-      rate: _rate.round(),
-      gapMs: _gapMs.round(),
-      provider: _provider,
-      cloudVoiceId: _cloudVoiceId,
-      azureRegion: _azureRegion,
-      localBaseUrl: _localBaseUrl,
-      localVoiceId: _localVoiceId,
-      localVoiceName: _localVoiceName.text.trim(),
-      localReferencePath: _localReferencePath,
-      localCloneAcknowledged: _localCloneAcknowledged,
-    );
+    final current = _draftSettings();
     final chosen = await showDialog<NarrationSettings>(
       context: context,
       builder: (context) => NarrationSettingsDialog(initial: current),
@@ -614,22 +621,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     // The inline choices are the next run's defaults; a failed write is not a
     // reason to refuse the narration.
     try {
-      await _settings.save(
-        NarrationSettings(
-          voice: voice ?? _saved.voice,
-          locale: _localeOf(voice) ?? _saved.locale,
-          rate: _rate.round(),
-          gapMs: _gapMs.round(),
-          provider: _provider,
-          cloudVoiceId: _cloudVoiceId,
-          azureRegion: _azureRegion,
-          localBaseUrl: _localBaseUrl,
-          localVoiceId: _localVoiceId,
-          localVoiceName: _localVoiceName.text.trim(),
-          localReferencePath: _localReferencePath,
-          localCloneAcknowledged: _localCloneAcknowledged,
-        ),
-      );
+      await _settings.save(_draftSettings(voice: voice));
     } catch (_) {
       // Persisting a preference is best-effort.
     }
