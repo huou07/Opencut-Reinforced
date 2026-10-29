@@ -380,8 +380,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           sampleRate: _localHealth?.sampleRate ?? 0,
         );
       } on LocalTtsException catch (error) {
-        if (_localReferencePath.isEmpty ||
-            !error.message.toLowerCase().contains('unknown voice')) {
+        if (_localReferencePath.isEmpty || !retryAfterReEnroll(error)) {
           rethrow;
         }
         // The server keeps enrolled voices in process memory only; after a

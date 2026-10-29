@@ -169,4 +169,40 @@ void main() {
     expect(File(output).lengthSync(), greaterThan(44));
     expect(played, [output]);
   });
+
+  test('a restarted server\'s missing voice is worth one re-enrol retry', () {
+    LocalTtsException http(int status, String message) =>
+        LocalTtsException('HTTP_$status', message);
+
+    // 404 is the OpenAI-shaped answer for an unknown voice.
+    expect(retryAfterReEnroll(http(404, 'Voice not found')), isTrue);
+    // Servers that answer 400 with the voice in the text.
+    expect(
+      retryAfterReEnroll(http(400, 'Unknown voice: Mai Anh')),
+      isTrue,
+    );
+    // A generic 400 (bad text) is not a voice problem but the retry is
+    // bounded to one attempt, so erring towards recovery is safe.
+    expect(retryAfterReEnroll(http(400, 'input is empty')), isTrue);
+    // Transport problems must not be retried blindly.
+    expect(
+      retryAfterReEnroll(
+        const LocalTtsException('OFFLINE', 'No local speech server.'),
+      ),
+      isFalse,
+    );
+    expect(
+      retryAfterReEnroll(
+        const LocalTtsException('TIMEOUT', 'The local server did not answer.'),
+      ),
+      isFalse,
+    );
+    expect(
+      retryAfterReEnroll(
+        const LocalTtsException('HTTP_500', 'internal voice error'),
+      ),
+      isFalse,
+    );
+    // The dialog's own guards still win: no clip, no retry.
+  });
 }

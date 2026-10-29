@@ -360,6 +360,23 @@ class LocalTtsService {
   }
 }
 
+/// Whether a failed speech request is worth one retry after re-enrolling the
+/// saved reference clip.
+///
+/// A local server keeps enrolled voices in its process: after it restarts it
+/// answers "unknown voice" (or 404/400) for a voice that was fine yesterday.
+/// The dialog keeps the clip path for exactly this case, so the trigger has to
+/// recognise the whole family of answers, not one string.
+bool retryAfterReEnroll(LocalTtsException error) {
+  if (error.code == 'HTTP_404' || error.code == 'HTTP_400') return true;
+  final message = error.message.toLowerCase();
+  return message.contains('voice') &&
+      (message.contains('unknown') ||
+          message.contains('not found') ||
+          message.contains('not enrolled') ||
+          message.contains('missing'));
+}
+
 /// `POST /v1/audio/speech`, the OpenAI shape every local server implements.
 LocalHttpRequest localSpeechRequest({
   required String baseUrl,

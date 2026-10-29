@@ -187,6 +187,9 @@ them. Android has no assistant: the desktop process boundary is explicit.
   can be enrolled as a cloned voice the app then narrates with. The server field
   is authoritative: an edited URL is probed before generating, and a server that
   does not answer fails with its own message instead of falling back silently.
+  Enrolment lives in the server process, so a restart forgets the cloned voice;
+  the dialog keeps the clip path, recognises a missing-voice answer (404/400 or
+  voice-worded text), re-enrols once and retries that line.
   The offline `tools/voiceover.mjs` path still uses the system voice.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.
