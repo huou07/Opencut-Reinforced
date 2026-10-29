@@ -264,11 +264,11 @@ after a tap also raced the build; the runner now settles before `tree`.
 
 ## Known gaps
 
-0. Project-open latency has no harness measurement: `interaction-latency` times
-   navigation and frame stepping, not the open path. The recents write no longer
-   serialises the first media/timeline fetch (2026-10-29) but the change is
-   structural; `save-reopen` passes, and a `measure` block around open is the
-   missing row.
+0. Project open is measured only as a round trip: `interaction-latency` gained
+   `project-open-and-close` (save, close to Home, reopen from recents, wait for
+   the empty timeline) — p50 2302 ms, p95 2353 ms on 2026-10-29, debug lane. The
+   block includes the close and the home transition, so it does not isolate the
+   open path; a row that starts at the recent card would.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
