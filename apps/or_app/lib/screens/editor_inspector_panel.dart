@@ -69,6 +69,24 @@ int? _pixelsToMilliPixels(String text) {
   return milli <= 128000 ? milli : null;
 }
 
+/// Accepted range of a visual number field, mirroring its formatter so the
+/// field can say the bound out loud instead of silently dropping keystrokes.
+String _visualRangeHint(String key) {
+  final limit = switch (key) {
+    'x' || 'y' || 'rotation' || 'brightness' => 10000,
+    'scale_x' || 'scale_y' => 128000,
+    'blur' => 128000,
+    'contrast' || 'saturation' => 4000,
+    _ => 10000,
+  };
+  final minimum = switch (key) {
+    'x' || 'y' || 'rotation' || 'brightness' => -limit,
+    'scale_x' || 'scale_y' => 1,
+    _ => 0,
+  };
+  return '$minimum to $limit';
+}
+
 class EditorInspectorPanel extends StatefulWidget {
   const EditorInspectorPanel({
     super.key,
@@ -802,6 +820,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       ],
       decoration: InputDecoration(
         labelText: label,
+        helperText: _visualRangeHint(key),
         isDense: true,
         counterText: '',
         contentPadding: const EdgeInsets.symmetric(
