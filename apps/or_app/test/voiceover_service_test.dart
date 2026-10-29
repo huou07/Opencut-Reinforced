@@ -68,6 +68,25 @@ void main() {
     );
   });
 
+  test('an unreadable voice table fails instead of listing nothing', () async {
+    final directory = await Directory.systemTemp.createTemp('or_say_empty');
+    addTearDown(() => directory.delete(recursive: true));
+    final script = File('${directory.path}/empty_say.sh');
+    await script.writeAsString('#!/bin/sh\necho "not a voice row"\n');
+    await Process.run('chmod', ['+x', script.path]);
+
+    await expectLater(
+      VoiceoverService(sayExecutable: script.path).listVoices(),
+      throwsA(
+        isA<VoiceoverException>().having(
+          (error) => error.message,
+          'message',
+          contains('say printed'),
+        ),
+      ),
+    );
+  });
+
   test('a system voice that never answers fails instead of hanging', () async {
     final directory = await Directory.systemTemp.createTemp('or_say_timeout');
     addTearDown(() => directory.delete(recursive: true));

@@ -117,6 +117,14 @@ class VoiceoverService {
       if (!seen.add('$name\u0000$locale')) continue;
       voices.add(VoiceOption(name: name, locale: locale));
     }
+    if (voices.isEmpty) {
+      // An empty catalog is a setup problem, not a valid answer: say printed
+      // rows that the app could not read as voice entries.
+      final rows = result.stdout.toString().split('\n').length;
+      throw VoiceoverException(
+        'No installed voice could be read (say printed $rows rows).',
+      );
+    }
     return voices;
   }
 

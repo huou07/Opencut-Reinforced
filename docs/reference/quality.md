@@ -229,7 +229,10 @@ and 112 removed.
   neither changed the result. Next hypotheses: the app's locale/environment
   makes `say -v ?` print a different table, or speech synthesis is gated by
   TCC in that launch context. `scripts/ui_scenarios/production-voice-music.json`
-  stays voice-dependent until then.
+  stays voice-dependent until then. The service now throws ("say printed N
+  rows") instead of returning an empty catalog, and the dialog shows the
+  empty-state text; a diagnostic scenario that waits for that error text is the
+  next cheap probe of the harness app's `say` output.
 
 ## Verification ideas not yet built
 
