@@ -335,12 +335,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     setState(() => _localReferencePath = recording.path);
   }
 
-  Future<void> _reEnrollLocal() async {
+  Future<void> _reEnrollLocal(String base) async {
     final name = _localVoiceName.text.trim().isEmpty
         ? (_saved.localVoiceName.isEmpty ? 'cloned' : _saved.localVoiceName)
         : _localVoiceName.text.trim();
     final id = await _local.enrollVoice(
-      baseUrl: _localBaseUrl,
+      baseUrl: base,
       name: name,
       referencePath: _localReferencePath,
     );
@@ -348,7 +348,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     // The server only remembers enrolments for the life of its process, so the
     // id it just handed back is the one the next launch must ask for.
     final saved = _saved.copyWith(
-      localBaseUrl: _localBaseUrl,
+      localBaseUrl: base,
       localVoiceId: id,
       localVoiceName: name,
       localReferencePath: _localReferencePath,
@@ -395,7 +395,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         }
         // The server keeps enrolled voices in process memory only; after a
         // restart it answers "unknown voice". Enrol the saved clip and retry.
-        await _reEnrollLocal();
+        await _reEnrollLocal(base);
         duration = await _local.synthesize(
           baseUrl: base,
           text: text,
