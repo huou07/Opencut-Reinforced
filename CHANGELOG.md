@@ -191,6 +191,11 @@ product still needs.
   record and a clip to enrol; a run without it stops with "tick the rights
   acknowledgement, then press Enrol voice" instead of silently cloning, and a
   re-enrolment records the new voice id and clip without touching consent.
+- **Preview no longer failed where Generate healed.** After the local speech
+  server restarted, pressing Preview with a cloned voice showed the server's raw
+  "unknown voice" error while Generate recovered by re-enrolling the saved clip.
+  Generate and Preview now share one recovery path, so an audition heals the
+  same voice, obeys the same consent rule, and plays the healed sample.
 - **The editor could look frozen after a native file panel.** macOS open/save
   panels are now sheets attached to the editor window with a single-flight guard
   and focus restoration after dismissal. A panel that previously ended up behind

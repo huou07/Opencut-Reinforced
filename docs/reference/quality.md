@@ -284,6 +284,10 @@ restored afterwards:
 - The acknowledgement on record produced exactly one enrolment POST and then a
   successful retried line ("Added 1 narration"), so the recovery still works when
   consent is there.
+- Pressing **Preview** with the acknowledgement off reached the same guidance and
+  sent no enrolment; with it on, the fake server logged the failed speech, one
+  `POST /v1/voices` and a second successful speech, and the dialog showed no
+  error — Preview and Generate take one recovery path.
 
 The fake server and its scenario are throwaway files; they are not committed.
 

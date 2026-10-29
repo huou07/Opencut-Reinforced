@@ -189,7 +189,9 @@ them. Android has no assistant: the desktop process boundary is explicit.
   does not answer fails with its own message instead of falling back silently.
   Enrolment lives in the server process, so a restart forgets the cloned voice;
   the dialog keeps the clip path, recognises a missing-voice answer (404/400 or
-  voice-worded text), re-enrols once and retries that line. Enrolment asks the
+  voice-worded text), re-enrols once and retries that clip. Generating a line
+  and pressing Preview take the same path, so a voice that heals while
+  generating also heals while auditioning. Enrolment asks the
   same rights acknowledgement the cloud clone consent asks, and refuses to enrol
   until it is checked. The automatic re-enrolment is a clone too, so it needs the
   acknowledgement still on record and a clip to enrol: without either, the run

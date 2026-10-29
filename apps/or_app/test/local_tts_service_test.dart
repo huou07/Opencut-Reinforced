@@ -192,7 +192,7 @@ void main() {
     );
   });
 
-  test('preview synthesises one sample and plays the file it wrote', () async {
+  test('the play hook receives the file just synthesised', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() => server.close(force: true));
     server.listen((request) async {
@@ -213,14 +213,15 @@ void main() {
     final service = LocalTtsService(playAudio: (path) async => played.add(path));
     final output = '${directory.path}/preview.wav';
 
-    final path = await service.preview(
+    final duration = await service.synthesize(
       baseUrl: '127.0.0.1:${server.port}',
       text: 'Xin chào',
       voiceId: 'Mai Anh',
       outputPath: output,
     );
+    await service.play(output);
 
-    expect(path, output);
+    expect(duration, 50);
     expect(File(output).lengthSync(), greaterThan(44));
     expect(played, [output]);
   });

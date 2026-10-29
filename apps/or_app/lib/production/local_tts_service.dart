@@ -128,26 +128,6 @@ class LocalTtsService {
     }
   }
 
-  /// Speaks a short [text] sample with [voiceId], plays it and returns the WAV
-  /// path, so a voice can be judged before synthesising a whole script.
-  Future<String> preview({
-    required String baseUrl,
-    required String text,
-    required String voiceId,
-    required String outputPath,
-    int sampleRate = 0,
-  }) async {
-    await synthesize(
-      baseUrl: baseUrl,
-      text: text,
-      voiceId: voiceId,
-      outputPath: outputPath,
-      sampleRate: sampleRate,
-    );
-    await play(outputPath);
-    return outputPath;
-  }
-
   /// Reads `/health` and `/v1/voices` so one round-trip validates the server.
   Future<LocalTtsStatus> probe(String baseUrl) async {
     final origin = normalizeBaseUrl(baseUrl);
