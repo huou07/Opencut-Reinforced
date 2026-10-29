@@ -212,8 +212,9 @@ their own increments with their own evidence.
    speed and shortcut labels, `apps/or_app/lib/screens/editor_rational_time.dart`
    the seconds → canonical time conversion,
    `apps/or_app/lib/screens/editor_timeline_panel.dart` the timeline panel, its
-   pointer/scrub gestures, rulers, painters, clip context menu and text-clip
-   editing, and
+   pointer/scrub gestures, clip context menu and text-clip editing,
+   `apps/or_app/lib/screens/editor_timeline_painters.dart` the ruler, grid and
+   placeholder painting, and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
    music workflows, `apps/or_app/lib/shell/export_flow.dart` the export job, its
    polling timer, the chosen destination and publishing the finished file,

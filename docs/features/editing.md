@@ -1,6 +1,6 @@
 # Feature — Timeline Editing
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-29
 
 Scope: the editing core — tracks, clips, exact-time operations, selection,
 snapping, undo, and the interaction surface that drives them.
@@ -38,7 +38,8 @@ trim/split behave normally; preview maps every offset to `source_start`.
 
 - Pointer: click/select, drag to move, drag clip edges to trim, marquee select and
   marquee drag, ruler scrub, playhead drag, clip context menu (including advanced
-  trim/slip/roll/move dialogs).
+  trim/slip/roll/move dialogs). Right-click selects the clip it acts on, so the
+  menu and the inspector describe the clip that was pointed at.
 - Keyboard: shortcuts resolve through one shell `Shortcuts`/`Actions` map and
   never fire while a text field holds focus. Blade tool toggles with C/V.
 - Every gesture dispatches one command; no optimistic edit geometry is applied
