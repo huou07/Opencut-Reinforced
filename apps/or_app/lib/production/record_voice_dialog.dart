@@ -56,6 +56,9 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
   @override
   void dispose() {
     _ticker?.cancel();
+    // A dialog torn down mid-take must not leave the native recorder running:
+    // nothing would be left on screen showing the microphone is still open.
+    if (_recording) unawaited(_recorder.stop().catchError((_) => 0));
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -163,6 +166,16 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
     }
   }
 
+  /// An explicit Cancel must respect the running take too: `Navigator.pop`
+  /// from a button bypasses `PopScope`, which only guards system pops.
+  void _requestClose() {
+    if (_recording) {
+      setState(() => _notice = 'Stop the take before closing.');
+      return;
+    }
+    Navigator.of(context).pop();
+  }
+
   Future<void> _play() async {
     final file = _file;
     if (file == null || _recording) return;
@@ -226,7 +239,13 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
   Widget build(BuildContext context) {
     final file = _file;
     final canUse = file != null && !_recording && (_durationMs ?? 0) > 0;
-    return AlertDialog(
+    return PopScope(
+      canPop: !_recording,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        setState(() => _notice = 'Stop the take before closing.');
+      },
+      child: AlertDialog(
       title: const Text('Record voice'),
       content: SizedBox(
         width: 520,
@@ -317,7 +336,7 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
       ),
       actions: [
         TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          onPressed: _busy ? null : _requestClose,
           child: const Text('Cancel'),
         ),
         TextButton(
@@ -335,6 +354,7 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
           child: const Text('Add to timeline'),
         ),
       ],
+      ),
     );
   }
 }

@@ -38,6 +38,9 @@ justification and review.
   drum intent, the interpreted values replace the fine-tune controls and a
   readback line shows exactly what will be generated; one-tap examples start a
   common request, and **Variation** reseeds the bed without changing the read.
+  **Record voice…** will not close while a take runs — Cancel, Escape and the
+  barrier all say why — and tearing the dialog down stops the capture instead of
+  leaving the microphone open.
   Generation is a bounded batch of ordinary commands, not
   a second project model. The voice a narration run uses is chosen in
   **Settings → Narration**, where it can be searched and previewed at the

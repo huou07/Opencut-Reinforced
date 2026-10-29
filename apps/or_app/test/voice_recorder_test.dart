@@ -16,6 +16,7 @@ class _FakeRecorder extends VoiceRecorder {
   int requests = 0;
   bool started = false;
   bool stopped = false;
+  int stops = 0;
   bool openedSettings = false;
   String? path;
 
@@ -47,6 +48,7 @@ class _FakeRecorder extends VoiceRecorder {
   @override
   Future<int> stop() async {
     stopped = true;
+    stops += 1;
     return 1500;
   }
 }
@@ -187,6 +189,80 @@ void main() {
     expect(result, isNotNull);
     expect(result!.durationMs, 1500);
     expect(result!.path, recorder.path);
+  });
+
+  testWidgets('closing mid-take is refused, and a torn-down dialog stops it', (
+    tester,
+  ) async {
+    // Nothing on screen should keep the microphone open: the dialog refuses to
+    // close while a take runs, and even a forced teardown stops the recorder.
+    final recorder = _FakeRecorder();
+    Future<void> open() async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showDialog<VoiceRecording>(
+                    context: context,
+                    builder: (context) => RecordVoiceDialog(
+                      recorder: recorder,
+                      temporaryDirectory: () async => Directory.systemTemp,
+                      supportDirectory: () async => Directory.systemTemp,
+                    ),
+                  ),
+                  child: const Text('Open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await open();
+    await tester.tap(find.byKey(const ValueKey('record-voice-toggle')));
+    await tester.pump();
+    expect(recorder.started, isTrue);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(
+      find.byType(AlertDialog),
+      findsOneWidget,
+      reason: 'an in-flight take cannot be dismissed',
+    );
+    expect(
+      find.text('Stop the take before closing.'),
+      findsOneWidget,
+      reason: 'the refusal explains itself',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('record-voice-toggle')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(recorder.stops, 1);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+
+    // Reopen, start another take, then tear the tree down mid-take.
+    await open();
+    await tester.tap(find.byKey(const ValueKey('record-voice-toggle')));
+    await tester.pump();
+    expect(recorder.started, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(
+      recorder.stops,
+      2,
+      reason: 'disposing the dialog releases the microphone',
+    );
   });
 
   testWidgets('the first take sends the macOS permission request', (
