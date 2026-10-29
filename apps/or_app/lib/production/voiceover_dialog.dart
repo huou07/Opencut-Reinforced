@@ -890,11 +890,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     key: ValueKey('voiceover-local-voice-$_localVoiceId'),
-                    initialValue: _localVoices.any(
-                      (voice) => voice.id == _localVoiceId,
-                    )
-                        ? _localVoiceId
-                        : null,
+                    initialValue: presentVoiceId(
+                      _localVoices.map((voice) => voice.id),
+                      _localVoiceId,
+                    ),
                     isExpanded: true,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -1109,11 +1108,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                             key: ValueKey(
                               'voiceover-cloud-voice-$_cloudVoiceId',
                             ),
-                            initialValue: _cloudVoices.any(
-                              (voice) => voice.id == _cloudVoiceId,
-                            )
-                                ? _cloudVoiceId
-                                : null,
+                            initialValue: presentVoiceId(
+                              _cloudVoices.map((voice) => voice.id),
+                              _cloudVoiceId,
+                            ),
                             isExpanded: true,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
@@ -1267,3 +1265,12 @@ String? localVoiceHintText({
   }
   return 'Press Connect to list the voices on this server.';
 }
+
+/// Keeps a dropdown value only while its item list still contains it.
+///
+/// A voice list can be replaced wholesale (provider switch, new server
+/// address) while the previously chosen id lives on in settings; handing that
+/// id to a dropdown whose items no longer contain it trips Flutter's
+/// single-match assertion.
+String? presentVoiceId(Iterable<String> ids, String candidate) =>
+    ids.contains(candidate) ? candidate : null;
