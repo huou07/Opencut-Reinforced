@@ -977,6 +977,23 @@ fn transcription_service_failure(
     TranscriptionResponse::Failure(TranscriptionFailure::new(code, error.to_string()))
 }
 
+/// How many artifact jobs may run at once.
+///
+/// Two jobs keep playback responsive on small machines; wider machines halve
+/// the cold-import fill time instead of leaving cores idle. Measured on this
+/// host with `crates/or_core/tests/artifact_throughput.rs` (16 artifacts):
+/// 34.4 ms each at one worker, 15.3 ms at two, 8.7 ms at four, 5.9 ms at eight.
+fn media_artifact_worker_count() -> usize {
+    let parallelism = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(2);
+    media_artifact_worker_count_for(parallelism)
+}
+
+fn media_artifact_worker_count_for(parallelism: usize) -> usize {
+    if parallelism >= 6 { 4 } else { 2 }
+}
+
 fn create_media_artifact_service() -> Option<MediaArtifactService> {
     #[cfg(target_os = "android")]
     {
@@ -986,7 +1003,7 @@ fn create_media_artifact_service() -> Option<MediaArtifactService> {
     #[cfg(not(target_os = "android"))]
     {
         let cache_root = media_artifact_cache_root()?;
-        let jobs = JobManagerConfig::new(2, 32, 128).ok()?;
+        let jobs = JobManagerConfig::new(media_artifact_worker_count(), 32, 128).ok()?;
         let cache = CacheStoreConfig::new(8 * 1024 * 1024, 256 * 1024 * 1024).ok()?;
         MediaArtifactService::new(MediaArtifactServiceConfig::new(
             cache_root,
@@ -3981,8 +3998,9 @@ fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImport
                 return Err(error);
             }
             match or_media::probe_media_path(path) {
-                Ok(probe_output) => prepare_media_import_with_probe(path, &probe_output)
-                    .map_err(|_| error),
+                Ok(probe_output) => {
+                    prepare_media_import_with_probe(path, &probe_output).map_err(|_| error)
+                }
                 Err(_) => Err(error),
             }
         }
@@ -4411,15 +4429,17 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
         },
         offset_x_basis_points: formatting.offset_x_basis_points,
         offset_y_basis_points: formatting.offset_y_basis_points,
-        background: formatting.background.map(|background| ProjectTextBackgroundView {
-            color: ProjectTextColorView {
-                red: background.color.red,
-                green: background.color.green,
-                blue: background.color.blue,
-                alpha: background.color.alpha,
-            },
-            padding_milli_points: background.padding_milli_points,
-        }),
+        background: formatting
+            .background
+            .map(|background| ProjectTextBackgroundView {
+                color: ProjectTextColorView {
+                    red: background.color.red,
+                    green: background.color.green,
+                    blue: background.color.blue,
+                    alpha: background.color.alpha,
+                },
+                padding_milli_points: background.padding_milli_points,
+            }),
         opacity_basis_points: formatting.opacity_basis_points,
     }
 }
@@ -4985,9 +5005,9 @@ mod tests {
     use super::{
         CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectCaptionCueView,
         ProjectHostHandle, audio_settings_view, configured_media_artifact_cache_root,
-        effects_from_view, media_artifact_event_view, operation_error_code, rational_time_millis,
-        rational_time_view, timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
-        timeline_track_view, visual_settings_view,
+        effects_from_view, media_artifact_event_view, media_artifact_worker_count_for,
+        operation_error_code, rational_time_millis, rational_time_view, timeline_clip_page_view,
+        timeline_marker_page_view, timeline_snap_view, timeline_track_view, visual_settings_view,
     };
     use crate::transcription::TranscriptionService;
     use or_core::{
@@ -5020,6 +5040,17 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// Two workers keep playback responsive on small machines; four halve the
+    /// cold-import fill time once a machine has cores to spare.
+    #[test]
+    fn artifact_pool_width_follows_core_count() {
+        assert_eq!(media_artifact_worker_count_for(1), 2);
+        assert_eq!(media_artifact_worker_count_for(4), 2);
+        assert_eq!(media_artifact_worker_count_for(5), 2);
+        assert_eq!(media_artifact_worker_count_for(6), 4);
+        assert_eq!(media_artifact_worker_count_for(10), 4);
     }
 
     fn handle_without_artifact_service(directory: &TestHostDirectory) -> ProjectHostHandle {

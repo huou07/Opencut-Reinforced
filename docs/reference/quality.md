@@ -59,6 +59,25 @@ This row has no source decode in it: a project with camera media will show a
 smaller multiple, because decode adds work to the render side that pipelining
 cannot overlap with itself.
 
+### Media artifact pool width (2026-10-29)
+
+- Workload: the ignored `artifact_throughput_by_pool_width` test —
+  `crates/or_core/tests/artifact_throughput.rs` — generating one thumbnail and
+  one waveform for each of eight 640×360, 1.5 s clips (16 artifacts), cold cache,
+  at four pool widths.
+- Source/build: `or_core` release test profile, system FFmpeg 8.x.
+- Codec/backend: H.264/AAC sources, FFmpeg subprocess per artifact.
+- Machine: MacBook Air M5 (Mac17,3), 10 CPU cores, 16 GB unified memory, idle
+  host.
+- Result: 34.4 ms per artifact at one worker, 15.3 ms at two (2.2×), 8.7 ms at
+  four (1.8×), 5.9 ms at eight. Scaling stays close to linear because a job is
+  one short-lived FFmpeg process, not a persisted thread.
+- Decision: the app asks for four workers when the machine reports at least six
+  parallel slots and two otherwise (`media_artifact_worker_count` in
+  `crates/or_app_bridge/src/api/project.rs`), so a cold multi-clip import fills
+  the library about twice as fast while four of ten cores remain for preview and
+  playback.
+
 These are measurements of one workload, not a budget row: they are not enforced
 by `scripts/bench_quality.py` and must be re-measured before being quoted again.
 
