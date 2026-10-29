@@ -56,4 +56,49 @@ void main() {
 
     expect(plan.keys, ['video']);
   });
+
+  test('only a failed preview of the supported kind is retryable', () {
+    final video = _video('m1');
+    const failed = ProjectMediaPreview(
+      kind: ProjectMediaArtifactKind.thumbnail,
+      state: ProjectMediaArtifactRequestState.failed,
+    );
+    final queued = retryablePreview(video, failed);
+    expect(queued, isNotNull);
+    expect(queued!.kind, ProjectMediaArtifactKind.thumbnail);
+    expect(queued.state, ProjectMediaArtifactRequestState.queued);
+
+    expect(retryablePreview(video, null), isNull);
+    expect(
+      retryablePreview(
+        video,
+        const ProjectMediaPreview(
+          kind: ProjectMediaArtifactKind.waveform,
+          state: ProjectMediaArtifactRequestState.failed,
+        ),
+      ),
+      isNull,
+    );
+    expect(
+      retryablePreview(
+        video,
+        const ProjectMediaPreview(
+          kind: ProjectMediaArtifactKind.thumbnail,
+          state: ProjectMediaArtifactRequestState.ready,
+        ),
+      ),
+      isNull,
+    );
+    final audio = _audio('a1');
+    expect(
+      retryablePreview(
+        audio,
+        const ProjectMediaPreview(
+          kind: ProjectMediaArtifactKind.thumbnail,
+          state: ProjectMediaArtifactRequestState.failed,
+        ),
+      ),
+      isNull,
+    );
+  });
 }

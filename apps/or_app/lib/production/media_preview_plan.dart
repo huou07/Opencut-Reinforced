@@ -25,3 +25,26 @@ Map<String, ProjectMediaPreview> planMediaPreviews(
   }
   return next;
 }
+
+/// The preview a retry would install for [item], or `null` when the tile is
+/// not in a state a retry can act on.
+///
+/// The guard mirrors what the user sees: only a *failed* preview of the kind the
+/// media still supports can be retried, so a stale entry (for example a
+/// thumbnail of an item that just became audio-less) never resurrects a request.
+ProjectMediaPreview? retryablePreview(
+  ProjectMediaItem item,
+  ProjectMediaPreview? current,
+) {
+  final kind = mediaPreviewKind(item);
+  if (kind == null ||
+      current == null ||
+      current.kind != kind ||
+      current.state != ProjectMediaArtifactRequestState.failed) {
+    return null;
+  }
+  return ProjectMediaPreview(
+    kind: kind,
+    state: ProjectMediaArtifactRequestState.queued,
+  );
+}

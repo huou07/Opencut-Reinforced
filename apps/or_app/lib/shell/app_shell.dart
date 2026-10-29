@@ -4551,22 +4551,9 @@ class _AppShellState extends State<AppShell> {
   void _retryMediaPreview(ProjectMediaItem item) {
     final session = _activeSession;
     if (session == null || !mounted) return;
-    final kind = mediaPreviewKind(item);
-    final current = _mediaPreviews[item.mediaId];
-    if (kind == null ||
-        current == null ||
-        current.kind != kind ||
-        current.state != ProjectMediaArtifactRequestState.failed) {
-      return;
-    }
-    _updateMediaPreview(
-      session,
-      item.mediaId,
-      ProjectMediaPreview(
-        kind: kind,
-        state: ProjectMediaArtifactRequestState.queued,
-      ),
-    );
+    final queued = retryablePreview(item, _mediaPreviews[item.mediaId]);
+    if (queued == null) return;
+    _updateMediaPreview(session, item.mediaId, queued);
     _mediaPreviewQueue.retry(item);
     _scheduleMediaPreviewRequests(session);
   }
