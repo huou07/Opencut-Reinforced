@@ -31,6 +31,8 @@ class EditorMediaItemPreview extends StatelessWidget {
         ? ProjectMediaArtifactKind.waveform
         : null;
     final failed = preview?.state == ProjectMediaArtifactRequestState.failed;
+    final running = preview?.kind == kind &&
+        preview?.state == ProjectMediaArtifactRequestState.running;
     final bytes = preview?.kind == kind && !failed ? preview?.bytes : null;
     final label = kind == ProjectMediaArtifactKind.thumbnail
         ? 'Thumbnail preview for ${mediaDisplayName(item.sourceUri)}'
@@ -65,7 +67,20 @@ class EditorMediaItemPreview extends StatelessWidget {
               ),
             )
           : bytes == null
-          ? Center(
+          ? running
+                ? Center(
+                    key: ValueKey('media-preview-progress-${item.mediaId}'),
+                    child: Semantics(
+                      label: 'Generating preview for '
+                          '${mediaDisplayName(item.sourceUri)}',
+                      child: const Icon(
+                        Icons.hourglass_top,
+                        size: 14,
+                        color: OrColors.textMuted,
+                      ),
+                    ),
+                  )
+                : Center(
               child: Icon(
                 hasVideo
                     ? Icons.movie_outlined

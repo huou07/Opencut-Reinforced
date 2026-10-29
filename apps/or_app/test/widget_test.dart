@@ -1042,6 +1042,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a running preview shows progress instead of a blank glyph', (
+    tester,
+  ) async {
+    // A queued/running artifact used to look identical to "no preview at all",
+    // so a slow first thumbnail read as a broken item.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-slow', '/tmp/slow.mp4')]
+      ..artifactRequestResponses['media-slow:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-slow',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.running,
+            cacheKey: 'slow-cache',
+            jobId: 'slow-job',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/slow-preview.orproj',
+    );
+    await _createProject(tester, 'Slow Preview');
+
+    expect(
+      find.byKey(const ValueKey('media-preview-progress-media-slow')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the whole failed preview tile is the retry target', (
     tester,
   ) async {
