@@ -256,9 +256,14 @@ select it explicitly (`voiceover-provider-system`). A tree captured right
 after a tap also raced the build; the runner now settles before `tree`.
 
 ## Verification ideas not yet built
-- The inspector's validation line (`inspector-error`, now a live region) has no
-  assertion: a scenario that types an invalid gain into `inspector-audio-gain_db`
-  and expects `inspector-error` would pin both the copy and the announcement.
+- The inspector's validation line (`inspector-error`, now a live region) cannot
+  be reached by typing: `_audioNumberField`'s input formatter rejects an
+  out-of-range keystroke before Apply ever sees it, so the field silently stops
+  updating instead. A scenario that types `100` into `inspector-audio-gain_db`
+  therefore applied a valid `0` and never showed the error. Either the formatter
+  should accept out-of-range input and let Apply speak, or the fields should say
+  they are clamped — deciding that is the next step, and it needs the assertion
+  either way.
 
 
 - A generation-gated fake (`summaryGate`, `mediaPageGate`) can pin the
