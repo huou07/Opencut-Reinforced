@@ -19,6 +19,10 @@ class NarrationSettings {
     this.provider = 'system',
     this.cloudVoiceId = '',
     this.azureRegion = '',
+    this.localBaseUrl = '',
+    this.localVoiceId = '',
+    this.localVoiceName = '',
+    this.localReferencePath = '',
   });
 
   /// The installed macOS voice name, for example `Linh`. Empty means "let the
@@ -34,7 +38,8 @@ class NarrationSettings {
   /// Silence between narration lines, in milliseconds.
   final int gapMs;
 
-  /// `system`, `elevenlabs` or `azure`. Empty/unknown reads as `system`.
+  /// `system`, `elevenlabs`, `azure` or `local`. Empty/unknown reads as
+  /// `system`.
   final String provider;
 
   /// The cloud voice id the last run used; empty means "ask next time".
@@ -44,6 +49,20 @@ class NarrationSettings {
   /// itself lives in the keychain.
   final String azureRegion;
 
+  /// The loopback address of a local, keyless speech server. Empty means the
+  /// default `http://127.0.0.1:8000`.
+  final String localBaseUrl;
+
+  /// The voice a local server offers, including one cloned from a clip.
+  final String localVoiceId;
+
+  /// The name given to a cloned voice when it was enrolled.
+  final String localVoiceName;
+
+  /// The reference clip the server cloned; kept so a restarted server can be
+  /// re-enrolled without asking for the file again.
+  final String localReferencePath;
+
   NarrationSettings copyWith({
     String? voice,
     String? locale,
@@ -52,6 +71,10 @@ class NarrationSettings {
     String? provider,
     String? cloudVoiceId,
     String? azureRegion,
+    String? localBaseUrl,
+    String? localVoiceId,
+    String? localVoiceName,
+    String? localReferencePath,
   }) => NarrationSettings(
     voice: voice ?? this.voice,
     locale: locale ?? this.locale,
@@ -60,10 +83,14 @@ class NarrationSettings {
     provider: provider ?? this.provider,
     cloudVoiceId: cloudVoiceId ?? this.cloudVoiceId,
     azureRegion: azureRegion ?? this.azureRegion,
+    localBaseUrl: localBaseUrl ?? this.localBaseUrl,
+    localVoiceId: localVoiceId ?? this.localVoiceId,
+    localVoiceName: localVoiceName ?? this.localVoiceName,
+    localReferencePath: localReferencePath ?? this.localReferencePath,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 2,
+    'version': 3,
     'voice': voice,
     'locale': locale,
     'rate': rate,
@@ -71,6 +98,10 @@ class NarrationSettings {
     'provider': provider,
     'cloud_voice_id': cloudVoiceId,
     'azure_region': azureRegion,
+    'local_base_url': localBaseUrl,
+    'local_voice_id': localVoiceId,
+    'local_voice_name': localVoiceName,
+    'local_reference_path': localReferencePath,
   };
 
   static NarrationSettings fromJson(Object? value) {
@@ -78,6 +109,11 @@ class NarrationSettings {
     String text(String key) {
       final raw = value[key];
       return raw is String && raw.length <= 256 ? raw : '';
+    }
+
+    String path(String key) {
+      final raw = value[key];
+      return raw is String && raw.length <= 1024 ? raw : '';
     }
 
     int bounded(Object? raw, int fallback, int minimum, int maximum) {
@@ -92,11 +128,16 @@ class NarrationSettings {
       locale: text('locale'),
       rate: bounded(value['rate'], 180, 90, 400),
       gapMs: bounded(value['gap_ms'], 250, 0, 10000),
-      provider: const {'system', 'elevenlabs', 'azure'}.contains(provider)
+      provider:
+          const {'system', 'elevenlabs', 'azure', 'local'}.contains(provider)
           ? provider
           : 'system',
       cloudVoiceId: text('cloud_voice_id'),
       azureRegion: text('azure_region'),
+      localBaseUrl: text('local_base_url'),
+      localVoiceId: text('local_voice_id'),
+      localVoiceName: text('local_voice_name'),
+      localReferencePath: path('local_reference_path'),
     );
   }
 
@@ -131,9 +172,8 @@ class NarrationSettings {
 /// Writes are serialized so two quick changes cannot interleave, and a corrupt
 /// file falls back to the defaults rather than breaking the Audio tool.
 class NarrationSettingsStore {
-  NarrationSettingsStore({
-    Future<Directory> Function()? supportDirectory,
-  }) : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
+  NarrationSettingsStore({Future<Directory> Function()? supportDirectory})
+    : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDirectory;
   Future<void> _pending = Future<void>.value();

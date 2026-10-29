@@ -16,6 +16,7 @@ import '../design/or_colors.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../motion/motion_insert_log.dart';
+import 'editor_tool_actions.dart';
 import '../motion/motion_library_controller.dart';
 import '../production/editor_settings.dart';
 import '../motion/motion_library_models.dart';
@@ -1746,82 +1747,28 @@ class _EditorToolPanel extends StatelessWidget {
       return _ToolActionsPanel(
         title: 'Text',
         showTitle: false,
-        subtitle:
-            'Titles and captions live on their own tracks. Select a clip to '
-            'edit its content and formatting in the inspector.',
-        actions: [
-          _ToolAction(
-            keyName: 'tool-add-text-track',
-            label: 'Add text track',
-            icon: Icons.text_fields_outlined,
-            onPressed: onAddTextTrack,
-          ),
-          _ToolAction(
-            keyName: 'tool-add-caption-track',
-            label: 'Add caption track',
-            icon: Icons.subtitles_outlined,
-            onPressed: onAddCaptionTrack,
-          ),
-          _ToolAction(
-            keyName: 'tool-import-captions',
-            label: 'Import captions…',
-            icon: Icons.file_open_outlined,
-            onPressed: onImportCaptions,
-          ),
-          _ToolAction(
-            keyName: 'tool-export-captions',
-            label: 'Export captions…',
-            icon: Icons.file_download_outlined,
-            onPressed: onExportCaptions,
-          ),
-        ],
+        subtitle: textToolSubtitle,
+        actions: textToolActions(
+          onAddTextTrack: onAddTextTrack,
+          onAddCaptionTrack: onAddCaptionTrack,
+          onImportCaptions: onImportCaptions,
+          onExportCaptions: onExportCaptions,
+        ),
       );
     }
     if (selectedTool == 'Audio') {
       return _ToolActionsPanel(
         title: 'Audio',
         showTitle: false,
-        subtitle:
-            'Audio clips carry gain, pan and fade times. The inspector shows '
-            'them in dB, % and seconds for the selected clip.',
-        actions: [
-          _ToolAction(
-            keyName: 'tool-add-audio-track',
-            label: 'Add audio track',
-            icon: Icons.graphic_eq_outlined,
-            onPressed: onAddAudioTrack,
-          ),
-          _ToolAction(
-            keyName: 'tool-import-audio',
-            label: 'Import audio or video…',
-            icon: Icons.add,
-            onPressed: onImportMedia,
-          ),
-          _ToolAction(
-            keyName: 'tool-record-voice',
-            label: 'Record voice…',
-            icon: Icons.mic_none_outlined,
-            onPressed: onRecordVoice,
-          ),
-          _ToolAction(
-            keyName: 'tool-generate-voiceover',
-            label: 'Generate voiceover…',
-            icon: Icons.record_voice_over_outlined,
-            onPressed: onGenerateVoiceover,
-          ),
-          _ToolAction(
-            keyName: 'tool-generate-music',
-            label: 'Generate music…',
-            icon: Icons.music_note_outlined,
-            onPressed: onGenerateMusic,
-          ),
-          _ToolAction(
-            keyName: 'tool-speech-model',
-            label: 'Speech model…',
-            icon: Icons.mic_none_outlined,
-            onPressed: onManageSpeechModel,
-          ),
-        ],
+        subtitle: audioToolSubtitle,
+        actions: audioToolActions(
+          onAddAudioTrack: onAddAudioTrack,
+          onImportMedia: onImportMedia,
+          onRecordVoice: onRecordVoice,
+          onGenerateVoiceover: onGenerateVoiceover,
+          onGenerateMusic: onGenerateMusic,
+          onManageSpeechModel: onManageSpeechModel,
+        ),
       );
     }
     if (selectedTool == 'Motion') {
@@ -1873,20 +1820,6 @@ class _EditorToolPanel extends StatelessWidget {
   }
 }
 
-class _ToolAction {
-  const _ToolAction({
-    required this.keyName,
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String keyName;
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-}
-
 /// A short, honest tool panel: a sentence about what the tool does and the
 /// actions it really performs. No "Unavailable" placeholder.
 class _ToolActionsPanel extends StatelessWidget {
@@ -1899,7 +1832,7 @@ class _ToolActionsPanel extends StatelessWidget {
 
   final String title;
   final String subtitle;
-  final List<_ToolAction> actions;
+  final List<EditorToolAction> actions;
 
   /// The tab strip above already names the category, so the panel must not
   /// repeat it as a second title row.

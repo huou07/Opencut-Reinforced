@@ -149,6 +149,10 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
       provider: widget.initial.provider,
       cloudVoiceId: widget.initial.cloudVoiceId,
       azureRegion: widget.initial.azureRegion,
+      localBaseUrl: widget.initial.localBaseUrl,
+      localVoiceId: widget.initial.localVoiceId,
+      localVoiceName: widget.initial.localVoiceName,
+      localReferencePath: widget.initial.localReferencePath,
     );
     try {
       await _store.save(settings);

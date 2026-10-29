@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -40,7 +40,10 @@ justification and review.
   common request, and **Variation** reseeds the bed without changing the read.
   Generation is a bounded batch of ordinary commands, not
   a second project model. The voice a narration run uses is chosen in
-  **Settings → Narration**, where it can be searched and previewed. The same
+  **Settings → Narration**, where it can be searched and previewed. The Generate
+  voiceover dialog also picks the source: installed voices, a cloud provider, or
+  a **Local server** with voice cloning; a local server needs no key and can
+  enrol a recorded or chosen 3–8 s reference clip as a cloned voice. The same
   Settings panel holds the cloud provider cards (key save/test/remove, Azure
   region, ElevenLabs personal-voice creation from a recorded WAV sample); keys
   live in the macOS keychain, not in this app's files.

@@ -1,6 +1,6 @@
 # Product Requirements Inventory
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: what OR is meant to be, area by area, with maturity labels. This is the
 requirement inventory, not implemented status — current work is selected by
@@ -86,12 +86,13 @@ workspace also carries an offline production workflow: an `or-assistant-script`,
 macOS `say` narration with exact caption timing, reviewed SRT import, and a
 generated royalty-free music bed
 ([assistant.md](../features/assistant.md)). The Audio tool also generates
-offline narration (macOS `say`) and royalty-free music beds in-app, with exact
-captions and optional −12 dB ducking under a voice track; the visible voice and
-music surfaces are no longer assistant-only.
+offline narration (macOS `say`, or a local keyless speech server with instant
+voice cloning from a reference clip) and royalty-free music beds in-app, with
+exact captions and optional −12 dB ducking under a voice track; the visible
+voice and music surfaces are no longer assistant-only.
 
 **PLANNED/FUTURE:** translation, dubbing, scene/silence analysis, selected
-generative assets, neural/cloud voices and music, and optional cloud providers
+generative assets, hosted voices and music, and optional hosted providers
 inside OR. Requirements: provider-independent tasks returning proposals/assets,
 review before apply, credentials outside project/CLI, explicit consent and cost,
 no bundled model weights by default, no network call in deterministic rendering.

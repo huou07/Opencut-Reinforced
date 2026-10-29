@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../project/project_gateway.dart';
 import 'cloud_voice_service.dart';
+import 'local_tts_service.dart';
 import 'narration_settings.dart';
 import 'narration_settings_dialog.dart';
+import 'record_voice_dialog.dart';
 import 'voiceover_service.dart';
 
 /// Collects a script and runs offline narration into the open project.
@@ -35,7 +38,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   final TextEditingController _script = TextEditingController();
   final VoiceoverService _voiceover = VoiceoverService();
   final CloudTtsService _cloud = CloudTtsService();
+  final LocalTtsService _local = LocalTtsService();
   final NarrationSettingsStore _settings = NarrationSettingsStore();
+  final TextEditingController _localUrl = TextEditingController();
+  final TextEditingController _localVoiceName = TextEditingController();
   late final VoiceoverApplier _applier = VoiceoverApplier(widget.gateway);
 
   List<VoiceOption> _voices = const [];
@@ -45,6 +51,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   String _provider = 'system';
   String _cloudVoiceId = '';
   String _azureRegion = '';
+  String _localBaseUrl = LocalTtsService.defaultBaseUrl;
+  String _localVoiceId = '';
+  String _localReferencePath = '';
+  List<LocalTtsVoice> _localVoices = const [];
+  LocalTtsHealth? _localHealth;
+  bool _localLoading = false;
+  bool _localEnrolling = false;
+  String? _localError;
   bool _cloudLoading = false;
   String? _cloudError;
   double _rate = 180;
@@ -63,6 +77,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   @override
   void dispose() {
     _script.dispose();
+    _localUrl.dispose();
+    _localVoiceName.dispose();
     super.dispose();
   }
 
@@ -86,8 +102,17 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         _azureRegion = saved.azureRegion;
         _rate = saved.rate.toDouble();
         _gapMs = saved.gapMs.toDouble();
+        _localBaseUrl = saved.localBaseUrl.isEmpty
+            ? LocalTtsService.defaultBaseUrl
+            : saved.localBaseUrl;
+        _localUrl.text = _localBaseUrl;
+        _localVoiceId = saved.localVoiceId;
+        _localVoiceName.text = saved.localVoiceName;
+        _localReferencePath = saved.localReferencePath;
       });
-      if (_provider != 'system' && mounted) {
+      if (_provider == 'local' && mounted) {
+        await _loadLocalVoices();
+      } else if (_provider != 'system' && mounted) {
         await _loadCloudVoices();
       }
     } on VoiceoverException catch (error) {
@@ -99,6 +124,23 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       ? CloudVoiceProvider.elevenLabs
       : CloudVoiceProvider.azure;
 
+  /// Every source the dialog can speak through, in review order: the
+  /// installed voice first because it needs no setup at all.
+  static const List<String> _voiceSources = [
+    'system',
+    'local',
+    'elevenlabs',
+    'azure',
+  ];
+
+  static String _voiceSourceLabel(String source) => switch (source) {
+    'system' => 'Installed voices (offline)',
+    'local' => 'Local server (clones a voice)',
+    'elevenlabs' => 'ElevenLabs (cloud)',
+    'azure' => 'Azure (cloud)',
+    _ => source,
+  };
+
   Future<void> _setProvider(String provider) async {
     if (provider == _provider) return;
     setState(() {
@@ -106,8 +148,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       _cloudVoices = const [];
       _cloudError = null;
       _cloudVoiceId = provider == _saved.provider ? _saved.cloudVoiceId : '';
+      _localVoices = const [];
+      _localError = null;
+      _localHealth = null;
+      _localVoiceId = provider == _saved.provider ? _saved.localVoiceId : '';
     });
-    if (provider != 'system') {
+    if (provider == 'local') {
+      await _loadLocalVoices();
+    } else if (provider != 'system') {
       await _loadCloudVoices();
     }
   }
@@ -147,6 +195,163 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         });
       }
     }
+  }
+
+  Future<void> _loadLocalVoices() async {
+    final base = LocalTtsService.normalizeBaseUrl(_localUrl.text);
+    setState(() {
+      _localLoading = true;
+      _localError = null;
+    });
+    try {
+      final status = await _local.probe(base);
+      if (!mounted) return;
+      final savedId = _localVoiceId.isNotEmpty
+          ? _localVoiceId
+          : _saved.localVoiceId;
+      final preferred = status.voices.any((voice) => voice.id == savedId)
+          ? savedId
+          : (status.voices.isEmpty ? '' : status.voices.first.id);
+      setState(() {
+        _localBaseUrl = base;
+        _localUrl.text = base;
+        _localHealth = status.health;
+        _localVoices = status.voices;
+        _localVoiceId = preferred;
+        _localLoading = false;
+      });
+    } on LocalTtsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _localLoading = false;
+        _localError = error.message;
+      });
+    }
+  }
+
+  Future<void> _enrollLocal() async {
+    final name = _localVoiceName.text.trim();
+    if (name.isEmpty) {
+      setState(() => _localError = 'Give the cloned voice a name first.');
+      return;
+    }
+    if (_localReferencePath.isEmpty) {
+      setState(
+        () => _localError = 'Choose or record a 3–8 s reference clip first.',
+      );
+      return;
+    }
+    setState(() {
+      _localEnrolling = true;
+      _localError = null;
+    });
+    try {
+      final id = await _local.enrollVoice(
+        baseUrl: LocalTtsService.normalizeBaseUrl(_localUrl.text),
+        name: name,
+        referencePath: _localReferencePath,
+      );
+      if (!mounted) return;
+      setState(() {
+        _localVoiceId = id;
+        _localEnrolling = false;
+      });
+      await _loadLocalVoices();
+    } on LocalTtsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _localEnrolling = false;
+        _localError = error.message;
+      });
+    }
+  }
+
+  Future<void> _chooseReference() async {
+    const type = XTypeGroup(
+      label: 'Reference audio (3–8 s)',
+      extensions: ['wav', 'mp3', 'flac', 'ogg', 'm4a'],
+    );
+    final file = await openFile(acceptedTypeGroups: const [type]);
+    if (file == null || !mounted) return;
+    setState(() => _localReferencePath = file.path);
+  }
+
+  Future<void> _recordReference() async {
+    final recording = await showDialog<VoiceRecording>(
+      context: context,
+      builder: (context) => const RecordVoiceDialog(),
+    );
+    if (recording == null || !mounted) return;
+    setState(() => _localReferencePath = recording.path);
+  }
+
+  Future<void> _reEnrollLocal() async {
+    final name = _localVoiceName.text.trim().isEmpty
+        ? (_saved.localVoiceName.isEmpty ? 'cloned' : _saved.localVoiceName)
+        : _localVoiceName.text.trim();
+    _localVoiceId = await _local.enrollVoice(
+      baseUrl: _localBaseUrl,
+      name: name,
+      referencePath: _localReferencePath,
+    );
+  }
+
+  Future<List<VoiceoverLine>> _synthesizeLocal(
+    List<String> lines,
+    Directory directory,
+  ) async {
+    await directory.create(recursive: true);
+    final results = <VoiceoverLine>[];
+    var cursor = 0;
+    for (var index = 0; index < lines.length; index += 1) {
+      final text = lines[index];
+      final path = '${directory.path}/local-line-${index + 1}.wav';
+      int duration;
+      try {
+        duration = await _local.synthesize(
+          baseUrl: _localBaseUrl,
+          text: text,
+          voiceId: _localVoiceId,
+          outputPath: path,
+          sampleRate: _localHealth?.sampleRate ?? 0,
+        );
+      } on LocalTtsException catch (error) {
+        if (_localReferencePath.isEmpty ||
+            !error.message.toLowerCase().contains('unknown voice')) {
+          rethrow;
+        }
+        // The server keeps enrolled voices in process memory only; after a
+        // restart it answers "unknown voice". Enrol the saved clip and retry.
+        await _reEnrollLocal();
+        duration = await _local.synthesize(
+          baseUrl: _localBaseUrl,
+          text: text,
+          voiceId: _localVoiceId,
+          outputPath: path,
+          sampleRate: _localHealth?.sampleRate ?? 0,
+        );
+      }
+      final start = cursor;
+      final end = start + duration;
+      results.add(
+        VoiceoverLine(
+          index: index + 1,
+          text: text,
+          caption: text,
+          path: path,
+          startMs: start,
+          endMs: end,
+        ),
+      );
+      cursor = end + _gapMs.round();
+      if (mounted) {
+        setState(() {
+          _stage = 'Speaking line ${index + 1} of ${lines.length}…';
+          _progress = (index + 1) / lines.length;
+        });
+      }
+    }
+    return results;
   }
 
   Future<List<VoiceoverLine>> _synthesizeCloud(
@@ -199,6 +404,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       provider: _provider,
       cloudVoiceId: _cloudVoiceId,
       azureRegion: _azureRegion,
+      localBaseUrl: _localBaseUrl,
+      localVoiceId: _localVoiceId,
+      localVoiceName: _localVoiceName.text.trim(),
+      localReferencePath: _localReferencePath,
     );
     final chosen = await showDialog<NarrationSettings>(
       context: context,
@@ -235,7 +444,13 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       setState(() => _error = 'Choose a voice first.');
       return;
     }
-    if (_provider != 'system' && _cloudVoiceId.isEmpty) {
+    if (_provider == 'local' && _localVoiceId.isEmpty) {
+      setState(() => _error = 'Choose or clone a local voice first.');
+      return;
+    }
+    if (_provider != 'system' &&
+        _provider != 'local' &&
+        _cloudVoiceId.isEmpty) {
       setState(() => _error = 'Choose a cloud voice first.');
       return;
     }
@@ -257,6 +472,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           provider: _provider,
           cloudVoiceId: _cloudVoiceId,
           azureRegion: _azureRegion,
+          localBaseUrl: _localBaseUrl,
+          localVoiceId: _localVoiceId,
+          localVoiceName: _localVoiceName.text.trim(),
+          localReferencePath: _localReferencePath,
         ),
       );
     } catch (_) {
@@ -264,22 +483,27 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     }
     try {
       final directory = await _voiceover.outputDirectory();
-      final synthesized = _provider == 'system'
-          ? await _voiceover.synthesize(
-              lines: lines,
-              voice: voice!,
-              rate: _rate.round(),
-              gapMs: _gapMs.round(),
-              directory: directory,
-              onProgress: (completed, total) {
-                if (!mounted) return;
-                setState(() {
-                  _stage = 'Speaking line $completed of $total…';
-                  _progress = total == 0 ? null : completed / total;
-                });
-              },
-            )
-          : await _synthesizeCloud(lines, directory);
+      final List<VoiceoverLine> synthesized;
+      if (_provider == 'local') {
+        synthesized = await _synthesizeLocal(lines, directory);
+      } else if (_provider != 'system') {
+        synthesized = await _synthesizeCloud(lines, directory);
+      } else {
+        synthesized = await _voiceover.synthesize(
+          lines: lines,
+          voice: voice!,
+          rate: _rate.round(),
+          gapMs: _gapMs.round(),
+          directory: directory,
+          onProgress: (completed, total) {
+            if (!mounted) return;
+            setState(() {
+              _stage = 'Speaking line $completed of $total…';
+              _progress = total == 0 ? null : completed / total;
+            });
+          },
+        );
+      }
       if (!mounted) return;
       setState(() {
         _stage = 'Adding narration and captions to the timeline…';
@@ -302,6 +526,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     } on VoiceoverException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on CloudVoiceException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } on LocalTtsException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on ProjectGatewayException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -327,8 +553,9 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
             children: [
               const Text(
                 'Each non-empty line becomes one narration clip and one caption '
-                'at its exact duration. Narration runs offline with the macOS '
-                'voice; nothing is uploaded.',
+                'at its exact duration. Narration runs offline: an installed '
+                'macOS voice, or a local speech server with voice cloning. '
+                'Nothing is uploaded.',
               ),
               const SizedBox(height: 12),
               TextField(
@@ -344,33 +571,27 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                 ),
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                key: ValueKey('voiceover-provider-$_provider'),
-                initialValue: _provider,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Voice source',
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'system',
-                    child: Text('Installed voices (offline)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'elevenlabs',
-                    child: Text('ElevenLabs (cloud)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'azure',
-                    child: Text('Microsoft Azure (cloud)'),
-                  ),
+              Text(
+                'Voice source',
+                style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final source in _voiceSources)
+                    ChoiceChip(
+                      key: ValueKey('voiceover-provider-$source'),
+                      label: Text(_voiceSourceLabel(source)),
+                      selected: _provider == source,
+                      onSelected: _busy
+                          ? null
+                          : (selected) {
+                              if (selected) unawaited(_setProvider(source));
+                            },
+                    ),
                 ],
-                onChanged: _busy
-                    ? null
-                    : (value) {
-                        if (value != null) unawaited(_setProvider(value));
-                      },
               ),
               const SizedBox(height: 8),
               if (_provider == 'system') ...[
@@ -422,6 +643,137 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                       ),
                     ],
                   ),
+              ] else if (_provider == 'local') ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('voiceover-local-url'),
+                        controller: _localUrl,
+                        enabled: !_busy,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Local server',
+                          hintText: 'http://127.0.0.1:8000',
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const ValueKey('voiceover-local-connect'),
+                      onPressed: _busy || _localLoading
+                          ? null
+                          : _loadLocalVoices,
+                      child: Text(_localLoading ? 'Checking…' : 'Connect'),
+                    ),
+                  ],
+                ),
+                if (_localError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _localError!,
+                    key: const ValueKey('voiceover-local-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                if (_localHealth != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Connected · ${_localHealth!.summary}',
+                    key: const ValueKey('voiceover-local-health'),
+                    style: TextStyle(color: OrColors.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  key: ValueKey('voiceover-local-voice-$_localVoiceId'),
+                  initialValue: _localVoiceId.isEmpty ? null : _localVoiceId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Local voice',
+                  ),
+                  items: [
+                    for (final voice in _localVoices)
+                      DropdownMenuItem(
+                        value: voice.id,
+                        child: Text(
+                          voice.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(() => _localVoiceId = value ?? ''),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Voice cloning: choose or record a 3–8 s clip, name it, then '
+                  'enrol. Only clone a voice you have the right to use.',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _localReferencePath.isEmpty
+                            ? 'No reference clip yet.'
+                            : _localReferencePath,
+                        key: const ValueKey('voiceover-local-reference'),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: OrColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      key: const ValueKey('voiceover-local-choose-clip'),
+                      onPressed: _busy || _localEnrolling
+                          ? null
+                          : _chooseReference,
+                      child: const Text('Choose clip…'),
+                    ),
+                    TextButton(
+                      key: const ValueKey('voiceover-local-record-clip'),
+                      onPressed: _busy || _localEnrolling
+                          ? null
+                          : _recordReference,
+                      child: const Text('Record…'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey('voiceover-local-clone-name'),
+                        controller: _localVoiceName,
+                        enabled: !_busy && !_localEnrolling,
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          labelText: 'Clone name',
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      key: const ValueKey('voiceover-local-enroll'),
+                      onPressed: _busy || _localEnrolling ? null : _enrollLocal,
+                      child: Text(
+                        _localEnrolling ? 'Enrolling…' : 'Enrol voice',
+                      ),
+                    ),
+                  ],
+                ),
               ] else ...[
                 if (_cloudLoading) ...[
                   Row(

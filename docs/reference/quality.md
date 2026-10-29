@@ -1,6 +1,6 @@
 # Quality Bar
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: the attributes OR holds itself to, how each is measured, and which gaps
 are known. The current runtime target is the local macOS app on the owner's M5
@@ -178,10 +178,14 @@ their own increments with their own evidence.
 6. The largest sources are still single files — `apps/or_app/lib/shell/app_shell.dart`,
    `apps/or_app/lib/screens/editor_shell_preview_screen.dart`,
    `crates/or_core/src/application.rs` and `crates/or_app_bridge/src/api/project.rs`.
-   Extraction into focused modules has started (`apps/or_app/lib/shell/platform_menus.dart`
-   holds the macOS menu bar, `apps/or_app/lib/motion/motion_insert_log.dart` holds the
-   motion insert record) but the rest has no moving plan beyond a mechanical split
-   under the existing tests; nothing about the split may change behaviour.
+   Extraction follows feature ownership, not line counts: `apps/or_app/lib/shell/platform_menus.dart`
+   holds the macOS menu bar, `apps/or_app/lib/motion/motion_insert_log.dart` the
+   motion insert record, `apps/or_app/lib/screens/editor_tool_actions.dart` the tool
+   panel copy and action lists, and `apps/or_app/lib/production/audio_tool_flows.dart`
+   the voiceover, recording and music workflows. Next seams, in order: one panel file
+   per editor tool (Media and Motion first), then the audio tools' state in
+   `app_shell.dart`, then the Rust command groups in `crates/or_core/src/application.rs`
+   by owner. The split may not change behaviour and lands under the existing tests.
 
 ## Evidence rules
 

@@ -1,6 +1,6 @@
 # Feature — Assistant Panel
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-10-29
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
 ACP, the `or` CLI surface and MCP fallback that edit the open project, and the
@@ -177,12 +177,15 @@ them. Android has no assistant: the desktop process boundary is explicit.
   common timeline edits, transcription, ducking and motion insertion/library.
   Verbs without an MCP twin (slip/roll/slide, track state, marker move/rename/
   delete, clean-up, and importing a caption file) have no fallback surface.
-- Narration quality is the installed system `say` voice, or a configured cloud
-  provider. The voice is selectable and previewable in Settings → Narration;
-  ElevenLabs and Azure keys are stored in the keychain, and an ElevenLabs
-  personal voice can be created from a recorded WAV sample with an explicit
-  consent checkbox. The offline `tools/voiceover.mjs` path still uses the system
-  voice, so a cloud choice applies to narration produced in the app.
+- Narration quality is the installed system `say` voice, a configured cloud
+  provider, or a local speech server. The voice is selectable and previewable in
+  Settings → Narration; ElevenLabs and Azure keys are stored in the keychain, and
+  an ElevenLabs personal voice can be created from a recorded WAV sample with an
+  explicit consent checkbox. The Audio tool's Generate voiceover dialog also
+  offers **Local server**: any OpenAI-compatible speech endpoint on loopback
+  (for example VieNeu-TTS, Apache-2.0) needs no key, and a 3–8 s reference clip
+  can be enrolled as a cloned voice the app then narrates with. The offline
+  `tools/voiceover.mjs` path still uses the system voice.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.
 - `--apply` reports a placed track and caption count but has no per-step undo

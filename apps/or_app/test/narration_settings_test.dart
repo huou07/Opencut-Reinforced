@@ -98,6 +98,11 @@ void main() {
         locale: 'vi_VN',
         rate: 195,
         gapMs: 400,
+        provider: 'local',
+        localBaseUrl: 'http://127.0.0.1:9000',
+        localVoiceId: 'cloned',
+        localVoiceName: 'My voice',
+        localReferencePath: '/tmp/ref.wav',
       ),
     );
     final loaded = await store.load();
@@ -105,6 +110,26 @@ void main() {
     expect(loaded.locale, 'vi_VN');
     expect(loaded.rate, 195);
     expect(loaded.gapMs, 400);
+    expect(loaded.provider, 'local');
+    expect(loaded.localBaseUrl, 'http://127.0.0.1:9000');
+    expect(loaded.localVoiceId, 'cloned');
+    expect(loaded.localVoiceName, 'My voice');
+    expect(loaded.localReferencePath, '/tmp/ref.wav');
+  });
+
+  test('the local provider is accepted and an unknown one falls back', () {
+    final local = NarrationSettings.fromJson({
+      'provider': 'local',
+      'local_base_url': '127.0.0.1:9000',
+      'local_voice_id': 'cloned',
+      'local_reference_path': '/tmp/ref.wav',
+    });
+    expect(local.provider, 'local');
+    expect(local.localVoiceId, 'cloned');
+    expect(
+      NarrationSettings.fromJson({'provider': 'bogus'}).provider,
+      'system',
+    );
   });
 
   testWidgets('voice settings save the chosen voice, rate and gap', (

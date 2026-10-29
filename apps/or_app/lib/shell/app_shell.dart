@@ -22,10 +22,7 @@ import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
 import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
-import '../production/music_dialog.dart';
-import '../production/record_voice_dialog.dart';
-import '../production/voiceover_dialog.dart';
-import '../production/voiceover_service.dart';
+import '../production/audio_tool_flows.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
@@ -2727,104 +2724,23 @@ class _AppShellState extends State<AppShell> {
       ) ??
       false;
 
-  /// Opens the offline voiceover workflow and refreshes the edit afterwards.
-  Future<void> _generateVoiceover() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    if (session == null || project == null || _busy) return;
-    final applied = await showDialog<VoiceoverApplied>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => VoiceoverDialog(
-        gateway: widget.projectGateway,
-        session: session,
-        project: project,
-      ),
-    );
-    if (!mounted || !identical(session, _activeSession)) return;
-    await _refreshProjectState(session);
-    if (applied == null || !mounted) return;
-    setState(() {
-      _projectNotice =
-          'Added ${applied.lines.length} narration '
-          '${applied.lines.length == 1 ? 'line' : 'lines'} and '
-          '${applied.captionCount} '
-          '${applied.captionCount == 1 ? 'caption' : 'captions'}.';
-    });
-  }
+  /// Audio tool workflows live in [AudioToolFlows]; these forward to them so
+  /// the shell keeps one place that knows how a result becomes a notice.
+  AudioToolFlows get _audioFlows => AudioToolFlows(
+    gateway: widget.projectGateway,
+    activeSession: () => _activeSession,
+    activeProject: () => _activeProject,
+    isBusy: () => _busy,
+    refresh: _refreshProjectState,
+    notice: (message) => setState(() => _projectNotice = message),
+    unavailable: _showUnavailable,
+  );
 
-  /// Records one take and places it as an ordinary audio clip.
-  Future<void> _recordVoice() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    if (session == null || project == null || _busy) return;
-    final recording = await showDialog<VoiceRecording>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const RecordVoiceDialog(),
-    );
-    if (!mounted || !identical(session, _activeSession) || recording == null) {
-      return;
-    }
-    if (recording.durationMs <= 0) {
-      _showUnavailable('The recording was empty. Record a longer take.');
-      return;
-    }
-    try {
-      await VoiceoverApplier(widget.projectGateway).apply(
-        session: session,
-        project: _activeProject ?? project,
-        lines: [
-          VoiceoverLine(
-            index: 1,
-            text: 'Recorded voice',
-            caption: '',
-            path: recording.path,
-            startMs: 0,
-            endMs: recording.durationMs,
-          ),
-        ],
-        includeCaptions: false,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      await _refreshProjectState(session);
-      if (!mounted) return;
-      final seconds = (recording.durationMs / 1000).toStringAsFixed(1);
-      setState(
-        () => _projectNotice = 'Added a recorded voice clip (${seconds}s).',
-      );
-    } on VoiceoverException catch (error) {
-      if (mounted) _showUnavailable(error.message);
-    } on ProjectGatewayException catch (error) {
-      if (mounted) _showUnavailable(error.message);
-    }
-  }
+  Future<void> _generateVoiceover() => _audioFlows.generateVoiceover(context);
 
-  /// Opens the generated-music workflow and refreshes the edit afterwards.
-  Future<void> _generateMusic() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    if (session == null || project == null || _busy) return;
-    final applied = await showDialog<MusicApplied>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => MusicDialog(
-        gateway: widget.projectGateway,
-        session: session,
-        project: project,
-      ),
-    );
-    if (!mounted || !identical(session, _activeSession)) return;
-    await _refreshProjectState(session);
-    if (applied == null || !mounted) return;
-    final duckNote = applied.ducked
-        ? ' Ducked -12 dB under the selected voice track; that used '
-              '${applied.undoSteps} undo ${applied.undoSteps == 1 ? 'step' : 'steps'}.'
-        : '';
-    setState(() {
-      _projectNotice = 'Added a ${applied.bed.mood} music bed.$duckNote';
-    });
-  }
+  Future<void> _recordVoice() => _audioFlows.recordVoice(context);
+
+  Future<void> _generateMusic() => _audioFlows.generateMusic(context);
 
   /// Asks which local speech model to use and persists the choice.
   ///

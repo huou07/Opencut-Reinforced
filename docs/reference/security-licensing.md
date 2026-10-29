@@ -1,6 +1,6 @@
 # Security, Dependencies and Licensing
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-29
 
 Scope: adoption rules for dependencies, media, fonts and models; the FFmpeg
 posture; and how secrets and licences are kept out of trouble. Architecture trust
@@ -24,6 +24,10 @@ owner approval and a recorded licensing decision.
 Do not bundle model weights by default; any future inclusion needs a size,
 licence and distribution strategy. Keep secrets, model weights, generated media,
 caches and build output out of tracked source.
+
+Local speech engines (for example VieNeu-TTS, Apache-2.0) are user-installed
+servers the app reaches only over loopback with no credential; the app ships no
+weights and no server.
 
 ## Current dependency posture
 
