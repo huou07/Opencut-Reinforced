@@ -101,7 +101,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     });
     try {
       final voices = await _voiceover.listVoices();
-      final saved = await _settings.load();
+      // A damaged or unreadable settings file must not take the voice list
+      // down with it: the dialog falls back to the defaults and keeps going.
+      NarrationSettings saved;
+      try {
+        saved = await _settings.load();
+      } on Object {
+        saved = const NarrationSettings();
+      }
       if (!mounted) return;
       final preferred =
           NarrationSettings.preferredVoiceName(voices, saved) ??
