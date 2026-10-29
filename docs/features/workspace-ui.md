@@ -43,7 +43,9 @@ justification and review.
   **Settings → Narration**, where it can be searched and previewed. The Generate
   voiceover dialog also picks the source: installed voices, a cloud provider, or
   a **Local server** with voice cloning; a local server needs no key and can
-  enrol a recorded or chosen 3–8 s reference clip as a cloned voice. The same
+  enrol a recorded or chosen 3–8 s reference clip as a cloned voice. Switching
+  the source keeps the last voice chosen for each source, and a choice made in
+  Settings becomes the next run's default. The same
   Settings panel holds the cloud provider cards (key save/test/remove, Azure
   region, ElevenLabs personal-voice creation from a recorded WAV sample); keys
   live in the macOS keychain, not in this app's files.

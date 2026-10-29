@@ -88,6 +88,23 @@
       "budget_ms": 15000
     },
     {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-provider-system"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-provider-local"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Connected",
+      "budget_ms": 30000
+    },
+    {
       "op": "enter_text",
       "selector": {
         "key": "voiceover-script"

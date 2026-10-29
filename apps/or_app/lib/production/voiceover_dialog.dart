@@ -50,9 +50,17 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   String? _voice;
   String _provider = 'system';
   String _cloudVoiceId = '';
+
+  /// The voice chosen per cloud provider in this dialog, so switching the
+  /// source does not throw away a deliberate pick before Generate.
+  final Map<String, String> _cloudSelections = {};
   String _azureRegion = '';
   String _localBaseUrl = LocalTtsService.defaultBaseUrl;
   String _localVoiceId = '';
+
+  /// The local voice chosen in this dialog, including one enrolled here. It
+  /// survives a switch to another source and back.
+  String _localSelection = '';
   String _localReferencePath = '';
   List<LocalTtsVoice> _localVoices = const [];
   LocalTtsHealth? _localHealth;
@@ -145,17 +153,34 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
 
   Future<void> _setProvider(String provider) async {
     if (provider == _provider) return;
+    if (_provider == 'local' && _localVoiceId.isNotEmpty) {
+      _localSelection = _localVoiceId;
+    }
+    if (_provider != 'system' &&
+        _provider != 'local' &&
+        _cloudVoiceId.isNotEmpty) {
+      _cloudSelections[_cloudProvider.wireName] = _cloudVoiceId;
+    }
+    final nextCloud = provider == 'azure'
+        ? CloudVoiceProvider.azure
+        : CloudVoiceProvider.elevenLabs;
+    final savedCloudId = provider == _saved.provider ? _saved.cloudVoiceId : '';
+    final savedLocalId = provider == _saved.provider ? _saved.localVoiceId : '';
     setState(() {
       _provider = provider;
       _cloudVoices = const [];
       _cloudError = null;
-      _cloudVoiceId = provider == _saved.provider ? _saved.cloudVoiceId : '';
+      _cloudVoiceId = provider == 'system'
+          ? ''
+          : (_cloudSelections[nextCloud.wireName] ?? savedCloudId);
       _localVoices = const [];
       _connectError = null;
       _cloneError = null;
       _cloneNameError = null;
       _localHealth = null;
-      _localVoiceId = provider == _saved.provider ? _saved.localVoiceId : '';
+      _localVoiceId = provider == 'local'
+          ? (_localSelection.isNotEmpty ? _localSelection : savedLocalId)
+          : '';
     });
     if (provider == 'local') {
       await _loadLocalVoices();
@@ -212,7 +237,9 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       if (!mounted) return;
       final savedId = _localVoiceId.isNotEmpty
           ? _localVoiceId
-          : _saved.localVoiceId;
+          : (_localSelection.isNotEmpty
+                ? _localSelection
+                : _saved.localVoiceId);
       final preferred = status.voices.any((voice) => voice.id == savedId)
           ? savedId
           : (status.voices.isEmpty ? '' : status.voices.first.id);
@@ -259,6 +286,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       if (!mounted) return;
       setState(() {
         _localVoiceId = id;
+        _localSelection = id;
         _localEnrolling = false;
       });
       await _loadLocalVoices();
@@ -430,12 +458,33 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       builder: (context) => NarrationSettingsDialog(initial: current),
     );
     if (!mounted || chosen == null) return;
+    final providerChanged = chosen.provider != _provider;
     setState(() {
       _saved = chosen;
       if (chosen.voice.isNotEmpty) _voice = chosen.voice;
       _rate = chosen.rate.toDouble();
       _gapMs = chosen.gapMs.toDouble();
+      // The management dialog is the authority for the next run: adopt its
+      // source and voice, otherwise the next Generate would persist the stale
+      // inline values over the choice just made there.
+      _provider = chosen.provider;
+      _cloudVoiceId = chosen.cloudVoiceId;
+      _azureRegion = chosen.azureRegion;
+      _localBaseUrl = chosen.localBaseUrl.isEmpty
+          ? LocalTtsService.defaultBaseUrl
+          : chosen.localBaseUrl;
+      _localUrl.text = _localBaseUrl;
+      _localVoiceId = chosen.localVoiceId;
+      _localSelection = chosen.localVoiceId;
+      _localVoiceName.text = chosen.localVoiceName;
+      _localReferencePath = chosen.localReferencePath;
     });
+    if (!providerChanged) return;
+    if (_provider == 'local') {
+      await _loadLocalVoices();
+    } else if (_provider != 'system') {
+      await _loadCloudVoices();
+    }
   }
 
   String? _localeOf(String? voice) {
