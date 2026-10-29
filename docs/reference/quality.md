@@ -290,7 +290,11 @@ after a tap also raced the build; the runner now settles before `tree`.
    2.6 MB. Encoding, not decoding (903-1151 fps), is the throughput owner.
    Feeding swscale RGBA instead of swapping channels per pixel measured 3079 ms
    (no change), so the cost is compositing/VideoToolbox, not the frame copy —
-   don't optimise that loop again on a hunch.
+   don't optimise that loop again on a hunch. The real lever is in
+   `crates/or_app_bridge/src/preview.rs`: the direct single-clip path always
+   returns packed RGBA even when the export asked for NV12, so each frame pays a
+   CPU YUV->NV12 swscale. Passing planes through from that path is the next
+   candidate; it moves cost from CPU conversion to the hardware encoder.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):

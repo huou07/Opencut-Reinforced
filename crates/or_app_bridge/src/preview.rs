@@ -1188,6 +1188,10 @@ mod desktop {
                                 "preview request was superseded",
                             ));
                         }
+                        // The direct path always hands back packed RGBA, even when
+                        // the caller asked for NV12: an export then pays a CPU
+                        // YUV->NV12 swscale per frame. Passing NV12 planes through
+                        // from here is the next export-throughput lever.
                         return Ok(Presentation {
                             width,
                             height,
