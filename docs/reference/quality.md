@@ -284,7 +284,14 @@ after a tap also raced the build; the runner now settles before `tree`.
    a test-binding artifact, not UI cost. The export path now has its own
    end-to-end row (`export-encode`): dialog + real encode of the 1 s fixture
    measured 2933 ms (n=1, debug lane) through to `Export complete`, so a
-   regression in the export lane finally has a scenario that fails. A second
+   regression in the export lane finally has a scenario that fails.
+
+0. `assistant-motion` is flaky on a cold run: once it aborted right after
+   `assistant-send` (no step line for the following tree, no crash report, and
+   `assistant-edit` passed in the same batch), then passed on an immediate
+   rerun. Treat a first-failure as inconclusive, rerun once, and only then
+   investigate — the assistant lane depends on an external harness spawn that
+   is not part of the app. A second
    row (`export-long`, 5 s 720p30 fixture) measured **3083 ms for 150 frames
    (~49 fps)** end to end including the dialog and probe: h264+aac, 5.013 s,
    2.6 MB. Encoding, not decoding (903-1151 fps), is the throughput owner.
