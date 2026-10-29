@@ -288,6 +288,11 @@ restored afterwards:
   sent no enrolment; with it on, the fake server logged the failed speech, one
   `POST /v1/voices` and a second successful speech, and the dialog showed no
   error — Preview and Generate take one recovery path.
+- A fake that refuses a part whose declared `Content-Type` does not match the
+  clip's filename (the format-trusting behaviour real servers have) logged
+  `ENROLL-ATTEMPT filename=reference.mp3 declared=audio/wav` and refused before
+  the change, and `declared=audio/mpeg` with a successful retried speech after
+  it. The reference was an MP3 encoded from `scripts/ui_scenarios/vi16.wav`.
 
 The fake server and its scenario are throwaway files; they are not committed.
 

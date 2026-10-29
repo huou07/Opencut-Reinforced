@@ -196,6 +196,12 @@ product still needs.
   "unknown voice" error while Generate recovered by re-enrolling the saved clip.
   Generate and Preview now share one recovery path, so an audition heals the
   same voice, obeys the same consent rule, and plays the healed sample.
+- **An MP3 reference clip was uploaded as WAV.** The local enrolment form
+  declared `audio/wav` for every reference clip, while the picker accepts WAV,
+  MP3, FLAC, OGG and M4A and the upload is the file unchanged. A server that
+  decodes by the declared type therefore failed on any non-WAV clip, including
+  the automatic re-enrolment after a restart. The part now declares the clip's
+  real format.
 - **The editor could look frozen after a native file panel.** macOS open/save
   panels are now sheets attached to the editor window with a single-flight guard
   and focus restoration after dismissal. A panel that previously ended up behind

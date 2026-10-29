@@ -113,6 +113,30 @@ void main() {
     expect(text, endsWith('\r\n--$boundary--\r\n'));
   });
 
+  test('a reference clip declares the format it is really in', () {
+    // The dialog accepts MP3, FLAC, OGG and M4A clips too and uploads the file
+    // unchanged, so the part must not claim audio/wav for all of them: a server
+    // that trusts the header decodes an MP3 as PCM and refuses the enrolment.
+    expect(localReferenceContentType('reference.mp3'), 'audio/mpeg');
+    expect(localReferenceContentType('reference.flac'), 'audio/flac');
+    expect(localReferenceContentType('reference.ogg'), 'audio/ogg');
+    expect(localReferenceContentType('reference.m4a'), 'audio/mp4');
+    expect(localReferenceContentType('reference.wav'), 'audio/wav');
+    expect(localReferenceContentType('reference.MP3'), 'audio/mpeg');
+    expect(localReferenceContentType('reference.aiff'), 'audio/wav');
+
+    final request = localVoiceEnrollmentRequest(
+      baseUrl: 'http://127.0.0.1:8000',
+      name: 'Giọng tôi',
+      filename: 'reference.mp3',
+      clip: [73, 68, 51],
+    );
+    final text = utf8.decode(request.body, allowMalformed: true);
+    expect(text, contains('filename="reference.mp3"'));
+    expect(text, contains('Content-Type: audio/mpeg'));
+    expect(text, isNot(contains('Content-Type: audio/wav')));
+  });
+
   test('probe, enrol and synthesize against a real loopback server', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() => server.close(force: true));

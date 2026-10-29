@@ -357,8 +357,11 @@ class LocalTtsService {
     final slash = path.lastIndexOf(RegExp(r'[/\\]'));
     final name = slash < 0 ? path : path.substring(slash + 1);
     final dot = name.lastIndexOf('.');
-    final extension = dot < 0 ? 'wav' : name.substring(dot + 1).toLowerCase();
-    return 'reference.${const {'wav', 'mp3', 'flac', 'ogg', 'm4a'}.contains(extension) ? extension : 'wav'}';
+    final extension = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+    final kept = localReferenceContentTypes.containsKey(extension)
+        ? extension
+        : 'wav';
+    return 'reference.$kept';
   }
 }
 
@@ -399,6 +402,28 @@ LocalHttpRequest localSpeechRequest({
   );
 }
 
+/// The MIME type each accepted reference-clip format declares to the server.
+///
+/// The dialog offers WAV, MP3, FLAC, OGG and M4A clips and uploads the file
+/// unchanged, so the multipart part has to say what the bytes really are: a
+/// server that trusts the declared type decodes the clip with that codec, and
+/// an MP3 labelled `audio/wav` is a decoding failure, not a lenient guess.
+const Map<String, String> localReferenceContentTypes = {
+  'wav': 'audio/wav',
+  'mp3': 'audio/mpeg',
+  'flac': 'audio/flac',
+  'ogg': 'audio/ogg',
+  'm4a': 'audio/mp4',
+};
+
+/// The declared type for a reference clip's [filename], `audio/wav` if the
+/// extension is not one of [`localReferenceContentTypes`].
+String localReferenceContentType(String filename) {
+  final dot = filename.lastIndexOf('.');
+  final extension = dot < 0 ? '' : filename.substring(dot + 1).toLowerCase();
+  return localReferenceContentTypes[extension] ?? 'audio/wav';
+}
+
 /// `POST /v1/voices`, multipart form: name, the reference clip and `denoise`.
 LocalHttpRequest localVoiceEnrollmentRequest({
   required String baseUrl,
@@ -408,6 +433,7 @@ LocalHttpRequest localVoiceEnrollmentRequest({
   bool denoise = true,
 }) {
   const boundary = 'orapp-local-tts-boundary';
+  final type = localReferenceContentType(filename);
   final body = BytesBuilder(copy: false);
   void field(String key, String value) {
     body.add(
@@ -425,7 +451,7 @@ LocalHttpRequest localVoiceEnrollmentRequest({
     utf8.encode(
       '--$boundary\r\n'
       'Content-Disposition: form-data; name="file"; filename="$filename"\r\n'
-      'Content-Type: audio/wav\r\n\r\n',
+      'Content-Type: $type\r\n\r\n',
     ),
   );
   body.add(clip);
