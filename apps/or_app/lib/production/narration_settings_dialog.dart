@@ -117,10 +117,23 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
     try {
       final directory =
           await (widget.temporaryDirectory ?? getTemporaryDirectory)();
+      VoiceOption? selected;
+      for (final option in _voices) {
+        if (option.name == _voice) {
+          selected = option;
+          break;
+        }
+      }
+      // Speak a sample in the voice's own language, so an English voice does
+      // not read a Vietnamese sentence and vice versa.
+      final languages = (selected?.locale ?? 'vi').toLowerCase();
       await _effectiveVoiceover.preview(
         voice: _voice,
-        text: 'Xin chào, đây là giọng đọc của Opencut Reinforced.',
+        text: languages.startsWith('vi')
+            ? 'Xin chào, đây là giọng đọc của Opencut Reinforced.'
+            : 'Hello, this is a voice preview for Opencut Reinforced.',
         directory: Directory('${directory.path}/voice-previews'),
+        rate: _rate.round(),
       );
     } on VoiceoverException catch (error) {
       if (mounted) setState(() => _error = error.message);

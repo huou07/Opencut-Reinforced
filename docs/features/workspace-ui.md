@@ -40,7 +40,8 @@ justification and review.
   common request, and **Variation** reseeds the bed without changing the read.
   Generation is a bounded batch of ordinary commands, not
   a second project model. The voice a narration run uses is chosen in
-  **Settings → Narration**, where it can be searched and previewed. The Generate
+  **Settings → Narration**, where it can be searched and previewed at the
+  configured rate, with the sample spoken in the voice's own language. The Generate
   voiceover dialog also picks the source: installed voices, a cloud provider, or
   a **Local server** with voice cloning; a local server needs no key and can
   enrol a recorded or chosen 3–8 s reference clip as a cloned voice. The

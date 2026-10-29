@@ -25,6 +25,8 @@ class _FakeVoiceover extends VoiceoverService {
 
   final List<VoiceOption> voices;
   String? previewedVoice;
+  String? previewedText;
+  int? previewedRate;
 
   @override
   Future<List<VoiceOption>> listVoices() async => voices;
@@ -37,6 +39,8 @@ class _FakeVoiceover extends VoiceoverService {
     int rate = 180,
   }) async {
     previewedVoice = voice;
+    previewedText = text;
+    previewedRate = rate;
     directory.createSync(recursive: true);
     return File('${directory.path}/preview.wav');
   }
@@ -182,6 +186,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     expect(voiceover.previewedVoice, 'Daniel');
+    expect(voiceover.previewedText, contains('voice preview'));
+    expect(voiceover.previewedRate, 180);
     await tester.ensureVisible(
       find.byKey(const ValueKey('narration-voice-save')),
     );
@@ -194,5 +200,54 @@ void main() {
     expect(result!.locale, 'en_GB');
     expect(store.saved.voice, 'Daniel');
     expect(store.saved.rate, 180);
+  });
+
+  testWidgets('preview speaks at the configured rate in the voice language', (
+    tester,
+  ) async {
+    final voiceover = _FakeVoiceover(_voices);
+    final store = _MemoryStore();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () {
+                showDialog<NarrationSettings>(
+                  context: context,
+                  builder: (context) => NarrationSettingsDialog(
+                    initial: const NarrationSettings(rate: 240),
+                    voiceover: voiceover,
+                    store: store,
+                    temporaryDirectory: () async => Directory.systemTemp,
+                  ),
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('narration-voice-Linh')),
+    );
+    await tester.tap(find.byKey(const ValueKey('narration-voice-Linh')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('narration-voice-preview')),
+    );
+    await tester.tap(find.byKey(const ValueKey('narration-voice-preview')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(voiceover.previewedVoice, 'Linh');
+    expect(voiceover.previewedRate, 240);
+    expect(voiceover.previewedText, contains('Xin chào'));
   });
 }
