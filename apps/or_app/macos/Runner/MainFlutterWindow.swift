@@ -669,7 +669,13 @@ final class NarrationBridge: NSObject, FlutterPlugin {
   ) {
     switch route {
     case .keychainGet(let account):
-      result(read(account))
+      // SecItemCopyMatching can block while macOS asks the user for keychain
+      // access. Run it off the platform thread so the UI never freezes and an
+      // unanswered prompt reads as "still checking" instead of a wedged app.
+      DispatchQueue.global(qos: .userInitiated).async {
+        let value = self.read(account)
+        DispatchQueue.main.async { result(value) }
+      }
     case .keychainSet(let account):
       guard let value = arguments["value"] as? String, !value.isEmpty else {
         result(FlutterError(
@@ -679,21 +685,31 @@ final class NarrationBridge: NSObject, FlutterPlugin {
         ))
         return
       }
-      do {
-        try write(account, value)
-        result(true)
-      } catch {
-        result(FlutterError(
-          code: "KEYCHAIN_WRITE_FAILED",
-          message: "macOS could not store this key.",
-          details: nil
-        ))
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          try self.write(account, value)
+          DispatchQueue.main.async { result(true) }
+        } catch {
+          DispatchQueue.main.async {
+            result(FlutterError(
+              code: "KEYCHAIN_WRITE_FAILED",
+              message: "macOS could not store this key.",
+              details: nil
+            ))
+          }
+        }
       }
     case .keychainDelete(let account):
-      delete(account)
-      result(true)
+      let account = account
+      DispatchQueue.global(qos: .userInitiated).async {
+        self.delete(account)
+        DispatchQueue.main.async { result(true) }
+      }
     case .keychainHas(let account):
-      result(read(account)?.isEmpty == false)
+      DispatchQueue.global(qos: .userInitiated).async {
+        let has = self.read(account)?.isEmpty == false
+        DispatchQueue.main.async { result(has) }
+      }
     case .recordPermission:
       result(Self.permissionState())
     case .recordPermissionRequest:

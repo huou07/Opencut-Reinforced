@@ -100,11 +100,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _narration = chosen);
   }
 
-  Future<_Diagnostics> _loadDiagnostics() async => (
-    appInfo: await widget.gateway.appInfo(),
-    health: await widget.gateway.health(),
-    capabilities: await widget.gateway.capabilities(),
-  );
+  /// Bounded: a probe that never answers used to leave the diagnostics
+  /// spinner animating for the rest of the session, which also made the whole
+  /// screen impossible to settle for automation.
+  Future<_Diagnostics> _loadDiagnostics() async {
+    try {
+      final (appInfo, health, capabilities) = await (
+        widget.gateway.appInfo(),
+        widget.gateway.health(),
+        widget.gateway.capabilities(),
+      ).wait.timeout(const Duration(seconds: 5));
+      return (appInfo: appInfo, health: health, capabilities: capabilities);
+    } on TimeoutException {
+      throw StateError('The Rust core diagnostics did not answer in time.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

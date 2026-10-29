@@ -19,6 +19,7 @@
 // `files/or-ui-artifacts` (Android), plus an `index.json` the host uses to pull
 // them off a guest.
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -167,6 +168,10 @@ class _Artifacts {
     });
   }
 
+  void appendText(String name, String text) {
+    File('${directory.path}/$name').writeAsStringSync(text, mode: FileMode.append);
+  }
+
   void writeText(String name, String text) {
     File('${directory.path}/$name').writeAsStringSync(text);
     index.add({
@@ -277,9 +282,25 @@ class _Runner {
     if (spec.raw['screens'] == true) {
       await _captureScreenInventory();
     }
-    for (final step in spec.steps) {
+    for (var index = 0; index < spec.steps.length; index += 1) {
       if (!ok && spec.raw['continue_on_failure'] != true) break;
-      await _executeStep(step);
+      final step = spec.steps[index];
+      // A hung step otherwise looks identical to a run that never started:
+      // the report is written once, at the end. Record progress per step.
+      artifacts.appendText(
+        'progress.log',
+        '${DateTime.now().toIso8601String()} step ${index + 1}/${spec.steps.length} ${step['op']}\n',
+      );
+      try {
+        await _executeStep(step).timeout(const Duration(seconds: 90));
+      } on TimeoutException {
+        artifacts.appendText(
+          'progress.log',
+          '${DateTime.now().toIso8601String()} step ${index + 1} timed out\n',
+        );
+        ok = false;
+        break;
+      }
     }
   }
 
