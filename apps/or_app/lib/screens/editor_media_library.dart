@@ -362,15 +362,20 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                   if (error != null) ...[
                     Padding(
                       padding: const EdgeInsets.all(OrSpacing.x2),
-                      child: Text(
-                        error!,
-                        style: const TextStyle(
-                          color: OrColors.textSecondary,
-                          fontSize: OrType.tinySize,
+                      child: Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          error!,
+                          key: const ValueKey('media-library-error'),
+                          style: const TextStyle(
+                            color: OrColors.textSecondary,
+                            fontSize: OrType.tinySize,
+                          ),
                         ),
                       ),
                     ),
                     TextButton(
+                      key: const ValueKey('media-library-retry'),
                       onPressed: onRefresh,
                       child: const Text('Retry'),
                     ),

@@ -1042,6 +1042,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a media page failure is announced and retryable', (
+    tester,
+  ) async {
+    // The footer used to be a bare sentence: no live-region announcement and no
+    // stable target, so a screen reader never learned the page failed.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..mediaPageError = 'The library could not be read.';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/media-error.orproj',
+    );
+    await _createProject(tester, 'Media Error');
+    final error = find.byKey(const ValueKey('media-library-error'));
+    expect(error, findsOneWidget);
+    expect(tester.getSemantics(error), containsSemantics(isLiveRegion: true));
+    final callsBefore = gateway.mediaListCalls;
+    await tester.tap(find.byKey(const ValueKey('media-library-retry')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListCalls, greaterThan(callsBefore));
+  });
+
   testWidgets('a running preview shows progress instead of a blank glyph', (
     tester,
   ) async {
@@ -6955,6 +6978,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int summaryCalls = 0;
   int renameCalls = 0;
   int mediaListCalls = 0;
+  String? mediaPageError;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
   int getVisualSettingsCalls = 0;
@@ -7343,6 +7367,10 @@ class _FakeProjectGateway implements ProjectGateway {
   }) async {
     mediaListCalls++;
     mediaListOffsets.add(offset);
+    final failure = mediaPageError;
+    if (failure != null) {
+      throw ProjectGatewayException('MEDIA_PAGE_FAILED', failure);
+    }
     final session = _session(handle);
     final start = offset.clamp(0, session.media.length).toInt();
     final end = (start + limit).clamp(start, session.media.length).toInt();
