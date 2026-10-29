@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/production/cloud_voice_service.dart';
@@ -112,6 +114,36 @@ void main() {
     expect((calls[0].arguments as Map)['account'], 'elevenlabs');
     expect((calls[1].arguments as Map)['account'], 'azure');
     expect((calls[1].arguments as Map)['value'], 'azure-key');
+  });
+
+  test('a keychain query that never answers fails with a named error', () async {
+    const channel = MethodChannel('or_narration');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          // macOS holds the reply while it asks for keychain access.
+          return Completer<String?>().future;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    const keychain = NarrationKeychain(
+      timeout: Duration(milliseconds: 30),
+    );
+    await expectLater(
+      keychain.read('elevenlabs'),
+      throwsA(
+        isA<CloudVoiceException>()
+            .having((error) => error.code, 'code', 'KEYCHAIN_TIMEOUT')
+            .having(
+              (error) => error.message,
+              'message',
+              'macOS did not answer the keychain check. Unlock the login '
+                  'keychain and try again.',
+            ),
+      ),
+    );
   });
 
   testWidgets('cloud settings saves a key, tests it, and removes it', (

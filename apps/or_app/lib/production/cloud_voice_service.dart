@@ -59,16 +59,30 @@ class CloudVoiceException implements Exception {
 /// Only the account name crosses this boundary. The secret goes in and out as a
 /// short-lived string and is never written to a project or a preference file.
 class NarrationKeychain {
-  const NarrationKeychain({MethodChannel? channel})
-    : _channel = channel ?? const MethodChannel('or_narration');
+  const NarrationKeychain({
+    MethodChannel? channel,
+    this.timeout = const Duration(seconds: 10),
+  }) : _channel = channel ?? const MethodChannel('or_narration');
 
   final MethodChannel _channel;
 
+  /// macOS can hold a keychain query while it asks for access. A request that
+  /// never answers must read as a failure with a next step, not as a spinner
+  /// that never resolves.
+  final Duration timeout;
+
   Future<String?> read(String account) async {
     try {
-      return await _channel.invokeMethod<String>('keychainGet', {
-        'account': account,
-      });
+      return await _channel
+          .invokeMethod<String>('keychainGet', {'account': account})
+          .timeout(
+            timeout,
+            onTimeout: () => throw const CloudVoiceException(
+              'KEYCHAIN_TIMEOUT',
+              'macOS did not answer the keychain check. Unlock the login '
+                  'keychain and try again.',
+            ),
+          );
     } on PlatformException catch (error) {
       throw CloudVoiceException(
         error.code,
