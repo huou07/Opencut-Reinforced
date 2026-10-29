@@ -41,6 +41,8 @@ import 'app_top_bar.dart';
 import 'command_palette.dart';
 import 'autosave_controller.dart';
 import 'project_error_message.dart';
+import 'project_recovery.dart';
+import 'project_recovery_dialogs.dart';
 import 'export_flow.dart';
 import 'caption_import_dialog.dart';
 import 'speech_model_messages.dart';
@@ -1357,7 +1359,7 @@ class _AppShellState extends State<AppShell> {
       await _startProject(
         session,
         path,
-        notice: _combineNotices(resolvedRecovery.notice, syncNotice),
+        notice: combineNotices(resolvedRecovery.notice, syncNotice),
       );
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
@@ -1481,188 +1483,77 @@ class _AppShellState extends State<AppShell> {
   String _withProjectExtension(String path) =>
       path.toLowerCase().endsWith('.orproj') ? path : '$path.orproj';
 
-  Future<_RecoveryPreparation> _prepareRecovery(
+  Future<RecoveryPreparation> _prepareRecovery(
     String path, {
     bool forCreate = false,
   }) async {
     final inspection = await widget.projectGateway.inspectRecovery(path);
-    if (forCreate && inspection.kind != ProjectRecoveryKind.none) {
-      _showUnavailable(
-        'A project or recovery checkpoint already exists at the selected location.',
-      );
-      return const _RecoveryPreparation(proceed: false);
-    }
-    switch (inspection.kind) {
-      case ProjectRecoveryKind.none:
-        return const _RecoveryPreparation(proceed: true);
-      case ProjectRecoveryKind.stale:
-        return const _RecoveryPreparation(
+    switch (planRecovery(inspection, forCreate: forCreate)) {
+      case RecoveryStep.refuseExisting:
+        _showUnavailable(recoveryExistingMessage);
+        return const RecoveryPreparation(proceed: false);
+      case RecoveryStep.openDirectly:
+        return const RecoveryPreparation(proceed: true);
+      case RecoveryStep.openWithStaleNotice:
+        return const RecoveryPreparation(
           proceed: true,
-          notice: 'A stale recovery checkpoint is present. The saved project was opened without applying it.',
+          notice: staleRecoveryNotice,
         );
-      case ProjectRecoveryKind.candidate:
-        final choice = await _askCandidateRecovery(inspection);
-        if (choice == null || choice == _RecoveryChoice.cancel) {
-          return const _RecoveryPreparation(proceed: false);
-        }
-        return _RecoveryPreparation(
-          proceed: true,
-          mutation: choice == _RecoveryChoice.recover
-              ? _RecoveryMutation.apply
-              : _RecoveryMutation.discard,
-        );
-      case ProjectRecoveryKind.conflict:
-        final discard = await _askConflictingRecoveryDiscard(
+      case RecoveryStep.askCandidate:
+        return preparationForChoice(await _askCandidateRecovery(inspection));
+      case RecoveryStep.askConflictDiscard:
+        if (!await _askConflictingRecoveryDiscard(
           inspection.conflictReason,
-        );
-        if (!discard) return const _RecoveryPreparation(proceed: false);
-        return const _RecoveryPreparation(
-          proceed: true,
-          mutation: _RecoveryMutation.discard,
-        );
-      case ProjectRecoveryKind.invalid:
-        final discard = await _askInvalidRecoveryDiscard();
-        if (!discard) return const _RecoveryPreparation(proceed: false);
-        return const _RecoveryPreparation(
-          proceed: true,
-          mutation: _RecoveryMutation.discard,
-        );
+        )) {
+          return const RecoveryPreparation(proceed: false);
+        }
+        return discardPreparation();
+      case RecoveryStep.askInvalidDiscard:
+        if (!await _askInvalidRecoveryDiscard()) {
+          return const RecoveryPreparation(proceed: false);
+        }
+        return discardPreparation();
     }
   }
 
-  Future<_RecoveryPreparation> _resolveRecovery(
+  Future<RecoveryChoice?> _askCandidateRecovery(
+    ProjectRecoveryInspection inspection,
+  ) => showRecoveryCheckpointDialog(context, inspection);
+
+  Future<bool> _askConflictingRecoveryDiscard(String reason) =>
+      showConflictingRecoveryDiscardDialog(context, reason);
+
+  Future<bool> _askInvalidRecoveryDiscard() =>
+      showInvalidRecoveryDiscardDialog(context);
+
+  Future<RecoveryPreparation> _resolveRecovery(
     String path,
-    _RecoveryPreparation preparation,
+    RecoveryPreparation preparation,
   ) async {
-    if (preparation.mutation == null) return preparation;
-    final result = preparation.mutation == _RecoveryMutation.apply
+    final mutation = preparation.mutation;
+    if (mutation == null) return preparation;
+    final result = mutation == RecoveryMutation.apply
         ? await widget.projectGateway.applyRecovery(path)
         : await widget.projectGateway.discardRecovery(path);
     if (!result.succeeded) {
       _showUnavailable(
-        result.message.isEmpty
-            ? 'Recovery could not be completed.'
-            : result.message,
+        result.message.isEmpty ? recoveryFailedMessage : result.message,
       );
-      return const _RecoveryPreparation(proceed: false);
+      return const RecoveryPreparation(proceed: false);
     }
-    final syncNotice = preparation.mutation == _RecoveryMutation.apply
+    final syncNotice = mutation == RecoveryMutation.apply
         ? await _syncNotice(path)
         : null;
-    return _RecoveryPreparation(
+    return RecoveryPreparation(
       proceed: true,
-      notice: _combineNotices(
-        preparation.mutation == _RecoveryMutation.apply &&
-                result.message.contains('cleanup is pending')
-            ? result.message
-            : preparation.notice,
-        syncNotice,
+      notice: recoveryNoticeAfter(
+        mutation: mutation,
+        resultMessage: result.message,
+        priorNotice: preparation.notice,
+        syncNotice: syncNotice,
       ),
     );
   }
-
-  Future<_RecoveryChoice?> _askCandidateRecovery(
-    ProjectRecoveryInspection inspection,
-  ) => showDialog<_RecoveryChoice>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Recovery checkpoint found'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'A recoverable project checkpoint is available${inspection.recoveryName.isEmpty ? '' : ' for “${inspection.recoveryName}”'}.',
-          ),
-          const SizedBox(height: OrSpacing.x3),
-          Text('Saved revision: ${inspection.baseRevision}'),
-          Text('Recovery revision: ${inspection.recoveryRevision}'),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.cancel),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.discard),
-          child: const Text('Discard'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.recover),
-          child: const Text('Recover'),
-        ),
-      ],
-    ),
-  );
-
-  Future<bool> _askConflictingRecoveryDiscard(String reason) async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Recovery checkpoint conflict'),
-        content: Text(
-          'This checkpoint does not match the project lineage${reason.isEmpty ? '.' : ' ($reason).'} No recovery data will be applied.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard checkpoint'),
-          ),
-        ],
-      ),
-    );
-    return discard == true && await _confirmRecoveryDiscard();
-  }
-
-  Future<bool> _askInvalidRecoveryDiscard() async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Invalid recovery checkpoint'),
-        content: const Text(
-          'This recovery checkpoint is malformed or failed validation. Its contents cannot be recovered, and the saved project will remain unchanged.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard checkpoint'),
-          ),
-        ],
-      ),
-    );
-    return discard == true && await _confirmRecoveryDiscard();
-  }
-
-  Future<bool> _confirmRecoveryDiscard() async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Discard recovery data?'),
-          content: const Text(
-            'This removes the recovery checkpoint permanently.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Discard'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
 
   Future<bool> _leaveCurrentProject({
     Future<bool> Function()? beforeClose,
@@ -2107,12 +1998,6 @@ class _AppShellState extends State<AppShell> {
     } catch (_) {
       return 'The project is saved on this device, but could not be synchronized to the selected document.';
     }
-  }
-
-  static String? _combineNotices(String? first, String? second) {
-    if (first == null || first.isEmpty) return second;
-    if (second == null || second.isEmpty) return first;
-    return '$first\n$second';
   }
 
   Future<void> _startExport() async {
@@ -5106,22 +4991,6 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
 }
 
 enum _LeaveChoice { save, discard, cancel }
-
-enum _RecoveryChoice { recover, discard, cancel }
-
-enum _RecoveryMutation { apply, discard }
-
-class _RecoveryPreparation {
-  const _RecoveryPreparation({
-    required this.proceed,
-    this.notice,
-    this.mutation,
-  });
-
-  final bool proceed;
-  final String? notice;
-  final _RecoveryMutation? mutation;
-}
 
 bool _sameProjectIdentity(ProjectReadModel first, ProjectReadModel second) =>
     first.projectId == second.projectId &&

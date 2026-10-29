@@ -202,7 +202,7 @@ Tracked so a future round can tell whether a seam grew back:
 
 | owner | lines |
 | --- | --- |
-| `apps/or_app/lib/shell/app_shell.dart` | 5182 |
+| `apps/or_app/lib/shell/app_shell.dart` | 5051 |
 | `apps/or_app/lib/screens/editor_timeline_panel.dart` | 4217 |
 | `apps/or_app/lib/screens/editor_shell_preview_screen.dart` | 2277 |
 | `apps/or_app/lib/screens/editor_inspector_panel.dart` | 1446 |
@@ -378,7 +378,10 @@ The fake server and its scenario are throwaway files; they are not committed.
    physical-device performance are unproven.
 5. Clean-machine install/upgrade/uninstall is unverified.
 6. The largest sources are still single files — `apps/or_app/lib/shell/app_shell.dart`
-   and `apps/or_app/lib/screens/editor_shell_preview_screen.dart`, and
+   (down to 5051 lines after its recovery decisions and dialogs moved to
+   `apps/or_app/lib/shell/project_recovery.dart` and
+   `apps/or_app/lib/shell/project_recovery_dialogs.dart`) and
+   `apps/or_app/lib/screens/editor_shell_preview_screen.dart`, and
    `crates/or_app_bridge/src/api/project.rs` still holds the opaque handle and most
    bridge methods after its view types moved to `crates/or_app_bridge/src/api/views.rs`
    (re-exported so the generated bridge keeps the same paths) and the media artifact
@@ -441,6 +444,11 @@ The fake server and its scenario are throwaway files; they are not committed.
    `crates/or_app_bridge/src/api/media_artifact_config.rs` the artifact cache
    location, worker-pool sizing and service construction. Next seams, in order:
    the project lifecycle and the media preview request path in `app_shell.dart` —
+   its recovery slice has started: the inspection-to-question decision, the
+   choice-to-mutation mapping and the notice-combining rule are pure functions
+   in `apps/or_app/lib/shell/project_recovery.dart`, and the checkpoint dialogs
+   live in `apps/or_app/lib/shell/project_recovery_dialogs.dart`, while the
+   shell keeps the gateway calls and the create/open/leave order;
    bookkeeping moved to `apps/or_app/lib/production/media_artifact_mailbox.dart`,
    the publish choice to `media_preview_publisher.dart`, the artifact read to
    `media_preview_reader.dart`, the queue/drain rules to
