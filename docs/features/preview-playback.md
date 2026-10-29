@@ -1,6 +1,6 @@
 # Feature — Preview and Playback
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-29
 
 Scope: the viewer and transport — seek, scrub, play/pause, frame step, and the
 timing contract they obey.
@@ -38,6 +38,12 @@ The desktop path is exercised by the semantic UI harness (`scripts/or_ui.py`) an
 by packaged-build journeys; release-mode pacing is recorded from the app itself
 (`OR_PACING_LOG`) against the 16.68 ms budget. Debug-lane pacing is a measurement,
 not a performance claim.
+
+Measured 2026-10-29 (`playback-pacing`, Debug lane, 720p30 on the local Mac):
+153 presented frames over 5.1 s — 29.9 fps, engine build p95 0.43 ms, frame span
+p95 0.56 ms, gap p95 33.33 ms (vsync spacing) with a 50 ms worst gap. The build
+and span stay two orders of magnitude under the budget, so pacing there is owned
+by presentation, not by Flutter work.
 
 ## Known gaps
 
