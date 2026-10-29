@@ -1732,7 +1732,10 @@ class _AppShellState extends State<AppShell> {
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Unsaved project changes'),
-      content: const Text('Save your changes before continuing?'),
+      content: const Text(
+        'Save your changes before continuing. Discard closes the project and '
+        'deletes its recovery copy.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, _LeaveChoice.cancel),

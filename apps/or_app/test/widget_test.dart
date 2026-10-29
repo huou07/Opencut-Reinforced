@@ -3278,7 +3278,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('workspace-close')));
     await tester.pumpAndSettle();
-    expect(find.text('Save your changes before continuing?'), findsOneWidget);
+    expect(
+      find.textContaining('Discard closes the project'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(gateway.closeCalls, 0);
@@ -3387,7 +3390,10 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('home-open-project')));
       await tester.pumpAndSettle();
-      expect(find.text('Save your changes before continuing?'), findsOneWidget);
+      expect(
+      find.textContaining('Discard closes the project'),
+      findsOneWidget,
+    );
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(gateway.openCalls, 0);
