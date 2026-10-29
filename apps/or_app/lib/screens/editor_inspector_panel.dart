@@ -1129,11 +1129,15 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       _audioTimeField('fade_out', 'Fade out (s)'),
       if (_error != null) ...[
         const SizedBox(height: OrSpacing.x2),
-        Text(
-          _error!,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.error,
-            fontSize: OrType.tinySize,
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            _error!,
+            key: const ValueKey('inspector-error'),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: OrType.tinySize,
+            ),
           ),
         ),
       ],
@@ -1412,11 +1416,15 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: OrSpacing.x2),
-                    Text(
-                      _error!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontSize: OrType.tinySize,
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _error!,
+                        key: const ValueKey('inspector-error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: OrType.tinySize,
+                        ),
                       ),
                     ),
                   ],

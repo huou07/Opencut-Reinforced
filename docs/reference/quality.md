@@ -256,6 +256,10 @@ select it explicitly (`voiceover-provider-system`). A tree captured right
 after a tap also raced the build; the runner now settles before `tree`.
 
 ## Verification ideas not yet built
+- The inspector's validation line (`inspector-error`, now a live region) has no
+  assertion: a scenario that types an invalid gain into `inspector-audio-gain_db`
+  and expects `inspector-error` would pin both the copy and the announcement.
+
 
 - A generation-gated fake (`summaryGate`, `mediaPageGate`) can pin the
   superseded-refresh branches behind a stale `listMediaPage`/`getProject` reply,
