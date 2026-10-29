@@ -332,6 +332,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         _localEnrolling = false;
         _cloneError = error.message;
       });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _localEnrolling = false;
+        _cloneError = 'The voice could not be enrolled: $error';
+      });
     }
   }
 
