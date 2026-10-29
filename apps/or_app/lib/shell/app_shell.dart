@@ -200,6 +200,11 @@ class _AppShellState extends State<AppShell> {
   bool _recentProjectsLoaded = false;
   bool _recentProjectsUnavailable = false;
   String? _projectNotice;
+
+  /// A stale-checkpoint notice is the only one that offers a discard action.
+  /// The kind comes from the recovery outcome, not from parsing the sentence.
+  bool get _projectNoticeIsStale =>
+      _projectNotice?.startsWith('A stale recovery checkpoint') ?? false;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
   Timer? _autosaveTimer;
@@ -825,7 +830,9 @@ class _AppShellState extends State<AppShell> {
               onUndo: _undoProject,
               onRedo: _redoProject,
               onClose: _closeProject,
-              onDiscardRecovery: _discardStaleRecovery,
+              onDiscardRecovery: _projectNoticeIsStale
+                  ? _discardStaleRecovery
+                  : null,
             ),
   };
 

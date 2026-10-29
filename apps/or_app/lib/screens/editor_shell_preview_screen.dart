@@ -1437,9 +1437,6 @@ class _ProjectNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final staleCheckpoint = message.toLowerCase().startsWith(
-      'a stale recovery checkpoint',
-    );
     return Container(
       key: const ValueKey('project-notice'),
       width: double.infinity,
@@ -1462,7 +1459,10 @@ class _ProjectNotice extends StatelessWidget {
               style: const TextStyle(fontSize: OrType.metadataCompactSize),
             ),
           ),
-          if (staleCheckpoint && onDiscardRecovery != null)
+          // The shell decides whether this notice has a discard action; the
+          // widget only renders it. Matching English copy here hid the action
+          // whenever the producer reworded its sentence.
+          if (onDiscardRecovery != null)
             TextButton(
               key: const ValueKey('discard-stale-recovery'),
               onPressed: onDiscardRecovery,
