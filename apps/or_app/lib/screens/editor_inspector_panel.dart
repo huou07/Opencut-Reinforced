@@ -10,7 +10,7 @@ import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
 import 'editor_frame_rate.dart';
 import 'editor_panel_header.dart';
-import 'editor_rational_time.dart';
+import 'inspector_audio_validation.dart';
 
 /// Human-facing unit conversion for the inspector. Canonical state stays in the
 /// engine's milli / basis-point integers; these helpers are the only place the
@@ -67,16 +67,6 @@ int? _pixelsToMilliPixels(String text) {
   if (value == null || value < 0) return null;
   final milli = (value * 1000).round();
   return milli <= 128000 ? milli : null;
-}
-
-ProjectRationalTime? _parseSecondsOrRational(String text) {
-  final trimmed = text.trim();
-  if (trimmed.isEmpty) return null;
-  final direct = ProjectRationalTime.tryParse(trimmed);
-  if (direct != null) return direct;
-  final seconds = _finiteNumber(trimmed);
-  if (seconds == null || seconds < 0) return null;
-  return rationalTimeFromSeconds(seconds);
 }
 
 class EditorInspectorPanel extends StatefulWidget {
@@ -429,10 +419,10 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     final transitionOutKind = int.tryParse(
       _fields['transition_out_kind']!.text,
     );
-    final transitionInDuration = _parseSecondsOrRational(
+    final transitionInDuration = parseSecondsOrRational(
       _fields['transition_in_duration']!.text,
     );
-    final transitionOutDuration = _parseSecondsOrRational(
+    final transitionOutDuration = parseSecondsOrRational(
       _fields['transition_out_duration']!.text,
     );
     if (x == null ||
@@ -492,32 +482,12 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     );
   }
 
-  ProjectTimelineAudioSettings? _readAudioSettings() {
-    final gain = double.tryParse(_audioFields['gain_db']!.text);
-    final pan = double.tryParse(_audioFields['pan_percent']!.text);
-    final fadeIn = _parseSecondsOrRational(_audioFields['fade_in']!.text);
-    final fadeOut = _parseSecondsOrRational(_audioFields['fade_out']!.text);
-    if (gain == null ||
-        !gain.isFinite ||
-        gain < -96 ||
-        gain > 24 ||
-        pan == null ||
-        !pan.isFinite ||
-        pan < -100 ||
-        pan > 100 ||
-        fadeIn == null ||
-        fadeIn.numerator < BigInt.zero ||
-        fadeOut == null ||
-        fadeOut.numerator < BigInt.zero) {
-      return null;
-    }
-    return ProjectTimelineAudioSettings(
-      gainMilliDecibels: (gain * 1000).round(),
-      panBasisPoints: (pan * 100).round(),
-      fadeIn: fadeIn,
-      fadeOut: fadeOut,
-    );
-  }
+  ProjectTimelineAudioSettings? _readAudioSettings() => audioSettingsFromTexts(
+    gain: _audioFields['gain_db']!.text,
+    pan: _audioFields['pan_percent']!.text,
+    fadeIn: _audioFields['fade_in']!.text,
+    fadeOut: _audioFields['fade_out']!.text,
+  );
 
   Future<void> _apply(ProjectTimelineVisualSettings settings) async {
     final project = widget.project;
@@ -1204,7 +1174,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
                         final settings = _readAudioSettings();
                         if (settings == null) {
                           setState(
-                            () => _error = 'Enter a gain between -96 and 24 dB, a pan between -100 and 100%, and fade times in seconds.',
+                            () => _error = inspectorAudioValidationMessage,
                           );
                           return;
                         }
