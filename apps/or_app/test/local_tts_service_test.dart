@@ -34,6 +34,10 @@ void main() {
       LocalTtsService.endpoint('localhost:9000', '/v1/voices').toString(),
       'http://localhost:9000/v1/voices',
     );
+    expect(
+      LocalTtsService.normalizeBaseUrl('http://127.0.0.1:8000/v1/'),
+      'http://127.0.0.1:8000',
+    );
   });
 
   test('speech request uses the OpenAI shape and asks for a WAV', () {

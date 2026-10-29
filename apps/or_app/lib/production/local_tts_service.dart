@@ -97,6 +97,14 @@ class LocalTtsService {
     while (value.endsWith('/')) {
       value = value.substring(0, value.length - 1);
     }
+    // The endpoints add `/v1` themselves, so a pasted OpenAI-style base keeps
+    // working instead of asking for `/v1/v1/audio/speech`.
+    if (value.endsWith('/v1')) {
+      value = value.substring(0, value.length - 3);
+      while (value.endsWith('/')) {
+        value = value.substring(0, value.length - 1);
+      }
+    }
     return value;
   }
 
