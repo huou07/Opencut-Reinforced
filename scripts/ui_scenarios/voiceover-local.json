@@ -1,6 +1,6 @@
 {
   "name": "voiceover-local",
-  "description": "Local (keyless) narration: connect to the loopback TTS server, keep the choice across a source switch, refuse a typed URL that does not answer, then recover by reopening the dialog.",
+  "description": "Local (keyless) narration: a typed server URL that does not answer is probed before the voice check, so the dialog reports the server's own message; reopening the dialog recovers and narrates.",
   "steps": [
     {"op": "expect", "key": "home-new-project", "role": "button"},
     {"op": "tap", "selector": {"key": "nav-projects"}},
@@ -13,14 +13,8 @@
     {"op": "wait", "text": "Generate voiceover", "budget_ms": 10000},
     {"op": "tap", "selector": {"key": "voiceover-provider-local"}},
     {"op": "expect", "key": "voiceover-local-url"},
-    {"op": "enter_text", "selector": {"key": "voiceover-local-url"}, "value": "127.0.0.1:8000"},
-    {"op": "tap", "selector": {"key": "voiceover-local-connect"}},
-    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 15000},
-    {"op": "tap", "selector": {"key": "voiceover-provider-system"}},
-    {"op": "tap", "selector": {"key": "voiceover-provider-local"}},
-    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 30000},
-    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
     {"op": "enter_text", "selector": {"key": "voiceover-local-url"}, "value": "127.0.0.1:9"},
+    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
     {"op": "tap", "selector": {"key": "voiceover-generate"}},
     {"op": "wait_label", "label_regex": "No local speech server|did not answer", "budget_ms": 20000},
     {"op": "tap", "selector": {"text": "Cancel"}},

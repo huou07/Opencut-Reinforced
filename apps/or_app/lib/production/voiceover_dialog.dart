@@ -527,8 +527,18 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       return;
     }
     if (_provider == 'local' && _localVoiceId.isEmpty) {
-      setState(() => _error = 'Choose or clone a local voice first.');
-      return;
+      // Probe first: "choose a voice" is the wrong complaint when the server
+      // the owner typed does not answer.
+      await _loadLocalVoices();
+      if (_localVoiceId.isEmpty) {
+        if (mounted) {
+          setState(
+            () => _error =
+                _connectError ?? 'Choose or clone a local voice first.',
+          );
+        }
+        return;
+      }
     }
     if (_provider != 'system' &&
         _provider != 'local' &&
