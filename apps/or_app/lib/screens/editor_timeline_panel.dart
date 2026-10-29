@@ -4390,11 +4390,11 @@ Future<void> _showTimelineClipActions({
       title: const Text('Clip'),
       content: Text(switch (clip.contentKind) {
         ProjectTimelineClipContentKind.media =>
-          'Clip ID: ${clip.clipId}\nMedia ID: ${clip.mediaId ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart?.canonical ?? ''} + ${clip.timelineDuration.canonical}',
+          'Timeline start: ${clip.timelineStart.canonical}\nSource range: ${clip.sourceStart?.canonical ?? ''} + ${clip.timelineDuration.canonical}',
         ProjectTimelineClipContentKind.text =>
-          'Clip ID: ${clip.clipId}\nTitle: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
+          'Title: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
         ProjectTimelineClipContentKind.caption =>
-          'Clip ID: ${clip.clipId}\nCaption: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
+          'Caption: ${clip.text ?? ''}\nTimeline start: ${clip.timelineStart.canonical}\nDuration: ${clip.timelineDuration.canonical}',
       }),
       actions: [
         SizedBox(
