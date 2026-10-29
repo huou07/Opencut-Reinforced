@@ -124,6 +124,38 @@ void main() {
     expect(loaded.localCloneAcknowledged, isTrue);
   });
 
+  test('copyWith keeps every field it is not asked to change', () {
+    const base = NarrationSettings(
+      voice: 'Mai',
+      locale: 'vi_VN',
+      rate: 190,
+      gapMs: 300,
+      provider: 'local',
+      cloudVoiceId: 'cloud-1',
+      azureRegion: 'southeastasia',
+      localBaseUrl: 'http://127.0.0.1:9001',
+      localVoiceId: 'cloned',
+      localVoiceName: 'My voice',
+      localReferencePath: '/tmp/ref.wav',
+      localCloneAcknowledged: true,
+    );
+    final changed = base.copyWith(voice: 'Other', rate: 180, gapMs: 250);
+    expect(changed.voice, 'Other');
+    expect(changed.rate, 180);
+    expect(changed.gapMs, 250);
+    // A field added to the settings must also reach copyWith, or a screen that
+    // edits four options silently resets the rest.
+    expect(changed.locale, 'vi_VN');
+    expect(changed.provider, 'local');
+    expect(changed.cloudVoiceId, 'cloud-1');
+    expect(changed.azureRegion, 'southeastasia');
+    expect(changed.localBaseUrl, 'http://127.0.0.1:9001');
+    expect(changed.localVoiceId, 'cloned');
+    expect(changed.localVoiceName, 'My voice');
+    expect(changed.localReferencePath, '/tmp/ref.wav');
+    expect(changed.localCloneAcknowledged, isTrue);
+  });
+
   test('the local provider is accepted and an unknown one falls back', () {
     final local = NarrationSettings.fromJson({
       'provider': 'local',

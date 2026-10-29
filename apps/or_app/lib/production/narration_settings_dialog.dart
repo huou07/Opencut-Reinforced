@@ -173,21 +173,14 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
 
   Future<void> _save() async {
     final selected = _voiceByName(_voices, _voice);
-    final settings = NarrationSettings(
+    // The screen edits four fields; everything else it does not own is carried
+    // forward by copyWith, so a field added later cannot be dropped here by
+    // omission.
+    final settings = widget.initial.copyWith(
       voice: selected?.name ?? '',
       locale: selected?.locale ?? '',
       rate: _rate.round(),
       gapMs: _gapMs.round(),
-      provider: widget.initial.provider,
-      cloudVoiceId: widget.initial.cloudVoiceId,
-      azureRegion: widget.initial.azureRegion,
-      localBaseUrl: widget.initial.localBaseUrl,
-      localVoiceId: widget.initial.localVoiceId,
-      localVoiceName: widget.initial.localVoiceName,
-      localReferencePath: widget.initial.localReferencePath,
-      // The acknowledgement belongs to the user, not to one screen: saving
-      // here must not silently withdraw it.
-      localCloneAcknowledged: widget.initial.localCloneAcknowledged,
     );
     try {
       await _store.save(settings);
