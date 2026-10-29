@@ -880,6 +880,17 @@ void main() {
     expect(gateway.illustrationRequests, isEmpty);
   });
 
+  testWidgets('a first page failure still offers a retry', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-first-page.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    gateway.mediaPageError = 'The media page could not be read.';
+    await _createProject(tester, 'First page failure');
+
+    expect(find.text('The media page could not be read.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('media-library-retry')), findsOneWidget);
+  });
+
   testWidgets('a failed media page offers a retry that reloads it', (
     tester,
   ) async {
