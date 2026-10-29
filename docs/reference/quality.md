@@ -284,10 +284,14 @@ projects.
    bookkeeping moved to `apps/or_app/lib/production/media_artifact_mailbox.dart`,
    the publish choice to `media_preview_publisher.dart`, the artifact read to
    `media_preview_reader.dart`, the queue/drain rules to
-   `media_preview_queue.dart`, and the page-pruning policy to
-   `media_preview_plan.dart` (pure `planMediaPreviews`); what remains is the
-   request/dispatch pair that
-   talks to the gateway and the event stream, then the timeline bridge methods in
+   `media_preview_queue.dart`, the page-pruning and retry policy to
+   `media_preview_plan.dart` (pure `planMediaPreviews` and `retryablePreview`),
+   and the selection guard to `timeline_project_identity.dart`; the
+   request/dispatch pair stays where it is on purpose — it binds the gateway,
+   the event subscription, the mailbox, the session identity and the shell's
+   setState together, so an extraction would trade one coupling for ten hooks
+   into the same object, and the pair is already covered by shell tests. Next
+   seams: the project lifecycle, then the timeline bridge methods in
    `crates/or_app_bridge/src/api/project.rs` (they interleave with stateful
    dispatch), then the remaining dispatch catalog in
    `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
