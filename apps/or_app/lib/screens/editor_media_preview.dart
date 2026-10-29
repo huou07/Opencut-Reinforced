@@ -40,16 +40,28 @@ class EditorMediaItemPreview extends StatelessWidget {
       width: 52,
       height: 36,
       child: failed
-          ? Center(
-              child: IconButton(
-                key: ValueKey('media-preview-retry-${item.mediaId}'),
-                tooltip: 'Preview unavailable. Retry.',
-                padding: EdgeInsets.zero,
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                color: OrColors.textMuted,
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
+          ? Tooltip(
+              message: 'Preview unavailable. Retry.',
+              child: Semantics(
+                button: true,
+                label: 'Preview unavailable. Retry.',
+                child: MouseRegion(
+                  cursor: onRetry == null
+                      ? MouseCursor.defer
+                      : SystemMouseCursors.click,
+                  child: GestureDetector(
+                    key: ValueKey('media-preview-retry-${item.mediaId}'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onRetry,
+                    child: const Center(
+                      child: Icon(
+                        Icons.refresh,
+                        size: 16,
+                        color: OrColors.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             )
           : bytes == null

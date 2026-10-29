@@ -1042,6 +1042,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the whole failed preview tile is the retry target', (
+    tester,
+  ) async {
+    // A 16px icon inside a 52x36 tile is a hard target; the retry now covers
+    // the tile and is announced as a button.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-broken', '/tmp/broken.mp4')]
+      ..artifactRequestResponses['media-broken:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-broken',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'PREVIEW_UNAVAILABLE',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/broken-tile.orproj',
+    );
+    await _createProject(tester, 'Broken Tile');
+
+    final tile = find.byKey(const ValueKey('media-preview-media-broken'));
+    expect(tile, findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Preview unavailable. Retry.'),
+      findsOneWidget,
+    );
+    final before = gateway.thumbnailRequests;
+    await tester.tapAt(tester.getTopLeft(tile) + const Offset(3, 3));
+    await tester.pumpAndSettle();
+    expect(gateway.thumbnailRequests, before + 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'an artifact event that arrives during another preview request still lands',
     (tester) async {
