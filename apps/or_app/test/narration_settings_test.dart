@@ -137,6 +137,19 @@ void main() {
     );
   });
 
+  test('the settings intro names the source that is actually in use', () {
+    expect(
+      narrationSettingsIntroText('system'),
+      'Voices installed on this Mac. The assistant and the Audio tool use '
+      'the saved default; nothing is uploaded.',
+    );
+    final local = narrationSettingsIntroText('local');
+    expect(local, contains('the local server'));
+    expect(local, contains('installed-voice fallback'));
+    expect(narrationSettingsIntroText('elevenlabs'), contains('ElevenLabs'));
+    expect(narrationSettingsIntroText('azure'), contains('Microsoft Azure'));
+  });
+
   testWidgets('voice settings save the chosen voice, rate and gap', (
     tester,
   ) async {
