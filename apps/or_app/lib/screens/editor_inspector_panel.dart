@@ -69,24 +69,6 @@ int? _pixelsToMilliPixels(String text) {
   return milli <= 128000 ? milli : null;
 }
 
-/// Accepted range of a visual number field, mirroring its formatter so the
-/// field can say the bound out loud instead of silently dropping keystrokes.
-String _visualRangeHint(String key) {
-  final limit = switch (key) {
-    'x' || 'y' || 'rotation' || 'brightness' => 10000,
-    'scale_x' || 'scale_y' => 128000,
-    'blur' => 128000,
-    'contrast' || 'saturation' => 4000,
-    _ => 10000,
-  };
-  final minimum = switch (key) {
-    'x' || 'y' || 'rotation' || 'brightness' => -limit,
-    'scale_x' || 'scale_y' => 1,
-    _ => 0,
-  };
-  return '$minimum to $limit';
-}
-
 class EditorInspectorPanel extends StatefulWidget {
   const EditorInspectorPanel({
     super.key,
@@ -780,6 +762,11 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       'contrast' || 'saturation' => 4000,
       _ => 10000,
     };
+    final minimum = switch (key) {
+      'x' || 'y' || 'rotation' => -limit,
+      'scale_x' || 'scale_y' => 1,
+      _ => 0,
+    };
     return TextField(
       key: ValueKey('inspector-visual-$key'),
       controller: _fields[key],
@@ -809,18 +796,12 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
           }
           final value = double.tryParse(newValue.text);
           if (value == null || !value.isFinite) return oldValue;
-          final minimum = switch (key) {
-            'x' || 'y' || 'rotation' => -limit.toDouble(),
-            'brightness' => -limit.toDouble(),
-            'scale_x' || 'scale_y' => 0.1,
-            _ => 0.0,
-          };
           return value >= minimum && value <= limit ? newValue : oldValue;
         }),
       ],
       decoration: InputDecoration(
         labelText: label,
-        helperText: _visualRangeHint(key),
+        helperText: '$minimum to $limit',
         isDense: true,
         counterText: '',
         contentPadding: const EdgeInsets.symmetric(
