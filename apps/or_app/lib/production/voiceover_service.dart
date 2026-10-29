@@ -72,7 +72,9 @@ class VoiceoverException implements Exception {
 /// local provider boundary the assistant uses. Nothing leaves the machine.
 class VoiceoverService {
   VoiceoverService({
-    this.sayExecutable = 'say',
+    // An app launched from the Finder or a test runner has a minimal PATH, so
+    // the system binaries are addressed absolutely instead of through `say`.
+    this.sayExecutable = '/usr/bin/say',
     this.processTimeout = const Duration(minutes: 2),
   });
 
@@ -253,7 +255,7 @@ class VoiceoverService {
     // `afplay` is the system player; a missing player is not a synthesis
     // failure, so the preview file still returns.
     try {
-      await Process.run('afplay', [file.path]);
+      await Process.run('/usr/bin/afplay', [file.path]);
     } on ProcessException {
       // The sample was written; the caller can still inspect or play it.
     }

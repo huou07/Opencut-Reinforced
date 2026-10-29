@@ -223,9 +223,13 @@ and 112 removed.
   `say` voices** ("No installed voice was found."), even though
   `VoiceoverService().listVoices()` returns `Linh (vi_VN)` under `flutter test`
   on this machine. The dialog now explains how to add a voice, but the harness
-  app's inability to run `say` needs its own round (PATH/environment of an
-  app launched by `xcodebuild`), and `scripts/ui_scenarios/production-voice-music.json`
-  stays dependent on a Vietnamese voice until then.
+  app's inability to run `say` needs its own round. Round 121 ruled out two
+  causes: the voice service now calls `/usr/bin/say` absolutely (GUI apps get a
+  minimal PATH), and the harness build carries no `app-sandbox` entitlement —
+  neither changed the result. Next hypotheses: the app's locale/environment
+  makes `say -v ?` print a different table, or speech synthesis is gated by
+  TCC in that launch context. `scripts/ui_scenarios/production-voice-music.json`
+  stays voice-dependent until then.
 
 ## Verification ideas not yet built
 
