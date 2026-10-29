@@ -4500,14 +4500,10 @@ class _AppShellState extends State<AppShell> {
         }
         setState(() => _activeProject = current);
       }
-      // A newer refresh took over this session while this one was running. Its
-      // own load will publish the page; showing 'changed while refreshing' told
-      // the user about a race they cannot act on.
-      setState(() {
-        _mediaPage = null;
-        _mediaLoading = false;
-        _mediaLoadError = null;
-      });
+      // A newer refresh took over this session while this one was running. It
+      // publishes the page; clearing the page here emptied the library for a
+      // frame and told the user about a race they cannot act on.
+      if (mounted && identical(session, _activeSession)) return;
     } on ProjectGatewayException catch (error) {
       if (mounted &&
           identical(session, _activeSession) &&
