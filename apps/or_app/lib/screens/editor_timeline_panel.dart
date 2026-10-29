@@ -705,6 +705,7 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
                 countLabel: countLabel,
                 trackIndex: walk,
                 trackCount: snapshot.items.length,
+                anySolo: snapshot.items.any((item) => item.state.solo),
                 busy: widget.busy,
                 project: widget.project,
                 onRemove: widget.onRemoveTrack,
@@ -2619,6 +2620,7 @@ class _TimelineTrackHeader extends StatelessWidget {
     required this.countLabel,
     required this.trackIndex,
     required this.trackCount,
+    required this.anySolo,
     required this.busy,
     required this.project,
     required this.onRemove,
@@ -2631,6 +2633,7 @@ class _TimelineTrackHeader extends StatelessWidget {
   final String countLabel;
   final int trackIndex;
   final int trackCount;
+  final bool anySolo;
   final bool busy;
   final ProjectReadModel? project;
   final Future<void> Function(ProjectReadModel, ProjectTimelineTrack)? onRemove;
@@ -2658,7 +2661,14 @@ class _TimelineTrackHeader extends StatelessWidget {
       ProjectTimelineTrackKind.text => Icons.title,
       ProjectTimelineTrackKind.caption => Icons.subtitles_outlined,
     };
-    final enabled = visual ? track.state.visible : !track.state.muted;
+    // A soloed track silences its unsoloed siblings, so "enabled" must read
+    // through the solo state or assistive tech hears the wrong thing.
+    final active = anySolo
+        ? track.state.solo
+        : (visual ? track.state.visible : !track.state.muted);
+    final activeLabel = active
+        ? 'active'
+        : (anySolo ? 'silenced by solo' : 'disabled');
     final removable = track.clipCount == 0 && !busy && project != null;
     void submit(ProjectTimelineTrackState state) {
       final handler = onSetState;
@@ -2670,7 +2680,7 @@ class _TimelineTrackHeader extends StatelessWidget {
     return Semantics(
       container: true,
       label:
-          '$kind track $label, ${track.clipCount} clips, ${enabled ? 'enabled' : 'disabled'}, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}, position ${trackIndex + 1} of $trackCount',
+          '$kind track $label, ${track.clipCount} clips, $activeLabel, ${track.state.locked ? 'locked' : 'unlocked'}, ${track.state.solo ? 'solo' : 'not solo'}, position ${trackIndex + 1} of $trackCount',
       child: Container(
         height: _timelineLaneHeight,
         padding: const EdgeInsets.only(left: OrSpacing.x2),
