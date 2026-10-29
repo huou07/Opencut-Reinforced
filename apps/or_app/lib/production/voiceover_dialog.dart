@@ -747,11 +747,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'No installed voice was found. Add one in System '
-                            'Settings > Accessibility > Spoken Content, then '
-                            'retry.',
+                            _error ??
+                                'No installed voice was found. Add one in '
+                                    'System Settings > Accessibility > '
+                                    'Spoken Content, then retry.',
                           ),
                         ),
                         TextButton(
