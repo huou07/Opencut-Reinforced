@@ -39,6 +39,7 @@ import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'autosave_controller.dart';
 import 'export_flow.dart';
 import 'caption_import_dialog.dart';
 import 'speech_model_messages.dart';
@@ -212,13 +213,12 @@ class _AppShellState extends State<AppShell> {
       _projectNotice?.startsWith('A stale recovery checkpoint') ?? false;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
-  Timer? _autosaveTimer;
+  late final AutosaveController _autosave;
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
-  bool _autosaveInFlight = false;
-  String? _autosaveStatus;
-  bool _autosaveFailed = false;
+  String? get _autosaveStatus => _autosave.status.label;
+  bool get _autosaveFailed => _autosave.status.failed;
   late final ExportFlow _export;
 
   /// Non-null only while a batch import is running. It owns the top bar's
@@ -278,10 +278,13 @@ class _AppShellState extends State<AppShell> {
       onExported: (path) => unawaited(_showExportReceipt(path)),
     )..addListener(_handleExportChanged);
     FocusManager.instance.addListener(_handleFocusChange);
-    _autosaveTimer = Timer.periodic(
-      _autosaveInterval,
-      (_) => unawaited(_autosaveProject()),
-    );
+    _autosave = AutosaveController(
+      attempt: _autosaveAttempt,
+      interval: _autosaveInterval,
+      onChanged: (_) {
+        if (mounted) setState(() {});
+      },
+    )..start();
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _onExitRequested,
     );
@@ -297,7 +300,7 @@ class _AppShellState extends State<AppShell> {
     _motionInsertLog.dispose();
     _mediaPreviewUpdates.dispose();
     FocusManager.instance.removeListener(_handleFocusChange);
-    _autosaveTimer?.cancel();
+    _autosave.stop();
     _export.dispose();
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
@@ -1902,10 +1905,7 @@ class _AppShellState extends State<AppShell> {
     }
     if (event.kind == 'project_changed' || event.kind == 'project_saved') {
       if (event.kind == 'project_saved') {
-        setState(() {
-          _autosaveStatus = null;
-          _autosaveFailed = false;
-        });
+        setState(_autosave.clear);
       }
       await _refreshProjectState(session);
     }
@@ -2168,41 +2168,15 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _autosaveProject() async {
+  Future<bool?> _autosaveAttempt() async {
     final session = _activeSession;
     final project = _activeProject;
-    if (session == null ||
-        project == null ||
-        !project.dirty ||
-        _autosaveInFlight) {
-      return;
-    }
-    _autosaveInFlight = true;
-    if (mounted) {
-      setState(() {
-        _autosaveStatus = 'Autosaving recovery';
-        _autosaveFailed = false;
-      });
-    }
-    try {
-      final result = await widget.projectGateway.autosaveCheckpoint(session);
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _autosaveFailed = !result.succeeded;
-        _autosaveStatus = result.succeeded
-            ? 'Recovery saved'
-            : 'Autosave needs attention';
-      });
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _autosaveStatus = 'Autosave needs attention';
-        _autosaveFailed = true;
-      });
-    } finally {
-      _autosaveInFlight = false;
-    }
+    if (session == null || project == null || !project.dirty) return false;
+    final result = await widget.projectGateway.autosaveCheckpoint(session);
+    if (!identical(session, _activeSession)) return null;
+    return result.succeeded;
   }
+
 
   Future<void> _undoProject() async {
     await _runProjectAction(widget.projectGateway.undo);
@@ -4947,8 +4921,7 @@ class _AppShellState extends State<AppShell> {
       _timelineRefreshGeneration++;
       _activeProjectPath = null;
       _projectNotice = null;
-      _autosaveStatus = null;
-      _autosaveFailed = false;
+      _autosave.clear();
     });
   }
 
