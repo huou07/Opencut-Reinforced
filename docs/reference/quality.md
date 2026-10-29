@@ -226,6 +226,8 @@ their own increments with their own evidence.
    the seconds → canonical time conversion,
    `apps/or_app/lib/screens/editor_timeline_panel.dart` the timeline panel, its
    pointer/scrub gestures and clip context menu,
+   `apps/or_app/lib/screens/editor_timeline_actions.dart` the clip context menu
+   contents, the marker rename/delete flows and the actions dialog,
    `apps/or_app/lib/screens/editor_timeline_dialogs.dart` the trim, split, slip,
    boundary, move, speed and delete dialogs plus the text-clip editor,
    `apps/or_app/lib/screens/editor_timeline_shared.dart` the track labels, exact
