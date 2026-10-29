@@ -74,6 +74,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   double _rate = 180;
   double _gapMs = 250;
   bool _busy = false;
+  bool _previewing = false;
+  String? _previewError;
   String _stage = '';
   double? _progress;
   String? _error;
@@ -511,6 +513,56 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     return null;
   }
 
+  List<String> get _scriptLines => _script.text
+      .split('\n')
+      .where((line) => line.trim().isNotEmpty)
+      .toList();
+
+  /// Speaks one sample with the chosen voice, so a source or a cloned voice
+  /// can be judged before generating the whole script.
+  Future<void> _previewVoice() async {
+    final sample = _scriptLines.isEmpty ? '' : _scriptLines.first.trim();
+    final text = sample.isEmpty ? 'Đây là một câu thử giọng.' : sample;
+    setState(() {
+      _previewing = true;
+      _previewError = null;
+    });
+    try {
+      final directory = await _voiceover.outputDirectory();
+      if (_provider == 'local') {
+        if (_localVoiceId.isEmpty) {
+          throw const LocalTtsException(
+            'PREVIEW_NO_VOICE',
+            'Choose or clone a local voice first.',
+          );
+        }
+        await _local.preview(
+          baseUrl: LocalTtsService.normalizeBaseUrl(_localUrl.text),
+          text: text,
+          voiceId: _localVoiceId,
+          outputPath: '${directory.path}/local-voice-preview.wav',
+          sampleRate: _localHealth?.sampleRate ?? 0,
+        );
+      } else {
+        final voice = _voice;
+        if (voice == null) {
+          throw const VoiceoverException('Choose a voice first.');
+        }
+        await _voiceover.preview(
+          voice: voice,
+          text: text,
+          directory: directory,
+        );
+      }
+    } on VoiceoverException catch (error) {
+      if (mounted) setState(() => _previewError = error.message);
+    } on LocalTtsException catch (error) {
+      if (mounted) setState(() => _previewError = error.message);
+    } finally {
+      if (mounted) setState(() => _previewing = false);
+    }
+  }
+
   Future<void> _generate() async {
     final lines = _script.text
         .split('\n')
@@ -733,6 +785,13 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                         ),
                         const SizedBox(width: 8),
                         TextButton(
+                          key: const ValueKey('voiceover-preview-voice'),
+                          onPressed: _busy || _previewing
+                              ? null
+                              : _previewVoice,
+                          child: Text(_previewing ? 'Speaking…' : 'Preview'),
+                        ),
+                        TextButton(
                           key: const ValueKey('voiceover-manage-voices'),
                           onPressed: _busy ? null : _openVoiceSettings,
                           child: const Text('Voice settings…'),
@@ -830,6 +889,21 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                         ? null
                         : (value) =>
                               setState(() => _localVoiceId = value ?? ''),
+                  ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      key: const ValueKey('voiceover-preview-local-voice'),
+                      onPressed: _busy || _previewing
+                          ? null
+                          : _previewVoice,
+                      icon: Icon(
+                        _previewing ? Icons.graphic_eq : Icons.play_arrow,
+                        size: 18,
+                      ),
+                      label: Text(_previewing ? 'Speaking…' : 'Preview voice'),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -1020,6 +1094,19 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                         ),
                       ],
                     ),
+                ],
+                if (_previewError != null) ...[
+                  const SizedBox(height: 6),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      _previewError!,
+                      key: const ValueKey('voiceover-preview-error'),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
                 ],
                 if (_provider == 'system') ...[
                   const SizedBox(height: 8),

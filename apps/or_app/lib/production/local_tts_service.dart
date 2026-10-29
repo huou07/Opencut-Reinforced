@@ -77,12 +77,16 @@ class LocalHttpRequest {
 /// user starts it. Voice cloning is `POST /v1/voices` with a 3–8 s reference
 /// clip. Nothing is uploaded and no key is needed on loopback.
 class LocalTtsService {
-  LocalTtsService({HttpClient Function()? httpClientFactory})
-    : _httpClientFactory = httpClientFactory ?? HttpClient.new;
+  LocalTtsService({
+    HttpClient Function()? httpClientFactory,
+    Future<void> Function(String path)? playAudio,
+  }) : _httpClientFactory = httpClientFactory ?? HttpClient.new,
+       _playAudio = playAudio ?? _playWithAfplay;
 
   static const defaultBaseUrl = 'http://127.0.0.1:8000';
 
   final HttpClient Function() _httpClientFactory;
+  final Future<void> Function(String path) _playAudio;
 
   /// Accepts `127.0.0.1:8000`, `http://localhost:8000/` or an empty value
   /// (the default loopback server) and returns a scheme-qualified origin.
@@ -98,6 +102,36 @@ class LocalTtsService {
 
   static Uri endpoint(String baseUrl, String path) =>
       Uri.parse('${normalizeBaseUrl(baseUrl)}$path');
+
+  /// Plays [path] through the system output; a missing player is not a
+  /// synthesis failure.
+  Future<void> play(String path) async {
+    try {
+      await _playAudio(path);
+    } on ProcessException {
+      // The sample was written; playback is best effort.
+    }
+  }
+
+  /// Speaks a short [text] sample with [voiceId], plays it and returns the WAV
+  /// path, so a voice can be judged before synthesising a whole script.
+  Future<String> preview({
+    required String baseUrl,
+    required String text,
+    required String voiceId,
+    required String outputPath,
+    int sampleRate = 0,
+  }) async {
+    await synthesize(
+      baseUrl: baseUrl,
+      text: text,
+      voiceId: voiceId,
+      outputPath: outputPath,
+      sampleRate: sampleRate,
+    );
+    await play(outputPath);
+    return outputPath;
+  }
 
   /// Reads `/health` and `/v1/voices` so one round-trip validates the server.
   Future<LocalTtsStatus> probe(String baseUrl) async {
@@ -382,4 +416,8 @@ LocalHttpRequest localVoiceEnrollmentRequest({
     headers: {'Content-Type': 'multipart/form-data; boundary=$boundary'},
     body: body.takeBytes(),
   );
+}
+
+Future<void> _playWithAfplay(String path) async {
+  await Process.run('afplay', [path]);
 }

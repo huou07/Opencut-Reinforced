@@ -136,4 +136,37 @@ void main() {
       containsAll(['/health', '/v1/voices', '/v1/audio/speech']),
     );
   });
+
+  test('preview synthesises one sample and plays the file it wrote', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      final response = request.response;
+      if (request.uri.path == '/v1/audio/speech') {
+        response.add(
+          wrapPcmAsWav(List<int>.filled(2400, 0), sampleRate: 24000, channels: 1),
+        );
+      } else {
+        response.statusCode = 404;
+      }
+      await response.close();
+    });
+
+    final directory = await Directory.systemTemp.createTemp('or-local-preview-');
+    addTearDown(() => directory.delete(recursive: true));
+    final played = <String>[];
+    final service = LocalTtsService(playAudio: (path) async => played.add(path));
+    final output = '${directory.path}/preview.wav';
+
+    final path = await service.preview(
+      baseUrl: '127.0.0.1:${server.port}',
+      text: 'Xin chào',
+      voiceId: 'Mai Anh',
+      outputPath: output,
+    );
+
+    expect(path, output);
+    expect(File(output).lengthSync(), greaterThan(44));
+    expect(played, [output]);
+  });
 }

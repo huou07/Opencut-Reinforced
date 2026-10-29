@@ -43,7 +43,10 @@ justification and review.
   **Settings → Narration**, where it can be searched and previewed. The Generate
   voiceover dialog also picks the source: installed voices, a cloud provider, or
   a **Local server** with voice cloning; a local server needs no key and can
-  enrol a recorded or chosen 3–8 s reference clip as a cloned voice. Switching
+  enrol a recorded or chosen 3–8 s reference clip as a cloned voice. The
+  dialog previews the chosen voice with one sample line (the first script line,
+  or a short Vietnamese default) before a full run, for installed and local
+  voices alike. Switching
   the source keeps the last voice chosen for each source, and a choice made in
   Settings becomes the next run's default. The same
   Settings panel holds the cloud provider cards (key save/test/remove, Azure
