@@ -5,6 +5,11 @@ Last reviewed: 2026-10-29
 Scope: behaviour that must not regress, and what counts as evidence for a UI
 change. Do not add an item here without a check that can fail.
 
+- A destructive confirmation names its consequence, not just its question:
+  what is closed, what is not written, which recovery copy is deleted.
+  Rounds 85-86 fixed two prompts that asked "continue?" while the branch also
+  discarded the recovery checkpoint and aborted a running export.
+
 ## Evidence requirement
 
 A user-visible capability is accepted only with real interaction through the app
