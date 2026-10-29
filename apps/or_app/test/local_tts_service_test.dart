@@ -4,8 +4,23 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/production/cloud_voice_service.dart' show wrapPcmAsWav;
 import 'package:or_app/production/local_tts_service.dart';
+import 'package:or_app/production/voiceover_dialog.dart'
+    show localVoiceHintText;
 
 void main() {
+  test('the empty local voice list gets exactly one useful hint', () {
+    expect(
+      localVoiceHintText(connected: false, hasVoices: false),
+      contains('Press Connect'),
+    );
+    expect(
+      localVoiceHintText(connected: true, hasVoices: false),
+      contains('Enrol one from a clip'),
+    );
+    expect(localVoiceHintText(connected: false, hasVoices: true), isNull);
+    expect(localVoiceHintText(connected: true, hasVoices: true), isNull);
+  });
+
   test('a bare host:port and trailing slashes become one origin', () {
     expect(
       LocalTtsService.normalizeBaseUrl(''),

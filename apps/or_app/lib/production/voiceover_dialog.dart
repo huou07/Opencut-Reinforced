@@ -862,17 +862,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                       ),
                     ),
                   ],
-                  if (_localHealth == null && _localVoices.isEmpty) ...[
+                  if (localVoiceHintText(
+                        connected: _localHealth != null,
+                        hasVoices: _localVoices.isNotEmpty,
+                      )
+                      case final hint?) ...[
                     const SizedBox(height: 4),
                     Text(
-                      'Press Connect to list the voices on this server.',
-                      style: TextStyle(color: OrColors.textSecondary),
-                    ),
-                  ],
-                  if (_localHealth != null && _localVoices.isEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'The server reported no voice. Enrol one from a clip below.',
+                      hint,
                       style: TextStyle(color: OrColors.textSecondary),
                     ),
                   ],
@@ -1234,4 +1231,19 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       ),
     );
   }
+}
+
+/// One hint explains why the local voice list is empty, and only one.
+///
+/// A server that never connected and a server that connected with no voice
+/// are different problems; a server with voices needs no hint at all.
+String? localVoiceHintText({
+  required bool connected,
+  required bool hasVoices,
+}) {
+  if (hasVoices) return null;
+  if (connected) {
+    return 'The server reported no voice. Enrol one from a clip below.';
+  }
+  return 'Press Connect to list the voices on this server.';
 }
