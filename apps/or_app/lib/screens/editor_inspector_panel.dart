@@ -897,6 +897,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     ],
     decoration: InputDecoration(
       labelText: label,
+      helperText: '$minimum to $maximum',
       isDense: true,
       counterText: '',
       contentPadding: const EdgeInsets.symmetric(
