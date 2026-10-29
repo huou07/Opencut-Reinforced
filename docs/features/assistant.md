@@ -184,8 +184,10 @@ them. Android has no assistant: the desktop process boundary is explicit.
   explicit consent checkbox. The Audio tool's Generate voiceover dialog also
   offers **Local server**: any OpenAI-compatible speech endpoint on loopback
   (for example VieNeu-TTS, Apache-2.0) needs no key, and a 3–8 s reference clip
-  can be enrolled as a cloned voice the app then narrates with. The offline
-  `tools/voiceover.mjs` path still uses the system voice.
+  can be enrolled as a cloned voice the app then narrates with. The server field
+  is authoritative: an edited URL is probed before generating, and a server that
+  does not answer fails with its own message instead of falling back silently.
+  The offline `tools/voiceover.mjs` path still uses the system voice.
 - The music bed has no tempo/beat sync to the edit and no per-scene ducking; the
   user adjusts clip gain by hand.
 - `--apply` reports a placed track and caption count but has no per-step undo

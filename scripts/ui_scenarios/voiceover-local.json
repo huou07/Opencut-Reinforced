@@ -1,130 +1,36 @@
 {
   "name": "voiceover-local",
-  "harness": "or_ui",
-  "description": "Generate voiceover through a keyless local OpenAI-compatible speech server: create a project, open the Audio tool, switch the source to Local server, connect to loopback, speak one line and confirm the narration lands on the timeline. Requires a stub or real server on 127.0.0.1:8000.",
-  "viewport": {
-    "width": 1280,
-    "height": 800
-  },
+  "description": "Local (keyless) narration: connect to the loopback TTS server, keep the choice across a source switch, refuse a typed URL that does not answer, then recover by reopening the dialog.",
   "steps": [
-    {
-      "op": "expect",
-      "key": "home-new-project",
-      "role": "button"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "nav-projects"
-      }
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "projects-new-project"
-      }
-    },
-    {
-      "op": "enter_text",
-      "selector": {
-        "key": "new-project-name"
-      },
-      "value": "Local voice journey"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "confirm-new-project"
-      }
-    },
-    {
-      "op": "wait",
-      "text": "No timeline tracks",
-      "budget_ms": 20000
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "editor-tool-audio"
-      }
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "tool-generate-voiceover"
-      }
-    },
-    {
-      "op": "wait",
-      "text": "Generate voiceover",
-      "budget_ms": 10000
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "voiceover-provider-local"
-      }
-    },
-    {
-      "op": "expect",
-      "key": "voiceover-local-url"
-    },
-    {
-      "op": "enter_text",
-      "selector": {
-        "key": "voiceover-local-url"
-      },
-      "value": "127.0.0.1:8000"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "voiceover-local-connect"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Connected",
-      "budget_ms": 15000
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "voiceover-provider-system"
-      }
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "voiceover-provider-local"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Connected",
-      "budget_ms": 30000
-    },
-    {
-      "op": "enter_text",
-      "selector": {
-        "key": "voiceover-script"
-      },
-      "value": "Xin chao, day la giong doc cuc bo."
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "voiceover-generate"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Added 1 narration",
-      "budget_ms": 60000
-    },
-    {
-      "op": "shot",
-      "name": "after-local-narration"
-    }
+    {"op": "expect", "key": "home-new-project", "role": "button"},
+    {"op": "tap", "selector": {"key": "nav-projects"}},
+    {"op": "tap", "selector": {"key": "projects-new-project"}},
+    {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Local voice journey"},
+    {"op": "tap", "selector": {"key": "confirm-new-project"}},
+    {"op": "wait", "text": "No timeline tracks", "budget_ms": 20000},
+    {"op": "tap", "selector": {"key": "editor-tool-audio"}},
+    {"op": "tap", "selector": {"key": "tool-generate-voiceover"}},
+    {"op": "wait", "text": "Generate voiceover", "budget_ms": 10000},
+    {"op": "tap", "selector": {"key": "voiceover-provider-local"}},
+    {"op": "expect", "key": "voiceover-local-url"},
+    {"op": "enter_text", "selector": {"key": "voiceover-local-url"}, "value": "127.0.0.1:8000"},
+    {"op": "tap", "selector": {"key": "voiceover-local-connect"}},
+    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 15000},
+    {"op": "tap", "selector": {"key": "voiceover-provider-system"}},
+    {"op": "tap", "selector": {"key": "voiceover-provider-local"}},
+    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 30000},
+    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
+    {"op": "enter_text", "selector": {"key": "voiceover-local-url"}, "value": "127.0.0.1:9"},
+    {"op": "tap", "selector": {"key": "voiceover-generate"}},
+    {"op": "wait_label", "label_regex": "No local speech server|did not answer", "budget_ms": 20000},
+    {"op": "tap", "selector": {"text": "Cancel"}},
+    {"op": "wait_absent", "text": "Generate voiceover", "budget_ms": 10000},
+    {"op": "tap", "selector": {"key": "tool-generate-voiceover"}},
+    {"op": "wait", "text": "Generate voiceover", "budget_ms": 10000},
+    {"op": "wait_label", "label_regex": "Connected", "budget_ms": 20000},
+    {"op": "enter_text", "selector": {"key": "voiceover-script"}, "value": "Xin chao, day la giong doc cuc bo."},
+    {"op": "tap", "selector": {"key": "voiceover-generate"}},
+    {"op": "wait_label", "label_regex": "Added 1 narration", "budget_ms": 60000},
+    {"op": "shot", "name": "after-local-narration"}
   ]
 }

@@ -256,6 +256,11 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       setState(() {
         _localLoading = false;
         _connectError = error.message;
+        // Voices on the screen belong to the server that last answered; after
+        // a failed probe they no longer describe the field's URL.
+        _localVoices = const [];
+        _localHealth = null;
+        _localVoiceId = '';
       });
     }
   }
@@ -344,6 +349,18 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     List<String> lines,
     Directory directory,
   ) async {
+    // The server field is the source of truth. A URL the owner typed but has
+    // not connected yet must not silently fall back to the last good server.
+    final base = LocalTtsService.normalizeBaseUrl(_localUrl.text);
+    if (base != _localBaseUrl) {
+      await _loadLocalVoices();
+      if (base != _localBaseUrl) {
+        throw LocalTtsException(
+          'server-unreachable',
+          _connectError ?? 'The local server did not answer at $base.',
+        );
+      }
+    }
     await directory.create(recursive: true);
     final results = <VoiceoverLine>[];
     var cursor = 0;
@@ -353,7 +370,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       int duration;
       try {
         duration = await _local.synthesize(
-          baseUrl: _localBaseUrl,
+          baseUrl: base,
           text: text,
           voiceId: _localVoiceId,
           outputPath: path,
@@ -368,7 +385,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         // restart it answers "unknown voice". Enrol the saved clip and retry.
         await _reEnrollLocal();
         duration = await _local.synthesize(
-          baseUrl: _localBaseUrl,
+          baseUrl: base,
           text: text,
           voiceId: _localVoiceId,
           outputPath: path,
