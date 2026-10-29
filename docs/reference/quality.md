@@ -210,9 +210,10 @@ their own increments with their own evidence.
 5. Clean-machine install/upgrade/uninstall is unverified.
 6. The largest sources are still single files — `apps/or_app/lib/shell/app_shell.dart`
    and `apps/or_app/lib/screens/editor_shell_preview_screen.dart`, and
-   `crates/or_app_bridge/src/api/project.rs` still holds the opaque handle and every
-   bridge method after its view types moved to `crates/or_app_bridge/src/api/views.rs`
-   (re-exported so the generated bridge keeps the same paths) — and
+   `crates/or_app_bridge/src/api/project.rs` still holds the opaque handle and most
+   bridge methods after its view types moved to `crates/or_app_bridge/src/api/views.rs`
+   (re-exported so the generated bridge keeps the same paths) and the media artifact
+   requests moved to `crates/or_app_bridge/src/api/project_artifacts.rs` — and
    `crates/or_core/src/application` is a
    module whose `mod.rs` still carries request dispatch and the command catalog,
    while the suite is split into `crates/or_core/src/application/tests/` with one

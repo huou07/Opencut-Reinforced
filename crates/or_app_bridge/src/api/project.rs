@@ -6,7 +6,7 @@ use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, Pre
 use crate::transcription::{TranscriptionModelInfo, TranscriptionService};
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
+    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind,
     CaptionFileFormat, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop, EffectReference,
     ExportRequest, ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
     MarkerId, MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
@@ -49,10 +49,10 @@ pub use super::views::*;
 /// Rust-owned opaque handle; it is the only bridge path to the live project host.
 #[frb(opaque)]
 pub struct ProjectHostHandle {
-    host: LiveProjectHost,
-    media_artifact_service: Option<MediaArtifactService>,
-    transcription_service: Option<Arc<TranscriptionService>>,
-    preview_runtime: Arc<PreviewRuntime>,
+    pub(crate) host: LiveProjectHost,
+    pub(crate) media_artifact_service: Option<MediaArtifactService>,
+    pub(crate) transcription_service: Option<Arc<TranscriptionService>>,
+    pub(crate) preview_runtime: Arc<PreviewRuntime>,
 }
 
 pub fn create_project(path: String, name: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
@@ -2387,139 +2387,6 @@ impl ProjectHostHandle {
         )
     }
 
-    pub fn request_media_thumbnail(&self, media_id: String) -> MediaArtifactRequestView {
-        self.request_media_artifact(media_id, MediaArtifactKindView::Thumbnail)
-    }
-
-    pub fn request_media_waveform(&self, media_id: String) -> MediaArtifactRequestView {
-        self.request_media_artifact(media_id, MediaArtifactKindView::Waveform)
-    }
-
-    pub fn read_media_artifact(
-        &self,
-        kind: MediaArtifactKindView,
-        cache_key: String,
-    ) -> Result<Option<MediaArtifactBytesView>, ProjectBridgeError> {
-        let cache_key = CacheKey::from_hex(&cache_key).map_err(|error| ProjectBridgeError {
-            code: "INVALID_CACHE_KEY".to_owned(),
-            message: error.to_string(),
-        })?;
-        let service = self
-            .media_artifact_service
-            .as_ref()
-            .ok_or_else(cache_unavailable_error)?;
-        let bytes = service
-            .read_artifact(cache_artifact_kind(kind), cache_key)
-            .map_err(|error| ProjectBridgeError {
-                code: error.code().to_owned(),
-                message: error.to_string(),
-            })?;
-        Ok(bytes.map(|bytes| MediaArtifactBytesView {
-            bytes,
-            mime_type: "image/png".to_owned(),
-        }))
-    }
-
-    pub fn subscribe_media_artifact_events(
-        &self,
-        sink: StreamSink<MediaArtifactEventView>,
-    ) -> Result<(), ProjectBridgeError> {
-        // A platform without cached artifacts has no events to deliver, so the
-        // subscription is empty rather than failed. The generated stream wrapper
-        // discards this call's future, so an error here would surface as an
-        // unobserved bridge error instead of anything the caller could handle.
-        let Some(receiver) = self.media_artifact_event_receiver() else {
-            return Ok(());
-        };
-        thread::Builder::new()
-            .name("or-flutter-media-artifact-events".to_owned())
-            .spawn(move || forward_media_artifact_events(receiver, sink))
-            .map_err(|error| ProjectBridgeError {
-                code: "EVENT_SUBSCRIPTION_FAILED".to_owned(),
-                message: error.to_string(),
-            })?;
-        Ok(())
-    }
-
-    fn media_artifact_event_receiver(&self) -> Option<mpsc::Receiver<MediaArtifactEvent>> {
-        self.media_artifact_service
-            .as_ref()
-            .map(MediaArtifactService::subscribe_events)
-    }
-
-    fn request_media_artifact(
-        &self,
-        media_id: String,
-        kind: MediaArtifactKindView,
-    ) -> MediaArtifactRequestView {
-        let id = match MediaId::from_str(&media_id) {
-            Ok(id) => id,
-            Err(error) => {
-                return MediaArtifactRequestView::failed(
-                    media_id,
-                    kind,
-                    "INVALID_MEDIA_ID",
-                    error.to_string(),
-                );
-            }
-        };
-        let summary = match self.host.describe() {
-            Ok(summary) => summary,
-            Err(error) => {
-                let error = host_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-        };
-        let request = QueryEnvelope::media_get(
-            summary.summary.project_id,
-            summary.summary.project_instance_id,
-            id,
-        );
-        let item = match self
-            .host
-            .handle_application_request(ApplicationRequest::Query(request))
-        {
-            Ok(ApplicationResponse::Query(result)) => match result.media_item {
-                Some(item) => *item,
-                None => {
-                    let error = unexpected_response_error();
-                    return MediaArtifactRequestView::failed(
-                        media_id,
-                        kind,
-                        error.code,
-                        error.message,
-                    );
-                }
-            },
-            Ok(ApplicationResponse::Error(error)) => {
-                let error = operation_bridge_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-            Ok(_) => {
-                let error = unexpected_response_error();
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-            Err(error) => {
-                let error = host_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-        };
-        let Some(service) = self.media_artifact_service.as_ref() else {
-            let error = cache_unavailable_error();
-            return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-        };
-        let result = match kind {
-            MediaArtifactKindView::Thumbnail => service.request_thumbnail(&item),
-            MediaArtifactKindView::Waveform => service.request_waveform(&item),
-        };
-        match result {
-            Ok(result) => MediaArtifactRequestView::from_request(media_id, kind, result),
-            Err(error) => {
-                MediaArtifactRequestView::failed(media_id, kind, error.code(), error.to_string())
-            }
-        }
-    }
-
     /// Prepares media without holding the live-host lock, then dispatches with the
     /// identity and revision captured by the caller before probing started.
     pub fn import_media(
@@ -3261,7 +3128,7 @@ fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImport
 }
 
 impl MediaArtifactRequestView {
-    fn failed(
+    pub(crate) fn failed(
         media_id: String,
         kind: MediaArtifactKindView,
         error_code: impl Into<String>,
@@ -3278,7 +3145,7 @@ impl MediaArtifactRequestView {
         }
     }
 
-    fn from_request(
+    pub(crate) fn from_request(
         media_id: String,
         kind: MediaArtifactKindView,
         request: MediaArtifactRequest,
@@ -3302,14 +3169,14 @@ impl MediaArtifactRequestView {
     }
 }
 
-fn cache_artifact_kind(kind: MediaArtifactKindView) -> CacheArtifactKind {
+pub(crate) fn cache_artifact_kind(kind: MediaArtifactKindView) -> CacheArtifactKind {
     match kind {
         MediaArtifactKindView::Thumbnail => CacheArtifactKind::Thumbnail,
         MediaArtifactKindView::Waveform => CacheArtifactKind::Waveform,
     }
 }
 
-fn cache_unavailable_error() -> ProjectBridgeError {
+pub(crate) fn cache_unavailable_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "CACHE_UNAVAILABLE".to_owned(),
         message: "media preview cache is unavailable".to_owned(),
@@ -4021,7 +3888,7 @@ fn invalid_timeline_id(code: &str, message: String) -> ProjectActionResult {
     })
 }
 
-fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
+pub(crate) fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
     ProjectBridgeError {
         code: operation_error_code(error.code).to_owned(),
         message: error.to_string(),
@@ -4056,7 +3923,7 @@ fn timeline_marker_query_arguments_error() -> ProjectBridgeError {
     }
 }
 
-fn unexpected_response_error() -> ProjectBridgeError {
+pub(crate) fn unexpected_response_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNEXPECTED_RESPONSE".to_owned(),
         message: "The project host returned an unexpected response.".to_owned(),
@@ -4090,7 +3957,7 @@ fn forward_events(
     }
 }
 
-fn forward_media_artifact_events(
+pub(crate) fn forward_media_artifact_events(
     receiver: mpsc::Receiver<MediaArtifactEvent>,
     sink: StreamSink<MediaArtifactEventView>,
 ) {
@@ -4166,7 +4033,7 @@ fn project_session_error(error: or_core::ProjectFileSessionError) -> ProjectBrid
     }
 }
 
-fn host_error(error: LiveProjectHostError) -> ProjectBridgeError {
+pub(crate) fn host_error(error: LiveProjectHostError) -> ProjectBridgeError {
     match error {
         LiveProjectHostError::Session(error) => project_session_error(error),
         LiveProjectHostError::Operation(error) => ProjectBridgeError {
