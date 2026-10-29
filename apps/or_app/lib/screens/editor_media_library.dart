@@ -276,8 +276,10 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text(
-                        'No media matches this search.',
+                      Text(
+                        (searchController?.text ?? '').isEmpty
+                            ? 'No media matches this search.'
+                            : 'No media matches "${searchController!.text}".',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: OrColors.textMuted,

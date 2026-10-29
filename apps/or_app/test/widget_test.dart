@@ -1534,7 +1534,7 @@ void main() {
       'nothing here',
     );
     await tester.pumpAndSettle();
-    expect(find.text('No media matches this search.'), findsOneWidget);
+    expect(find.text('No media matches "nothing here".'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('media-search-clear')),
       findsOneWidget,
@@ -1545,7 +1545,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2 items'), findsOneWidget);
     expect(
-      find.text('No media matches this search.'),
+      find.text('No media matches "nothing here".'),
       findsNothing,
       reason: 'clearing the field restores the library',
     );
