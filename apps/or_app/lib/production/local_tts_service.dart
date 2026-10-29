@@ -80,8 +80,15 @@ class LocalTtsService {
   LocalTtsService({
     HttpClient Function()? httpClientFactory,
     Future<void> Function(String path)? playAudio,
+    this.metadataTimeout = const Duration(seconds: 10),
   }) : _httpClientFactory = httpClientFactory ?? HttpClient.new,
        _playAudio = playAudio ?? _playWithAfplay;
+
+  /// Budget for the small JSON calls (`/health`, `/v1/voices`).
+  ///
+  /// Ten seconds is generous for a loopback server that is already warm, and
+  /// short enough that a wedged process reads as an error instead of a spinner.
+  final Duration metadataTimeout;
 
   static const defaultBaseUrl = 'http://127.0.0.1:8000';
 
@@ -274,7 +281,7 @@ class LocalTtsService {
       method: 'GET',
       uri: uri,
       headers: const {'Accept': 'application/json'},
-      timeout: const Duration(seconds: 4),
+      timeout: metadataTimeout,
     );
     final decoded = _tryDecodeJson(bytes);
     if (decoded == null) {

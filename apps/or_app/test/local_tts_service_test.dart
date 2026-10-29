@@ -303,6 +303,33 @@ void main() {
     );
   });
 
+  test('a silent health check times out instead of waiting', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      // The process is alive but never answers.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      request.response.statusCode = 200;
+      await request.response.close();
+    });
+
+    final service = LocalTtsService(
+      metadataTimeout: const Duration(milliseconds: 50),
+    );
+    await expectLater(
+      service.probe('http://127.0.0.1:${server.port}'),
+      throwsA(
+        isA<LocalTtsException>()
+            .having((error) => error.code, 'code', 'TIMEOUT')
+            .having(
+              (error) => error.message,
+              'message',
+              contains('did not answer in time'),
+            ),
+      ),
+    );
+  });
+
   test('a non-voice failure is rethrown unchanged', () async {
     expect(
       () => synthesizeWithVoiceRecovery(
