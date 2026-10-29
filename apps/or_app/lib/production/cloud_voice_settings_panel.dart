@@ -54,6 +54,7 @@ class _CloudVoiceSettingsPanelState extends State<CloudVoiceSettingsPanel> {
   final TextEditingController _samplePath = TextEditingController();
   final TextEditingController _cloneName = TextEditingController();
   bool _loaded = false;
+  bool _keyCheckFailed = false;
   bool _consent = false;
   bool _cloning = false;
   String? _cloneStatus;
@@ -86,15 +87,26 @@ class _CloudVoiceSettingsPanelState extends State<CloudVoiceSettingsPanel> {
   }
 
   Future<void> _loadConfigured() async {
-    for (final provider in CloudVoiceProvider.values) {
-      try {
-        final configured = await _keychain.has(provider.wireName);
-        if (mounted) setState(() => _configured[provider] = configured);
-      } catch (_) {
-        // A missing keychain bridge is reported when the user acts, not on load.
+    // Both checks run together: each one may wait out the keychain budget, and
+    // a sequential loop would double the worst case.
+    final results = await Future.wait(
+      CloudVoiceProvider.values.map((provider) async {
+        try {
+          return (provider, await _keychain.has(provider.wireName));
+        } on CloudVoiceException {
+          return (provider, null);
+        }
+      }),
+    );
+    if (!mounted) return;
+    setState(() {
+      _loaded = true;
+      for (final (provider, configured) in results) {
+        if (configured != null) _configured[provider] = configured;
       }
-    }
-    if (mounted) setState(() => _loaded = true);
+      // A failed check must not read as "no key configured".
+      _keyCheckFailed = results.any((entry) => entry.$2 == null);
+    });
   }
 
   Future<void> _saveKey(CloudVoiceProvider provider) async {
@@ -239,6 +251,18 @@ class _CloudVoiceSettingsPanelState extends State<CloudVoiceSettingsPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_keyCheckFailed) ...[
+          Text(
+            'The macOS keychain did not answer, so saved keys could not be '
+            'checked. Reopen Settings to try again.',
+            key: const ValueKey('cloud-voice-check-failed'),
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+        ],
         for (final provider in CloudVoiceProvider.values) ...[
           _providerCard(provider),
           const SizedBox(height: OrSpacing.x3),

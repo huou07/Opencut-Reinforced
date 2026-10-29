@@ -173,6 +173,39 @@ void main() {
     );
   });
 
+  testWidgets('a keychain that never answers is reported, not shown as missing', (
+    tester,
+  ) async {
+    const channel = MethodChannel('or_narration');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          return Completer<bool?>().future;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CloudVoiceSettingsPanel(
+              settings: const NarrationSettings(voice: '', locale: ''),
+              onChanged: (_) {},
+              keychain: NarrationKeychain(timeout: Duration(milliseconds: 20)),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('cloud-voice-check-failed')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('cloud settings saves a key, tests it, and removes it', (
     tester,
   ) async {
