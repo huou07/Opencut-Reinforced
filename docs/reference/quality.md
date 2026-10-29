@@ -95,6 +95,35 @@ change:
 - `or_render`'s own 640×360 row is 1.4 ms p50 including readback on the same
   Metal adapter, so the bridge adds little per frame.
 
+### Viewer frame publish conversion (2026-10-30)
+
+- Workload: `ViewerTextureAdapter::publish_rgba` on a 1920×1080 RGBA frame, the
+  step every macOS viewer frame takes between the renderer and Flutter's texture
+  upload. It is measured by the ignored bench test
+  `viewer_publish_rgba_conversion_cost` in `crates/or_runtime/src/lib.rs`; run it
+  with `cargo test -p or_runtime --lib viewer_publish_rgba_conversion_cost --
+  --ignored --nocapture`, and add `--release` for the shipped profile.
+- Machine: MacBook Air M5.
+- Before: debug **59.0 ms p50 opaque / 59.3 ms translucent**, release 2.78 ms /
+  2.16 ms. The loop appended four bytes per pixel and divided by 255 four times
+  per pixel, which an unoptimised build does not fold into a multiply.
+- Change: a destination buffer allocated at the exact size with chunked writes,
+  the same `(value × alpha + 127) / 255` rounding expressed as the exact shift
+  form `(x + (x >> 8) + 1) >> 8` (verified equal for every `x` up to 65 152), and
+  an opaque fast path that only swaps red and blue, because video frames are
+  opaque.
+- After: debug **13.5 ms opaque (−77%), 23.8 ms translucent (−60%)**; release
+  **2.01 ms (−28%), 1.91 ms (−12%)**. Release gains less because the optimiser
+  already turned the constant division into a multiply, so the remaining win is
+  the removed per-pixel append.
+- The published bytes are unchanged: the opaque path skips a multiply by 255,
+  which is the identity, and the mailbox tests pin the premultiplied values.
+- What this change did not move: the `interaction-latency` scenario's
+  `preview-frame-step-forward-and-back` row (p50 3.76 → 3.66 ms, p95 17.85 →
+  19.59 ms, within run-to-run noise). That block steps frames on an empty
+  project, so it exercises the transport and rebuild path, not a 1080p publish;
+  its `RESULT: OR_UI=PASS` is the regression check, not the measurement.
+
 ### MotionScene preview stills (2026-10-27)
 
 - Workload: a 24-line Rust code scene, one frame rasterised, then

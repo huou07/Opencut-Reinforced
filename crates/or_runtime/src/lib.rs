@@ -697,6 +697,19 @@ impl Default for ViewerTextureAdapter {
     }
 }
 
+/// Premultiplies one 8-bit colour channel for the viewer's BGRA frame.
+///
+/// The contract is `(value * alpha + 127) / 255` (round to nearest). The caller
+/// skips it for opaque frames, which video frames are. The shift form of the
+/// division is exact for every input in range and avoids a real division, which
+/// an unoptimised build would otherwise run four times per pixel on every
+/// published frame.
+#[inline]
+fn premultiply_channel(value: u8, alpha: u32) -> u8 {
+    let scaled = u32::from(value) * alpha + 127;
+    ((scaled + (scaled >> 8) + 1) >> 8) as u8
+}
+
 impl ViewerTextureAdapter {
     /// Invalidates earlier work when a seek or project revision supersedes it.
     pub fn advance_generation(&self, generation: u64) -> bool {
@@ -732,16 +745,26 @@ impl ViewerTextureAdapter {
             return Err(ViewerTextureError::InvalidPixels);
         }
 
-        let mut bgra = Vec::with_capacity(byte_count);
-        for pixel in rgba.as_chunks::<4>().0 {
-            let alpha = u16::from(pixel[3]);
-            let premultiply = |channel: u8| ((u16::from(channel) * alpha + 127) / 255) as u8;
-            bgra.extend_from_slice(&[
-                premultiply(pixel[2]),
-                premultiply(pixel[1]),
-                premultiply(pixel[0]),
-                pixel[3],
-            ]);
+        let mut bgra = vec![0u8; byte_count];
+        for (source, target) in rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(bgra.as_chunks_mut::<4>().0.iter_mut())
+        {
+            let alpha = u32::from(source[3]);
+            if alpha == 255 {
+                // Opaque frames only swap channels; premultiplying by 255 is
+                // the identity, and video frames are opaque.
+                target[0] = source[2];
+                target[1] = source[1];
+                target[2] = source[0];
+            } else {
+                target[0] = premultiply_channel(source[2], alpha);
+                target[1] = premultiply_channel(source[1], alpha);
+                target[2] = premultiply_channel(source[0], alpha);
+            }
+            target[3] = source[3];
         }
 
         let descriptor =
@@ -1458,6 +1481,39 @@ mod tests {
             .unwrap();
         assert!(adapter.acquire_latest().is_some());
         drop((second, third));
+    }
+
+    /// Wall-clock cost of the per-frame software publish path: every macOS
+    /// viewer frame is RGBA from the renderer and must leave as premultiplied
+    /// BGRA. A measurement, not a correctness check, so it stays ignored.
+    #[test]
+    #[ignore]
+    fn viewer_publish_rgba_conversion_cost() {
+        let (width, height) = (1920u32, 1080u32);
+        for (label, alpha) in [("opaque", 255u8), ("translucent", 128u8)] {
+            let rgba: Vec<u8> = (0..(width * height * 4) as usize)
+                .map(|index| match index % 4 {
+                    3 => alpha,
+                    _ => 0x40 + (index % 127) as u8,
+                })
+                .collect();
+            let adapter = ViewerTextureAdapter::default();
+            let mut samples = Vec::new();
+            for _ in 0..21 {
+                let started = std::time::Instant::now();
+                adapter
+                    .publish_rgba(1, width, height, RationalTime::ZERO, &rgba)
+                    .unwrap();
+                samples.push(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!(
+                "viewer publish {label} 1920x1080: min {:.2} ms / p50 {:.2} ms / max {:.2} ms",
+                samples[0],
+                samples[samples.len() / 2],
+                samples[samples.len() - 1],
+            );
+        }
     }
 
     fn provider(value: &str) -> RuntimeProviderId {

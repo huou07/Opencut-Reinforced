@@ -133,6 +133,12 @@ product still needs.
 
 ### Changed
 
+- **Every viewer frame publishes faster.** The RGBA→premultiplied-BGRA step that
+  every macOS preview frame takes before Flutter uploads it now writes into a
+  sized buffer and uses a shift-divide instead of a per-pixel append and four
+  divisions, and opaque frames skip the multiply entirely. A 1920×1080 publish
+  measured 59.0 ms → 13.5 ms in a debug build and 2.8 ms → 2.0 ms in release on
+  this Mac; the published bytes are unchanged.
 - **Templates and Asset Library destinations removed**: both surfaced shields and
   filter chips for catalogs the product does not ship (cloud/community assets are
   deferred by the owner), which read as broken controls. The shell now lists only
