@@ -1,0 +1,71 @@
+{
+  "description": "The caption import journey: the SRT preview lists both cues in the review dialog, accepting imports them as a caption track, and the imported text is on the timeline.",
+  "viewport": "1280x800",
+  "budget_ms": 600000,
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Caption import review"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-text"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-import-captions"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "will be added to a new caption track",
+      "budget_ms": 15000
+    },
+    {
+      "op": "shot"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Import captions"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Harness caption one",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot"
+    }
+  ]
+}

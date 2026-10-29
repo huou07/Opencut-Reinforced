@@ -1320,6 +1320,20 @@ class _FixturePicker extends FileSelectorProjectPicker {
   }
 
   final Directory directory;
+
+  /// The caption import journey needs a real SubRip file the review dialog
+  /// can read. The fixture picker writes one into the scenario directory so
+  /// the import runs through the real preview and import commands.
+  @override
+  Future<String?> openCaptionFile() async {
+    final path = '${directory.path}/scenario-captions.srt';
+    File(path).writeAsStringSync(
+      '1\n00:00:00,000 --> 00:00:02,000\nHarness caption one\n\n'
+      '2\n00:00:02,000 --> 00:00:04,000\nHarness caption two\n\n',
+    );
+    return path;
+  }
+
   late final String media;
   late final String badMedia;
   late final String project;
