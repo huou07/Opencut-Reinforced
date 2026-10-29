@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:or_app_bridge/or_app_bridge.dart';
 
+import '../screens/media_decode.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
@@ -233,18 +234,16 @@ class _MotionSceneCanvasState extends State<MotionSceneCanvas> {
                   if (preview != null)
                     Positioned.fill(
                       child: IgnorePointer(
-                        child: Image.memory(
-                          preview,
+                        child: Image(
+                          image: previewImageProvider(
+                            preview,
+                            logicalWidth: width,
+                            logicalHeight: height,
+                            devicePixelRatio:
+                                MediaQuery.devicePixelRatioOf(context),
+                          ),
                           fit: BoxFit.fill,
                           gaplessPlayback: true,
-                          // Scrubbing re-renders the scene; each frame must not
-                          // decode the PNG at full canvas resolution.
-                          cacheWidth: (width *
-                                  MediaQuery.devicePixelRatioOf(context))
-                              .round(),
-                          cacheHeight: (height *
-                                  MediaQuery.devicePixelRatioOf(context))
-                              .round(),
                         ),
                       ),
                     )

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../project/project_gateway.dart';
+import 'media_decode.dart';
 
 /// The small square that shows what an item is: a thumbnail for visual media, a
 /// waveform for audio, the retry control after a failed request, and a plain
@@ -94,13 +95,14 @@ class EditorMediaItemPreview extends StatelessWidget {
             )
           : ClipRRect(
               borderRadius: BorderRadius.circular(OrRadii.small),
-              child: Image.memory(
-                bytes,
+              child: Image(
+                image: previewImageProvider(
+                  bytes,
+                  logicalWidth: 52,
+                  logicalHeight: 36,
+                  devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                ),
                 key: ValueKey('media-preview-image-${item.mediaId}'),
-                // The tile is 52 wide; decoding a 4K thumbnail at full size
-                // costs tens of megabytes per library page.
-                cacheWidth: (52 * MediaQuery.devicePixelRatioOf(context)).round(),
-                cacheHeight: (36 * MediaQuery.devicePixelRatioOf(context)).round(),
                 fit: BoxFit.contain,
                 semanticLabel: label,
                 errorBuilder: (context, error, stackTrace) => const Center(

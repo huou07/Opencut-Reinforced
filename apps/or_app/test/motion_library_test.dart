@@ -1497,4 +1497,5 @@ void main() {
     expect(log.last!.outputPath, isNot(firstOutput));
     expect(log.last!.frameCount, 150);
   });
+
 }
