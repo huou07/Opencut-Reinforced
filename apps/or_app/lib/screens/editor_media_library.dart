@@ -238,9 +238,19 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                 0,
               ),
               child: Text(
-                filtering
-                    ? '${items.length} of ${library.length} items'
-                    : '${library.length} ${library.length == 1 ? 'item' : 'items'}',
+                // "12 of 50 items" would read as "the library has 50" while
+                // only the loaded page is counted; say so when a page remains.
+                switch ((filtering, page?.nextOffset != null)) {
+                  (true, true) => '${items.length} of ${library.length} '
+                        'matches · more available',
+                  (true, false) => '${items.length} of ${library.length} items',
+                  (false, true) =>
+                    '${library.length} '
+                        '${library.length == 1 ? 'item' : 'items'} · more available',
+                  (false, false) =>
+                    '${library.length} '
+                        '${library.length == 1 ? 'item' : 'items'}',
+                },
                 key: const ValueKey('media-count'),
                 style: const TextStyle(
                   color: OrColors.textMuted,
