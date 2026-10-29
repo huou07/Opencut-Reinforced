@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:io';
 import 'dart:ui';
 
@@ -25,6 +24,7 @@ import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
 import '../production/media_artifact_mailbox.dart';
 import '../production/media_preview_publisher.dart';
+import '../production/media_preview_queue.dart';
 import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
@@ -232,10 +232,16 @@ class _AppShellState extends State<AppShell> {
   /// timeline never rebuilds the whole editor.
   final ValueNotifier<Map<String, ProjectMediaPreview>> _mediaPreviewUpdates =
       ValueNotifier<Map<String, ProjectMediaPreview>>(const {});
-  final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
-  final Set<String> _queuedMediaPreviewIds = {};
+  late final MediaPreviewQueue _mediaPreviewQueue = MediaPreviewQueue(
+    isCurrentSession: (session) =>
+        mounted && identical(session, _activeSession),
+    visibleItems: () => _mediaPage?.items,
+    onStart: (session, item, kind) => unawaited(
+      _requestMediaPreview(session as ProjectSessionHandle, item, kind),
+    ),
+    maxActive: _maxActiveMediaPreviewRequests,
+  );
   final MediaArtifactMailbox _mediaArtifactMailbox = MediaArtifactMailbox();
-  int _activeMediaPreviewRequests = 0;
   BigInt _lastMediaArtifactSequence = BigInt.zero;
   bool _mediaLoading = false;
   bool _mediaLoadingMore = false;
@@ -1771,10 +1777,8 @@ class _AppShellState extends State<AppShell> {
     _lastEventSequence = BigInt.zero;
     _lastMediaArtifactSequence = BigInt.zero;
     _timelineRefreshGeneration++;
-    _mediaPreviewQueue.clear();
-    _queuedMediaPreviewIds.clear();
+    _mediaPreviewQueue.reset();
     _mediaArtifactMailbox.reset();
-    _activeMediaPreviewRequests = 0;
     _motionInsertLog.clear();
     setState(() {
       _activeSession = session;
@@ -4562,9 +4566,7 @@ class _AppShellState extends State<AppShell> {
         state: ProjectMediaArtifactRequestState.queued,
       ),
     );
-    _mediaPreviewQueue.removeWhere((queued) => queued.mediaId == item.mediaId);
-    _mediaPreviewQueue.addLast(item);
-    _queuedMediaPreviewIds.add(item.mediaId);
+    _mediaPreviewQueue.retry(item);
     _scheduleMediaPreviewRequests(session);
   }
 
@@ -4577,12 +4579,7 @@ class _AppShellState extends State<AppShell> {
     final visibleIds = items.map((item) => item.mediaId).toSet();
     final nextPreviews = Map<String, ProjectMediaPreview>.of(_mediaPreviews)
       ..removeWhere((mediaId, _) => !visibleIds.contains(mediaId));
-    _mediaPreviewQueue.removeWhere(
-      (item) => !visibleIds.contains(item.mediaId),
-    );
-    _queuedMediaPreviewIds.removeWhere(
-      (mediaId) => !visibleIds.contains(mediaId),
-    );
+    _mediaPreviewQueue.removeInvisible(visibleIds);
     if (_mediaPreviewUpdates.value.keys.any(
       (mediaId) => !visibleIds.contains(mediaId),
     )) {
@@ -4603,10 +4600,8 @@ class _AppShellState extends State<AppShell> {
         kind: kind,
         state: ProjectMediaArtifactRequestState.queued,
       );
-      if (_queuedMediaPreviewIds.add(item.mediaId)) {
-        _mediaPreviewQueue.addLast(item);
-      }
     }
+    _mediaPreviewQueue.enqueue(items);
 
     setState(() {
       _mediaPreviews
@@ -4616,23 +4611,8 @@ class _AppShellState extends State<AppShell> {
     _scheduleMediaPreviewRequests(session);
   }
 
-  void _scheduleMediaPreviewRequests(ProjectSessionHandle session) {
-    if (!mounted || !identical(session, _activeSession)) return;
-    while (_activeMediaPreviewRequests < _maxActiveMediaPreviewRequests &&
-        _mediaPreviewQueue.isNotEmpty) {
-      final page = _mediaPage;
-      if (page == null) return;
-      final item = _mediaPreviewQueue.removeFirst();
-      _queuedMediaPreviewIds.remove(item.mediaId);
-      if (!page.items.any((visible) => visible.mediaId == item.mediaId)) {
-        continue;
-      }
-      final kind = mediaPreviewKind(item);
-      if (kind == null) continue;
-      _activeMediaPreviewRequests++;
-      unawaited(_requestMediaPreview(session, item, kind));
-    }
-  }
+  void _scheduleMediaPreviewRequests(ProjectSessionHandle session) =>
+      _mediaPreviewQueue.drain(session);
 
   Future<void> _requestMediaPreview(
     ProjectSessionHandle session,
@@ -4798,11 +4778,8 @@ class _AppShellState extends State<AppShell> {
         updates: _mediaPreviewUpdates,
       );
 
-  void _finishMediaPreviewRequest(ProjectSessionHandle session) {
-    if (!mounted || !identical(session, _activeSession)) return;
-    if (_activeMediaPreviewRequests > 0) _activeMediaPreviewRequests--;
-    _scheduleMediaPreviewRequests(session);
-  }
+  void _finishMediaPreviewRequest(ProjectSessionHandle session) =>
+      _mediaPreviewQueue.finishRequest(session);
 
   void _handleMediaArtifactEvent(
     ProjectSessionHandle session,
@@ -4833,9 +4810,7 @@ class _AppShellState extends State<AppShell> {
     if (!mounted || !identical(session, _activeSession)) return;
     final matching = _mediaArtifactMailbox.takeMatching(event);
     if (matching.isEmpty) return;
-    _activeMediaPreviewRequests = _activeMediaPreviewRequests >= matching.length
-        ? _activeMediaPreviewRequests - matching.length
-        : 0;
+    _mediaPreviewQueue.settle(matching.length, session);
 
     final targetIds = matching.map((ticket) => ticket.mediaId).where((mediaId) {
       final preview = _mediaPreviews[mediaId];
@@ -4968,10 +4943,8 @@ class _AppShellState extends State<AppShell> {
     _export.detach();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
-    _mediaPreviewQueue.clear();
-    _queuedMediaPreviewIds.clear();
+    _mediaPreviewQueue.reset();
     _mediaArtifactMailbox.reset();
-    _activeMediaPreviewRequests = 0;
     _lastMediaArtifactSequence = BigInt.zero;
     _motionInsertLog.clear();
     if (!mounted) return;
