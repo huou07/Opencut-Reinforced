@@ -56,6 +56,42 @@ void main() {
     expect(body['sample_rate'], 48000);
   });
 
+  test('an unwritable output path fails with a readable error', () async {
+    // The service owns the clip I/O, so a disk error must arrive as
+    // LocalTtsException instead of a raw FileSystemException escaping the
+    // dialog's error ladder.
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      final response = request.response;
+      response.headers.contentType = ContentType('audio', 'wav');
+      response.add(
+        wrapPcmAsWav(
+          List<int>.filled(2400, 0),
+          sampleRate: 24000,
+          channels: 1,
+        ),
+      );
+      await response.close();
+    });
+    final service = LocalTtsService();
+    await expectLater(
+      service.synthesize(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+        text: 'One line.',
+        voiceId: 'voice',
+        outputPath: '/dev/null/preview.wav',
+      ),
+      throwsA(
+        isA<LocalTtsException>().having(
+          (error) => error.code,
+          'code',
+          'WRITE_FAILED',
+        ),
+      ),
+    );
+  });
+
   test('enrolment is a multipart form with the clip and denoise flag', () {
     final request = localVoiceEnrollmentRequest(
       baseUrl: 'http://127.0.0.1:8000',

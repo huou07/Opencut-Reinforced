@@ -214,8 +214,15 @@ class LocalTtsService {
       );
     }
     final file = File(outputPath);
-    await file.parent.create(recursive: true);
-    await file.writeAsBytes(bytes, flush: true);
+    try {
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(bytes, flush: true);
+    } on FileSystemException {
+      throw const LocalTtsException(
+        'WRITE_FAILED',
+        'The narration clip could not be written to disk.',
+      );
+    }
     return wavDurationMsFromBytes(bytes);
   }
 
