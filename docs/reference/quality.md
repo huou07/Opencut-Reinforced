@@ -184,11 +184,14 @@ their own increments with their own evidence.
    panel copy and action lists, `apps/or_app/lib/screens/editor_media_library.dart`
    the media library pane (items, previews and empty/filter/error states),
    `apps/or_app/lib/screens/editor_panel_header.dart` the shared tool-panel title
-   row, and `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover,
-   recording and music workflows. Next seams, in order: one panel file per editor
-   tool (Motion first), then the audio tools' state in `app_shell.dart`, then the
-   Rust command groups in `crates/or_core/src/application.rs` by owner. The split
-   may not change behaviour and lands under the existing tests.
+   row, `apps/or_app/lib/screens/editor_inspector_panel.dart` the clip and sequence
+   inspector, `apps/or_app/lib/screens/editor_frame_rate.dart` the shared sequence
+   rate menu, `apps/or_app/lib/screens/editor_rational_time.dart` the seconds →
+   canonical time conversion, and `apps/or_app/lib/production/audio_tool_flows.dart`
+   the voiceover, recording and music workflows. Next seams, in order: the viewer
+   panel, then the timeline panel, then the audio tools' state in `app_shell.dart`,
+   then the Rust command groups in `crates/or_core/src/application.rs` by owner. The
+   split may not change behaviour and lands under the existing tests.
 
 ## Evidence rules
 
