@@ -196,6 +196,17 @@ What is left for the GPU is MotionScene rasterisation, which is still a CPU
 rasteriser, and zero-copy surfaces between the renderer and the encoder. Both are
 their own increments with their own evidence.
 
+## Seam sizes (2026-10-30, round 188)
+
+Tracked so a future round can tell whether a seam grew back:
+
+| owner | lines |
+| --- | --- |
+| `apps/or_app/lib/shell/app_shell.dart` | 5182 |
+| `apps/or_app/lib/screens/editor_timeline_panel.dart` | 4217 |
+| `apps/or_app/lib/screens/editor_shell_preview_screen.dart` | 2277 |
+| `apps/or_app/lib/screens/editor_inspector_panel.dart` | 1446 |
+| `crates/or_app_bridge/src/api/project.rs` | 4435 |
 ## Session-scoped invariants
 
 `MediaPreviewQueue` and `MediaArtifactMailbox` belong to one project session:
