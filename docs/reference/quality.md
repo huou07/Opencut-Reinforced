@@ -241,7 +241,9 @@ their own increments with their own evidence.
    module per owner file over a shared support module, and
    `crates/or_app_bridge/src/api/media_artifact_config.rs` the artifact cache
    location, worker-pool sizing and service construction. Next seams, in order:
-   the project lifecycle and the media preview queue in `app_shell.dart`, then
+   the project lifecycle and the queue behind the new
+   `apps/or_app/lib/production/media_preview_kinds.dart` helpers in
+   `app_shell.dart`, then
    the artifact event forwarding and request path in
    `crates/or_app_bridge/src/api/project.rs`, then the remaining dispatch
    catalog in `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the

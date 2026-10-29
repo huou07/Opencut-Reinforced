@@ -24,6 +24,7 @@ import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
 import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
+import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
@@ -224,7 +225,7 @@ class _AppShellState extends State<AppShell> {
       ValueNotifier<Map<String, ProjectMediaPreview>>(const {});
   final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
   final Set<String> _queuedMediaPreviewIds = {};
-  final List<_MediaPreviewTicket> _pendingMediaPreviewTickets = [];
+  final List<MediaPreviewTicket> _pendingMediaPreviewTickets = [];
   final Map<String, ProjectMediaArtifactEvent> _earlyMediaArtifactEvents = {};
   int _activeMediaPreviewRequests = 0;
   int _mediaPreviewSubmissionsInFlight = 0;
@@ -4672,7 +4673,7 @@ class _AppShellState extends State<AppShell> {
     }
 
     for (final item in items) {
-      final kind = _mediaPreviewKind(item);
+      final kind = mediaPreviewKind(item);
       if (kind == null || nextPreviews[item.mediaId]?.kind == kind) continue;
       nextPreviews[item.mediaId] = ProjectMediaPreview(
         kind: kind,
@@ -4702,7 +4703,7 @@ class _AppShellState extends State<AppShell> {
       if (!page.items.any((visible) => visible.mediaId == item.mediaId)) {
         continue;
       }
-      final kind = _mediaPreviewKind(item);
+      final kind = mediaPreviewKind(item);
       if (kind == null) continue;
       _activeMediaPreviewRequests++;
       unawaited(_requestMediaPreview(session, item, kind));
@@ -4784,7 +4785,7 @@ class _AppShellState extends State<AppShell> {
             );
             _finishMediaPreviewRequest(session);
           } else {
-            final ticket = _MediaPreviewTicket(
+            final ticket = MediaPreviewTicket(
               mediaId: item.mediaId,
               kind: kind,
               cacheKey: cacheKey,
@@ -4792,7 +4793,7 @@ class _AppShellState extends State<AppShell> {
             );
             _pendingMediaPreviewTickets.add(ticket);
             final earlyEvent =
-                _earlyMediaArtifactEvents[_mediaArtifactEventKey(
+                _earlyMediaArtifactEvents[mediaArtifactEventKey(
                   kind,
                   cacheKey,
                   jobId,
@@ -4929,7 +4930,7 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaArtifactEvent event,
   ) {
     if (_mediaPreviewSubmissionsInFlight > 0) {
-      _earlyMediaArtifactEvents[_mediaArtifactEventKey(
+      _earlyMediaArtifactEvents[mediaArtifactEventKey(
             event.kind,
             event.cacheKey,
             event.jobId,
@@ -5324,32 +5325,6 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
 }
 
 enum _LeaveChoice { save, discard, cancel }
-
-ProjectMediaArtifactKind? _mediaPreviewKind(ProjectMediaItem item) {
-  if (item.videoDetails != null) return ProjectMediaArtifactKind.thumbnail;
-  if (item.audioDetails != null) return ProjectMediaArtifactKind.waveform;
-  return null;
-}
-
-String _mediaArtifactEventKey(
-  ProjectMediaArtifactKind kind,
-  String cacheKey,
-  String jobId,
-) => '${kind.name}\u0000$cacheKey\u0000$jobId';
-
-class _MediaPreviewTicket {
-  const _MediaPreviewTicket({
-    required this.mediaId,
-    required this.kind,
-    required this.cacheKey,
-    required this.jobId,
-  });
-
-  final String mediaId;
-  final ProjectMediaArtifactKind kind;
-  final String cacheKey;
-  final String jobId;
-}
 
 enum _RecoveryChoice { recover, discard, cancel }
 
