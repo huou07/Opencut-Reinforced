@@ -24,6 +24,7 @@ import '../project/timeline_clip_clipboard.dart';
 import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
 import '../production/media_artifact_mailbox.dart';
+import '../production/media_preview_publisher.dart';
 import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -4794,36 +4795,24 @@ class _AppShellState extends State<AppShell> {
     ProjectSessionHandle session,
     String mediaId,
     ProjectMediaPreview preview,
-  ) => _publishMediaPreview(session, mediaId, preview);
+  ) => _mediaPreviewPublisher.publish(
+    session,
+    mediaId,
+    preview,
+    store: (value) => _mediaPreviews[mediaId] = value,
+  );
 
-  /// Stores one preview and repaints only what shows it.
-  ///
-  /// The timeline paints clip filmstrips from the preview map, so a preview for
-  /// media that is on the timeline still needs a shell rebuild; every other
-  /// preview is published through [_mediaPreviewUpdates] and repaints just the
-  /// media pane.
-  void _publishMediaPreview(
-    ProjectSessionHandle session,
-    String mediaId,
-    ProjectMediaPreview preview,
-  ) {
-    if (!mounted ||
-        !identical(session, _activeSession) ||
-        !_mediaPreviews.containsKey(mediaId)) {
-      return;
-    }
-    _mediaPreviews[mediaId] = preview;
-    final onTimeline = _timelineClipPages.values.any(
-      (page) => page.items.any((clip) => clip.mediaId == mediaId),
-    );
-    if (onTimeline) {
-      setState(() {});
-    }
-    _mediaPreviewUpdates.value = Map<String, ProjectMediaPreview>.unmodifiable({
-      ..._mediaPreviewUpdates.value,
-      mediaId: preview,
-    });
-  }
+  late final MediaPreviewPublisher _mediaPreviewPublisher =
+      MediaPreviewPublisher(
+        isMounted: () => mounted,
+        isCurrentSession: (session) => identical(session, _activeSession),
+        holds: _mediaPreviews.containsKey,
+        isOnTimeline: (mediaId) => _timelineClipPages.values.any(
+          (page) => page.items.any((clip) => clip.mediaId == mediaId),
+        ),
+        rebuildEditor: () => setState(() {}),
+        updates: _mediaPreviewUpdates,
+      );
 
   void _finishMediaPreviewRequest(ProjectSessionHandle session) {
     if (!mounted || !identical(session, _activeSession)) return;
@@ -4874,7 +4863,7 @@ class _AppShellState extends State<AppShell> {
     if (event.state != ProjectMediaArtifactEventState.succeeded) {
       for (final mediaId in targetIds) {
         final current = _mediaPreviews[mediaId]!;
-        _publishMediaPreview(
+        _updateMediaPreview(
           session,
           mediaId,
           ProjectMediaPreview(
@@ -4907,7 +4896,7 @@ class _AppShellState extends State<AppShell> {
             current.jobId != event.jobId) {
           continue;
         }
-        _publishMediaPreview(
+        _updateMediaPreview(
           session,
           mediaId,
           ProjectMediaPreview(
@@ -4927,7 +4916,7 @@ class _AppShellState extends State<AppShell> {
       for (final mediaId in targetIds) {
         final current = _mediaPreviews[mediaId];
         if (current == null || current.cacheKey != event.cacheKey) continue;
-        _publishMediaPreview(
+        _updateMediaPreview(
           session,
           mediaId,
           ProjectMediaPreview(
