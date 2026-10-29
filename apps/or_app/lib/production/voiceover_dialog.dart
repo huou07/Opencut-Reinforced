@@ -861,13 +861,18 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                         style: TextStyle(color: OrColors.textSecondary),
                       ),
                     ),
-                  ] else if (_localVoices.isEmpty) ...[
+                  ],
+                  if (_localHealth == null && _localVoices.isEmpty) ...[
                     const SizedBox(height: 4),
                     Text(
-                      _localHealth == null
-                          ? 'Press Connect to list the voices on this server.'
-                          : 'No voice on the server yet. Enrol one from a clip '
-                                'below.',
+                      'Press Connect to list the voices on this server.',
+                      style: TextStyle(color: OrColors.textSecondary),
+                    ),
+                  ],
+                  if (_localHealth != null && _localVoices.isEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'The server reported no voice. Enrol one from a clip below.',
                       style: TextStyle(color: OrColors.textSecondary),
                     ),
                   ],
