@@ -223,9 +223,6 @@ and 112 removed.
   superseded-refresh branches behind a stale `listMediaPage`/`getProject` reply,
   which is the only way to assert the round 112 rule ("a losing refresh touches
   no state") end to end.
-- The retry-disabled-while-loading guard now has run-time feedback (round 110)
-  but no direct assertion; a gated `summary()` holds the reload state long
-  enough to check it.
 
 ## Known gaps
 
