@@ -33,6 +33,7 @@ class _FakeGateway implements ProjectGateway {
   String? destination;
   String? quality;
   ProjectExportJob status = _job('succeeded');
+  int statusFailuresRemaining = 0;
 
   @override
   Future<ProjectReadModel> summary(ProjectSessionHandle session) async {
@@ -60,6 +61,10 @@ class _FakeGateway implements ProjectGateway {
     String jobId,
   ) async {
     statusCalls += 1;
+    if (statusFailuresRemaining > 0) {
+      statusFailuresRemaining -= 1;
+      throw const ProjectGatewayException('EXPORT_STATUS', 'status lost');
+    }
     return status;
   }
 
@@ -179,6 +184,33 @@ void main() {
     expect(flow.status, 'The folder is not writable.');
     expect(picker.discardCalls, 1);
     expect(flow.publishing, isFalse);
+    flow.dispose();
+  });
+
+  test('a transient status failure keeps polling a running job', () async {
+    final gateway = _FakeGateway()
+      ..status = _job('running')
+      ..statusFailuresRemaining = 2;
+    final picker = _FakePicker();
+    final exported = <String>[];
+    final flow = _flow(
+      gateway: gateway,
+      picker: picker,
+      onExported: exported.add,
+    );
+
+    await flow.start(_Session());
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    // Two failed reads did not stop the watcher: the export is still active.
+    expect(flow.isActive, isTrue);
+    expect(flow.failed, isFalse);
+    expect(flow.status, 'Export 3/9');
+    expect(gateway.statusCalls, greaterThan(2));
+
+    gateway.status = _job('succeeded');
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(exported.single, '/tmp/export.mp4');
+    expect(flow.status, 'Export complete');
     flow.dispose();
   });
 

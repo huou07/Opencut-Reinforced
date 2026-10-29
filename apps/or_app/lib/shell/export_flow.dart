@@ -33,6 +33,8 @@ class ExportFlow extends ChangeNotifier {
 
   Timer? _pollTimer;
   bool _pollInFlight = false;
+  int _statusFailures = 0;
+  static const _maxStatusFailures = 5;
   ProjectExportJob? _job;
   String? _destinationPath;
   String? _status;
@@ -162,6 +164,7 @@ class ExportFlow extends ChangeNotifier {
   /// been published or discarded by then.
   void detach() {
     _session = null;
+    _statusFailures = 0;
     _pollTimer?.cancel();
     _pollTimer = null;
     _job = null;
@@ -194,6 +197,7 @@ class ExportFlow extends ChangeNotifier {
         job.jobId,
       );
       if (!_isCurrent(session)) return;
+      _statusFailures = 0;
       if (status.succeeded && status.state == 'succeeded') {
         final destination = _destinationPath;
         if (destination != null) {
@@ -244,6 +248,16 @@ class ExportFlow extends ChangeNotifier {
       }
     } catch (_) {
       if (!_isCurrent(session)) return;
+      _statusFailures += 1;
+      // A single status read can fail while the renderer is busy. Abandoning
+      // the timer there would leave a running job with no watcher, and the
+      // shell would stop treating the export as active. Retry a bounded number
+      // of times, then report it.
+      if (_statusFailures < _maxStatusFailures) {
+        _status = 'Export status unavailable, retrying…';
+        notifyListeners();
+        return;
+      }
       _status = 'Export status unavailable';
       _failed = true;
       notifyListeners();
