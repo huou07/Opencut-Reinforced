@@ -35,6 +35,27 @@ Uint8List pcmWav({
 }
 
 void main() {
+  test('the preview args keep the chosen rate and cap the sample length', () {
+    final args = voiceoverPreviewArguments(
+      voice: 'Linh',
+      rate: 240,
+      text: 'a' * 400,
+      outputPath: '/tmp/preview.wav',
+    );
+    expect(args.sublist(0, 2), ['-v', 'Linh']);
+    expect(args[args.indexOf('-r') + 1], '240');
+    expect(args.last.length, 240);
+
+    final defaultVoice = voiceoverPreviewArguments(
+      voice: 'default',
+      rate: 900,
+      text: 'Xin chào',
+      outputPath: '/tmp/preview.wav',
+    );
+    expect(defaultVoice.contains('-v'), isFalse);
+    expect(defaultVoice[defaultVoice.indexOf('-r') + 1], '400');
+  });
+
   test('reads the exact PCM frame count and ignores odd chunk padding', () {
     final wav = pcmWav(sampleRate: 44100, channels: 1, milliseconds: 1500);
     expect(wavDurationMsFromBytes(wav), 1500);

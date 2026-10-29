@@ -191,29 +191,26 @@ class VoiceoverService {
     return results;
   }
 
-  /// Speechs one short sample with [voice] and plays it through the system
-  /// output. The returned file lets a test inspect the WAV without audio
+  /// Speaks one short sample with [voice] at [rate] and plays it through the
+  /// system output. The returned file lets a test inspect the WAV without audio
   /// hardware; playback is best-effort and never blocks the picker.
   Future<File> preview({
     required String voice,
     required String text,
     required Directory directory,
+    int rate = 180,
   }) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
+    if (text.trim().isEmpty) {
       throw const VoiceoverException('Nothing to preview.');
     }
     await directory.create(recursive: true);
     final file = File('${directory.path}/voice-preview.wav');
-    final arguments = <String>[
-      if (voice != 'default') ...['-v', voice],
-      '-r',
-      '180',
-      '-o',
-      file.path,
-      '--data-format=LEI16@44100',
-      trimmed.length > 240 ? trimmed.substring(0, 240) : trimmed,
-    ];
+    final arguments = voiceoverPreviewArguments(
+      voice: voice,
+      rate: rate,
+      text: text,
+      outputPath: file.path,
+    );
     final ProcessResult result;
     try {
       result = await Process.run(sayExecutable, arguments);
@@ -429,4 +426,24 @@ class VoiceoverApplier {
     if (mediaMs <= BigInt.zero) return measuredMs;
     return mediaMs.toInt() < measuredMs ? mediaMs.toInt() : measuredMs;
   }
+}
+
+/// The `say` arguments for a one-shot preview at [rate], so the spoken sample
+/// matches the configured rate and stays short.
+List<String> voiceoverPreviewArguments({
+  required String voice,
+  required int rate,
+  required String text,
+  required String outputPath,
+}) {
+  final sample = text.trim();
+  return [
+    if (voice != 'default') ...['-v', voice],
+    '-r',
+    '${rate.clamp(90, 400)}',
+    '-o',
+    outputPath,
+    '--data-format=LEI16@44100',
+    sample.length > 240 ? sample.substring(0, 240) : sample,
+  ];
 }

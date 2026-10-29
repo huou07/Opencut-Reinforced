@@ -172,6 +172,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       _provider = provider;
       _cloudVoices = const [];
       _cloudError = null;
+      _previewError = null;
       _cloudVoiceId = provider == 'system'
           ? ''
           : (_cloudSelections[nextCloud.wireName] ?? savedCloudId);
@@ -522,7 +523,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   /// can be judged before generating the whole script.
   Future<void> _previewVoice() async {
     final sample = _scriptLines.isEmpty ? '' : _scriptLines.first.trim();
-    final text = sample.isEmpty ? 'Đây là một câu thử giọng.' : sample;
+    final spoken = sample.isEmpty ? 'Đây là một câu thử giọng.' : sample;
+    final text = spoken.length > 240 ? spoken.substring(0, 240) : spoken;
     setState(() {
       _previewing = true;
       _previewError = null;
@@ -552,6 +554,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           voice: voice,
           text: text,
           directory: directory,
+          rate: _rate.round(),
         );
       }
     } on VoiceoverException catch (error) {
@@ -1195,7 +1198,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           ),
           FilledButton(
             key: const ValueKey('voiceover-generate'),
-            onPressed: _busy ? null : _generate,
+            onPressed: _busy || _previewing ? null : _generate,
             child: const Text('Generate and add'),
           ),
         ],

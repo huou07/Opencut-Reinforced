@@ -34,6 +34,7 @@ class _FakeVoiceover extends VoiceoverService {
     required String voice,
     required String text,
     required Directory directory,
+    int rate = 180,
   }) async {
     previewedVoice = voice;
     directory.createSync(recursive: true);
