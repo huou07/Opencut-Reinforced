@@ -211,12 +211,13 @@ their own increments with their own evidence.
    speed and shortcut labels, `apps/or_app/lib/screens/editor_rational_time.dart`
    the seconds → canonical time conversion, and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
-   music workflows, and `crates/or_core/src/application/types.rs` the command and
-   query descriptors, envelopes, change sets, result records and error types.
-   Next seams, in order: the timeline panel, then the tool panels and the audio
-   tools' state in `app_shell.dart`, then the Rust command and query groups in
-   `crates/or_core/src/application/mod.rs` by owner. The split may not change
-   behaviour and lands under the existing tests.
+   music workflows, `crates/or_core/src/application/types.rs` the command and
+   query descriptors, envelopes, change sets, result records and error types, and
+   `crates/or_core/src/application/timeline.rs` the timeline track, clip and
+   marker commands. Next seams, in order: the timeline panel, then the tool
+   panels and the audio tools' state in `app_shell.dart`, then the remaining Rust
+   command and query groups in `crates/or_core/src/application/mod.rs` by owner.
+   The split may not change behaviour and lands under the existing tests.
 
 ## Evidence rules
 
