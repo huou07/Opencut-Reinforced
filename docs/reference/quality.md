@@ -239,6 +239,8 @@ their own increments with their own evidence.
    polling timer, the chosen destination and publishing the finished file,
    `apps/or_app/lib/production/media_import_flow.dart` the per-file import walk,
    its progress label and the closing batch statement,
+   `apps/or_app/lib/shell/caption_import_dialog.dart` the caption-file review
+   dialog (blank-skip, byte limit, explicit accept),
    `crates/or_core/src/application/types.rs` the command and
    query descriptors, envelopes, change sets, result records and error types,
    `crates/or_core/src/application/timeline.rs` the timeline track, clip and
