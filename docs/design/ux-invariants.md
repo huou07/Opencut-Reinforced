@@ -51,6 +51,11 @@ journey. See [operations/verification.md](../operations/verification.md).
 - A shell shortcut never consumes a key a focused text field needs: the key map
   is split by focus, and native menu items carry no modifier-less equivalents.
 
+- **A field that refuses a keystroke names its accepted range.** Silent clamping
+  reads as a broken field. Where the field cannot yet reject with a message, it
+  shows the range as helper text (round 175, inspector audio fields).
+
+
 ## Proven interaction surfaces
 
 Project create/open/save/reopen and cross-track move; import and library search;
