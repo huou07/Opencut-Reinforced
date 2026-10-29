@@ -118,6 +118,9 @@ change:
 - Result: preview frame step forward/back **p50 5.2 ms, p95 14.8 ms** (inside the
   16.68 ms budget); Projects/Home screen switch p50 101.7 ms, p95 179.1 ms;
   export dialog open/cancel p50 133.6 ms, p95 165.3 ms.
+- Re-run 2026-10-29 after the shell and timeline extraction: frame step
+  **p50 5.4 ms, p95 12.8 ms**; Projects/Home switch p50 138.5 ms, p95 171.2 ms —
+  the same order as the 2026-10-28 row, so the refactors did not move this path.
 - Caveat: debug-lane wall clock, not a release or GPU claim. The edit-to-preview
   path is structural evidence (one seek, texture kept) plus the widget contract,
   not a separate wall-clock row yet.
