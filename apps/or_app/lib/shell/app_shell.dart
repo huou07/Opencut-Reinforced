@@ -25,6 +25,7 @@ import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
 import '../production/media_artifact_mailbox.dart';
 import '../production/media_preview_publisher.dart';
+import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
@@ -4752,44 +4753,27 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaArtifactKind kind,
     String cacheKey,
   ) async {
-    try {
-      final artifact = await widget.projectGateway.readMediaArtifact(
-        session,
-        kind: kind,
-        cacheKey: cacheKey,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      final current = _mediaPreviews[mediaId];
-      if (current == null || current.cacheKey != cacheKey) return;
-      _updateMediaPreview(
-        session,
-        mediaId,
-        ProjectMediaPreview(
-          kind: kind,
-          state: artifact?.mimeType == 'image/png'
-              ? ProjectMediaArtifactRequestState.ready
-              : ProjectMediaArtifactRequestState.failed,
-          cacheKey: cacheKey,
-          bytes: artifact?.mimeType == 'image/png' ? artifact?.bytes : null,
-          errorCode: artifact == null ? 'ARTIFACT_NOT_FOUND' : null,
-        ),
-      );
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      final current = _mediaPreviews[mediaId];
-      if (current == null || current.cacheKey != cacheKey) return;
-      _updateMediaPreview(
-        session,
-        mediaId,
-        ProjectMediaPreview(
-          kind: kind,
-          state: ProjectMediaArtifactRequestState.failed,
-          cacheKey: cacheKey,
-          errorCode: 'ARTIFACT_READ_FAILED',
-        ),
-      );
-    }
+    final preview = await _mediaPreviewReader.read(
+      session,
+      mediaId: mediaId,
+      kind: kind,
+      cacheKey: cacheKey,
+    );
+    if (preview == null || !mounted) return;
+    _updateMediaPreview(session, mediaId, preview);
   }
+
+  late final MediaPreviewReader _mediaPreviewReader = MediaPreviewReader(
+    isCurrentSession: (session) =>
+        mounted && identical(session, _activeSession),
+    readArtifact: (session, kind, cacheKey) => widget.projectGateway
+        .readMediaArtifact(
+          session as ProjectSessionHandle,
+          kind: kind,
+          cacheKey: cacheKey,
+        ),
+    current: (mediaId) => _mediaPreviews[mediaId],
+  );
 
   void _updateMediaPreview(
     ProjectSessionHandle session,

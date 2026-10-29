@@ -272,12 +272,11 @@ their own increments with their own evidence.
    `crates/or_app_bridge/src/api/media_artifact_config.rs` the artifact cache
    location, worker-pool sizing and service construction. Next seams, in order:
    the project lifecycle and the media preview scheduler/request path in
-   `app_shell.dart` — the ticket and early-event bookkeeping already moved to
-   `apps/or_app/lib/production/media_artifact_mailbox.dart`; what remains needs
-   an injected page/session reader, a scheduler delegate for
-   `_scheduleMediaPreviewRequests`, and a publish callback that picks between a
-   shell rebuild and the `_mediaPreviewUpdates` notifier depending on whether
-   the item sits on the timeline, then the timeline bridge methods in
+   `app_shell.dart` — bookkeeping moved to
+   `apps/or_app/lib/production/media_artifact_mailbox.dart`, the publish choice
+   to `media_preview_publisher.dart`, and the artifact read to
+   `media_preview_reader.dart`; what remains is the queue scheduler
+   (`_scheduleMediaPreviewRequests`) and the request/dispatch pair, then the timeline bridge methods in
    `crates/or_app_bridge/src/api/project.rs` (they interleave with stateful
    dispatch), then the remaining dispatch catalog in
    `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
