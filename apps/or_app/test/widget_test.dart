@@ -1058,7 +1058,7 @@ void main() {
     await _createProject(tester, 'Media Error');
     final error = find.byKey(const ValueKey('media-library-error'));
     expect(error, findsOneWidget);
-    expect(tester.getSemantics(error), containsSemantics(isLiveRegion: true));
+    expect(tester.getSemantics(error), isSemantics(isLiveRegion: true));
     final callsBefore = gateway.mediaListCalls;
     await tester.tap(find.byKey(const ValueKey('media-library-retry')));
     await tester.pumpAndSettle();

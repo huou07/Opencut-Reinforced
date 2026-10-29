@@ -24,6 +24,7 @@ import '../production/audio_tool_flows.dart';
 import '../production/media_import_flow.dart';
 import '../production/media_artifact_mailbox.dart';
 import '../production/media_preview_publisher.dart';
+import '../production/media_preview_plan.dart';
 import '../production/media_preview_queue.dart';
 import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
@@ -4577,8 +4578,7 @@ class _AppShellState extends State<AppShell> {
     if (!mounted || !identical(session, _activeSession)) return;
 
     final visibleIds = items.map((item) => item.mediaId).toSet();
-    final nextPreviews = Map<String, ProjectMediaPreview>.of(_mediaPreviews)
-      ..removeWhere((mediaId, _) => !visibleIds.contains(mediaId));
+    final nextPreviews = planMediaPreviews(items, _mediaPreviews);
     _mediaPreviewQueue.removeInvisible(visibleIds);
     if (_mediaPreviewUpdates.value.keys.any(
       (mediaId) => !visibleIds.contains(mediaId),
@@ -4593,14 +4593,6 @@ class _AppShellState extends State<AppShell> {
           );
     }
 
-    for (final item in items) {
-      final kind = mediaPreviewKind(item);
-      if (kind == null || nextPreviews[item.mediaId]?.kind == kind) continue;
-      nextPreviews[item.mediaId] = ProjectMediaPreview(
-        kind: kind,
-        state: ProjectMediaArtifactRequestState.queued,
-      );
-    }
     _mediaPreviewQueue.enqueue(items);
 
     setState(() {

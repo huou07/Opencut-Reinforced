@@ -283,8 +283,10 @@ projects.
    the project lifecycle and the media preview request path in `app_shell.dart` —
    bookkeeping moved to `apps/or_app/lib/production/media_artifact_mailbox.dart`,
    the publish choice to `media_preview_publisher.dart`, the artifact read to
-   `media_preview_reader.dart`, and the queue/drain rules to
-   `media_preview_queue.dart`; what remains is the request/dispatch pair that
+   `media_preview_reader.dart`, the queue/drain rules to
+   `media_preview_queue.dart`, and the page-pruning policy to
+   `media_preview_plan.dart` (pure `planMediaPreviews`); what remains is the
+   request/dispatch pair that
    talks to the gateway and the event stream, then the timeline bridge methods in
    `crates/or_app_bridge/src/api/project.rs` (they interleave with stateful
    dispatch), then the remaining dispatch catalog in
