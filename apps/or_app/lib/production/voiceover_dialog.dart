@@ -138,6 +138,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       }
     } on VoiceoverException catch (error) {
       if (mounted) setState(() => _error = error.message);
+    } on Object catch (error) {
+      // Anything else must still end the load visibly instead of leaving the
+      // dialog on an empty voice picker with no explanation.
+      if (mounted) {
+        setState(() => _error = 'The voice list could not be loaded: $error');
+      }
     }
   }
 
