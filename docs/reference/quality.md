@@ -268,7 +268,11 @@ after a tap also raced the build; the runner now settles before `tree`.
    `project-open-and-close` (save, close to Home, reopen from recents, wait for
    the empty timeline) — p50 2302 ms, p95 2353 ms on 2026-10-29, debug lane. The
    block includes the close and the home transition, so it does not isolate the
-   open path; a row that starts at the recent card would.
+   open path; a row that starts at the recent card would. Attempting that row
+   with `before` setup inside an op-`measure` loop hung for 90 s, while a linear
+   `reopen-twice` scenario (save, close, reopen, save, close, reopen) passes —
+   so the hang is in the measure loop's repeated dispatch, not in opening a
+   project a second time.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):

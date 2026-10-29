@@ -1,0 +1,112 @@
+{
+ "name": "reopen-twice",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "fixtures": [],
+ "steps": [
+  {
+   "op": "shot",
+   "name": "home"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Twice"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "key",
+   "chord": "cmd+s"
+  },
+  {
+   "op": "wait_absent",
+   "text": "Unsaved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-close"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Projects and recent work",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^recent-project-"
+   },
+   "allow_multiple": true
+  },
+  {
+   "op": "wait",
+   "text": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "key",
+   "chord": "cmd+s"
+  },
+  {
+   "op": "wait_absent",
+   "text": "Unsaved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-close"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Projects and recent work",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^recent-project-"
+   },
+   "allow_multiple": true
+  },
+  {
+   "op": "wait",
+   "text": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "shot",
+   "name": "reopened-twice"
+  }
+ ]
+}
