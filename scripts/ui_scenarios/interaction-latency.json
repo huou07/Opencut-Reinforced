@@ -132,31 +132,39 @@
    ]
   },
   {
+   "op": "shot",
+   "name": "after-latency"
+  },
+  {
+   "op": "tree",
+   "name": "after-latency"
+  },
+  {
+   "op": "key",
+   "chord": "cmd+s"
+  },
+  {
+   "op": "wait_absent",
+   "text": "Unsaved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-close"
+   },
+   "settle": false
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Projects and recent work",
+   "budget_ms": 15000
+  },
+  {
    "op": "measure",
-   "name": "project-open-and-close",
-   "repeat": 5,
+   "name": "project-open-from-recents",
+   "repeat": 1,
    "steps": [
-    {
-     "op": "key",
-     "chord": "cmd+s"
-    },
-    {
-     "op": "wait_absent",
-     "text": "Unsaved",
-     "budget_ms": 15000
-    },
-    {
-     "op": "tap",
-     "selector": {
-      "key": "workspace-close"
-     },
-     "settle": false
-    },
-    {
-     "op": "wait_label",
-     "label_regex": "Projects and recent work",
-     "budget_ms": 15000
-    },
     {
      "op": "tap",
      "selector": {
@@ -170,14 +178,6 @@
      "budget_ms": 20000
     }
    ]
-  },
-  {
-   "op": "shot",
-   "name": "after-latency"
-  },
-  {
-   "op": "tree",
-   "name": "after-latency"
   }
  ]
 }
