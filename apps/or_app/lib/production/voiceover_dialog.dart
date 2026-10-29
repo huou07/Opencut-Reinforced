@@ -280,6 +280,12 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         _localHealth = null;
         _localVoiceId = '';
       });
+    } on Object catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _localLoading = false;
+        _connectError = 'The local server could not be checked: $error';
+      });
     }
   }
 
