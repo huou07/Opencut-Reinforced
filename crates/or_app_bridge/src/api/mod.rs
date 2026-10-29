@@ -64,6 +64,7 @@ mod tests {
         }
     }
 }
+mod media_artifact_config;
 pub mod motion;
 pub mod motion_library;
 pub mod project;
