@@ -234,6 +234,15 @@ and 112 removed.
   empty-state text; a diagnostic scenario that waits for that error text is the
   next cheap probe of the harness app's `say` output.
 
+## Harness isolation
+
+The integration harness launches the real app against the **user's** support
+directory, so narration settings persist across runs: after a round that left
+`provider: local`, `production-voice-music` opened on the local provider and
+its `Linh (vi_VN)` wait timed out. Scenarios that assume a default provider must
+select it explicitly (`voiceover-provider-system`). A tree captured right
+after a tap also raced the build; the runner now settles before `tree`.
+
 ## Verification ideas not yet built
 
 - A generation-gated fake (`summaryGate`, `mediaPageGate`) can pin the

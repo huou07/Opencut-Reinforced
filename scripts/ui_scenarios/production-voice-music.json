@@ -60,6 +60,12 @@
       "name": "voiceover-dialog"
     },
     {
+      "op": "tap",
+      "selector": {
+        "key": "voiceover-provider-system"
+      }
+    },
+    {
       "op": "wait",
       "text": "Linh (vi_VN)",
       "budget_ms": 20000

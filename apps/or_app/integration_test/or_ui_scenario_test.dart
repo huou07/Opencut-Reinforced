@@ -430,6 +430,9 @@ class _Runner {
         );
         return;
       case 'tree':
+        // A tree captured mid-build reports half a screen; settle first so the
+        // artifact matches what the user sees.
+        await _settle();
         result.semantics = await _tree(
           '${step['name'] ?? 'tree'}-${result.index}',
         );
