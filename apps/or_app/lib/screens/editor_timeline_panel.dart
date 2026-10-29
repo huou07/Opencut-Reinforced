@@ -3125,6 +3125,11 @@ class _TimelinePointerSurfaceState extends State<_TimelinePointerSurface> {
 
   void _handleDown(PointerDownEvent event) {
     if (_pointer != null) return;
+    // The secondary button belongs to the context menu, which the lane opens
+    // from its own listener. Tracking the press here as well made the release
+    // fire a tap: a right-click cut the clip with the razor armed and seeked
+    // when it landed on the ruler.
+    if (event.buttons & kPrimaryButton == 0) return;
     _pointer = event.pointer;
     _start = event.position;
     _dragging = false;
