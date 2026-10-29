@@ -1817,9 +1817,10 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       setState(() => _activeProject = view);
-      await _recordRecentProject(path, view.name);
-      if (!mounted || !identical(session, _activeSession)) return;
+      // The recents write is local bookkeeping; awaiting it here made the first
+      // media and timeline fetch wait for a disk round trip.
       await Future.wait([
+        _recordRecentProject(path, view.name),
         _refreshMediaPage(
           session,
           project: view,
@@ -1827,6 +1828,7 @@ class _AppShellState extends State<AppShell> {
         ),
         _refreshTimeline(session, project: view),
       ]);
+      if (!mounted || !identical(session, _activeSession)) return;
     } catch (_) {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
