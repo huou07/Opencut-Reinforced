@@ -1006,6 +1006,76 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'an artifact event that arrives during another preview request still lands',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final png = await _tinyPngBytes();
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          _mediaFixture('gate-first', '/tmp/first.mp4'),
+          _mediaFixture('gate-second', '/tmp/second.mp4'),
+        ]
+        ..artifactRequestResponses['gate-first:thumbnail'] =
+            const ProjectMediaArtifactRequest(
+              mediaId: 'gate-first',
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'first-cache',
+              jobId: 'first-job',
+            )
+        ..artifactRequestResponses['gate-second:thumbnail'] =
+            const ProjectMediaArtifactRequest(
+              mediaId: 'gate-second',
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'second-cache',
+              jobId: 'second-job',
+            )
+        ..artifactResponses['first-cache'] = ProjectMediaArtifact(
+          bytes: png,
+          mimeType: 'image/png',
+        );
+      final holdSecond = Completer<void>();
+      gateway.thumbnailGates['gate-second'] = holdSecond;
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/gated-preview.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Gated Preview');
+
+      expect(gateway.thumbnailRequests, 2);
+      // The second request still holds the early cache open. The first ticket
+      // is already waiting for its finish event, which arrives now.
+      gateway.emitMediaArtifact(
+        gateway.lastSession!,
+        ProjectMediaArtifactEvent(
+          sequence: BigInt.one,
+          mediaId: 'gate-first',
+          kind: ProjectMediaArtifactKind.thumbnail,
+          cacheKey: 'first-cache',
+          jobId: 'first-job',
+          state: ProjectMediaArtifactEventState.succeeded,
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('media-preview-image-gate-first')),
+        findsNothing,
+      );
+
+      holdSecond.complete();
+      await tester.pumpAndSettle();
+
+      // The first ticket was already waiting when its event arrived, so the
+      // event is dispatched even though another submission was still open.
+      expect(gateway.mediaPreviewReads, 1);
+      expect(
+        find.byKey(const ValueKey('media-preview-image-gate-first')),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('cached media preview is read without waiting for an event', (
     tester,
   ) async {
@@ -6665,6 +6735,9 @@ class _FakeProjectGateway implements ProjectGateway {
   List<ProjectTimelineMarker> initialTimelineMarkers = [];
   final Map<String, ProjectMediaArtifactRequest> artifactRequestResponses = {};
   final Map<String, ProjectMediaArtifact> artifactResponses = {};
+
+  /// Holds one thumbnail request open so a test can control event timing.
+  final Map<String, Completer<void>> thumbnailGates = {};
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
@@ -8223,6 +8296,10 @@ class _FakeProjectGateway implements ProjectGateway {
     String mediaId,
   ) async {
     thumbnailRequests++;
+    final gate = thumbnailGates[mediaId];
+    if (gate != null) {
+      await gate.future;
+    }
     return artifactRequestResponses['$mediaId:thumbnail'] ??
         ProjectMediaArtifactRequest(
           mediaId: mediaId,
