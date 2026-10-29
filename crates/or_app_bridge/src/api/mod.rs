@@ -66,6 +66,7 @@ mod tests {
 }
 mod media_artifact_config;
 mod project_artifacts;
+mod project_media;
 mod project_transcription;
 mod views;
 pub mod motion;
