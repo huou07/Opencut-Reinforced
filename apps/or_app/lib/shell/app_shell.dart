@@ -4427,6 +4427,12 @@ class _AppShellState extends State<AppShell> {
   }) async {
     if (!mounted || !identical(session, _activeSession)) return;
     final refreshGeneration = ++_mediaRefreshGeneration;
+    // A retry from the error footer arrives with a page and an error; the
+    // panel needs the loading state before the summary is awaited, or the
+    // button stays live and the user can only guess that anything happened.
+    if (_mediaLoadError != null) {
+      setState(() => _mediaLoading = true);
+    }
     try {
       final view = known ?? await widget.projectGateway.summary(session);
       if (!mounted ||

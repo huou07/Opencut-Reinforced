@@ -891,6 +891,30 @@ void main() {
     expect(find.byKey(const ValueKey('media-library-retry')), findsOneWidget);
   });
 
+  testWidgets('the media error retry shows a reload state', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-held-retry.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    gateway.mediaPageError = 'The media page could not be read.';
+    await _createProject(tester, 'Held retry');
+
+    gateway.mediaPageError = null;
+    final gate = Completer<void>();
+    gateway.summaryGate = gate;
+    final retry = find.byKey(const ValueKey('media-library-retry'));
+    await tester.ensureVisible(retry);
+    await tester.pumpAndSettle();
+    await tester.tap(retry);
+    await tester.pump();
+
+    expect(retry, findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('media-library-error')), findsNothing);
+  });
+
   testWidgets('a failed media page offers a retry that reloads it', (
     tester,
   ) async {
