@@ -72,6 +72,7 @@ mod views;
 pub mod motion;
 pub mod motion_library;
 pub mod project;
+pub mod timeline;
 pub use motion::*;
 pub use motion_library::*;
 pub use project::*;
