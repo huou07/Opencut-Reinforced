@@ -63,7 +63,7 @@
     },
     {
       "op": "tap",
-      "index": 1,
+      "index": 0,
       "selector": {
         "key_regex": "^timeline-track-solo-.*$"
       }

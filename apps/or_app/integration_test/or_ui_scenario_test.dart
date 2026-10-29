@@ -960,7 +960,7 @@ class _Runner {
   Finder _requireFinder(Map<String, Object?> step) {
     final finder = _anyFinder(step);
     final index = step['index'];
-    if (index is int && index > 0) return finder.at(index);
+    if (index is int) return finder.at(index);
     return finder;
   }
 
