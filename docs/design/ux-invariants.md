@@ -26,6 +26,8 @@ journey. See [operations/verification.md](../operations/verification.md).
 - A divider is either backed by a working resize handler or renders only the
   structural rule; a drag-looking grip without a handler is a defect.
 - Every transient message goes through the shared snackbar.
+- Enrolling or cloning a voice asks for the same explicit acknowledgement on
+  every provider (installed, cloud or local server) before the clip is used.
 - User-facing copy never states an internal identifier (clip id, media id,
   job id, artifact key, checkpoint path); it names the consequence instead.
 - Transport and timeline keys resolve through the single shell
