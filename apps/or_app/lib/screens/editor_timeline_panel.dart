@@ -14,7 +14,7 @@ import '../motion/motion_library_models.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
 import 'editor_labels.dart';
-import 'editor_media_library.dart';
+import 'editor_media_preview.dart';
 import 'editor_panel_header.dart';
 import 'editor_rational_time.dart';
 import 'editor_timeline_painters.dart';

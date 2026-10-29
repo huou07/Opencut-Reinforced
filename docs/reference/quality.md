@@ -214,7 +214,9 @@ their own increments with their own evidence.
    holds the macOS menu bar, `apps/or_app/lib/motion/motion_insert_log.dart` the
    motion insert record, `apps/or_app/lib/screens/editor_tool_actions.dart` the tool
    panel copy and action lists, `apps/or_app/lib/screens/editor_media_library.dart`
-   the media library pane (items, previews and empty/filter/error states),
+   the media library pane (items and empty/filter/error states), and
+   `apps/or_app/lib/screens/editor_media_preview.dart` one item's preview states
+   (pending, ready, failed-with-retry),
    `apps/or_app/lib/screens/editor_panel_header.dart` the shared tool-panel title
    row, `apps/or_app/lib/screens/editor_inspector_panel.dart` the clip and sequence
    inspector, `apps/or_app/lib/screens/editor_viewer_panel.dart` the preview,

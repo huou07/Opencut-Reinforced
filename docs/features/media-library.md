@@ -65,7 +65,8 @@ refreshing the whole library.
 
 - `crates/or_core/src/` — media identity, probe, cache, jobs
 - `crates/or_app_bridge/` — artifact service wiring
-- `apps/or_app/lib/screens/editor_media_library.dart` — library pane, item rows, previews
+- `apps/or_app/lib/screens/editor_media_library.dart` — library pane and item rows
+- `apps/or_app/lib/screens/editor_media_preview.dart` — one item's preview states
 - `apps/or_app/lib/` — import, relink and artifact loading flows
 
 ## Known gaps
