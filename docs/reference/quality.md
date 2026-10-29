@@ -217,6 +217,8 @@ their own increments with their own evidence.
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
    music workflows, `apps/or_app/lib/shell/export_flow.dart` the export job, its
    polling timer, the chosen destination and publishing the finished file,
+   `apps/or_app/lib/production/media_import_flow.dart` the per-file import walk,
+   its progress label and the closing batch statement,
    `crates/or_core/src/application/types.rs` the command and
    query descriptors, envelopes, change sets, result records and error types,
    `crates/or_core/src/application/timeline.rs` the timeline track, clip and
@@ -225,7 +227,7 @@ their own increments with their own evidence.
    remove and relink commands, and `crates/or_core/src/application/history.rs`
    the undo and redo command, and `crates/or_core/src/application/tests/` one
    module per owner file over a shared support module. Next seams, in order: the
-   import flow and the project lifecycle in `app_shell.dart`, then
+   project lifecycle and the media preview queue in `app_shell.dart`, then
    `crates/or_app_bridge/src/api/project.rs`, then the remaining dispatch
    catalog in `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
    existing tests.

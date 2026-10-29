@@ -23,6 +23,7 @@ import '../project/project_gateway.dart';
 import '../project/source_path.dart';
 import '../project/timeline_clip_clipboard.dart';
 import '../production/audio_tool_flows.dart';
+import '../production/media_import_flow.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
@@ -3946,25 +3947,25 @@ class _AppShellState extends State<AppShell> {
       }
     }
 
-    var imported = 0;
-    final failures = <String>[];
-    try {
-      for (final source in sources) {
-        if (!mounted || !identical(session, _activeSession)) return;
-        _setImportStatus(
-          _importStatusLabel(imported + 1, sources.length, source),
-        );
+    final outcome = await MediaImportFlow(
+      onStatus: _setImportStatus,
+      importOne: (source) async {
+        if (!mounted || !identical(session, _activeSession)) {
+          return (imported: false, failure: null, aborted: true);
+        }
         if (Platform.isAndroid) {
           final failure = await registerAndroidMediaSource(
             source,
             register: OrViewerTexture.registerMediaSourceForImport,
           );
           if (failure != null) {
-            failures.add(failure);
-            continue;
+            return (imported: false, failure: failure, aborted: false);
           }
-          if (!mounted || !identical(session, _activeSession)) return;
+          if (!mounted || !identical(session, _activeSession)) {
+            return (imported: false, failure: null, aborted: true);
+          }
         }
+        String? failure;
         final updated = await _runProjectAction((session, _) async {
           // Capture identity and revision immediately before Rust probes each
           // file.
@@ -3978,44 +3979,20 @@ class _AppShellState extends State<AppShell> {
           }
           setState(() => _activeProject = current);
           return widget.projectGateway.importMedia(session, current, source);
-        }, onFailure: failures.add);
+        }, onFailure: (message) => failure = message);
         if (updated == null) {
-          if (!mounted || !identical(session, _activeSession)) return;
-          continue;
+          return (
+            imported: false,
+            failure: failure,
+            aborted: !mounted || !identical(session, _activeSession),
+          );
         }
-        imported++;
-      }
-    } finally {
-      _setImportStatus(null);
-    }
-    if (failures.isNotEmpty) {
-      final failureSummary = failures.first.length > 180
-          ? '${failures.first.substring(0, 177)}…'
-          : failures.first;
-      _showUnavailable(
-        'Imported $imported of ${sources.length} ${folder ? 'folder files' : 'selected files'}. '
-        '${failures.length} could not be imported. $failureSummary',
-      );
-    } else if (sources.length > 1 && mounted) {
-      // One file is its own confirmation (it appears in the library); a batch
-      // of ten otherwise finished with no statement that anything happened.
-      _showUnavailable(
-        'Imported $imported ${folder ? 'folder files' : 'selected files'}.',
-      );
-    }
-  }
-
-  /// One line for the top bar's transient slot while files are probed and
-  /// added one at a time.
-  String _importStatusLabel(int position, int total, String source) {
-    final segments = source.replaceAll('\\', '/').split('/');
-    final name = segments.isEmpty || segments.last.isEmpty
-        ? source
-        : segments.last;
-    final shown = name.length > 32 ? '${name.substring(0, 29)}…' : name;
-    return total <= 1
-        ? 'Importing $shown…'
-        : 'Importing $position of $total · $shown';
+        return (imported: true, failure: null, aborted: false);
+      },
+    ).run(sources, folder: folder);
+    if (outcome.aborted || !mounted) return;
+    final message = outcome.summary;
+    if (message != null) _showUnavailable(message);
   }
 
   void _setImportStatus(String? value) {
