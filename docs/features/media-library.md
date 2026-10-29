@@ -38,7 +38,8 @@ future. See [architecture/media-pipeline.md](../architecture/media-pipeline.md).
 ## Library surface
 
 - Media panel lists items with metadata, thumbnails and audio waveforms.
-- Search filters the library without touching project state.
+- Search filters the library without touching project state; a search with no
+  matches names the result and offers **Clear search**.
 - Removing an item is a command and is guarded when timeline clips reference it.
 - Relink replaces one item's source under the same `MediaId` and preserves
   timeline references; it is undoable.

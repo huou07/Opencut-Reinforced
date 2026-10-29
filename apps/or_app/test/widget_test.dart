@@ -1342,10 +1342,20 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('No media matches this search.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('media-search-clear')),
+      findsOneWidget,
+      reason: 'an empty result explains itself and offers a way back',
+    );
 
-    await tester.enterText(find.byKey(const ValueKey('media-search')), '');
+    await tester.tap(find.byKey(const ValueKey('media-search-clear')));
     await tester.pumpAndSettle();
     expect(find.text('2 items'), findsOneWidget);
+    expect(
+      find.text('No media matches this search.'),
+      findsNothing,
+      reason: 'clearing the field restores the library',
+    );
 
     // Filtering is a view concern: it must never reach the command log.
     expect(gateway.importMediaCalls, 2);

@@ -76,13 +76,17 @@ class EditorMediaLibraryPanel extends StatelessWidget {
       if (updates == null) return _panel(context, '');
       return ValueListenableBuilder<Map<String, ProjectMediaPreview>>(
         valueListenable: updates,
-        builder: (context, live, _) => _panel(context, '', live),
+        builder: (context, live, _) => _panel(context, '', liveUpdates: live),
       );
     }
+    void clearSearch() => controller
+      ..text = ''
+      ..selection = const TextSelection.collapsed(offset: 0);
     if (updates == null) {
       return ValueListenableBuilder<TextEditingValue>(
         valueListenable: controller,
-        builder: (context, value, _) => _panel(context, value.text),
+        builder: (context, value, _) =>
+            _panel(context, value.text, onClearSearch: clearSearch),
       );
     }
     return ValueListenableBuilder<TextEditingValue>(
@@ -90,16 +94,18 @@ class EditorMediaLibraryPanel extends StatelessWidget {
       builder: (context, value, _) =>
           ValueListenableBuilder<Map<String, ProjectMediaPreview>>(
             valueListenable: updates,
-            builder: (context, live, _) => _panel(context, value.text, live),
+            builder: (context, live, _) =>
+                _panel(context, value.text, liveUpdates: live, onClearSearch: clearSearch),
           ),
     );
   }
 
   Widget _panel(
     BuildContext context,
-    String searchQuery, [
+    String searchQuery, {
     Map<String, ProjectMediaPreview> liveUpdates = const {},
-  ]) {
+    VoidCallback? onClearSearch,
+  }) {
     assert(() {
       mediaLibraryPanelBuilds += 1;
       return true;
@@ -247,23 +253,36 @@ class EditorMediaLibraryPanel extends StatelessWidget {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else if (items.isEmpty && error == null && filtering)
-            const Expanded(
+            Expanded(
               child: Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(
+                  padding: const EdgeInsets.fromLTRB(
                     OrSpacing.x3,
                     OrSpacing.x4,
                     OrSpacing.x3,
                     0,
                   ),
-                  child: Text(
-                    'No media matches this search.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: OrColors.textMuted,
-                      fontSize: OrType.metadataCompactSize,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'No media matches this search.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: OrType.metadataCompactSize,
+                        ),
+                      ),
+                      if (onClearSearch != null) ...[
+                        const SizedBox(height: OrSpacing.x2),
+                        TextButton(
+                          key: const ValueKey('media-search-clear'),
+                          onPressed: onClearSearch,
+                          child: const Text('Clear search'),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
