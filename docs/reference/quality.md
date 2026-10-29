@@ -271,8 +271,12 @@ their own increments with their own evidence.
    the transcription model and job calls, and
    `crates/or_app_bridge/src/api/media_artifact_config.rs` the artifact cache
    location, worker-pool sizing and service construction. Next seams, in order:
-   the project lifecycle and the queue behind the `media_preview_kinds.dart`
-   helpers in `app_shell.dart`, then the timeline bridge methods in
+   the project lifecycle and the media preview queue behind the
+   `media_preview_kinds.dart` helpers in `app_shell.dart` — that queue needs an
+   injected page/session reader, a scheduler delegate for
+   `_scheduleMediaPreviewRequests`, and a publish callback that picks between a
+   shell rebuild and the `_mediaPreviewUpdates` notifier depending on whether
+   the item sits on the timeline, then the timeline bridge methods in
    `crates/or_app_bridge/src/api/project.rs` (they interleave with stateful
    dispatch), then the remaining dispatch catalog in
    `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
