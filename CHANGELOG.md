@@ -133,6 +133,13 @@ product still needs.
 
 ### Changed
 
+- **The assistant rail stops rebuilding at frame rate.** While playback runs,
+  the editor publishes its playhead to the assistant at most four times a second
+  instead of every frame, and a context the panel already has no longer notifies
+  it. A paused seek, a frame step and a clip selection still arrive at once, so
+  "this clip" and "this moment" stay exact where it matters. Four seconds of
+  playback now publishes 16 contexts instead of 240 panel rebuilds, measured by
+  `apps/or_app/test/assistant_context_test.dart`.
 - **Every viewer frame publishes faster.** The RGBA→premultiplied-BGRA step that
   every macOS preview frame takes before Flutter uploads it now writes into a
   sized buffer and uses a shift-divide instead of a per-pixel append and four

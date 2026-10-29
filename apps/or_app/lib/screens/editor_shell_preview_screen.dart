@@ -414,6 +414,10 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   String? _selectedTrackId;
   String? _selectedClipId;
   ProjectTimelineTrackKind? _selectedTrackKind;
+  AssistantEditorContext? _assistantContext;
+  DateTime? _assistantContextAt;
+  String? _assistantClipId;
+  String? _assistantClipLabel;
   bool _snapEnabled = true;
 
   /// Snapping is a mode, so it needs a verb the palette and menus can call,
@@ -488,30 +492,56 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   /// Publishes the editor focus (selected clip, playhead) to the assistant so
   /// "this clip" has a concrete meaning without the agent guessing.
+  ///
+  /// Playback reports a playhead every frame and the panel rebuilds on every
+  /// notification, so a playhead-only move while playing goes out at most
+  /// every [assistantPlayheadRefreshInterval]; a selection change or a paused
+  /// seek goes out at once.
   void _syncAssistantContext() {
     final assistant = widget.assistant;
     if (assistant == null) return;
-    final position = _previewState.value?.position;
-    final seconds = position?.secondsForDisplay;
-    ProjectTimelineClip? selected;
+    final preview = _previewState.value;
     final clipId = _selectedClipId;
-    if (clipId != null) {
-      for (final page in widget.timelineClipPages.values) {
-        for (final clip in page.items) {
-          if (clip.clipId == clipId) selected = clip;
+    final next = AssistantEditorContext(
+      clipId: clipId,
+      clipLabel: clipId == null ? null : _assistantClipLabelFor(clipId),
+      trackKind: _selectedTrackKind?.name,
+      playheadSeconds: preview?.position.secondsForDisplay,
+    );
+    final now = DateTime.now();
+    final publishedAt = _assistantContextAt;
+    final publish = assistantContextToPublish(
+      current: _assistantContext,
+      next: next,
+      streaming: preview?.playing ?? false,
+      sinceLastPublish: publishedAt == null
+          ? assistantPlayheadRefreshInterval
+          : now.difference(publishedAt),
+    );
+    if (publish == null) return;
+    _assistantContext = publish;
+    _assistantContextAt = now;
+    assistant.setContext(publish);
+  }
+
+  /// Caches the selected clip's label so playback does not rescan every clip
+  /// page for a selection that has not moved.
+  String? _assistantClipLabelFor(String clipId) {
+    if (clipId == _assistantClipId) return _assistantClipLabel;
+    ProjectTimelineClip? selected;
+    for (final page in widget.timelineClipPages.values) {
+      for (final clip in page.items) {
+        if (clip.clipId == clipId) {
+          selected = clip;
+          break;
         }
       }
+      if (selected != null) break;
     }
-    assistant.setContext(
-      AssistantEditorContext(
-        clipId: clipId,
-        clipLabel: selected == null
-            ? null
-            : '${selected.contentKind.name} clip',
-        trackKind: _selectedTrackKind?.name,
-        playheadSeconds: seconds,
-      ),
-    );
+    final label = selected == null ? null : '${selected.contentKind.name} clip';
+    _assistantClipId = clipId;
+    _assistantClipLabel = label;
+    return label;
   }
 
   /// Switches the right rail between clip settings and the assistant.

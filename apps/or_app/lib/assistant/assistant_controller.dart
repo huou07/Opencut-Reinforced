@@ -227,7 +227,9 @@ class AssistantController extends ChangeNotifier {
     _notify();
   }
 
+  /// Publishes the editor focus, skipping a context the panel already has.
   void setContext(AssistantEditorContext context) {
+    if (_context == context) return;
     _context = context;
     _notify();
   }

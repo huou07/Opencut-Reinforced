@@ -124,6 +124,33 @@ change:
   project, so it exercises the transport and rebuild path, not a 1080p publish;
   its `RESULT: OR_UI=PASS` is the regression check, not the measurement.
 
+### Assistant context publishing during playback (2026-10-30)
+
+- Problem: `_onPreviewStateChanged` in `apps/or_app/lib/screens/editor_shell_preview_screen.dart`
+  published an assistant context on every preview state, `AssistantController.setContext`
+  notified its listeners unconditionally, and `AssistantPanel` rebuilds its whole
+  transcript, status row and composer on every notification. Playback reports a
+  playhead every frame, so a playing project with the rail open rebuilt the
+  panel at frame rate even though the status row only shows hundredths of a
+  second.
+- Change: `AssistantEditorContext` compares by value, `setContext` drops a
+  context the panel already has, a playhead-only move during playback publishes
+  at most every `assistantPlayheadRefreshInterval` (250 ms), and a paused seek or
+  a selection change still publishes at once. The selected clip's label is
+  cached per clip id, so the per-tick path no longer rescans every clip page.
+- Measured by `apps/or_app/test/assistant_context_test.dart`: 240 preview states
+  of a four-second playback publish **16 contexts instead of 240** panel
+  rebuilds, and the panel's status row still tracks the transport.
+- Real app: `scripts/ui_scenarios/assistant-playhead.json` — the project is
+  opened, a clip inserted, the assistant rail opened (`editor-tab-assistant`),
+  and three frame steps must move the visible `Playhead 0.00 s` label, which
+  they do immediately because a paused move is never throttled; the run ends on
+  `Playhead 0.10 s`. `RESULT: OR_UI=PASS` on this Mac.
+- What this does not change: the panel still rebuilds once per published context
+  (four times a second while playing), and a settled conversation with no
+  selection still shows the playhead row, which is why the row is published
+  rather than removed.
+
 ### MotionScene preview stills (2026-10-27)
 
 - Workload: a 24-line Rust code scene, one frame rasterised, then
