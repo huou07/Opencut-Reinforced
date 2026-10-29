@@ -4495,10 +4495,13 @@ class _AppShellState extends State<AppShell> {
         }
         setState(() => _activeProject = current);
       }
+      // A newer refresh took over this session while this one was running. Its
+      // own load will publish the page; showing 'changed while refreshing' told
+      // the user about a race they cannot act on.
       setState(() {
         _mediaPage = null;
         _mediaLoading = false;
-        _mediaLoadError = 'The media library changed while it was refreshing.';
+        _mediaLoadError = null;
       });
     } on ProjectGatewayException catch (error) {
       if (mounted &&
