@@ -58,7 +58,9 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   LocalTtsHealth? _localHealth;
   bool _localLoading = false;
   bool _localEnrolling = false;
-  String? _localError;
+  String? _connectError;
+  String? _cloneError;
+  String? _cloneNameError;
   bool _cloudLoading = false;
   String? _cloudError;
   double _rate = 180;
@@ -149,7 +151,9 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       _cloudError = null;
       _cloudVoiceId = provider == _saved.provider ? _saved.cloudVoiceId : '';
       _localVoices = const [];
-      _localError = null;
+      _connectError = null;
+      _cloneError = null;
+      _cloneNameError = null;
       _localHealth = null;
       _localVoiceId = provider == _saved.provider ? _saved.localVoiceId : '';
     });
@@ -201,7 +205,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     final base = LocalTtsService.normalizeBaseUrl(_localUrl.text);
     setState(() {
       _localLoading = true;
-      _localError = null;
+      _connectError = null;
     });
     try {
       final status = await _local.probe(base);
@@ -224,7 +228,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       if (!mounted) return;
       setState(() {
         _localLoading = false;
-        _localError = error.message;
+        _connectError = error.message;
       });
     }
   }
@@ -232,18 +236,19 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   Future<void> _enrollLocal() async {
     final name = _localVoiceName.text.trim();
     if (name.isEmpty) {
-      setState(() => _localError = 'Give the cloned voice a name first.');
+      setState(() => _cloneNameError = 'Give the cloned voice a name first.');
       return;
     }
     if (_localReferencePath.isEmpty) {
       setState(
-        () => _localError = 'Choose or record a 3–8 s reference clip first.',
+        () => _cloneError = 'Choose or record a 3–8 s reference clip first.',
       );
       return;
     }
     setState(() {
       _localEnrolling = true;
-      _localError = null;
+      _cloneError = null;
+      _cloneNameError = null;
     });
     try {
       final id = await _local.enrollVoice(
@@ -261,7 +266,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
       if (!mounted) return;
       setState(() {
         _localEnrolling = false;
-        _localError = error.message;
+        _cloneError = error.message;
       });
     }
   }
@@ -289,11 +294,22 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     final name = _localVoiceName.text.trim().isEmpty
         ? (_saved.localVoiceName.isEmpty ? 'cloned' : _saved.localVoiceName)
         : _localVoiceName.text.trim();
-    _localVoiceId = await _local.enrollVoice(
+    final id = await _local.enrollVoice(
       baseUrl: _localBaseUrl,
       name: name,
       referencePath: _localReferencePath,
     );
+    _localVoiceId = id;
+    // The server only remembers enrolments for the life of its process, so the
+    // id it just handed back is the one the next launch must ask for.
+    final saved = _saved.copyWith(
+      localBaseUrl: _localBaseUrl,
+      localVoiceId: id,
+      localVoiceName: name,
+      localReferencePath: _localReferencePath,
+    );
+    _saved = saved;
+    await _settings.save(saved);
   }
 
   Future<List<VoiceoverLine>> _synthesizeLocal(
@@ -542,421 +558,485 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Generate voiceover'),
-      content: SizedBox(
-        width: 620,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Each non-empty line becomes one narration clip and one caption '
-                'at its exact duration. Narration runs offline: an installed '
-                'macOS voice, or a local speech server with voice cloning. '
-                'Nothing is uploaded.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('voiceover-script'),
-                controller: _script,
-                minLines: 4,
-                maxLines: 8,
-                enabled: !_busy,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Script, one line per scene',
-                  hintText: 'Xin chào, đây là Opencut Reinforced.\nBạn có thể dựng phim ngay trên máy.',
+    return PopScope(
+      canPop: !_busy,
+      child: AlertDialog(
+        title: const Text('Generate voiceover'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Each non-empty line becomes one narration clip and one caption '
+                  'at its exact duration. Narration runs offline: an installed '
+                  'macOS voice, or a local speech server with voice cloning. '
+                  'Nothing is uploaded.',
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Voice source',
-                style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final source in _voiceSources)
-                    ChoiceChip(
-                      key: ValueKey('voiceover-provider-$source'),
-                      label: Text(_voiceSourceLabel(source)),
-                      selected: _provider == source,
-                      onSelected: _busy
-                          ? null
-                          : (selected) {
-                              if (selected) unawaited(_setProvider(source));
-                            },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_provider == 'system') ...[
-                if (_voices.isEmpty)
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text('No installed voice was found.'),
-                      ),
-                      TextButton(
-                        onPressed: _busy ? null : _loadVoices,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          key: ValueKey('voiceover-voice-${_voice ?? 'none'}'),
-                          initialValue: _voice,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Voice',
-                          ),
-                          items: [
-                            for (final voice in _voices)
-                              DropdownMenuItem(
-                                value: voice.name,
-                                child: Text(
-                                  voice.label,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          onChanged: _busy
-                              ? null
-                              : (value) => setState(() => _voice = value),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        key: const ValueKey('voiceover-manage-voices'),
-                        onPressed: _busy ? null : _openVoiceSettings,
-                        child: const Text('Voice settings…'),
-                      ),
-                    ],
-                  ),
-              ] else if (_provider == 'local') ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey('voiceover-local-url'),
-                        controller: _localUrl,
-                        enabled: !_busy,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Local server',
-                          hintText: 'http://127.0.0.1:8000',
-                          isDense: true,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      key: const ValueKey('voiceover-local-connect'),
-                      onPressed: _busy || _localLoading
-                          ? null
-                          : _loadLocalVoices,
-                      child: Text(_localLoading ? 'Checking…' : 'Connect'),
-                    ),
-                  ],
-                ),
-                if (_localError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _localError!,
-                    key: const ValueKey('voiceover-local-error'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
-                if (_localHealth != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Connected · ${_localHealth!.summary}',
-                    key: const ValueKey('voiceover-local-health'),
-                    style: TextStyle(color: OrColors.textSecondary),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  key: ValueKey('voiceover-local-voice-$_localVoiceId'),
-                  initialValue: _localVoiceId.isEmpty ? null : _localVoiceId,
-                  isExpanded: true,
+                const SizedBox(height: 12),
+                TextField(
+                  key: const ValueKey('voiceover-script'),
+                  controller: _script,
+                  minLines: 4,
+                  maxLines: 8,
+                  enabled: !_busy,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    labelText: 'Local voice',
+                    labelText: 'Script, one line per scene',
+                    hintText: 'Xin chào, đây là Opencut Reinforced.\nBạn có thể dựng phim ngay trên máy.',
                   ),
-                  items: [
-                    for (final voice in _localVoices)
-                      DropdownMenuItem(
-                        value: voice.id,
-                        child: Text(
-                          voice.label,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (value) => setState(() => _localVoiceId = value ?? ''),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  'Voice cloning: choose or record a 3–8 s clip, name it, then '
-                  'enrol. Only clone a voice you have the right to use.',
+                  'Voice source',
                   style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 6),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: Text(
-                        _localReferencePath.isEmpty
-                            ? 'No reference clip yet.'
-                            : _localReferencePath,
-                        key: const ValueKey('voiceover-local-reference'),
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: OrColors.textSecondary,
-                          fontSize: 12,
-                        ),
+                    for (final source in _voiceSources)
+                      ChoiceChip(
+                        key: ValueKey('voiceover-provider-$source'),
+                        label: Text(_voiceSourceLabel(source)),
+                        selected: _provider == source,
+                        onSelected: _busy
+                            ? null
+                            : (selected) {
+                                if (selected) unawaited(_setProvider(source));
+                              },
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      key: const ValueKey('voiceover-local-choose-clip'),
-                      onPressed: _busy || _localEnrolling
-                          ? null
-                          : _chooseReference,
-                      child: const Text('Choose clip…'),
-                    ),
-                    TextButton(
-                      key: const ValueKey('voiceover-local-record-clip'),
-                      onPressed: _busy || _localEnrolling
-                          ? null
-                          : _recordReference,
-                      child: const Text('Record…'),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey('voiceover-local-clone-name'),
-                        controller: _localVoiceName,
-                        enabled: !_busy && !_localEnrolling,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          labelText: 'Clone name',
-                          isDense: true,
+                const SizedBox(height: 8),
+                if (_provider == 'system') ...[
+                  if (_voices.isEmpty)
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('No installed voice was found.'),
                         ),
-                      ),
+                        TextButton(
+                          onPressed: _busy ? null : _loadVoices,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey(
+                              'voiceover-voice-${_voice ?? 'none'}',
+                            ),
+                            initialValue: _voice,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: 'Voice',
+                            ),
+                            items: [
+                              for (final voice in _voices)
+                                DropdownMenuItem(
+                                  value: voice.name,
+                                  child: Text(
+                                    voice.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: _busy
+                                ? null
+                                : (value) => setState(() => _voice = value),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          key: const ValueKey('voiceover-manage-voices'),
+                          onPressed: _busy ? null : _openVoiceSettings,
+                          child: const Text('Voice settings…'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      key: const ValueKey('voiceover-local-enroll'),
-                      onPressed: _busy || _localEnrolling ? null : _enrollLocal,
-                      child: Text(
-                        _localEnrolling ? 'Enrolling…' : 'Enrol voice',
-                      ),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                if (_cloudLoading) ...[
+                ] else if (_provider == 'local') ...[
                   Row(
                     children: [
-                      const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('voiceover-local-url'),
+                          controller: _localUrl,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.url,
+                          autocorrect: false,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) {
+                            if (!_busy && !_localLoading) _loadLocalVoices();
+                          },
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Local server',
+                            hintText: 'http://127.0.0.1:8000',
+                            isDense: true,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        'Loading ${_provider == 'elevenlabs' ? 'ElevenLabs' : 'Azure'} voices…',
-                        style: TextStyle(color: OrColors.textSecondary),
+                      TextButton(
+                        key: const ValueKey('voiceover-local-connect'),
+                        onPressed: _busy || _localLoading
+                            ? null
+                            : _loadLocalVoices,
+                        child: Text(_localLoading ? 'Checking…' : 'Connect'),
                       ),
                     ],
                   ),
-                ] else if (_cloudError != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _cloudError!,
-                        key: const ValueKey('voiceover-cloud-error'),
+                  if (_connectError != null) ...[
+                    const SizedBox(height: 6),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _connectError!,
+                        key: const ValueKey('voiceover-local-error'),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
                       ),
-                      Row(
-                        children: [
-                          TextButton(
-                            key: const ValueKey('voiceover-cloud-retry'),
-                            onPressed: _busy ? null : _loadCloudVoices,
-                            child: const Text('Retry'),
-                          ),
-                          TextButton(
-                            onPressed: _busy ? null : _openVoiceSettings,
-                            child: const Text('Voice settings…'),
-                          ),
-                        ],
+                    ),
+                  ],
+                  if (_localHealth != null) ...[
+                    const SizedBox(height: 4),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'Connected · ${_localHealth!.summary}',
+                        key: const ValueKey('voiceover-local-health'),
+                        style: TextStyle(color: OrColors.textSecondary),
                       ),
-                    ],
-                  )
-                else if (_cloudVoices.isEmpty)
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'No cloud voice is available for this key.',
+                    ),
+                  ] else if (_localVoices.isEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _localHealth == null
+                          ? 'Press Connect to list the voices on this server.'
+                          : 'No voice on the server yet. Enrol one from a clip '
+                                'below.',
+                      style: TextStyle(color: OrColors.textSecondary),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('voiceover-local-voice-$_localVoiceId'),
+                    initialValue: _localVoiceId.isEmpty ? null : _localVoiceId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Local voice',
+                    ),
+                    items: [
+                      for (final voice in _localVoices)
+                        DropdownMenuItem(
+                          value: voice.id,
+                          child: Tooltip(
+                            message: voice.label,
+                            child: Text(
+                              voice.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: _busy ? null : _loadCloudVoices,
-                        child: const Text('Retry'),
-                      ),
                     ],
-                  )
-                else
+                    onChanged: _busy
+                        ? null
+                        : (value) =>
+                              setState(() => _localVoiceId = value ?? ''),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Voice cloning: choose or record a 3–8 s clip, name it, then '
+                    'enrol. Only clone a voice you have the right to use.',
+                    style: TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: DropdownButtonFormField<String>(
-                          key: ValueKey('voiceover-cloud-voice-$_cloudVoiceId'),
-                          initialValue: _cloudVoiceId.isEmpty
-                              ? null
-                              : _cloudVoiceId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            labelText: 'Cloud voice',
+                        child: Tooltip(
+                          message: _localReferencePath.isEmpty
+                              ? 'No reference clip yet.'
+                              : _localReferencePath,
+                          child: Text(
+                            _localReferencePath.isEmpty
+                                ? 'No reference clip yet.'
+                                : _localReferencePath,
+                            key: const ValueKey('voiceover-local-reference'),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: OrColors.textSecondary,
+                              fontSize: 12,
+                            ),
                           ),
-                          items: [
-                            for (final voice in _cloudVoices)
-                              DropdownMenuItem(
-                                value: voice.id,
-                                child: Text(
-                                  voice.label,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          onChanged: _busy
-                              ? null
-                              : (value) =>
-                                    setState(() => _cloudVoiceId = value ?? ''),
                         ),
                       ),
                       const SizedBox(width: 8),
+                      OutlinedButton(
+                        key: const ValueKey('voiceover-local-choose-clip'),
+                        onPressed: _busy || _localEnrolling
+                            ? null
+                            : _chooseReference,
+                        child: const Text('Choose clip…'),
+                      ),
                       TextButton(
-                        onPressed: _busy ? null : _openVoiceSettings,
-                        child: const Text('Voice settings…'),
+                        key: const ValueKey('voiceover-local-record-clip'),
+                        onPressed: _busy || _localEnrolling
+                            ? null
+                            : _recordReference,
+                        child: const Text('Record…'),
                       ),
                     ],
                   ),
-              ],
-              if (_provider == 'system') ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('voiceover-local-clone-name'),
+                          controller: _localVoiceName,
+                          enabled: !_busy && !_localEnrolling,
+                          onChanged: (_) {
+                            if (_cloneNameError != null) {
+                              setState(() => _cloneNameError = null);
+                            }
+                          },
+                          decoration: InputDecoration(
+                            border: const OutlineInputBorder(),
+                            labelText: 'Clone name',
+                            isDense: true,
+                            errorText: _cloneNameError,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton.tonal(
+                        key: const ValueKey('voiceover-local-enroll'),
+                        onPressed: _busy || _localEnrolling
+                            ? null
+                            : _enrollLocal,
+                        child: Text(
+                          _localEnrolling ? 'Enrolling…' : 'Enrol voice',
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_cloneError != null) ...[
+                    const SizedBox(height: 6),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _cloneError!,
+                        key: const ValueKey('voiceover-local-clone-error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ] else ...[
+                  if (_cloudLoading) ...[
+                    Row(
+                      children: [
+                        const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Loading ${_provider == 'elevenlabs' ? 'ElevenLabs' : 'Azure'} voices…',
+                          style: TextStyle(color: OrColors.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ] else if (_cloudError != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _cloudError!,
+                          key: const ValueKey('voiceover-cloud-error'),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            TextButton(
+                              key: const ValueKey('voiceover-cloud-retry'),
+                              onPressed: _busy ? null : _loadCloudVoices,
+                              child: const Text('Retry'),
+                            ),
+                            TextButton(
+                              onPressed: _busy ? null : _openVoiceSettings,
+                              child: const Text('Voice settings…'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  else if (_cloudVoices.isEmpty)
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'No cloud voice is available for this key.',
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _loadCloudVoices,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey(
+                              'voiceover-cloud-voice-$_cloudVoiceId',
+                            ),
+                            initialValue: _cloudVoiceId.isEmpty
+                                ? null
+                                : _cloudVoiceId,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: 'Cloud voice',
+                            ),
+                            items: [
+                              for (final voice in _cloudVoices)
+                                DropdownMenuItem(
+                                  value: voice.id,
+                                  child: Text(
+                                    voice.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                            onChanged: _busy
+                                ? null
+                                : (value) => setState(
+                                    () => _cloudVoiceId = value ?? '',
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: _busy ? null : _openVoiceSettings,
+                          child: const Text('Voice settings…'),
+                        ),
+                      ],
+                    ),
+                ],
+                if (_provider == 'system') ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const SizedBox(width: 96, child: Text('Rate')),
+                      Expanded(
+                        child: Slider(
+                          key: const ValueKey('voiceover-rate'),
+                          value: _rate,
+                          min: 120,
+                          max: 240,
+                          divisions: 24,
+                          label: '${_rate.round()} wpm',
+                          onChanged: _busy
+                              ? null
+                              : (value) => setState(() => _rate = value),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 72,
+                        child: Text(
+                          '${_rate.round()} wpm',
+                          textAlign: TextAlign.end,
+                          style: TextStyle(color: OrColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const SizedBox(width: 96, child: Text('Rate')),
+                    const SizedBox(width: 96, child: Text('Gap')),
                     Expanded(
                       child: Slider(
-                        key: const ValueKey('voiceover-rate'),
-                        value: _rate,
-                        min: 120,
-                        max: 240,
-                        divisions: 24,
-                        label: '${_rate.round()} wpm',
+                        key: const ValueKey('voiceover-gap'),
+                        value: _gapMs,
+                        min: 0,
+                        max: 1000,
+                        divisions: 20,
+                        label: '${_gapMs.round()} ms',
                         onChanged: _busy
                             ? null
-                            : (value) => setState(() => _rate = value),
+                            : (value) => setState(() => _gapMs = value),
                       ),
                     ),
                     SizedBox(
                       width: 72,
                       child: Text(
-                        '${_rate.round()} wpm',
+                        '${_gapMs.round()} ms',
                         textAlign: TextAlign.end,
                         style: TextStyle(color: OrColors.textSecondary),
                       ),
                     ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const SizedBox(width: 96, child: Text('Gap')),
-                  Expanded(
-                    child: Slider(
-                      key: const ValueKey('voiceover-gap'),
-                      value: _gapMs,
-                      min: 0,
-                      max: 1000,
-                      divisions: 20,
-                      label: '${_gapMs.round()} ms',
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() => _gapMs = value),
-                    ),
+                if (_busy) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(value: _progress),
+                  const SizedBox(height: 6),
+                  Text(
+                    _stage,
+                    key: const ValueKey('voiceover-stage'),
+                    style: TextStyle(color: OrColors.textSecondary),
                   ),
-                  SizedBox(
-                    width: 72,
-                    child: Text(
-                      '${_gapMs.round()} ms',
-                      textAlign: TextAlign.end,
-                      style: TextStyle(color: OrColors.textSecondary),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _error!,
+                    key: const ValueKey('voiceover-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ],
-              ),
-              if (_busy) ...[
-                const SizedBox(height: 8),
-                LinearProgressIndicator(value: _progress),
-                const SizedBox(height: 6),
-                Text(
-                  _stage,
-                  key: const ValueKey('voiceover-stage'),
-                  style: TextStyle(color: OrColors.textSecondary),
-                ),
               ],
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  key: const ValueKey('voiceover-error'),
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('voiceover-generate'),
+            onPressed: _busy ? null : _generate,
+            child: const Text('Generate and add'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          key: const ValueKey('voiceover-generate'),
-          onPressed: _busy ? null : _generate,
-          child: const Text('Generate and add'),
-        ),
-      ],
     );
   }
 }
