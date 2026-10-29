@@ -210,7 +210,10 @@ their own increments with their own evidence.
    transport and scrub state, `apps/or_app/lib/screens/editor_frame_rate.dart` the
    shared sequence rate menu, `apps/or_app/lib/screens/editor_labels.dart` the time,
    speed and shortcut labels, `apps/or_app/lib/screens/editor_rational_time.dart`
-   the seconds → canonical time conversion, and
+   the seconds → canonical time conversion,
+   `apps/or_app/lib/screens/editor_timeline_panel.dart` the timeline panel, its
+   pointer/scrub gestures, rulers, painters, clip context menu and text-clip
+   editing, and
    `apps/or_app/lib/production/audio_tool_flows.dart` the voiceover, recording and
    music workflows, `crates/or_core/src/application/types.rs` the command and
    query descriptors, envelopes, change sets, result records and error types,
@@ -220,8 +223,8 @@ their own increments with their own evidence.
    remove and relink commands, and `crates/or_core/src/application/history.rs`
    the undo and redo command, and `crates/or_core/src/application/tests/` one
    module per owner file over a shared support module. Next seams, in order: the
-   timeline panel, then the tool panels and the audio tools' state in
-   `app_shell.dart`. The split may not change behaviour and lands under the
+   tool-panel actions and the audio tools' state in `app_shell.dart`, then the
+   remaining dispatch catalog in `crates/or_core/src/application/mod.rs`. The split may not change behaviour and lands under the
    existing tests.
 
 ## Evidence rules
