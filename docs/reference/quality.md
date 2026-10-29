@@ -293,8 +293,10 @@ after a tap also raced the build; the runner now settles before `tree`.
    don't optimise that loop again on a hunch. The real lever is in
    `crates/or_app_bridge/src/preview.rs`: the direct single-clip path always
    returns packed RGBA even when the export asked for NV12, so each frame pays a
-   CPU YUV->NV12 swscale. Passing planes through from that path is the next
-   candidate; it moves cost from CPU conversion to the hardware encoder.
+   CPU YUV->NV12 swscale. That is still cheaper than the alternative: routing
+   NV12 exports through the GPU composite path (skipping the direct shortcut)
+   measured **3477 ms** against 3078 ms, so the direct path stays and the CPU
+   conversion is the cheaper branch for a single full-size clip.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
