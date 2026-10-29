@@ -40,6 +40,7 @@ import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
 import 'autosave_controller.dart';
+import 'project_error_message.dart';
 import 'export_flow.dart';
 import 'caption_import_dialog.dart';
 import 'speech_model_messages.dart';
@@ -4956,17 +4957,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _showProjectError(ProjectGatewayException error) {
-    final message = switch (error.code) {
-      'DESTINATION_EXISTS' => 'A file already exists at that location. Choose another name or use Open Project.',
-      'PROJECT_FILE_CHANGED' =>
-        'The project file changed outside OR. The save was blocked.',
-      'RECOVERY_REQUIRED' => 'This project needs explicit recovery handling before it can be opened.',
-      'LOCAL_IPC_ERROR' =>
-        'The local CLI session could not be started. The project remains on disk. ${error.message}',
-      _ =>
-        error.message.isEmpty ? 'The project operation failed.' : error.message,
-    };
-    _showUnavailable(message);
+    _showUnavailable(projectErrorMessage(error));
   }
 
   void _showUnavailable(String message) {
