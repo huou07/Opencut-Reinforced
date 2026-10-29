@@ -745,9 +745,14 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                 if (_provider == 'system') ...[
                   if (_voices.isEmpty)
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Expanded(
-                          child: Text('No installed voice was found.'),
+                          child: Text(
+                            'No installed voice was found. Add one in System '
+                            'Settings > Accessibility > Spoken Content, then '
+                            'retry.',
+                          ),
                         ),
                         TextButton(
                           onPressed: _busy ? null : _loadVoices,

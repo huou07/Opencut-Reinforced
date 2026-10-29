@@ -217,6 +217,16 @@ newer refresh owns the page, tracks and error. Clearing them (or reporting the
 race) emptied the library or flashed an empty timeline, which rounds 106, 111
 and 112 removed.
 
+## Harness environment gaps
+
+- The app launched by `flutter build macos` + the harness lists **no installed
+  `say` voices** ("No installed voice was found."), even though
+  `VoiceoverService().listVoices()` returns `Linh (vi_VN)` under `flutter test`
+  on this machine. The dialog now explains how to add a voice, but the harness
+  app's inability to run `say` needs its own round (PATH/environment of an
+  app launched by `xcodebuild`), and `scripts/ui_scenarios/production-voice-music.json`
+  stays dependent on a Vietnamese voice until then.
+
 ## Verification ideas not yet built
 
 - A generation-gated fake (`summaryGate`, `mediaPageGate`) can pin the
