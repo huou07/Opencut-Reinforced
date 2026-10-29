@@ -264,12 +264,14 @@ after a tap also raced the build; the runner now settles before `tree`.
 
 ## Known gaps
 
-0. Project open from the recent list is one sample, not a distribution:
-   `interaction-latency` now closes to Home outside the clock and times only
-   `tap recent -> empty timeline`, which measured **1454 ms** on 2026-10-29
-   (debug lane, n=1). The earlier round-trip block read 2251 ms. A distribution
-   needs a measure loop with outside-the-clock setup, which hung when tried;
-   `reopen-twice` proves the app itself reopens twice cleanly.
+0. Harness wall clock is not app latency. A temporary in-app stopwatch around
+   `_openProjectLocation`/`_startProject` (file sink, one `reopen-twice` run on
+   2026-10-29) read **recovery 4 ms, `openProject` 9-11 ms, summary+first
+   media/timeline fetch 11-62 ms**, while the harness block timed the same
+   `tap recent -> empty timeline` at **1454 ms**. The difference is the debug
+   test binding: semantics lookups, `pump` loops and `wait` polling. Quote the
+   harness numbers as a relative regression signal, never as user latency, and
+   use in-app timers before claiming an open-path cost.
 
 0. The media page-two failure path is covered by a widget test
    (`widget_test.dart`, "a failed media page offers a retry that reloads it"):
