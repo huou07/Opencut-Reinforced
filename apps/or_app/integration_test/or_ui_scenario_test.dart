@@ -775,6 +775,24 @@ class _Runner {
     final elapsedSeconds = lastStamp > firstStamp
         ? (lastStamp - firstStamp) / 1000000.0
         : 0.0;
+    // A scenario can turn the numbers into a gate: crossing the budget fails
+    // the step instead of leaving pacing as something a human compares by eye.
+    void requireBudget(String key, double actual, String label) {
+      final budget = (step[key] as num?)?.toDouble();
+      if (budget != null && actual > budget) {
+        throw _StepFailure(
+          'frame_budget',
+          '$label ${actual.toStringAsFixed(2)} ms exceeded the '
+              '${budget.toStringAsFixed(2)} ms budget',
+        );
+      }
+    }
+
+    final buildP95 = percentile(builds, 0.95);
+    final spanP95 = percentile(spans, 0.95);
+    requireBudget('max_build_p95_ms', buildP95, 'build p95');
+    requireBudget('max_span_p95_ms', spanP95, 'span p95');
+
     return {
       'name': '${step['name'] ?? 'frames'}',
       'frames': frames.length,

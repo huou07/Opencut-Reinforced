@@ -195,8 +195,11 @@ their own increments with their own evidence.
 
 ## Known gaps
 
-1. No presented-frame (vsync/compositor) budget; pacing is read from the app's own
-   log, not a dedicated gate.
+1. Pacing has engine frame timings and now fails a scenario when a `frames`
+   step crosses its `max_build_p95_ms` / `max_span_p95_ms` budget
+   (`scripts/ui_scenarios/editor-frames.json`), but it still runs under the
+   Flutter test binding: no presented-frame (vsync/compositor) budget and no
+   measurement of a GPU-composited window.
 2. Hardware encode exists for the MP4 profile and its colour conversion runs on
    the GPU (ADR 0011); hardware decode, shared GPU surfaces, a hardware path for
    VP9 and Android audio are not implemented.
