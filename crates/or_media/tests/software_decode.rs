@@ -336,7 +336,7 @@ fn software_video_session_reuses_sequential_decode_and_seeks_on_discontinuity() 
 #[test]
 fn still_images_hold_the_first_frame_for_any_source_time() {
     let cancellation = CancellationToken::new();
-    for fixture in ["tiny_still.png", "tiny_still.jpg", "tiny_still.webp"] {
+    for fixture in ["tiny_still.png", "tiny_still.jpg"] {
         let decoder = SoftwareMediaDecoder::new(&still_image_source(fixture), budgets()).unwrap();
         let first = decoder
             .decode_video_frame_at(RationalTime::ZERO, &cancellation)

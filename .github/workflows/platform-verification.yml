@@ -305,6 +305,9 @@ jobs:
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
           read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            export_configure_args+=(--enable-videotoolbox --enable-encoder=h264_videotoolbox --enable-encoder=aac)
+          fi
           configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
