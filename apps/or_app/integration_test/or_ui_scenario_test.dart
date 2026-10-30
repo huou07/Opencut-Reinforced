@@ -169,7 +169,8 @@ class _Artifacts {
   }
 
   void appendText(String name, String text) {
-    File('${directory.path}/$name').writeAsStringSync(text, mode: FileMode.append);
+    File('${directory.path}/$name')
+        .writeAsStringSync(text, mode: FileMode.append);
   }
 
   void writeText(String name, String text) {

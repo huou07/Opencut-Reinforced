@@ -680,8 +680,9 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     } on LocalTtsException catch (error) {
       if (mounted) setState(() => _previewError = error.message);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _previewError = 'The preview could not play.');
+      }
     } finally {
       if (mounted) setState(() => _previewing = false);
     }

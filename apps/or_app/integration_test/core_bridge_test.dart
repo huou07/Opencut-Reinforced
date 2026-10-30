@@ -2438,12 +2438,7 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
-  }) => _gateway.startExport(
-    session,
-    current,
-    destination,
-    quality: quality,
-  );
+  }) => _gateway.startExport(session, current, destination, quality: quality);
 
   @override
   Future<ProjectExportJob> exportStatus(
