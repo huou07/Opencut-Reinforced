@@ -69,7 +69,9 @@ mod desktop {
         TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
         TransitionReference,
     };
-    use or_ipc::{ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler};
+    use or_ipc::{
+        ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
+    };
     use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
@@ -1524,7 +1526,7 @@ mod desktop {
     impl MotionMaterializeHandler for PreviewRuntime {
         fn handle_motion_materialize_request(
             &self,
-            session: &ProjectSession,
+            identity: ProjectSessionIdentity,
             request: MotionMaterializeRequest,
         ) -> MotionMaterializeResponse {
             let view = match request {
@@ -1539,8 +1541,8 @@ mod desktop {
                     height,
                     title,
                 } => {
-                    if project_id != session.project_id()
-                        || project_instance_id != session.project_instance_id()
+                    if project_id != identity.project_id
+                        || project_instance_id != identity.project_instance_id
                     {
                         return MotionMaterializeResponse::failure(
                             "PROJECT_INSTANCE_MISMATCH",
@@ -1574,8 +1576,8 @@ mod desktop {
                     width,
                     height,
                 } => {
-                    if project_id != session.project_id()
-                        || project_instance_id != session.project_instance_id()
+                    if project_id != identity.project_id
+                        || project_instance_id != identity.project_instance_id
                     {
                         return MotionMaterializeResponse::failure(
                             "PROJECT_INSTANCE_MISMATCH",
@@ -4161,7 +4163,9 @@ mod desktop {
         ExportRequest, ExportResponse, MotionMaterializeRequest, MotionMaterializeResponse,
         ProjectSession, RationalTime,
     };
-    use or_ipc::{ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler};
+    use or_ipc::{
+        ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
+    };
     use or_runtime::PreviewFrameStep;
 
     pub struct PreviewRuntime;
@@ -4242,7 +4246,7 @@ mod desktop {
     impl MotionMaterializeHandler for PreviewRuntime {
         fn handle_motion_materialize_request(
             &self,
-            _session: &ProjectSession,
+            _identity: ProjectSessionIdentity,
             _request: MotionMaterializeRequest,
         ) -> MotionMaterializeResponse {
             MotionMaterializeResponse::failure(

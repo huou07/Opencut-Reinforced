@@ -37,7 +37,10 @@ have; without one they return an explicit unavailable error. Materialisation
 writes a persistent file, transcription returns a bounded proposal, and the
 caller registers either result through ordinary media, timeline and caption
 commands. Transcription is a start/status/proposal/cancel job so the host lock
-is never held while the model runs.
+is never held while the model runs. Motion materialisation copies the session
+identity, releases the host lock and renders; the IPC transport serves each
+connection on its own thread, so preview, queries and edits never queue behind a
+long scene render.
 
 `or mcp` is an MCP stdio server that exposes these commands and queries to an
 external agent. It holds no project state: every tool call attaches through the

@@ -2,9 +2,26 @@ use crate::{IpcProtocolError, LocalIpcServer};
 use or_core::{
     ApplicationRequest, ApplicationResponse, ExportRequest, ExportResponse,
     MotionMaterializeRequest, MotionMaterializeResponse, ProjectFileSession,
-    ProjectFileSessionError, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
-    TranscriptionRequest, TranscriptionResponse,
+    ProjectFileSessionError, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession,
+    QueryEnvelope, QueryResult, TranscriptionRequest, TranscriptionResponse,
 };
+
+/// The stable identity of one live project session, cheap to copy so a long
+/// operation can run without holding the host lock.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectSessionIdentity {
+    pub project_id: ProjectId,
+    pub project_instance_id: ProjectInstanceId,
+}
+
+impl ProjectSessionIdentity {
+    pub fn from_session(session: &ProjectSession) -> Self {
+        Self {
+            project_id: session.project_id(),
+            project_instance_id: session.project_instance_id(),
+        }
+    }
+}
 
 /// Runtime extension for application operations that need desktop media services.
 pub trait ExportRequestHandler: Send + Sync {
@@ -22,7 +39,7 @@ pub trait ExportRequestHandler: Send + Sync {
 pub trait MotionMaterializeHandler: Send + Sync {
     fn handle_motion_materialize_request(
         &self,
-        session: &ProjectSession,
+        identity: ProjectSessionIdentity,
         request: MotionMaterializeRequest,
     ) -> MotionMaterializeResponse;
 }
@@ -215,6 +232,28 @@ impl LiveProjectHost {
         &self,
         request: ApplicationRequest,
     ) -> Result<ApplicationResponse, LiveProjectHostError> {
+        // Motion materialisation renders a complete scene. It needs only the
+        // session identity, so release the host lock before the render starts;
+        // otherwise preview, queries and clicks wait for the whole scene.
+        let request = match request {
+            ApplicationRequest::MotionMaterialize(request) => {
+                let (handler, identity) = {
+                    let state = self.lock_open()?;
+                    (state.motion_handler(), state.project_identity())
+                };
+                let response = match handler {
+                    Some(handler) => {
+                        handler.handle_motion_materialize_request(identity, request)
+                    }
+                    None => MotionMaterializeResponse::failure(
+                        "MOTION_RUNTIME_UNAVAILABLE",
+                        "the project host has no motion materialisation runtime",
+                    ),
+                };
+                return Ok(ApplicationResponse::MotionMaterialize(response));
+            }
+            request => request,
+        };
         let mut state = self.lock_open()?;
         let before = state.session.session().project_revision();
         let response = state.handle_application_request(request);
@@ -314,6 +353,14 @@ pub(crate) struct LiveProjectHostState {
 }
 
 impl LiveProjectHostState {
+    pub(crate) fn motion_handler(&self) -> Option<Arc<dyn MotionMaterializeHandler>> {
+        self.motion_handler.clone()
+    }
+
+    pub(crate) fn project_identity(&self) -> ProjectSessionIdentity {
+        ProjectSessionIdentity::from_session(self.session.session())
+    }
+
     pub(crate) fn handle_application_request(
         &mut self,
         request: ApplicationRequest,
@@ -350,7 +397,7 @@ impl LiveProjectHostState {
                 if let Some(handler) = &self.motion_handler {
                     ApplicationResponse::MotionMaterialize(
                         handler.handle_motion_materialize_request(
-                            self.session.session(),
+                            self.project_identity(),
                             motion_request,
                         ),
                     )

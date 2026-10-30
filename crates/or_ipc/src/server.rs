@@ -6,8 +6,8 @@ use crate::protocol::{
     read_frame, write_frame,
 };
 use or_core::{
-    ApplicationResponse, ProjectFileSession, ProjectFileSessionErrorCode, command_catalog,
-    query_catalog,
+    ApplicationRequest, ApplicationResponse, MotionMaterializeResponse, ProjectFileSession,
+    ProjectFileSessionErrorCode, command_catalog, query_catalog,
 };
 use serde::Deserialize;
 #[cfg(not(windows))]
@@ -335,18 +335,35 @@ fn serve(
     stopping: Arc<AtomicBool>,
 ) -> Result<(), IpcProtocolError> {
     let BoundEndpoint::Unix(listener) = bound;
+    listener
+        .set_nonblocking(true)
+        .map_err(IpcProtocolError::Io)?;
     loop {
-        let (mut stream, _) = match listener.accept() {
-            Ok(connection) => connection,
-            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(IpcProtocolError::Io(error)),
-        };
         if stopping.load(Ordering::SeqCst) {
             break;
         }
-        if let Ok(true) = handle_shared_connection(&mut stream, &shared, &auth_token) {
-            break;
-        }
+        let stream = match listener.accept() {
+            Ok((stream, _)) => stream,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(std::time::Duration::from_millis(2));
+                continue;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(IpcProtocolError::Io(error)),
+        };
+        stream.set_nonblocking(false).map_err(IpcProtocolError::Io)?;
+        // A motion render can take seconds. Serve each connection on its own
+        // thread so a render never queues the preview, queries or edits behind
+        // it; the project host state is still serialised by its own mutex.
+        let shared = Arc::clone(&shared);
+        let auth_token = auth_token.clone();
+        let worker_stopping = Arc::clone(&stopping);
+        thread::spawn(move || {
+            let mut stream = stream;
+            if let Ok(true) = handle_shared_connection(&mut stream, &shared, &auth_token) {
+                worker_stopping.store(true, Ordering::SeqCst);
+            }
+        });
     }
     drop(listener);
     Ok(())
@@ -477,6 +494,39 @@ fn dispatch_shared(
     shared: &Arc<Mutex<LiveProjectHostState>>,
     request: IpcRequest,
 ) -> (IpcResponseResult, bool) {
+    // A motion render can take seconds. Read its handler and identity, release
+    // the host lock, render, then answer; preview and edits stay responsive.
+    let request = match request {
+        IpcRequest::Application(ApplicationRequest::MotionMaterialize(request)) => {
+            let (handler, identity) = {
+                let Ok(state) = shared.lock() else {
+                    return (
+                        IpcResponseResult::Error(IpcErrorCode::ServerStateError),
+                        false,
+                    );
+                };
+                if state.closing {
+                    return (
+                        IpcResponseResult::Error(IpcErrorCode::ServerStateError),
+                        false,
+                    );
+                }
+                (state.motion_handler(), state.project_identity())
+            };
+            let response = match handler {
+                Some(handler) => handler.handle_motion_materialize_request(identity, request),
+                None => MotionMaterializeResponse::failure(
+                    "MOTION_RUNTIME_UNAVAILABLE",
+                    "the project host has no motion materialisation runtime",
+                ),
+            };
+            return (
+                dispatch_application_response(ApplicationResponse::MotionMaterialize(response)),
+                false,
+            );
+        }
+        request => request,
+    };
     let Ok(mut state) = shared.lock() else {
         return (
             IpcResponseResult::Error(IpcErrorCode::ServerStateError),

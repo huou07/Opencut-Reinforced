@@ -14,8 +14,9 @@ use std::{
     fs,
     path::PathBuf,
     str::FromStr,
-    sync::{Arc, Mutex},
-    time::Duration,
+    sync::{Arc, Mutex, mpsc},
+    thread,
+    time::{Duration, Instant},
 };
 use uuid::Uuid;
 
@@ -589,7 +590,7 @@ fn motion_materialisation_is_a_runtime_request_that_never_moves_the_revision() {
     impl MotionMaterializeHandler for FixedMotionHandler {
         fn handle_motion_materialize_request(
             &self,
-            session: &or_core::ProjectSession,
+            _identity: or_ipc::ProjectSessionIdentity,
             request: MotionMaterializeRequest,
         ) -> MotionMaterializeResponse {
             self.0.lock().unwrap().push(request.clone());
@@ -653,4 +654,97 @@ fn motion_materialisation_is_a_runtime_request_that_never_moves_the_revision() {
     );
     assert!(!host.is_dirty().unwrap());
     host.shutdown(false).unwrap();
+}
+
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+#[test]
+fn a_motion_render_does_not_block_queries() {
+    struct BlockingMotionHandler {
+        entered: mpsc::Sender<()>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+
+    impl MotionMaterializeHandler for BlockingMotionHandler {
+        fn handle_motion_materialize_request(
+            &self,
+            _identity: or_ipc::ProjectSessionIdentity,
+            _request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            self.entered.send(()).unwrap();
+            self.release.lock().unwrap().recv().unwrap();
+            MotionMaterializeResponse {
+                succeeded: true,
+                error_code: String::new(),
+                message: "ok".to_owned(),
+                output_path: "/tmp/fixture.mkv".to_owned(),
+                scene_id: "scene".to_owned(),
+                scene_name: "Fixture".to_owned(),
+                width: 640,
+                height: 360,
+                frame_rate_numerator: 30,
+                frame_rate_denominator: 1,
+                frame_count: 1,
+                duration: or_core::RationalTime::new(1, 30).unwrap(),
+                bytes_written: 1,
+            }
+        }
+    }
+
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path(), "Motion").unwrap();
+    let (entered_tx, entered_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let handler = Arc::new(BlockingMotionHandler {
+        entered: entered_tx,
+        release: Mutex::new(release_rx),
+    });
+    let host = Arc::new(
+        LiveProjectHost::start_with_handlers(
+            session,
+            Some(&directory.descriptor_path()),
+            None,
+            Some(handler),
+        )
+        .unwrap(),
+    );
+    let client = LocalIpcClient::open(&directory.descriptor_path()).unwrap();
+    let summary = host.describe().unwrap().summary;
+    let request = MotionMaterializeRequest::FromCode {
+        project_id: summary.project_id,
+        project_instance_id: summary.project_instance_id,
+        source_path: "/tmp/sample.rs".to_owned(),
+        destination: "/tmp/fixture.mkv".to_owned(),
+        frame_rate_numerator: 30,
+        frame_rate_denominator: 1,
+        width: 640,
+        height: 360,
+        title: "Fixture".to_owned(),
+    };
+    let worker = thread::spawn(move || {
+        client.application(ApplicationRequest::MotionMaterialize(request))
+    });
+    entered_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the motion handler should start");
+    let second_client = LocalIpcClient::open(&directory.descriptor_path()).unwrap();
+    let (query_tx, query_rx) = mpsc::channel();
+    let query = thread::spawn(move || {
+        let result = second_client.describe();
+        let _ = query_tx.send(result);
+    });
+    let started = Instant::now();
+    let queried = query_rx.recv_timeout(Duration::from_secs(2));
+    let elapsed = started.elapsed();
+    if !matches!(&queried, Ok(Ok(_))) {
+        let _ = release_tx.send(());
+        let _ = worker.join();
+        let _ = query.join();
+        panic!("an IPC query was blocked for {elapsed:?} while a motion scene rendered");
+    }
+    assert!(elapsed < Duration::from_secs(2));
+    let _ = release_tx.send(());
+    let response = worker.join().unwrap().unwrap();
+    assert!(matches!(response, ApplicationSuccess::MotionMaterialize(_)));
+    let _ = query.join().unwrap();
 }
