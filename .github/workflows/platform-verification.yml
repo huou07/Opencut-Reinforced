@@ -153,9 +153,19 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Prepare system media helpers outside the linked loader path
+        run: |
+          set -euo pipefail
+          for helper in ffprobe ffmpeg; do
+            printf '#!/bin/sh\nunset LD_LIBRARY_PATH\nexec /usr/bin/%s "$@"\n' "$helper" > "$RUNNER_TEMP/$helper"
+            chmod +x "$RUNNER_TEMP/$helper"
+          done
+
       - name: Run Rust tests
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+          OR_FFPROBE_PATH: ${{ runner.temp }}/ffprobe
+          OR_FFMPEG_PATH: ${{ runner.temp }}/ffmpeg
         run: cargo test --workspace
 
       - name: Verify the real ffprobe adapter with generated media
