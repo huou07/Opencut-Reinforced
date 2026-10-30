@@ -773,6 +773,40 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     return null;
   }
 
+  ProjectTimelineClip? get _selectedTextClip {
+    final clip = _selectedInspectorClip;
+    if (clip == null) return null;
+    return switch (clip.contentKind) {
+      ProjectTimelineClipContentKind.text ||
+      ProjectTimelineClipContentKind.caption => clip,
+      ProjectTimelineClipContentKind.media => null,
+    };
+  }
+
+  Future<void> _commitTextFormatting(
+    ProjectTimelineClip clip,
+    ProjectTextFormatting formatting,
+  ) async {
+    final project = widget.project;
+    final track = _selectedInspectorTrack;
+    final onUpdate = widget.onUpdateTimelineTextClip;
+    final text = clip.text;
+    if (project == null || track == null || onUpdate == null || text == null) {
+      return;
+    }
+    await onUpdate(
+      project,
+      track,
+      clip,
+      clip.timelineDuration,
+      ProjectTimelineTextContent(
+        kind: clip.contentKind,
+        text: text,
+        formatting: formatting,
+      ),
+    );
+  }
+
   ProjectTimelineClip? get _selectedInspectorClip {
     final selectedId = _selectedClipId;
     final project = widget.project;
@@ -1004,6 +1038,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onStateChanged: _onPreviewStateChanged,
                   selectedVisualSettings: _selectedVisualSettings,
                   onCommitTransform: _commitSelectedTransform,
+                  selectedTextClip: _selectedTextClip,
+                  onCommitTextFormatting: _commitTextFormatting,
                   hasTimelineContent: widget.timelineClipPages.values.any(
                     (page) => page.totalCount > 0,
                   ),
@@ -1181,6 +1217,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             previewSeekPosition: widget.previewSeekPosition,
             onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
             onStateChanged: _onPreviewStateChanged,
+            selectedTextClip: _selectedTextClip,
+            onCommitTextFormatting: _commitTextFormatting,
           ),
         ),
         Expanded(

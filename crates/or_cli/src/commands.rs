@@ -4,8 +4,9 @@ use or_core::{
     MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem, MotionMaterializeRequest,
     OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError, ProjectFileSession,
     ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
-    TimelineClipState, TrackId, TrackKind, TrackState, TranscriptionRequest, TranscriptionResponse,
+    FontIdentity, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextAlignment,
+    TextBackground, TextColor, TextFormatting, TextVerticalAnchor, TextWeight, TimelineClipState,
+    TrackId, TrackKind, TrackState, TranscriptionRequest, TranscriptionResponse,
     VisualSettings, apply_project_recovery, command_catalog, discard_project_recovery,
     encode_caption_file, inspect_project_recovery, parse_caption_file, prepare_media_import,
     query_catalog,
@@ -2847,6 +2848,223 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "set-text" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--clip",
+                    "--text",
+                    "--duration",
+                    "--font",
+                    "--size-pt",
+                    "--weight",
+                    "--align",
+                    "--color",
+                    "--anchor",
+                    "--offset-x",
+                    "--offset-y",
+                    "--opacity",
+                    "--background",
+                    "--background-padding",
+                    "--background-opacity",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let page = timeline_query(
+                &path,
+                attached,
+                "timeline.clips",
+                json!({
+                    "track_id": track_id,
+                    "offset": 0,
+                    "limit": MAX_TIMELINE_CLIP_PAGE_SIZE,
+                }),
+                json,
+            )?;
+            let page = page.timeline_clip_page_v2.ok_or_else(|| {
+                CliError::operation_message(json, "timeline.clips returned no page")
+            })?;
+            let clip = page
+                .items
+                .iter()
+                .find(|clip| clip.clip_id == clip_id)
+                .ok_or_else(|| {
+                    CliError::operation_message(json, "the clip is not on that track")
+                })?;
+            let (mut text, mut formatting, is_caption) = match &clip.content {
+                ClipContent::Text { text, formatting } => (text.clone(), *formatting, false),
+                ClipContent::Caption { text, formatting } => (text.clone(), *formatting, true),
+                ClipContent::Media { .. } => {
+                    return Err(CliError::usage(
+                        json,
+                        "set-text needs a title or caption clip",
+                    ));
+                }
+            };
+            if let Some(value) = options.value("--text") {
+                text = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--text must be valid UTF-8"))?
+                    .to_owned();
+            }
+            if let Some(value) = options.value("--font") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--font must be valid UTF-8"))?;
+                formatting.font = match name {
+                    "inter" => FontIdentity::BundledInter,
+                    "be-vietnam-pro" => FontIdentity::BeVietnamPro,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--font must be inter or be-vietnam-pro",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--size-pt") {
+                let points = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--size-pt must be valid UTF-8"))?
+                    .parse::<f64>()
+                    .map_err(|_| CliError::usage(json, "--size-pt must be a number"))?;
+                if !(4.0..=256.0).contains(&points) {
+                    return Err(CliError::usage(json, "--size-pt must be 4..256"));
+                }
+                formatting.size_milli_points = (points * 1000.0).round() as u32;
+            }
+            if let Some(value) = options.value("--weight") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--weight must be valid UTF-8"))?;
+                formatting.weight = match name {
+                    "regular" => TextWeight::Regular,
+                    "medium" => TextWeight::Medium,
+                    "semibold" => TextWeight::Semibold,
+                    "bold" => TextWeight::Bold,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--weight must be regular, medium, semibold or bold",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--align") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--align must be valid UTF-8"))?;
+                formatting.alignment = match name {
+                    "left" => TextAlignment::Start,
+                    "center" => TextAlignment::Center,
+                    "right" => TextAlignment::End,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--align must be left, center or right",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--color") {
+                formatting.color = parse_text_color(value, json)?;
+            }
+            if let Some(value) = options.value("--anchor") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--anchor must be valid UTF-8"))?;
+                formatting.anchor = match name {
+                    "top" => TextVerticalAnchor::Top,
+                    "center" => TextVerticalAnchor::Center,
+                    "bottom" => TextVerticalAnchor::Bottom,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--anchor must be top, center or bottom",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--offset-x") {
+                formatting.offset_x_basis_points = parse_i16(value, "--offset-x", json)?;
+            }
+            if let Some(value) = options.value("--offset-y") {
+                formatting.offset_y_basis_points = parse_i16(value, "--offset-y", json)?;
+            }
+            if let Some(value) = options.value("--opacity") {
+                formatting.opacity_basis_points = parse_u16(value, "--opacity", json)?;
+                if formatting.opacity_basis_points > 10_000 {
+                    return Err(CliError::usage(json, "--opacity must be 0..10000"));
+                }
+            }
+            if let Some(value) = options.value("--background") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--background must be valid UTF-8"))?;
+                if name == "none" {
+                    formatting.background = None;
+                } else {
+                    let color = parse_text_color(value, json)?;
+                    let padding = match options.value("--background-padding") {
+                        Some(padding) => parse_u32(padding, "--background-padding", json)?,
+                        None => formatting
+                            .background
+                            .map_or(8_000, |background| background.padding_milli_points),
+                    };
+                    formatting.background = Some(TextBackground {
+                        color,
+                        padding_milli_points: padding,
+                    });
+                }
+            }
+            if let Some(value) = options.value("--background-opacity") {
+                let alpha = parse_u16(value, "--background-opacity", json)?;
+                if alpha > 255 {
+                    return Err(CliError::usage(
+                        json,
+                        "--background-opacity must be 0..255",
+                    ));
+                }
+                if let Some(background) = formatting.background.as_mut() {
+                    background.color.alpha = alpha as u8;
+                }
+            }
+            let duration = match options.value("--duration") {
+                Some(value) => parse_cli_rational(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--duration must be valid UTF-8"))?,
+                    "--duration",
+                    json,
+                )?,
+                None => clip.timeline_duration,
+            };
+            let content = if is_caption {
+                ClipContent::Caption { text, formatting }
+            } else {
+                ClipContent::Text { text, formatting }
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.update",
+                json!({
+                    "clip_id": clip_id,
+                    "timeline_duration": rational_value(duration),
+                    "content": content,
+                    "settings": clip.settings,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "move-clip" => {
             let options = Options::parse(
                 action_args,
@@ -3109,7 +3327,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, import-captions, move-clip, trim-clip, split-clip, duck-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, set-text, import-captions, move-clip, trim-clip, split-clip, duck-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -4502,6 +4720,72 @@ fn pointer_descriptor(path: &Path) -> Option<PathBuf> {
     } else {
         Some(path.parent().unwrap_or(Path::new("")).join(descriptor))
     }
+}
+
+fn parse_text_color(value: &std::ffi::OsStr, json: bool) -> Result<TextColor, CliError> {
+    let raw = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "color must be valid UTF-8"))?;
+    let hex = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
+    if hex.len() != 6 && hex.len() != 8 {
+        return Err(CliError::usage(
+            json,
+            "color must be #RRGGBB or #RRGGBBAA",
+        ));
+    }
+    let parsed = u32::from_str_radix(hex, 16)
+        .map_err(|_| CliError::usage(json, "color must be hexadecimal"))?;
+    if hex.len() == 6 {
+        Ok(TextColor {
+            red: ((parsed >> 16) & 0xFF) as u8,
+            green: ((parsed >> 8) & 0xFF) as u8,
+            blue: (parsed & 0xFF) as u8,
+            alpha: 255,
+        })
+    } else {
+        Ok(TextColor {
+            red: ((parsed >> 24) & 0xFF) as u8,
+            green: ((parsed >> 16) & 0xFF) as u8,
+            blue: ((parsed >> 8) & 0xFF) as u8,
+            alpha: (parsed & 0xFF) as u8,
+        })
+    }
+}
+
+fn parse_i16(
+    value: &std::ffi::OsStr,
+    flag: &str,
+    json: bool,
+) -> Result<i16, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .parse::<i16>()
+        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
+}
+
+fn parse_u16(
+    value: &std::ffi::OsStr,
+    flag: &str,
+    json: bool,
+) -> Result<u16, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .parse::<u16>()
+        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
+}
+
+fn parse_u32(
+    value: &std::ffi::OsStr,
+    flag: &str,
+    json: bool,
+) -> Result<u32, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .parse::<u32>()
+        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
 }
 
 fn media_project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliError> {

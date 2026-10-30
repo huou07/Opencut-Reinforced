@@ -425,6 +425,31 @@ class ProjectTextFormatting {
     anchor: ProjectTextVerticalAnchor.bottom,
   );
 
+  ProjectTextFormatting copyWith({
+    ProjectFontIdentity? font,
+    int? sizeMilliPoints,
+    ProjectTextWeight? weight,
+    ProjectTextAlignment? alignment,
+    ProjectTextColor? color,
+    ProjectTextVerticalAnchor? anchor,
+    int? offsetXBasisPoints,
+    int? offsetYBasisPoints,
+    ProjectTextBackground? background,
+    bool clearBackground = false,
+    int? opacityBasisPoints,
+  }) => ProjectTextFormatting(
+    font: font ?? this.font,
+    sizeMilliPoints: sizeMilliPoints ?? this.sizeMilliPoints,
+    weight: weight ?? this.weight,
+    alignment: alignment ?? this.alignment,
+    color: color ?? this.color,
+    anchor: anchor ?? this.anchor,
+    offsetXBasisPoints: offsetXBasisPoints ?? this.offsetXBasisPoints,
+    offsetYBasisPoints: offsetYBasisPoints ?? this.offsetYBasisPoints,
+    background: clearBackground ? null : (background ?? this.background),
+    opacityBasisPoints: opacityBasisPoints ?? this.opacityBasisPoints,
+  );
+
   final ProjectFontIdentity font;
   final int sizeMilliPoints;
   final ProjectTextWeight weight;

@@ -13,6 +13,7 @@ import 'editor_frame_rate.dart';
 import 'editor_labels.dart';
 import 'editor_panel_header.dart';
 import 'editor_rational_time.dart';
+import 'viewer_caption_overlay.dart';
 import 'viewer_transform_overlay.dart';
 
 class EditorViewerPanel extends StatefulWidget {
@@ -28,6 +29,8 @@ class EditorViewerPanel extends StatefulWidget {
     this.hasTimelineContent = false,
     this.selectedVisualSettings,
     this.onCommitTransform,
+    this.selectedTextClip,
+    this.onCommitTextFormatting,
   });
 
   final bool compact;
@@ -43,6 +46,12 @@ class EditorViewerPanel extends StatefulWidget {
   /// the viewer can manipulate. A non-null value puts handles on the stage.
   final ProjectTimelineVisualSettings? selectedVisualSettings;
   final ValueChanged<ProjectTimelineVisualSettings>? onCommitTransform;
+
+  /// The selected title or caption, if the selection is one. A text selection
+  /// shows the caption overlay instead of the transform box.
+  final ProjectTimelineClip? selectedTextClip;
+  final void Function(ProjectTimelineClip, ProjectTextFormatting)?
+  onCommitTextFormatting;
   final ProjectRationalTime? previewSeekPosition;
   final VoidCallback? onPreviewSeekConsumed;
   final ValueChanged<ProjectPreviewState> onStateChanged;
@@ -627,7 +636,23 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                           ? 'Viewer texture unavailable'
                           : 'Open a project to preview',
                     ),
-                  if (widget.selectedVisualSettings != null &&
+                  if (widget.selectedTextClip != null &&
+                      widget.onCommitTextFormatting != null)
+                    ViewerCaptionOverlay(
+                      key: const ValueKey('viewer-caption-overlay'),
+                      canvasSize: Size(
+                        (preview?.width ?? 0).toDouble(),
+                        (preview?.height ?? 0).toDouble(),
+                      ),
+                      clip: widget.selectedTextClip!,
+                      onCommit: (formatting) =>
+                          widget.onCommitTextFormatting!(
+                            widget.selectedTextClip!,
+                            formatting,
+                          ),
+                      enabled: !_busy,
+                    )
+                  else if (widget.selectedVisualSettings != null &&
                       widget.onCommitTransform != null)
                     ViewerTransformOverlay(
                       key: const ValueKey('viewer-transform-overlay'),

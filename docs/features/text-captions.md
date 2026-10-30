@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-10-30
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -28,7 +28,14 @@ defaulted so every project written before them renders unchanged:
 
 The Edit Title/Caption dialog writes all of these through the existing
 `timeline.clip.update` command; the renderer measures the shaped text, so the
-box follows real advances rather than a character-count estimate.
+box follows real advances rather than a character-count estimate. The dialog
+offers a full colour picker for text and for the background box (alpha included;
+a cleared background is transparent), and the viewer draws a selected title or
+caption as a direct-manipulation box: drag the interior to move it, drag the
+corner handle to resize the font, and release to commit one ordinary clip
+update. The same fields are available without the GUI through
+`or timeline set-text` (`--color`, `--background`, `--background-padding`,
+`--size-pt`, `--font`, `--anchor`, `--offset-x`, `--offset-y`, `--opacity`).
 
 ## Captions
 

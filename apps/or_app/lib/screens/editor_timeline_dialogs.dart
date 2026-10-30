@@ -7,6 +7,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
+import '../widgets/or_color_field.dart';
 import 'editor_timeline_shared.dart';
 
 class TimelineTextClipEdit {
@@ -203,28 +204,16 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
   var font = formatting.font;
   var weight = formatting.weight;
   var alignment = formatting.alignment;
-  final colors = <ProjectTextColor>[
-    ProjectTextColor.white,
-    ProjectTextColor(red: 255, green: 220, blue: 90, alpha: 255),
-    ProjectTextColor(red: 110, green: 210, blue: 255, alpha: 255),
-  ];
-  var colorIndex = colors.indexWhere(
-    (color) =>
-        color.red == formatting.color.red &&
-        color.green == formatting.color.green &&
-        color.blue == formatting.color.blue &&
-        color.alpha == formatting.color.alpha,
-  );
-  if (colorIndex < 0) {
-    colors.add(formatting.color);
-    colorIndex = colors.length - 1;
-  }
+  var textColor = formatting.color;
   var anchor = formatting.anchor;
   var offsetX = formatting.offsetXBasisPoints.toDouble();
   var offsetY = formatting.offsetYBasisPoints.toDouble();
   var opacityPercent = formatting.opacityBasisPoints / 100.0;
   var backgroundEnabled = formatting.background != null;
   var backgroundPercent = (formatting.background?.color.alpha ?? 170) / 2.55;
+  var backgroundRed = formatting.background?.color.red ?? 0;
+  var backgroundGreen = formatting.background?.color.green ?? 0;
+  var backgroundBlue = formatting.background?.color.blue ?? 0;
   bool fieldsAreValid() {
     final durationValue = ProjectRationalTime.tryParse(durationController.text);
     final sizePoints = double.tryParse(sizeController.text.trim());
@@ -386,31 +375,12 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                   },
                 ),
                 const SizedBox(height: OrSpacing.x2),
-                DropdownButtonFormField<int>(
-                  isExpanded: true,
-                  key: const ValueKey('timeline-text-color'),
-                  initialValue: colorIndex,
-                  decoration: const InputDecoration(
-                    labelText: 'Color',
-                    isDense: true,
-                  ),
-                  items: [
-                    const DropdownMenuItem(value: 0, child: Text('White')),
-                    const DropdownMenuItem(value: 1, child: Text('Yellow')),
-                    const DropdownMenuItem(value: 2, child: Text('Cyan')),
-                    if (colors.length > 3)
-                      const DropdownMenuItem(
-                        value: 3,
-                        child: Text('Current custom color'),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setDialogState(() => colorIndex = value);
-                    updateValidity();
-                  },
+                OrColorField(
+                  label: 'Text colour',
+                  color: textColor,
+                  onChanged: (value) =>
+                      setDialogState(() => textColor = value),
                 ),
-                const SizedBox(height: OrSpacing.x2),
                 DropdownButtonFormField<ProjectTextVerticalAnchor>(
                   isExpanded: true,
                   key: const ValueKey('timeline-text-anchor'),
@@ -476,6 +446,22 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                       setDialogState(() => backgroundEnabled = value),
                 ),
                 if (backgroundEnabled)
+                  OrColorField(
+                    label: 'Background colour',
+                    color: ProjectTextColor(
+                      red: backgroundRed,
+                      green: backgroundGreen,
+                      blue: backgroundBlue,
+                      alpha: (backgroundPercent * 2.55).round(),
+                    ),
+                    onChanged: (value) => setDialogState(() {
+                      backgroundRed = value.red;
+                      backgroundGreen = value.green;
+                      backgroundBlue = value.blue;
+                      backgroundPercent = value.alpha / 2.55;
+                    }),
+                  ),
+                if (backgroundEnabled)
                   textStyleSlider(
                     keyName: 'timeline-text-background-opacity',
                     label: 'Box opacity',
@@ -525,7 +511,7 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                             sizeMilliPoints: (sizePoints * 1000).round(),
                             weight: weight,
                             alignment: alignment,
-                            color: colors[colorIndex],
+                            color: textColor,
                             anchor: anchor,
                             offsetXBasisPoints: offsetX.round(),
                             offsetYBasisPoints: offsetY.round(),
@@ -533,9 +519,9 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                             background: backgroundEnabled
                                 ? ProjectTextBackground(
                                     color: ProjectTextColor(
-                                      red: 0,
-                                      green: 0,
-                                      blue: 0,
+                                      red: backgroundRed,
+                                      green: backgroundGreen,
+                                      blue: backgroundBlue,
                                       alpha: (backgroundPercent * 2.55).round(),
                                     ),
                                   )
