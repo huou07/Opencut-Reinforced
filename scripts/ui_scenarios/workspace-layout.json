@@ -1,0 +1,38 @@
+{
+  "name": "workspace-layout",
+  "harness": "or_ui",
+  "description": "Captures the editing workspace at the two reference widths so a chrome change can be read as rectangles and pixels instead of a description. Creates one project, adds a video track and a text clip, then records the tree and a screenshot at 1440x900 and 1280x800. Every step names a widget key or a semantics label; no step names a coordinate and no step injects canonical project state.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": ["wav"],
+  "steps": [
+    { "op": "shot", "name": "home-1440" },
+    { "op": "tree", "name": "home-1440" },
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    {
+      "op": "enter_text",
+      "selector": { "key": "new-project-name" },
+      "value": "Workspace layout"
+    },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait", "text": "No timeline tracks", "budget_ms": 20000 },
+    { "op": "shot", "name": "editor-empty-1440" },
+    { "op": "tree", "name": "editor-empty-1440" },
+    { "op": "tap", "selector": { "key": "timeline-empty-add-video" } },
+    { "op": "wait", "text": "V1", "budget_ms": 20000 },
+    { "op": "picker", "next": "media" },
+    { "op": "tap", "selector": { "key": "media-import" } },
+    { "op": "wait", "text": "fixture.wav", "budget_ms": 20000 },
+    { "op": "shot", "name": "editor-track-1440" },
+    { "op": "tree", "name": "editor-track-1440" },
+    { "op": "tap", "selector": { "key": "editor-tool-text" } },
+    { "op": "shot", "name": "text-panel-1440" },
+    { "op": "tap", "selector": { "key": "editor-tool-media" } },
+    { "op": "resize", "width": 1280, "height": 800 },
+    { "op": "shot", "name": "editor-track-1280" },
+    { "op": "tree", "name": "editor-track-1280" },
+    { "op": "resize", "width": 1024, "height": 768 },
+    { "op": "shot", "name": "editor-track-1024" },
+    { "op": "tree", "name": "editor-track-1024" }
+  ]
+}

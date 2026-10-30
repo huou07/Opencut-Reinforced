@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -28,6 +30,9 @@ class OrSnackBar {
     BuildContext context,
     String message, {
     double bottomInset = 0,
+    String? actionLabel,
+    VoidCallback? onAction,
+    Duration duration = displayDuration,
   }) {
     final margin = bottomInset <= 0
         ? null
@@ -51,7 +56,10 @@ class OrSnackBar {
           margin: margin,
           backgroundColor: OrColors.surface,
           showCloseIcon: true,
-          duration: displayDuration,
+          duration: duration,
+          action: actionLabel == null || onAction == null
+              ? null
+              : SnackBarAction(label: actionLabel, onPressed: onAction),
         ),
       );
   }
@@ -267,38 +275,54 @@ class OrEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: OrSpacing.x4,
-        vertical: OrSpacing.x12,
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: OrColors.textMuted, size: 24),
-          const SizedBox(height: OrSpacing.x3),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: OrType.controlSize,
-              fontWeight: FontWeight.w600,
+    // The same empty state lives in full pages and in short side panels (the
+    // Inspector at 800x600 measured a 134 px box against 96 px of fixed vertical
+    // padding and overflowed by 49 px on 2026-10-25). Scale the padding to the
+    // space it actually has and keep the content scrollable so a short panel
+    // never clips it.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxHeight;
+        final vertical = available.isFinite
+            ? math.min(OrSpacing.x12, math.max(OrSpacing.x2, available * 0.08))
+            : OrSpacing.x12;
+        return SingleChildScrollView(
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: OrSpacing.x4,
+              vertical: vertical,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: OrColors.textMuted, size: 24),
+                const SizedBox(height: OrSpacing.x3),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: OrType.controlSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: OrType.metadataSize,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: OrSpacing.x2),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 380),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: OrType.metadataSize,
-                height: 1.45,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -333,6 +357,8 @@ class OrBadge extends StatelessWidget {
   }
 }
 
+/// A control for work the product does not perform yet. It is not disabled:
+/// pressing it explains the boundary, so a dead control never looks like a bug.
 class OrUnavailableButton extends StatelessWidget {
   const OrUnavailableButton({
     super.key,
@@ -347,75 +373,26 @@ class OrUnavailableButton extends StatelessWidget {
   final String reason;
   final VoidCallback onPressed;
   final IconData? icon;
+
+  /// Matches the filled weight of the action it stands in for.
   final bool primary;
 
   @override
   Widget build(BuildContext context) {
+    final iconWidget = Icon(icon ?? Icons.info_outline, size: 16);
     return Tooltip(
       message: reason,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon ?? Icons.info_outline, size: 18),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: primary ? OrColors.textSecondary : OrColors.text,
-          backgroundColor: primary ? OrColors.surface : Colors.transparent,
-          side: BorderSide(
-            color: primary ? OrColors.border : OrColors.borderStrong,
-          ),
-          minimumSize: const Size(0, OrControlSizes.buttonTouch),
-          textStyle: const TextStyle(fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
-}
-
-class OrDisabledChip extends StatelessWidget {
-  const OrDisabledChip(this.label, {super.key});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Unavailable in this Developer Preview',
-      child: OutlinedButton(
-        onPressed: null,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: OrColors.textMuted,
-          disabledForegroundColor: OrColors.textMuted,
-          side: const BorderSide(color: OrColors.border),
-          minimumSize: const Size(0, OrControlSizes.button),
-          padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-          textStyle: const TextStyle(fontSize: OrType.metadataCompactSize),
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-}
-
-class OrSearchField extends StatelessWidget {
-  const OrSearchField({super.key, required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 260,
-      child: TextField(
-        enabled: false,
-        decoration: InputDecoration(
-          prefixIcon: const Icon(Icons.search_outlined, size: 18),
-          hintText: label,
-          suffixIcon: const Tooltip(
-            message: 'Catalog search is unavailable in this Developer Preview',
-            child: Icon(Icons.info_outline, size: 16),
-          ),
-        ),
-      ),
+      child: primary
+          ? FilledButton.icon(
+              onPressed: onPressed,
+              icon: iconWidget,
+              label: Text(label),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: iconWidget,
+              label: Text(label),
+            ),
     );
   }
 }

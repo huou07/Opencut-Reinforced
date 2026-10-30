@@ -38,12 +38,12 @@ const MAX_REDUCTION_DB: u32 = 97;
 
 /// The statistics window the floor estimate averages over. Short enough that a
 /// pause in speech is several windows, long enough that one sample is not noise.
-const RMS_WINDOW_ARGUMENT: &str = "length=0.1";
+/// Mono sample rate of the temporary decode, and the window it is cut into.
+const SAMPLE_RATE: u32 = 48_000;
+/// 100 ms at [`SAMPLE_RATE`], the same window the removed filter chain used.
+const WINDOW_SAMPLES: usize = (SAMPLE_RATE as usize) / 10;
 
 /// The key `ametadata` prints for each window's RMS level, without the separator its
-/// value follows.
-const RMS_LEVEL_KEY: &str = "lavfi.astats.Overall.RMS_level";
-
 /// How far above the quietest measured windows the filter's floor is set.
 const NOISE_FLOOR_MARGIN_DB: i32 = 2;
 
@@ -251,17 +251,8 @@ pub fn clean_audio(request: &AudioCleanupRequest) -> Result<AudioCleanupResult, 
 /// Pure, so the shape of the helper's output is tested without running one. Lines
 /// that are not an RMS figure — the `frame:`/`pts:` headers `ametadata` also prints —
 /// are ignored, and a run with no figures at all is an empty vector rather than an
-/// error, because "the helper printed nothing measurable" is the caller's decision.
-pub fn parse_window_rms_db(output: &str) -> Vec<f64> {
-    output
-        .lines()
-        .filter_map(|line| line.trim().strip_prefix(RMS_LEVEL_KEY))
-        .filter_map(|value| value.strip_prefix('='))
-        .filter_map(|value| value.trim().parse::<f64>().ok())
-        .filter(|value| value.is_finite())
-        .collect()
-}
-
+/// error. This keeps a helper failure distinguishable from a silent recording.
+///
 /// The value at `percentile` (0.0..=1.0) of a sample, using nearest-rank.
 ///
 /// The floor estimate is a low percentile rather than the mean: a recording's mean
@@ -278,38 +269,104 @@ pub fn percentile(samples: &[f64], percentile: f64) -> Option<f64> {
     sorted.get(rank - 1).copied()
 }
 
-/// The helper arguments that print one RMS figure per statistics window.
+/// The helper arguments that decode the source to one mono WAV.
 ///
-/// Pure, so the exact chain is asserted without a process; see the test that pins the
-/// missing `=` separator, which is easy to get wrong and produces silence.
-fn statistics_arguments(source: &Path) -> Vec<OsString> {
+/// The measurement cannot be delegated to an FFmpeg filter chain: the FFmpeg the
+/// app ships is built for media interchange only, without the `null` muxer, the
+/// raw PCM muxers or the `astats`/`ametadata` filters. A WAV is the one container
+/// every build writes, and the windows are then computed here.
+fn statistics_arguments(source: &Path, decoded: &Path) -> Vec<OsString> {
     [
         "-hide_banner".to_owned(),
         "-nostdin".to_owned(),
         "-loglevel".to_owned(),
         "error".to_owned(),
+        "-y".to_owned(),
         "-i".to_owned(),
         source.display().to_string(),
         "-vn".to_owned(),
-        "-af".to_owned(),
-        format!(
-            "astats=metadata=1:reset=1:{RMS_WINDOW_ARGUMENT},\
-             ametadata=print:key={RMS_LEVEL_KEY}:file=-"
-        ),
+        "-ac".to_owned(),
+        "1".to_owned(),
+        "-ar".to_owned(),
+        SAMPLE_RATE.to_string(),
         "-f".to_owned(),
-        "null".to_owned(),
-        "-".to_owned(),
+        "wav".to_owned(),
+        decoded.display().to_string(),
     ]
     .into_iter()
     .map(OsString::from)
     .collect()
 }
 
-/// Measures the material's own noise floor, in whole dBFS.
+/// Reads the little-endian samples of a 16-bit mono WAV file.
 ///
-/// Runs the helper over the source once with per-window RMS statistics and takes a
-/// low percentile of them. This is the figure [`clean_audio`] must be told: a value
-/// below the real floor leaves the noise, and a value above it takes the audio.
+/// The chunks are walked rather than assumed: `LIST` and `fact` chunks legitimately
+/// precede `data`, and reading from a fixed offset would decode header bytes as
+/// audio.
+fn read_wav_pcm16(path: &Path) -> Option<Vec<i16>> {
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut offset = 12;
+    while offset + 8 <= bytes.len() {
+        let id = &bytes[offset..offset + 4];
+        let size = u32::from_le_bytes([
+            bytes[offset + 4],
+            bytes[offset + 5],
+            bytes[offset + 6],
+            bytes[offset + 7],
+        ]) as usize;
+        let body = offset + 8;
+        if id == b"data" {
+            let end = body.saturating_add(size).min(bytes.len());
+            return Some(
+                bytes[body..end]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|pair| i16::from_le_bytes(*pair))
+                    .collect(),
+            );
+        }
+        // Chunks are word aligned, so an odd size is followed by one pad byte.
+        offset = body.saturating_add(size).saturating_add(size % 2);
+    }
+    None
+}
+
+/// Root-mean-square level of each non-overlapping window, in dBFS.
+///
+/// The windows are the measurement: a percentile over them answers "how quiet is
+/// this recording when nobody is speaking", which a single average cannot. A window
+/// of pure digital silence has no finite level and is skipped rather than reported
+/// as negative infinity.
+pub fn window_rms_dbfs(samples: &[i16], window_len: usize) -> Vec<f64> {
+    if window_len == 0 {
+        return Vec::new();
+    }
+    samples
+        .chunks(window_len)
+        .filter_map(|window| {
+            if window.is_empty() {
+                return None;
+            }
+            let sum = window
+                .iter()
+                .map(|sample| {
+                    let value = f64::from(*sample) / 32_768.0;
+                    value * value
+                })
+                .sum::<f64>();
+            let mean = sum / window.len() as f64;
+            if mean <= 0.0 {
+                return None;
+            }
+            Some(10.0 * mean.log10())
+        })
+        .collect()
+}
+
 pub fn measure_noise_floor_db(
     source: &Path,
     percentile_rank: f64,
@@ -320,20 +377,23 @@ pub fn measure_noise_floor_db(
         ));
     }
     let executable = ffmpeg_executable();
-    let arguments = statistics_arguments(source);
+    let decoded = std::env::temp_dir().join(format!(
+        "or-noise-floor-{}-{}.wav",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or_default()
+    ));
+    let arguments = statistics_arguments(source, &decoded);
 
     let mut child = Command::new(&executable)
         .args(&arguments)
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
+        .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| AudioCleanupError::new(AudioCleanupErrorCode::BackendUnavailable))?;
-    let mut output = String::new();
-    if let Some(mut stdout) = child.stdout.take() {
-        use std::io::Read;
-        let _ = stdout.read_to_string(&mut output);
-    }
     let deadline = Instant::now() + CLEANUP_TIMEOUT;
     let status = loop {
         match child.try_wait() {
@@ -342,12 +402,14 @@ pub fn measure_noise_floor_db(
                 if Instant::now() >= deadline {
                     let _ = child.kill();
                     let _ = child.wait();
+                    let _ = std::fs::remove_file(&decoded);
                     return Err(AudioCleanupError::new(AudioCleanupErrorCode::TimedOut));
                 }
                 std::thread::sleep(POLL_INTERVAL);
             }
             Err(_) => {
                 let _ = child.kill();
+                let _ = std::fs::remove_file(&decoded);
                 return Err(AudioCleanupError::new(
                     AudioCleanupErrorCode::GenerationFailed,
                 ));
@@ -355,12 +417,22 @@ pub fn measure_noise_floor_db(
         }
     };
     if !status.success() {
+        let _ = std::fs::remove_file(&decoded);
         return Err(AudioCleanupError::new(
             AudioCleanupErrorCode::GenerationFailed,
         ));
     }
 
-    let windows = parse_window_rms_db(&output);
+    let samples = read_wav_pcm16(&decoded);
+    let _ = std::fs::remove_file(&decoded);
+    let samples =
+        samples.ok_or_else(|| AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed))?;
+    let windows = window_rms_dbfs(&samples, WINDOW_SAMPLES);
+    // A recording with no measurable window is silent, which is a fact about the
+    // material rather than a failed run; the caller can say so.
+    if windows.is_empty() {
+        return Err(AudioCleanupError::new(AudioCleanupErrorCode::SilentSource));
+    }
     let floor = percentile(&windows, percentile_rank)
         .ok_or_else(|| AudioCleanupError::new(AudioCleanupErrorCode::GenerationFailed))?;
     // The floor is passed to the filter two dB above the quietest windows: the
@@ -435,7 +507,7 @@ mod tests {
     fn implausible_parameters_are_refused() {
         for noise_floor_db in [-200, 0, 12] {
             let error = clean_audio(&AudioCleanupRequest {
-                source: PathBuf::from("/etc/hostname"),
+                source: std::env::current_exe().unwrap(),
                 noise_floor_db,
                 ..request()
             })
@@ -443,7 +515,7 @@ mod tests {
             assert_eq!(error.code(), AudioCleanupErrorCode::InvalidArguments);
         }
         let error = clean_audio(&AudioCleanupRequest {
-            source: PathBuf::from("/etc/hostname"),
+            source: std::env::current_exe().unwrap(),
             reduction_db: 0,
             ..request()
         })
@@ -452,45 +524,70 @@ mod tests {
     }
 
     #[test]
-    fn the_statistics_arguments_name_the_key_once() {
-        // A trailing '=' in the key would make the filter argument
-        // "...RMS_level=:file=-", which parses to nothing.
-        let arguments = statistics_arguments(Path::new("/tmp/or-source.wav"))
+    fn the_statistics_arguments_decode_one_mono_wav() {
+        // The bundle's FFmpeg has no null muxer and no astats filter, so the
+        // measurement can only be a WAV the crate reads itself.
+        let decoded = Path::new("/tmp/or-decoded.wav");
+        let arguments = statistics_arguments(Path::new("/tmp/or-source.wav"), decoded)
             .iter()
             .map(|argument| argument.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
-        let chain = arguments
-            .iter()
-            .find(|argument| argument.starts_with("astats="))
-            .expect("the statistics chain is present");
         assert!(
-            chain.contains("key=lavfi.astats.Overall.RMS_level:file=-"),
-            "{chain}"
+            arguments.windows(2).any(|pair| pair == ["-ac", "1"]),
+            "{arguments:?}"
+        );
+        assert!(
+            arguments.windows(2).any(|pair| pair == ["-f", "wav"]),
+            "{arguments:?}"
+        );
+        assert_eq!(
+            arguments.last().map(String::as_str),
+            Some("/tmp/or-decoded.wav")
+        );
+        assert!(
+            !arguments.iter().any(|argument| argument.contains("astats")),
+            "{arguments:?}"
         );
     }
 
     #[test]
-    fn the_statistics_parser_reads_only_rms_figures() {
-        let output = "frame:0    pts:0       pts_time:0\n\
-             lavfi.astats.Overall.RMS_level=-23.201059\n\
-             frame:1    pts:4096    pts_time:0.0853333\n\
-             lavfi.astats.Overall.RMS_level=-21.5\n\
-             lavfi.astats.Overall.Peak_level=-18.0\n\
-             lavfi.astats.Overall.RMS_level=nan\n";
-        assert_eq!(parse_window_rms_db(output), vec![-23.201059, -21.5]);
-        assert!(parse_window_rms_db("no figures here").is_empty());
+    fn window_rms_reports_levels_and_skips_digital_silence() {
+        // Full-scale halving is -6.02 dBFS; a silent window has no finite level.
+        let windows = window_rms_dbfs(&[16_384, -16_384, 16_384, -16_384, 0, 0], 2);
+        assert_eq!(windows.len(), 2);
+        assert!((windows[0] + 6.0206).abs() < 0.01, "{windows:?}");
+        assert_eq!(window_rms_dbfs(&[0, 0, 0, 0], 2), Vec::<f64>::new());
     }
 
     #[test]
-    fn a_silent_source_is_reported_as_such_rather_than_as_a_failure() {
-        // `astats` reports -inf for digital silence, and the parser drops non-finite
-        // figures, so the set is empty and the caller learns the material has no
-        // measurable audio instead of being told the run failed.
-        let output = "frame:0    pts:0       pts_time:0\n\
-             lavfi.astats.Overall.RMS_level=-inf\n\
-             frame:1    pts:512     pts_time:0.064\n\
-             lavfi.astats.Overall.RMS_level=-inf\n";
-        assert!(parse_window_rms_db(output).is_empty());
+    fn a_wav_written_by_the_helper_is_read_back_as_samples() {
+        let path = std::env::temp_dir().join(format!("or-wav-read-{}.wav", std::process::id()));
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36u32 + 8).to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(b"LIST");
+        bytes.extend_from_slice(&4u32.to_le_bytes());
+        bytes.extend_from_slice(b"INFO");
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&[1, 0, 1, 0, 0x80, 0xbb, 0, 0]);
+        bytes.extend_from_slice(&[0, 0xee, 2, 0, 2, 0, 16, 0]);
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&4u32.to_le_bytes());
+        bytes.extend_from_slice(&1i16.to_le_bytes());
+        bytes.extend_from_slice(&(-2i16).to_le_bytes());
+        std::fs::write(&path, &bytes).unwrap();
+        let samples = read_wav_pcm16(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(samples, Some(vec![1, -2]));
+    }
+
+    #[test]
+    fn a_silent_source_has_no_measurable_window() {
+        // Digital silence has no finite level, so the window set is empty and the
+        // caller learns the material has no audio instead of being told the run failed.
+        assert!(window_rms_dbfs(&[0i16; 4_800], WINDOW_SAMPLES).is_empty());
         assert_eq!(
             AudioCleanupErrorCode::SilentSource.as_str(),
             "CLEANUP_SILENT_SOURCE"
@@ -513,8 +610,8 @@ mod tests {
     #[test]
     fn writing_over_the_source_is_refused() {
         let error = clean_audio(&AudioCleanupRequest {
-            source: PathBuf::from("/etc/hostname"),
-            destination: PathBuf::from("/etc/hostname"),
+            source: std::env::current_exe().unwrap(),
+            destination: std::env::current_exe().unwrap(),
             ..request()
         })
         .unwrap_err();
@@ -533,7 +630,7 @@ mod tests {
             );
         }
         let error = clean_audio_file(
-            Path::new("/etc/hostname"),
+            &std::env::current_exe().unwrap(),
             Path::new("/tmp/or-out.wav"),
             -30,
             12,

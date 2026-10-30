@@ -10,7 +10,10 @@
 
 use std::path::{Path, PathBuf};
 
+use std::collections::BTreeMap;
+
 use or_motion::{parse_motion_scene, validate_scene};
+use or_render::MotionImage;
 
 /// A bounded request to materialise one scene.
 const MAX_MOTION_OUTPUT_FRAMES: u64 = 200_000;
@@ -84,6 +87,11 @@ pub fn materialize_motion_scene(
         Ok(scene) => scene,
         Err(error) => return failure(error.code(), error.code().to_owned(), &output),
     };
+    let base = output_directory_of(&scene_path);
+    let images = match or_render::load_motion_scene_images(&scene, &base) {
+        Ok(images) => images,
+        Err(error) => return failure(error.code(), error.to_string(), &output),
+    };
     materialize_parsed_scene(
         &scene,
         &output,
@@ -91,6 +99,7 @@ pub fn materialize_motion_scene(
         frame_rate_denominator,
         width,
         height,
+        &images,
     )
 }
 
@@ -144,7 +153,15 @@ pub fn materialize_motion_scene_from_code(
         frame_rate_denominator,
         width,
         height,
+        &BTreeMap::new(),
     )
+}
+
+fn output_directory_of(scene_path: &str) -> PathBuf {
+    Path::new(scene_path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// The shared materialiser: a validated scene, an output path and an explicit shape.
@@ -155,6 +172,7 @@ fn materialize_parsed_scene(
     frame_rate_denominator: u32,
     width: u32,
     height: u32,
+    images: &BTreeMap<String, MotionImage>,
 ) -> MotionMaterializationView {
     if frame_rate_numerator == 0 || frame_rate_denominator == 0 {
         return failure(
@@ -223,10 +241,11 @@ fn materialize_parsed_scene(
     // type describes rasterisation only, so an encoder failure is carried out in a
     // local and reported as itself rather than being disguised as a canvas problem.
     let mut encoder_failure: Option<String> = None;
-    let encoded = or_render::for_each_motion_frame(
+    let encoded = or_render::for_each_motion_frame_with_images(
         scene,
         frame_rate_numerator,
         frame_rate_denominator,
+        images,
         |index, frame| {
             if encoder_failure.is_some() {
                 return Err(or_render::MotionRasterError::InvalidCanvas);
@@ -332,7 +351,10 @@ mod tests {
     #[test]
     #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
     fn materialises_a_scene_built_from_code() {
-        let source = scene_file("source.rs", "fn main() {\n    let total = 1 + 1;\n}\n");
+        let source = scene_file(
+            "motion_sample.rs",
+            "fn main() {\n    let edit = \"make the timeline feel direct\";\n    println!(\"Hello, {edit}!\");\n}\n",
+        );
         let output =
             std::env::temp_dir().join(format!("or-motion-from-code-{}.mkv", std::process::id()));
         let _ = std::fs::remove_file(&output);
@@ -341,16 +363,33 @@ mod tests {
             output.display().to_string(),
             10,
             1,
-            128,
-            96,
+            640,
+            360,
             "From code".to_owned(),
         );
         assert!(view.succeeded, "{}: {}", view.code, view.message);
         assert!(view.frame_count > 0);
-        assert_eq!(view.width, 128);
-        assert_eq!(view.height, 96);
+        assert_eq!(view.width, 640);
+        assert_eq!(view.height, 360);
         assert!(!view.scene_id.is_empty());
         assert!(view.bytes_written > 0);
+        let media_source = or_core::MediaSourceRef::from_file_path(&output).unwrap();
+        let budget_limits = or_runtime::BudgetLimits::new(8, 8 * 1024 * 1024).unwrap();
+        let budgets = or_runtime::RuntimeBudgets::new(budget_limits, budget_limits, budget_limits);
+        let decoder = or_media::SoftwareMediaDecoder::new(&media_source, budgets).unwrap();
+        let cancellation = or_runtime::CancellationToken::new();
+        let first = decoder
+            .decode_video_frame_at(or_core::RationalTime::ZERO, &cancellation)
+            .unwrap()
+            .unwrap();
+        let later = decoder
+            .decode_video_frame_at(or_core::RationalTime::new(1, 10).unwrap(), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert!(
+            first.pixels() != later.pixels(),
+            "code-to-video frames should animate"
+        );
         let _ = std::fs::remove_file(&output);
     }
 
@@ -400,7 +439,7 @@ mod tests {
         assert!(!output.exists());
     }
 
-    /// The materialisation-throughput row docs/QUALITY.md owed: a named canvas, a named
+    /// The materialisation-throughput row docs/reference/quality.md owed: a named canvas, a named
     /// rate and a scene built from real source, measured through the client the product
     /// actually calls.
     #[test]

@@ -1,0 +1,116 @@
+{
+  "description": "The keyboard delete path: the focused clip is selected, Delete opens the confirmation dialog rather than deleting silently, and confirming removes only that clip.",
+  "viewport": "1280x800",
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Delete key review"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "tiny_h264",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Insert",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "key",
+      "chord": "delete"
+    },
+    {
+      "op": "wait",
+      "text": "Delete clip?",
+      "budget_ms": 10000
+    },
+    {
+      "op": "shot",
+      "name": "delete-confirm"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-confirm-delete-"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    }
+  ],
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "budget_ms": 600000
+}

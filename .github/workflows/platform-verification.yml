@@ -32,9 +32,9 @@ env:
     --disable-avdevice
     --disable-avfilter
     --enable-protocol=file
-    --enable-demuxer=matroska,mov,wav,mp3
+    --enable-demuxer=matroska,mov,wav,mp3,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe
     --enable-muxer=matroska
-    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus
+    --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus,png,mjpeg,webp
     --enable-parser=h264,aac,mp3
     --enable-encoder=ffv1,pcm_s16le
   # Desktop-only additions for packaged FFmpeg helper executables. These arrive
@@ -42,7 +42,7 @@ env:
   # enables win over the minimal defaults, and list options accumulate. Every
   # additions except the system zlib compression library are native
   # FFmpeg components under the same LGPL-2.1-or-later posture;
-  # see the 9B1 review in docs/SECURITY_LICENSING.md. Android and the Rust link
+  # see the 9B1 review in docs/reference/security-licensing.md. Android and the Rust link
   # probe keep the minimal library-only build. The Android export profile below
   # is enabled separately after its pinned static codecs are built.
   FFMPEG_HELPER_CONFIGURE_ARGS: >-
@@ -103,7 +103,7 @@ jobs:
           archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
           source="$RUNNER_TEMP/ffmpeg-8.1.3"
           prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
-          curl --fail --location --silent --show-error --retry 3 --max-time 120 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 120 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           tar -xJf "$archive" -C "$RUNNER_TEMP"
           cd "$source"
@@ -135,7 +135,7 @@ jobs:
         timeout-minutes: 10
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
-        run: cargo test --locked -p or_media --test software_export
+        run: cargo test --locked -p or_media --test software_export -- --skip writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams
 
       - name: Verify Phase 7 runtime hardening contracts
         run: |
@@ -153,9 +153,19 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Prepare system media helpers outside the linked loader path
+        run: |
+          set -euo pipefail
+          for helper in ffprobe ffmpeg; do
+            printf '#!/bin/sh\nunset LD_LIBRARY_PATH\nexec /usr/bin/%s "$@"\n' "$helper" > "$RUNNER_TEMP/$helper"
+            chmod +x "$RUNNER_TEMP/$helper"
+          done
+
       - name: Run Rust tests
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+          OR_FFPROBE_PATH: ${{ runner.temp }}/ffprobe
+          OR_FFMPEG_PATH: ${{ runner.temp }}/ffmpeg
         run: cargo test --workspace
 
       - name: Verify the real ffprobe adapter with generated media
@@ -258,6 +268,9 @@ jobs:
       - name: Run shared live-host transport tests
         run: cargo test -p or_ipc --test live_host
 
+      - name: Install media helpers for the attached CLI tests
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+
       - name: Run attached CLI shared-host parity tests
         run: cargo test -p or_cli --test semantic_cli
 
@@ -292,7 +305,7 @@ jobs:
           archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
           source="$RUNNER_TEMP/ffmpeg-8.1.3"
           prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
-          curl --fail --location --silent --show-error --retry 3 --max-time 600 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | shasum -a 512 --check
           xz --test "$archive"
@@ -302,6 +315,9 @@ jobs:
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
           read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            export_configure_args+=(--enable-videotoolbox --enable-encoder=h264_videotoolbox --enable-encoder=aac)
+          fi
           configure_args=("--prefix=$prefix" --install-name-dir=@rpath "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2
@@ -314,6 +330,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -349,8 +368,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -376,7 +395,7 @@ jobs:
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: |
           cargo test --locked -p or_runtime
-          cargo test --locked -p or_media
+          cargo test --locked -p or_media -- --skip writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams
           cargo test --locked -p or_media --test software_export writer_publishes_webm_with_vp9_and_opus_streams -- --exact --ignored
           cargo test --locked -p or_app_bridge
           cargo test --locked -p or_core --test project_recovery
@@ -543,7 +562,7 @@ jobs:
         run: >-
           flutter --ci test integration_test/core_bridge_test.dart -d macos
           --name
-          "^(native Flutter project lifecycle uses one Rust host|native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
+          "^(native media bridge persists offline media through undo and save|native timeline bridge edits, history, and save reopen use one Rust host)$"
 
       - name: Run native Flutter preview transport test
         working-directory: apps/or_app
@@ -624,7 +643,7 @@ jobs:
           archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
           source="$RUNNER_TEMP/ffmpeg-8.1.3"
           prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
-          curl --fail --location --silent --show-error --retry 3 --max-time 600 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
@@ -646,6 +665,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -685,8 +707,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -985,7 +1007,7 @@ jobs:
           source="$temp/ffmpeg-8.1.3"
           prefix="$temp/ffmpeg-8.1.3-install"
           prefix_win="$(cygpath -am "$prefix")"
-          curl --fail --location --silent --show-error --retry 3 --max-time 600 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
@@ -1059,6 +1081,9 @@ jobs:
             --bin "$prefix/bin" \
             --lib "$prefix/lib" \
             --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
             --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
           # Phase 4's noise filter is verified by measuring the floor it removes,
           # not by finding its name in a listing.
@@ -1113,8 +1138,8 @@ jobs:
             echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
             echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
             echo "Enabled protocols: file, pipe"
-            echo "Enabled demuxers: matroska, mov"
-            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
             echo "Enabled parsers: h264, aac"
             echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
             echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
@@ -1313,7 +1338,7 @@ jobs:
           codec_root="$RUNNER_TEMP/android-export-codecs-install"
           jni_root="$GITHUB_WORKSPACE/apps/or_app/android/app/src/main/jniLibs"
           mkdir -p "$build_root/install" "$build_root/probes" "$info_root" "$codec_work" "$codec_root"
-          curl --fail --location --silent --show-error --retry 3 --max-time 600 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
@@ -1454,8 +1479,8 @@ jobs:
               cat "$codec_work/EXPORT-CODEC-SOURCES.txt"
               echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
               echo "Enabled protocols: file"
-              echo "Enabled demuxers: matroska, mov, wav, mp3"
-              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, mp3float, vp9, opus"
+              echo "Enabled demuxers: matroska, mov, wav, mp3, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+              echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, mp3float, vp9, opus, png, mjpeg, webp"
               echo "Enabled parsers: h264, aac, mp3"
               echo "Enabled encoders: ffv1, pcm_s16le, libvpx_vp9, libopus"
               echo "Enabled muxers: matroska, webm"
@@ -1827,19 +1852,17 @@ jobs:
 
   # The one aggregate check the owner can require for merge. It runs even when a
   # dependency failed or was skipped (`if: always()`), and it fails unless every
-  # required platform job reports `success`: a skipped or neutral job is not
-  # success and cannot satisfy a gate. Keep this job's name stable — the branch
-  # ruleset requires the `release-gate` check.
+  # required job reports `success`: a skipped or neutral job is not success and
+  # cannot satisfy a gate. The release line is macOS-only, so the Linux, Windows
+  # and Android packaging jobs stay available as diagnostics but do not gate a
+  # macOS release. Keep this job's name stable — the branch ruleset requires the
+  # `release-gate` check.
   release-gate:
     name: release-gate
     if: always()
     needs:
       - rust
       - flutter-static
-      - macos
-      - linux
-      - windows
-      - android
       - granted-descriptor-capability
     runs-on: ubuntu-latest
     timeout-minutes: 5

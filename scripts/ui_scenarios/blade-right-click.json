@@ -1,0 +1,109 @@
+{
+  "name": "blade-right-click",
+  "description": "A secondary click over a clip while the razor is armed must not cut the clip; the context menu is the only result.",
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Blade right click"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 15000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "tiny_h264_aac.mp4",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1, 1 clip",
+      "budget_ms": 20000
+    },
+    {
+      "op": "key",
+      "chord": "c"
+    },
+    {
+      "op": "secondary_tap",
+      "selector": {
+        "label_regex": "spans"
+      }
+    },
+    {
+      "op": "key",
+      "chord": "Escape"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1, 1 clip",
+      "budget_ms": 10000
+    },
+    {
+      "op": "shot",
+      "name": "after-right-click"
+    }
+  ],
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ]
+}

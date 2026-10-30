@@ -1,0 +1,144 @@
+{
+  "name": "assistant-edit",
+  "harness": "or_ui",
+  "description": "Create a project, open the Assistant rail tab, wait for the DeepSeek Harness session to connect, ask the assistant to add a text clip through the or MCP tools, and observe the clip appear on the timeline. This exercises the real ACP process, the real MCP server and the real command path; the wording of the reply is not asserted.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Assistant journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "editor-before"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "assistant-connecting"
+    },
+    {
+      "op": "pump",
+      "ms": 15000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-connect-15s"
+    },
+    {
+      "op": "wait",
+      "text": "Ask for an edit",
+      "budget_ms": 120000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-ready"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-ready"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings"
+      }
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "assistant-settings-dialog"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-auto-approve"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-save"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "assistant-composer"
+      },
+      "value": "Use the or tools. Add a text track (kind text), insert a 3 second text clip at 1 second whose text is Hello from AI, and save the project. Do not ask questions."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-send"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 30000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-after-send"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-after-send"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": ".*Hello from AI.*",
+      "budget_ms": 120000
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "assistant-edited"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-edited"
+    }
+  ]
+}

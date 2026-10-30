@@ -1,0 +1,138 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "budget_ms": 600000,
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Pacing review"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "No timeline tracks",
+      "budget_ms": 15000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "tiny_h264",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Insert",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "tiny_h264_aac.mp4, starts",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Playhead [0-9]+\\.[0-9]{2} s",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-next-frame"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-next-frame"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-next-frame"
+      }
+    },
+    {
+      "op": "wait_absent",
+      "text": "Playhead 0.00 s",
+      "budget_ms": 3000
+    },
+    {
+      "op": "tree",
+      "name": "after-step"
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "assistant-after-step"
+    }
+  ]
+}

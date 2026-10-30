@@ -1,0 +1,107 @@
+{
+  "name": "caption-style",
+  "harness": "or_ui",
+  "description": "Adds a manual caption through the real dialog, chooses the Vietnamese display font, enables the background box and saves. Proves the caption style controls reach the real clip command.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Caption style"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add caption track"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add caption"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-text-content"
+      },
+      "value": "Tiếng Việt có dấu"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-text-font"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Be Vietnam Pro"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-text-background"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-save-text"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "shot",
+      "name": "caption-styled"
+    },
+    {
+      "op": "tree",
+      "name": "caption-styled"
+    }
+  ]
+}

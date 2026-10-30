@@ -1,145 +1,210 @@
 # Opencut Reinforced — Agent Guide
 
-Last reviewed: 2026-10-18
+Last reviewed: 2026-10-27
 
-OR is an MIT-licensed cross-platform video editor for human and structured
-CLI/agent use. Architectural directions are not implemented capabilities. Read
-only the task-relevant references; this file is an operating map, and
-[docs/INDEX.md](docs/INDEX.md) is the full documentation router.
+OR is an MIT-licensed, local-first video editor with one Rust-owned project core
+shared by the Flutter UI, the `or` CLI and agents.
 
-## Product focus
+## Rule
 
-The owner's active priorities, in dependency order:
+Use this routing table to pick what to read for the current task, and do not read
+material the task does not need. When editing docs or this file, follow the
+routing template in `docs/operations/docs-maintenance.md` exactly and do not add
+any other rule to this file.
 
-1. **Complete basic editing** — timeline, tracks, clips, move/trim/split/ripple,
-   undo/redo, zoom/scroll, snapping, markers, clip properties, save/reopen and
-   recovery, usable by pointer, keyboard and touch.
-2. **Code-to-illustration video** — turn a code artifact into a declarative
-   MotionScene (highlighted code, callouts, captions, narration) and render it
-   deterministically. An external generative-video provider is a later, optional
-   second track.
-3. **Automatic subtitles** — local speech-to-text into reviewable caption
-   proposals, editable and exportable to SRT/WebVTT.
-4. **Noise filtering and audio cleanup** — denoise, voice enhancement and
-   loudness work in the audio layer.
+## Routing
 
-Desktop (macOS, Linux, Windows) must present one coherent product with the same
-concepts, terminology, layout intent and command semantics; input and layout
-adapt to platform and screen size. Android shares the same model with adapted
-presentation. Framing, gaps and open decisions are in
-[docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md); this list selects work and
-does not restate it.
+### Architecture
 
-## Non-negotiables
+- **System overview** — clients, control and real-time planes, crate map, data flow.
+  When: you need the shape of the system before touching a subsystem.
+  Path: `docs/architecture/system-overview.md`
+- **Control plane** — commands, queries, revisions, history, persistence, IPC, CLI parity.
+  When: changing project state, save/recovery, the session, the bridge or the CLI.
+  Path: `docs/architecture/control-plane.md`
+- **Real-time plane** — snapshots, frames and leases, preview pipeline, audio clock, budgets.
+  When: changing playback, rendering, presentation or frame lifetime.
+  Path: `docs/architecture/realtime-plane.md`
+- **Media pipeline** — FFmpeg runtime, probing, import profile, cache, jobs, encoding.
+  When: changing media probing, decoding, cache, background jobs or codec support.
+  Path: `docs/architecture/media-pipeline.md`
+- **Project format** — `.orproj` envelope, versions, invariants, safe writing.
+  When: touching the schema, migrations, codec or anything that reads project files.
+  Path: `docs/architecture/project-format.md`
+- **Platforms** — targets, storage and permissions per platform, packaging, capability matrix.
+  When: work depends on platform behaviour, SAF, packaging or native interop.
+  Path: `docs/architecture/platforms.md`
+- **Security boundaries** — untrusted input, secrets, IPC limits, agent surface.
+  When: a change crosses a trust boundary or touches credentials or permissions.
+  Path: `docs/architecture/security-boundaries.md`
 
-The permanent execution, acceptance, security and dependency rules are in
-[docs/AGENT_POLICY.md](docs/AGENT_POLICY.md). The short version:
+### Features
 
-- UI, CLI and agents mutate canonical Rust project state through the shared
-  command/application path. Keep domain logic outside presentation, and never
-  create a second editable project state in Dart, CLI code or a worker.
-- Canonical motion is declarative and non-executable; rendering makes no
-  provider call. Do not scaffold unrequested architecture.
-- AI output is a reviewable proposal applied through a revision-checked command,
-  never an instruction. Credentials stay in OS secure storage and never reach the
-  CLI, agents, logs or fixtures.
-- Keep protected specifications, invariants, workflows and claims intact unless
-  the owner explicitly authorizes their control-plane change.
-- `scripts/check_or_core_deps.py` enforces the canonical-state dependency
-  boundary. A failure needs a decision, never a widened pattern list.
-- Keep credentials, models, caches and generated media out of tracked source.
-  Preserve licences and lawful small fixtures.
+- **Project lifecycle** — create, open, save, reopen, recover, relink, recent projects.
+  When: changing project opening, saving, recovery, conflicts or source relinking.
+  Path: `docs/features/project-lifecycle.md`
+- **Editing** — tracks, clips, exact-time commands, selection, snapping, undo, gestures.
+  When: changing any timeline edit, command, history entry or editing interaction.
+  Path: `docs/features/editing.md`
+- **Media library** — import, supported profile, library surface, thumbnails, waveforms.
+  When: changing import, library listing, removal, relink or generated previews.
+  Path: `docs/features/media-library.md`
+- **Preview and playback** — timing contract, transport, runtime behaviour, pacing evidence.
+  When: changing the viewer, transport, seek/scrub, frame step or sequence rate.
+  Path: `docs/features/preview-playback.md`
+- **Text and captions** — text clips, captions, SRT/WebVTT, shared text path.
+  When: changing titles, caption clips, subtitle interchange or text rendering.
+  Path: `docs/features/text-captions.md`
+- **Effects, colour and audio controls** — transforms, closed effect set, colour, gain/pan.
+  When: changing clip visual settings, effects, transitions or audio parameters.
+  Path: `docs/features/effects-audio.md`
+- **Export** — profiles, job behaviour, staging and failure semantics, validation, interchange.
+  When: changing export, an output profile, progress/cancel or an interchange format.
+  Path: `docs/features/export.md`
+- **MotionScene** — declarative code-to-video contract, evaluator, materialisation.
+  When: working on deterministic scenes, the Motion panel or motion CLI verbs.
+  Path: `docs/features/motionscene.md`
+- **Motion assets** — parameterised scene/fragment assets, classification, the app-level library and its CLI.
+  When: working on reusable motion assets, classification or the motion library store.
+  Path: `docs/features/motion-assets.md`
+- **Workspace and UI shell** — shell slots, editor layout, interaction rules.
+  When: adding or moving any control, panel, menu, shortcut or compact layout.
+  Path: `docs/features/workspace-ui.md`
+- **Assistant panel** — ACP harness connection, MCP editing tools, motion insertion, panel states.
+  When: changing the assistant panel, its harness overlay, or the `or mcp` tools.
+  Path: `docs/features/assistant.md`
+- **Agent workspace** — the app-installed workspace, its AGENTS.md routing, guides, skills and tools.
+  When: changing what the assistant reads or runs by default, or updating a workspace guide, skill or tool.
+  Path: `docs/features/agent-workspace.md`
 
-## Work loop
+### Design
 
-1. Establish branch, HEAD, worktrees and dirty changes; preserve unrelated work.
-2. Read the active roadmap and the authority that owns the capability. Reuse
-   existing components, command paths and tests before adding abstractions.
-3. Define the observable outcome and the evidence class it will need.
-4. Implement the smallest correct change and its regression guard.
-5. Verify through the ladder below, commit one coherent change, and report
-   honestly.
+- **Design language** — Focused Monochrome tokens, hard visual rules, motion, copy.
+  When: any visual, layout, colour or copywriting decision in the app.
+  Path: `docs/design/design-language.md`
+- **UX invariants** — behaviour that must not regress, and what counts as evidence.
+  When: changing an implemented interaction, or checking a UI claim.
+  Path: `docs/design/ux-invariants.md`
 
-After two speculative repairs for the same check, record observed/expected/
-evidence/attempts, a falsifiable hypothesis and a discriminating next check
-before another edit. Never discard WIP, amend shared history, force-push, merge
-protected branches, or infer publication authority from a green gate.
+### Operations
 
-## Build, test and release
+- **Change workflow** — the work loop from request to verified local increment.
+  When: starting any non-trivial change.
+  Path: `docs/operations/workflow.md`
+- **Verification** — evidence classes, check ladder, how to report results.
+  When: deciding what check answers your question or reporting a result.
+  Path: `docs/operations/verification.md`
+- **Local macOS** — build, run, check, measure commands and host traps.
+  When: building or running the app on this machine, or measuring performance.
+  Path: `docs/operations/local-macos.md`
+- **UI harness** — driving the real app by semantics and reading artifacts.
+  When: proving a user-visible behaviour or debugging an interaction.
+  Path: `docs/operations/ui-harness.md`
+- **Git** — commit and history rules, and actions that are out of bounds.
+  When: committing, or unsure whether an external action is allowed.
+  Path: `docs/operations/git.md`
+- **Permissions** — what this mission authorizes and what it forbids.
+  When: any build, launch, install, network or repository action needs a boundary check.
+  Path: `docs/operations/permissions.md`
+- **Docs maintenance** — documentation shape and the routing template.
+  When: adding, moving, renaming or reviewing documentation.
+  Path: `docs/operations/docs-maintenance.md`
+- **OR skills** — how OR skills are packaged, installed and edited.
+  When: editing a skill or its routing.
+  Path: `docs/operations/skills.md`
 
-Local work is headless by default. Exactly two bounded local runtime lanes are
-owner-granted ([docs/AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md)):
+### Reference
 
-```sh
-bash scripts/run_local_lane.sh linux      # hygiene, Flutter suite, preflight, bench
-bash scripts/run_local_lane.sh linux --packaged   # adds the local .deb and journey
-bash scripts/run_local_lane.sh android    # local emulator lane: apk, emulator, preview, saf
-```
+- **Product requirements** — the requirement inventory and maturity labels.
+  When: you need to know what the product is meant to do, not what is implemented.
+  Path: `docs/reference/product.md`
+- **Roadmap** — current owner-selected focus, acceptance target, deferred work.
+  When: choosing what to work on next or checking whether work is in scope.
+  Path: `docs/reference/roadmap.md`
+- **Quality bar** — attributes, measurements, known gaps.
+  When: making or checking a quality, performance or reliability claim.
+  Path: `docs/reference/quality.md`
+- **Testing** — test layers, determinism rules, what to run.
+  When: adding or choosing a regression check.
+  Path: `docs/reference/testing.md`
+- **Tooling** — repository scripts, machine-local tools, hosted jobs.
+  When: you need an existing script or tool instead of writing a new one.
+  Path: `docs/reference/tooling.md`
+- **Security and licensing** — adoption rules, dependency posture, FFmpeg, secrets.
+  When: adding a dependency, asset, codec, font or model, or checking licence risk.
+  Path: `docs/reference/security-licensing.md`
+- **Release** — Developer Preview pipeline and stable-release requirements.
+  When: packaging or distribution work is explicitly in scope.
+  Path: `docs/reference/release.md`
+- **Developer Preview install** — installing and dogfooding a preview build.
+  When: a tester needs to install or exercise a preview build.
+  Path: `docs/reference/developer-preview-install.md`
+- **Claim records** — schema and rules for the committed verification claim JSON files.
+  When: recording, auditing or superseding a hosted verification claim.
+  Path: `docs/evidence/claims/README.md`
 
-`bash scripts/check-repo.sh` is the source gate and `bash scripts/acceptance.sh`
-adds the Rust and Flutter lanes, `gitleaks` and the local performance budget.
-`scripts/acceptance.sh` writes the machine-readable report
-`.hub/gate-report.json`; `scripts/check-repo.sh` is read-only and writes no
-report. **GitHub Actions is the only
-authority for native, packaged and cross-platform acceptance**; a local preflight
-or emulator result is developer evidence and never becomes `ACCEPTED`. Release,
-packaging and distribution follow [docs/RELEASE.md](docs/RELEASE.md) and are
-owner-gated. Mechanics are in [docs/TOOLING.md](docs/TOOLING.md) and
-[docs/TESTING.md](docs/TESTING.md); the working procedure is skill `or-dev-loop`.
+### Decisions
 
-## UI/UX and performance acceptance
+- **ADR index** — recorded architecture decisions and their status.
+  When: changing a subsystem boundary, or checking why an architecture choice was made.
+  Path: `docs/adr/README.md`
+- **Motion assets proposal** — proposed parameterised assets, classification, library store and phases.
+  When: planning or building the reusable motion asset library.
+  Path: `docs/adr/0010-motion-assets-and-reusable-library.md`
 
-A capability is not finished because it compiles or because a widget test passes.
-For every user-visible surface: the desktop platforms present one coherent
-product and Android an adapted one, sharing concepts, terminology and command
-semantics; controllable elements expose real semantics; the thresholds in
-[docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md) and
-[docs/QUALITY.md](docs/QUALITY.md) hold (4.5:1 text contrast, no type below
-11 px, 24 px desktop and 44 px compact hit areas, a keyboard alternative for
-every pointer action, and the 320x480 and 320x440 compact viewports clean); and
-the interaction is **measured, not asserted**. Semantic, behavioural, visual and
-native evidence each answer a different question and never promote one another —
-a screenshot is not a journey, and a widget test is not UX acceptance. Load skill
-`or-ui-ux` for UI work and close the interactive budget rows that
-[docs/QUALITY.md](docs/QUALITY.md) still records as unverified.
+### History
 
-## Evidence and reporting
+- **Archive index** — what the archived plans, delivery logs and dated receipts are.
+  When: you need historical detail or a dated record, not current truth.
+  Path: `docs/archive/README.md`
 
-Report `IMPLEMENTED`, each verified evidence class, `ACCEPTED`, and
-`BLOCKED`/`UNVERIFIED`/`NOT RUN` separately. A skipped or unavailable check is
-never `PASS`. A completion claim is a record under
-[docs/evidence/claims/](docs/evidence/claims/README.md) that binds the exact
-implementation SHA to the hosted run and job that verified it; an implementation
-statement never establishes DONE. A Linux debug app with a fixture picker is not
-an installed-package or native OS-picker claim.
+### Tools
 
-## Document routing
+- **Repository gate** — required files, whitespace, links, freshness, claims, `or_core` dependencies.
+  When: before committing, or when a documentation or dependency rule may be violated.
+  Path: `scripts/check-repo.sh`
+- **Acceptance gate** — source gate plus Rust/Flutter lanes and the local performance budget.
+  When: you need the broadest local check before declaring an increment done.
+  Path: `scripts/acceptance.sh`
+- **UI harness** — drive the real app by widget key, semantics label, text or role.
+  When: proving a user-visible behaviour in the running app.
+  Path: `scripts/or_ui.py`
+- **Semantics outline** — one line per node with its rect and actions.
+  When: reading a screen dump quickly.
+  Path: `scripts/or_tree_outline.py`
+- **Packaged driver** — CoreGraphics mouse and keyboard events for the built bundle.
+  When: the semantic harness cannot reach a packaged-app surface.
+  Path: `scripts/packaged_drive.py`
+- **Release bundle** — build, package and codesign the macOS bundle with a bridge hash check.
+  When: producing or re-verifying a packaged local build.
+  Path: `scripts/build_macos_release.sh`
+- **Performance budget** — measure the local budget rows.
+  When: checking for a performance regression or recording a measurement.
+  Path: `scripts/bench_quality.py`
+- **Agent workspace bundle** — packs the installed assistant workspace and guards bundle drift.
+  When: editing the workspace AGENTS.md, guides, skills or tools.
+  Path: `tooling/or-agent-workspace/build.mjs`
 
-| Need | Authority |
-|---|---|
-| Full documentation router, authority order, current work selection | [docs/INDEX.md](docs/INDEX.md) |
-| Permanent execution, acceptance, security, dependency rules | [docs/AGENT_POLICY.md](docs/AGENT_POLICY.md) |
-| What to do now, priorities, traceability | [docs/PRODUCT_ROADMAP.md](docs/PRODUCT_ROADMAP.md) |
-| What this host authorizes without asking | [docs/AGENT-AUTHORITY.md](docs/AGENT-AUTHORITY.md) |
-| Required product capabilities and maturity labels | [docs/PRODUCT.md](docs/PRODUCT.md) |
-| Architecture, subsystem contracts, `.orproj` format, decisions | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md), [docs/PROJECT_FORMAT.md](docs/PROJECT_FORMAT.md), [ADRs](docs/adr/README.md) |
-| Feature path from definition to merged pull request | [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) |
-| Quality bar, evidence classes, gates and known gaps | [docs/QUALITY.md](docs/QUALITY.md), [docs/TESTING.md](docs/TESTING.md) |
-| Local tooling, hosted verification, approved agent tools | [docs/TOOLING.md](docs/TOOLING.md) |
-| UI conventions, acceptance and interaction performance | [DESIGN.md](DESIGN.md), [docs/UX_ACCEPTANCE.md](docs/UX_ACCEPTANCE.md), skill `or-ui-ux` |
-| Reuse, upstream, dependency and licence decisions | [docs/OPEN_SOURCE_CONVERGENCE.md](docs/OPEN_SOURCE_CONVERGENCE.md), [docs/SECURITY_LICENSING.md](docs/SECURITY_LICENSING.md) |
-| Release and installation | [docs/RELEASE.md](docs/RELEASE.md), [docs/DEVELOPER_PREVIEW_INSTALL.md](docs/DEVELOPER_PREVIEW_INSTALL.md) |
-| Current work selection | [docs/prompts/OR-BUILD.md](docs/prompts/OR-BUILD.md), [docs/prompts/README.md](docs/prompts/README.md) |
-| History and archived receipts | [docs/ROADMAP.md](docs/ROADMAP.md), [docs/PAUSE_MIGRATION_HANDOFF.md](docs/PAUSE_MIGRATION_HANDOFF.md), [docs/archive/execution/README.md](docs/archive/execution/README.md) |
-| Contributing and vulnerability reporting | [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [README.md](README.md) |
+### Skills
 
-## Skill routing
-
-Project-local skills live in [.agents/skills/](.agents/skills/) and are catalogued
-with their triggers and exclusions in [docs/skills.md](docs/skills.md):
-`or-edit-feature`, `or-ui-ux`, `or-dev-loop`, `or-media-ai`,
-`or-claim-evidence`, `or-release`. Load one only when its trigger matches; defer to the shared
-procedures the current session exposes rather than copying one into this
-repository.
-
-Author framework artifacts in English and converse in the owner's language.
+- **or-edit-feature** — canonical editing: timeline, media/project commands, clips, undo, save/reopen, recovery.
+  When: changing editing or project behaviour.
+  Path: `tooling/dsh-or-skills/skills/or-edit-feature/SKILL.md`
+- **or-ui-ux** — layout, information architecture, pointer/keyboard interaction, accessibility, visual review.
+  When: changing a user-visible surface.
+  Path: `tooling/dsh-or-skills/skills/or-ui-ux/SKILL.md`
+- **or-media-render** — import, decode/playback, audio, compositing, FFmpeg, export, media performance.
+  When: changing the media or render pipeline.
+  Path: `tooling/dsh-or-skills/skills/or-media-render/SKILL.md`
+- **or-motionscene** — deterministic code-to-video scenes: authoring, preview, render, insertion.
+  When: working on MotionScene.
+  Path: `tooling/dsh-or-skills/skills/or-motionscene/SKILL.md`
+- **or-dev-loop** — local builds, focused checks, real macOS runs, semantic UI driving, evidence classes.
+  When: running or verifying anything on this machine.
+  Path: `tooling/dsh-or-skills/skills/or-dev-loop/SKILL.md`
+- **or-claim-evidence** — exact-SHA hosted claim records.
+  When: recording or auditing a hosted claim, only when explicitly in scope.
+  Path: `tooling/dsh-or-skills/skills/or-claim-evidence/SKILL.md`
+- **or-release** — packaging, publishing and distribution.
+  When: release work is explicitly authorized.
+  Path: `tooling/dsh-or-skills/skills/or-release/SKILL.md`

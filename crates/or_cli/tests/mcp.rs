@@ -1,0 +1,460 @@
+//! End-to-end coverage for `or mcp`: a real live host, a real child process,
+//! and edits that must be visible in the saved project file.
+
+use or_core::{
+    JobId, JobState, MediaId, ProjectFileSession, ProjectSession, TrackKind, TranscriptionJobView,
+    TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView,
+};
+use or_ipc::{LiveProjectHost, TranscriptionRequestHandler};
+use serde_json::{Value, json};
+use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
+    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::{SystemTime, UNIX_EPOCH},
+};
+
+static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+struct TestDirectory(PathBuf);
+
+impl TestDirectory {
+    fn new() -> Self {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0);
+        let sequence = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("or-mcp-{}-{stamp}-{sequence}", std::process::id()));
+        fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+
+    fn project_path(&self) -> PathBuf {
+        self.0.join("assistant.orproj")
+    }
+
+    fn descriptor_path(&self) -> PathBuf {
+        self.0.join("endpoint.json")
+    }
+
+    fn pointer_path(&self) -> PathBuf {
+        self.0.join("session-pointer.json")
+    }
+}
+
+impl Drop for TestDirectory {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+struct McpProcess {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    next_id: u64,
+}
+
+impl McpProcess {
+    fn start(pointer: &Path) -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_or"))
+            .arg("mcp")
+            .arg("--pointer")
+            .arg(pointer)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn or mcp");
+        let stdin = child.stdin.take().unwrap();
+        let stdout = BufReader::new(child.stdout.take().unwrap());
+        Self {
+            child,
+            stdin,
+            stdout,
+            next_id: 0,
+        }
+    }
+
+    fn request(&mut self, method: &str, params: Value) -> Value {
+        self.next_id += 1;
+        let id = self.next_id;
+        let message = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": method,
+            "params": params,
+        });
+        writeln!(self.stdin, "{message}").unwrap();
+        self.stdin.flush().unwrap();
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).unwrap();
+        let response: Value = serde_json::from_str(&line).expect("MCP response is JSON");
+        assert_eq!(response["id"], id, "response id");
+        response
+    }
+
+    fn call(&mut self, name: &str, arguments: Value) -> Result<String, String> {
+        let response = self.request("tools/call", json!({"name": name, "arguments": arguments}));
+        let result = &response["result"];
+        let text = result["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        if result["isError"].as_bool().unwrap_or(false) {
+            Err(text)
+        } else {
+            Ok(text)
+        }
+    }
+}
+
+impl Drop for McpProcess {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn write_pointer(directory: &TestDirectory) {
+    let pointer = json!({
+        "version": 1,
+        "descriptor_path": directory.descriptor_path().display().to_string(),
+        "project_path": directory.project_path().display().to_string(),
+        "project_name": "Assistant test",
+        "workspace_path": directory.0.display().to_string(),
+        "motion_library_path": directory.0.join("library").display().to_string(),
+    });
+    fs::write(directory.pointer_path(), pointer.to_string()).unwrap();
+}
+
+#[test]
+fn mcp_lists_tools_and_edits_the_live_project() {
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let host = LiveProjectHost::start(session, Some(directory.descriptor_path().as_path()))
+        .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+
+    let initialized = mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+    assert_eq!(
+        initialized["result"]["serverInfo"]["name"],
+        "opencut-reinforced"
+    );
+
+    let tools = mcp.request("tools/list", json!({}));
+    let names: Vec<&str> = tools["result"]["tools"]
+        .as_array()
+        .expect("tools array")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    assert!(names.contains(&"timeline_overview"));
+    assert!(names.contains(&"insert_text"));
+    assert!(names.contains(&"motion_insert_scene"));
+    assert!(names.contains(&"motion_asset_list"));
+    assert!(names.contains(&"motion_asset_insert"));
+    assert!(names.contains(&"motion_asset_save"));
+    assert!(names.contains(&"captions_transcribe"));
+    for tool in tools["result"]["tools"].as_array().unwrap() {
+        assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
+    }
+
+    let status: Value =
+        serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
+    assert_eq!(status["name"], "Assistant");
+    assert_eq!(status["dirty"], false, "a freshly opened project is clean");
+    assert_eq!(
+        status["project_path"],
+        directory.project_path().display().to_string()
+    );
+
+    let added: Value =
+        serde_json::from_str(&mcp.call("add_track", json!({"kind": "text"})).unwrap()).unwrap();
+    let track_id = added["track_id"].as_str().expect("track id").to_owned();
+
+    mcp.call(
+        "insert_text",
+        json!({
+            "track_id": track_id,
+            "text": "Hello from the assistant",
+            "at": "1.5",
+            "duration": "2",
+        }),
+    )
+    .expect("insert text");
+
+    mcp.call("add_marker", json!({"at": "2", "label": "AI marker"}))
+        .expect("add marker");
+    let dirty_status: Value =
+        serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
+    assert_eq!(
+        dirty_status["dirty"], true,
+        "an unsaved edit is visible in the status"
+    );
+    mcp.call("save", json!({})).expect("save project");
+    let saved_status: Value =
+        serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
+    assert_eq!(
+        saved_status["dirty"], false,
+        "an explicit save clears dirty"
+    );
+
+    // A fresh session reads the file, so the assertion is about persisted state
+    // rather than the live host's cached document.
+    let reopened = ProjectFileSession::open(directory.project_path().as_path()).unwrap();
+    let project = reopened.session().project();
+    let track = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.kind() == TrackKind::Text)
+        .expect("text track persisted");
+    assert_eq!(track.clips().len(), 1);
+    assert_eq!(track.clips()[0].timeline_start().numerator(), 3);
+    assert_eq!(track.clips()[0].timeline_start().denominator(), 2);
+    assert_eq!(project.timeline().markers().len(), 1);
+    drop(host);
+}
+
+#[test]
+fn motion_materialize_reports_when_the_host_has_no_runtime() {
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let host = LiveProjectHost::start(session, Some(directory.descriptor_path().as_path()))
+        .expect("start live host");
+    let source = directory.0.join("sample.rs");
+    fs::write(&source, "fn main() { println!(\"hi\"); }\n").unwrap();
+    let output = directory.0.join("out.mkv");
+
+    let result = Command::new(env!("CARGO_BIN_EXE_or"))
+        .args(["motion", "materialize", "--attach"])
+        .arg(directory.descriptor_path())
+        .args(["--source"])
+        .arg(&source)
+        .args(["--output"])
+        .arg(&output)
+        .arg("--json")
+        .output()
+        .expect("run or motion materialize");
+    assert!(!result.status.success());
+    let response: Value = serde_json::from_slice(&result.stdout).expect("JSON error on stdout");
+    assert_eq!(response["error"]["code"], "MOTION_RUNTIME_UNAVAILABLE");
+    drop(host);
+}
+
+#[test]
+fn mcp_lists_motion_assets_and_refuses_an_unknown_insert() {
+    let directory = TestDirectory::new();
+    let library = directory.0.join("library");
+    fs::create_dir_all(library.join("assets")).unwrap();
+    let catalog = json!({
+        "format": "opencut-reinforced-motion-library",
+        "schema_version": 1,
+        "entries": [
+            {
+                "asset_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+                "name": "Explainer title",
+                "category": "text",
+                "category_source": "explicit",
+                "kind": "scene",
+                "tags": [],
+                "canvas": {"width": 1920, "height": 1080},
+                "duration_milliseconds": 4000
+            }
+        ]
+    });
+    fs::write(library.join("catalog.json"), catalog.to_string()).unwrap();
+
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let host = LiveProjectHost::start(session, Some(directory.descriptor_path().as_path()))
+        .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+    mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+
+    let listed: Value =
+        serde_json::from_str(&mcp.call("motion_asset_list", json!({})).unwrap()).unwrap();
+    assert_eq!(listed["total"], 1);
+    assert_eq!(listed["entries"][0]["name"], "Explainer title");
+    assert_eq!(listed["entries"][0]["category"], "text");
+
+    let error = mcp
+        .call(
+            "motion_asset_insert",
+            json!({"asset_id": "0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f"}),
+        )
+        .unwrap_err();
+    assert!(error.contains("MOTION_LIBRARY_NOT_FOUND"), "{error}");
+
+    let scene_path = directory.0.join("saved.ormotion.json");
+    fs::write(
+        &scene_path,
+        serde_json::to_vec_pretty(&json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "name": "Authored title",
+            "duration": {"numerator": 4, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "title",
+                    "kind": "text",
+                    "text": "Hello from MCP",
+                    "position": {"x": 80, "y": 120},
+                    "font_size": 64
+                }
+            ],
+            "animations": []
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let saved: Value = serde_json::from_str(
+        &mcp.call(
+            "motion_asset_save",
+            json!({"scene_path": scene_path.display().to_string(), "category": "text"}),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved["motion_asset"]["category"], "text");
+    assert_eq!(saved["motion_asset"]["name"], "Authored title");
+    assert!(
+        saved["motion_asset"]["preview"]
+            .as_str()
+            .is_some_and(|preview| preview.starts_with("previews/"))
+    );
+    let listed: Value =
+        serde_json::from_str(&mcp.call("motion_asset_list", json!({})).unwrap()).unwrap();
+    assert_eq!(listed["total"], 2);
+
+    drop(host);
+}
+
+struct FakeTranscriptionHandler {
+    job_id: JobId,
+}
+
+impl TranscriptionRequestHandler for FakeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        match request {
+            TranscriptionRequest::Start { .. } => {
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Status { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id: session.project_id(),
+                    project_revision: session.project_revision(),
+                    media_id: MediaId::generate(),
+                    provider_id: "whisper.cpp".to_owned(),
+                    model_id: "whisper-small-multilingual".to_owned(),
+                    model_version: "1.0".to_owned(),
+                    model_license: "MIT".to_owned(),
+                    language: "vi".to_owned(),
+                    segments: vec![TranscriptionSegmentView {
+                        start_ms: 0,
+                        end_ms: 1_200,
+                        text: "Xin chào".to_owned(),
+                    }],
+                })
+            }
+            TranscriptionRequest::Cancel { .. } => {
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Cancelled,
+                    failure_message: None,
+                })
+            }
+        }
+    }
+}
+
+#[test]
+fn mcp_captions_transcribe_returns_a_proposal_without_changing_the_project() {
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Assistant")
+        .expect("create project");
+    let handler = Arc::new(FakeTranscriptionHandler {
+        job_id: JobId::generate(),
+    });
+    let host = LiveProjectHost::start_with_runtimes(
+        session,
+        Some(directory.descriptor_path().as_path()),
+        None,
+        None,
+        Some(handler),
+    )
+    .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+    mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+
+    let transcript: Value = serde_json::from_str(
+        &mcp.call(
+            "captions_transcribe",
+            json!({"media_id": "22222222-2222-4222-8222-222222222222"}),
+        )
+        .expect("transcribe"),
+    )
+    .unwrap();
+    assert_eq!(transcript["transcription"]["language"], "vi");
+    assert_eq!(
+        transcript["transcription"]["segments"][0]["text"],
+        "Xin chào"
+    );
+    assert_eq!(host.describe().unwrap().summary.project_revision.value(), 0);
+    drop(host);
+}

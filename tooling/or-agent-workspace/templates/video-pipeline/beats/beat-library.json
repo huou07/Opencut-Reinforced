@@ -1,0 +1,26 @@
+{
+  "format": "or-video-template-beats",
+  "schema_version": 1,
+  "note": "One composer per idea. Change the composer when the idea changes; never repeat the same one for two consecutive beats.",
+  "composers": {
+    "open": "Empty project: an empty preview frame and empty timeline, then content pours in. Use for the hook.",
+    "chatLink": "OR on the left, the installed harness outside a dashed boundary on the right, tokens crossing and returning. Use when explaining that OR is a client of an external assistant, not an agent of its own.",
+    "chatRun": "Chat conversation with tool steps and a permission card, then a script file appears. Use for idea → script.",
+    "assembly": "Shapes fly in and assemble into a composition, then the whole frame shrinks into a timeline clip. Use for code/JSON → MotionScene → clip.",
+    "motionDetail": "A scene sheet with growing bars, an orbiting shape and a still preview card. Use for deterministic scenes, preview-before-render, PNG assets.",
+    "motionLibrary": "Thumbnail grid, one card lifts, duplicates and exposes parameter chips. Use for reusable scene templates.",
+    "voiceGen": "Script lines on the left, a local speech server chip, a waveform growing, a clip landing on the audio lane. Use for TTS.",
+    "voiceChoose": "Three voice sources with selection ring and cost/key chips. Use for local vs system vs cloud voice, honestly priced.",
+    "whisperListen": "Big waveform, sweeping playhead, words popping out, caption chips appearing below. Use for local transcription.",
+    "captionSync": "Preview frame with subtitles appearing in time, caption lane underneath, style panel sliding in. Use for caption review and styling.",
+    "editOps": "Zoomed timeline: drag, trim, split, ripple. Use for the basic editing verbs.",
+    "previewSync": "Timeline on the left, preview on the right with a before/after wipe and a shared playhead. Use for 'you see the result immediately'.",
+    "layers": "Video, audio and caption planes separate, then snap into the frame; music dips under voice. Use for layer thinking and ducking.",
+    "automation": "One chat request fans out into tool chips that fly into tracks and fill them. Use for assistant-driven batch work.",
+    "localDevice": "A device outline with engines inside and a crossed cloud outside. Use for local-first processing.",
+    "freeLicence": "Licence badges (MIT, VieNeu, Whisper) and an honest cost note. Use for free/open claims; never imply paid services become free.",
+    "platforms": "Per-platform capability bars with a fallback note. Use for hardware/OS and performance expectations.",
+    "finale": "All layers converge into the preview, export bar fills, completion tick. Use for the finished product.",
+    "close": "Workflow map lighting up in order. Use for the takeaway."
+  }
+}

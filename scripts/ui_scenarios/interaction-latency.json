@@ -1,143 +1,183 @@
 {
-  "name": "interaction-latency",
-  "harness": "or_ui",
-  "description": "Measured interaction latency for the surfaces a user waits on: switching screens, stepping the preview, and opening and cancelling the export dialog. Each block runs repeat times and its timed steps act with settle disabled; the following wait step observes the visible result, so the number is latency to the visible state rather than the harness's settling budget (at most one 16 ms poll interval of uncertainty). Wall clock on this host through the Flutter test binding; Linux runs under Xvfb with software GL, so this is software-path evidence and never a GPU or device performance claim.",
-  "viewport": {
-    "width": 1280,
-    "height": 800
+ "name": "interaction-latency",
+ "harness": "or_ui",
+ "description": "Measured interaction latency for the surfaces a user waits on: switching screens, stepping the preview, and opening and cancelling the export dialog. Each block runs repeat times and its timed steps act with settle disabled; the following wait step observes the visible result, so the number is latency to the visible state rather than the harness's settling budget (at most one 16 ms poll interval of uncertainty). Wall clock on this host through the Flutter test binding; Linux runs under Xvfb with software GL, so this is software-path evidence and never a GPU or device performance claim.",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "fixtures": [
+  "wav"
+ ],
+ "steps": [
+  {
+   "op": "expect",
+   "key": "home-new-project",
+   "role": "button"
   },
-  "fixtures": [
-    "wav"
-  ],
-  "steps": [
+  {
+   "op": "measure",
+   "name": "screen-switch-projects-and-home",
+   "repeat": 10,
+   "steps": [
     {
-      "op": "expect",
-      "key": "home-new-project",
-      "role": "button"
+     "op": "tap",
+     "selector": {
+      "key": "nav-projects"
+     },
+     "settle": false
     },
     {
-      "op": "measure",
-      "name": "screen-switch-projects-and-home",
-      "repeat": 10,
-      "steps": [
-        {
-          "op": "tap",
-          "selector": {
-            "key": "nav-projects"
-          },
-          "settle": false
-        },
-        {
-          "op": "wait_label",
-          "label_regex": "Create or open an \\.orproj project",
-          "budget_ms": 8000
-        },
-        {
-          "op": "tap",
-          "selector": {
-            "key": "nav-home"
-          },
-          "settle": false
-        },
-        {
-          "op": "wait_label",
-          "label_regex": "Projects and recent work",
-          "budget_ms": 8000
-        }
-      ]
+     "op": "wait_label",
+     "label_regex": "Create or open an \\.orproj project",
+     "budget_ms": 8000
     },
     {
-      "op": "tap",
-      "selector": {
-        "key": "nav-projects"
-      }
+     "op": "tap",
+     "selector": {
+      "key": "nav-home"
+     },
+     "settle": false
     },
     {
-      "op": "tap",
-      "selector": {
-        "key": "projects-new-project"
-      }
-    },
-    {
-      "op": "enter_text",
-      "selector": {
-        "key": "new-project-name"
-      },
-      "value": "Latency probe"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "confirm-new-project"
-      }
-    },
-    {
-      "op": "wait",
-      "text": "No timeline tracks",
-      "budget_ms": 20000
-    },
-    {
-      "op": "measure",
-      "name": "preview-frame-step-forward-and-back",
-      "repeat": 10,
-      "steps": [
-        {
-          "op": "tap",
-          "selector": {
-            "key": "preview-next-frame"
-          },
-          "settle": false
-        },
-        {
-          "op": "tap",
-          "selector": {
-            "key": "preview-previous-frame"
-          },
-          "settle": false
-        }
-      ]
-    },
-    {
-      "op": "measure",
-      "name": "export-dialog-open-and-cancel",
-      "repeat": 10,
-      "steps": [
-        {
-          "op": "tap",
-          "selector": {
-            "key": "export-project"
-          },
-          "settle": false
-        },
-        {
-          "op": "wait_label",
-          "label_regex": "Export video",
-          "budget_ms": 8000
-        },
-        {
-          "op": "tap",
-          "selector": {
-            "label": "Cancel",
-            "within": {
-              "type": "AlertDialog"
-            }
-          },
-          "settle": false
-        },
-        {
-          "op": "wait_label_absent",
-          "label_regex": "Export video",
-          "budget_ms": 8000
-        }
-      ]
-    },
-    {
-      "op": "shot",
-      "name": "after-latency"
-    },
-    {
-      "op": "tree",
-      "name": "after-latency"
+     "op": "wait_label",
+     "label_regex": "Projects and recent work",
+     "budget_ms": 8000
     }
-  ]
+   ]
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Latency probe"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "measure",
+   "name": "preview-frame-step-forward-and-back",
+   "repeat": 10,
+   "steps": [
+    {
+     "op": "tap",
+     "selector": {
+      "key": "preview-next-frame"
+     },
+     "settle": false
+    },
+    {
+     "op": "tap",
+     "selector": {
+      "key": "preview-previous-frame"
+     },
+     "settle": false
+    }
+   ]
+  },
+  {
+   "op": "measure",
+   "name": "export-dialog-open-and-cancel",
+   "repeat": 10,
+   "steps": [
+    {
+     "op": "tap",
+     "selector": {
+      "key": "export-project"
+     },
+     "settle": false
+    },
+    {
+     "op": "wait_label",
+     "label_regex": "Export video",
+     "budget_ms": 8000
+    },
+    {
+     "op": "tap",
+     "selector": {
+      "label": "Cancel",
+      "within": {
+       "type": "AlertDialog"
+      }
+     },
+     "settle": false
+    },
+    {
+     "op": "wait_label_absent",
+     "label_regex": "Export video",
+     "budget_ms": 8000
+    }
+   ]
+  },
+  {
+   "op": "shot",
+   "name": "after-latency"
+  },
+  {
+   "op": "tree",
+   "name": "after-latency"
+  },
+  {
+   "op": "key",
+   "chord": "cmd+s"
+  },
+  {
+   "op": "wait_absent",
+   "text": "Unsaved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-close"
+   },
+   "settle": false
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Projects and recent work",
+   "budget_ms": 15000
+  },
+  {
+   "op": "measure",
+   "name": "project-open-from-recents",
+   "repeat": 1,
+   "steps": [
+    {
+     "op": "tap",
+     "selector": {
+      "key_regex": "^recent-project-"
+     },
+     "allow_multiple": true
+    },
+    {
+     "op": "wait",
+     "text": "No timeline tracks",
+     "budget_ms": 20000
+    }
+   ]
+  }
+ ]
 }

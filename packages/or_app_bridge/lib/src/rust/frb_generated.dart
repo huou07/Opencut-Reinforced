@@ -5,6 +5,7 @@
 
 import 'api.dart';
 import 'api/motion.dart';
+import 'api/motion_library.dart';
 import 'api/project.dart';
 
 import 'dart:async';
@@ -69,7 +70,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -260876208;
+  int get rustContentHash => -1932195339;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -108,6 +109,7 @@ abstract class RustLibApi extends BaseApi {
   Future<ProjectModelDownloadView>
   crateApiProjectProjectHostHandleBeginTranscriptionModelDownload({
     required ProjectHostHandle that,
+    required String modelId,
   });
 
   Future<ProjectExportJobView> crateApiProjectProjectHostHandleCancelExport({
@@ -163,6 +165,17 @@ abstract class RustLibApi extends BaseApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String markerId,
+  });
+
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleDuckTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckMillidecibels,
   });
 
   Future<ProjectExportJobView> crateApiProjectProjectHostHandleExportStatus({
@@ -306,6 +319,18 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleMoveTimelineClips({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required List<String> clipIds,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  });
+
+  Future<ProjectActionResult>
   crateApiProjectProjectHostHandleMoveTimelineMarker({
     required ProjectHostHandle that,
     required String projectId,
@@ -416,6 +441,12 @@ abstract class RustLibApi extends BaseApi {
     required String trackId,
   });
 
+  Future<ProjectTranscriptionModelView>
+  crateApiProjectProjectHostHandleRemoveTranscriptionModel({
+    required ProjectHostHandle that,
+    required String modelId,
+  });
+
   Future<ProjectActionResult> crateApiProjectProjectHostHandleRename({
     required ProjectHostHandle that,
     required String projectId,
@@ -482,6 +513,34 @@ abstract class RustLibApi extends BaseApi {
     required ProjectHostHandle that,
   });
 
+  Future<ProjectTranscriptionModelView>
+  crateApiProjectProjectHostHandleSelectTranscriptionModel({
+    required ProjectHostHandle that,
+    required String modelId,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSetTimelineClipFrozen({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSetTimelineClipReversed({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  });
+
   Future<ProjectActionResult>
   crateApiProjectProjectHostHandleSetTimelineSequenceFrameRate({
     required ProjectHostHandle that,
@@ -539,6 +598,7 @@ abstract class RustLibApi extends BaseApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   });
 
   Future<ProjectTranscriptionJobView>
@@ -579,6 +639,11 @@ abstract class RustLibApi extends BaseApi {
     required ProjectHostHandle that,
   });
 
+  Future<List<ProjectTranscriptionModelOptionView>>
+  crateApiProjectProjectHostHandleTranscriptionModels({
+    required ProjectHostHandle that,
+  });
+
   Future<ProjectTranscriptProposalView?>
   crateApiProjectProjectHostHandleTranscriptionProposal({
     required ProjectHostHandle that,
@@ -613,6 +678,17 @@ abstract class RustLibApi extends BaseApi {
     required String trackId,
     required String clipId,
     required ProjectTimelineAudioSettingsView settings,
+  });
+
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
   });
 
   Future<ProjectActionResult>
@@ -682,6 +758,127 @@ abstract class RustLibApi extends BaseApi {
     required int width,
     required int height,
     required String title,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetImportImage({
+    required String root,
+    required String sourcePath,
+    required String name,
+    String? category,
+    required List<String> tags,
+    required int width,
+    required int height,
+    required int seconds,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetLoad({
+    required String root,
+    required String assetId,
+  });
+
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionAssetMaterialize({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  });
+
+  Future<MotionAssetMutationView> crateApiMotionLibraryMotionAssetRemove({
+    required String root,
+    required String assetId,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetSave({
+    required String root,
+    required String documentJson,
+    String? category,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionAssetScene({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    String? sceneId,
+    String? name,
+  });
+
+  Future<MotionAssetLibraryView> crateApiMotionLibraryMotionLibrary({
+    required String root,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneAppend({
+    required String root,
+    required String sceneJson,
+    required String assetId,
+    required String valuesJson,
+    required String prefix,
+    required double offsetX,
+    required double offsetY,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneCompose({
+    required String root,
+    required String sceneId,
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+    required List<String> assetIds,
+    required List<String> valuesJson,
+    required List<double> offsetX,
+    required List<double> offsetY,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneEdit({
+    required String root,
+    required String sceneJson,
+    required String editJson,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneFromAsset({
+    required String root,
+    required String assetId,
+  });
+
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionSceneMaterialize({
+    required String root,
+    required String sceneJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneNew({
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+  });
+
+  Future<MotionScenePreviewView> crateApiMotionLibraryMotionScenePreview({
+    required String root,
+    required String sceneJson,
+    required PlatformInt64 atMilliseconds,
+  });
+
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneRead({
+    required String root,
+    required String path,
+  });
+
+  Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
+    required String root,
+    required String sceneJson,
+    required String name,
+    String? category,
   });
 
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path});
@@ -863,6 +1060,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<ProjectModelDownloadView>
   crateApiProjectProjectHostHandleBeginTranscriptionModelDownload({
     required ProjectHostHandle that,
+    required String modelId,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -872,6 +1070,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             that,
             serializer,
           );
+          sse_encode_String(modelId, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -885,7 +1084,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         ),
         constMeta:
             kCrateApiProjectProjectHostHandleBeginTranscriptionModelDownloadConstMeta,
-        argValues: [that],
+        argValues: [that, modelId],
         apiImpl: this,
       ),
     );
@@ -895,7 +1094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   get kCrateApiProjectProjectHostHandleBeginTranscriptionModelDownloadConstMeta =>
       const TaskConstMeta(
         debugName: "ProjectHostHandle_begin_transcription_model_download",
-        argNames: ["that"],
+        argNames: ["that", "modelId"],
       );
 
   @override
@@ -1269,6 +1468,75 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectActionResult> crateApiProjectProjectHostHandleDuckTimelineClip({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckMillidecibels,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_String(voiceTrackId, serializer);
+          sse_encode_i_32(duckMillidecibels, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 13,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleDuckTimelineClipConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          voiceTrackId,
+          duckMillidecibels,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleDuckTimelineClipConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_duck_timeline_clip",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "voiceTrackId",
+          "duckMillidecibels",
+        ],
+      );
+
+  @override
   Future<ProjectExportJobView> crateApiProjectProjectHostHandleExportStatus({
     required ProjectHostHandle that,
     required String projectId,
@@ -1289,7 +1557,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -1336,7 +1604,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 15,
             port: port_,
           );
         },
@@ -1391,7 +1659,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 16,
             port: port_,
           );
         },
@@ -1440,7 +1708,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 17,
             port: port_,
           );
         },
@@ -1503,7 +1771,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1563,7 +1831,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 19,
             port: port_,
           );
         },
@@ -1614,7 +1882,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1667,7 +1935,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1738,7 +2006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 22,
             port: port_,
           );
         },
@@ -1831,7 +2099,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 23,
             port: port_,
           );
         },
@@ -1899,7 +2167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 24,
             port: port_,
           );
         },
@@ -1942,7 +2210,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 25,
             port: port_,
           );
         },
@@ -1984,7 +2252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 25,
+            funcId: 26,
             port: port_,
           );
         },
@@ -2023,7 +2291,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 27,
             port: port_,
           );
         },
@@ -2074,7 +2342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 28,
             port: port_,
           );
         },
@@ -2116,6 +2384,76 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleMoveTimelineClips({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required List<String> clipIds,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_list_String(clipIds, serializer);
+          sse_encode_i_64(deltaNumerator, serializer);
+          sse_encode_u_32(deltaDenominator, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 29,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiProjectProjectHostHandleMoveTimelineClipsConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipIds,
+          deltaNumerator,
+          deltaDenominator,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleMoveTimelineClipsConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_move_timeline_clips",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipIds",
+          "deltaNumerator",
+          "deltaDenominator",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult>
   crateApiProjectProjectHostHandleMoveTimelineMarker({
     required ProjectHostHandle that,
     required String projectId,
@@ -2142,7 +2480,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 30,
             port: port_,
           );
         },
@@ -2206,7 +2544,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 31,
             port: port_,
           );
         },
@@ -2259,7 +2597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 30,
+            funcId: 32,
             port: port_,
           );
         },
@@ -2300,7 +2638,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 33,
             port: port_,
           );
         },
@@ -2338,7 +2676,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 34,
             port: port_,
           );
         },
@@ -2374,7 +2712,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 35,
             port: port_,
           );
         },
@@ -2415,7 +2753,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 36,
             port: port_,
           );
         },
@@ -2453,7 +2791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 37,
             port: port_,
           );
         },
@@ -2489,7 +2827,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 38,
             port: port_,
           );
         },
@@ -2527,7 +2865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
+            funcId: 39,
             port: port_,
           );
         },
@@ -2563,7 +2901,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 38,
+            funcId: 40,
             port: port_,
           );
         },
@@ -2602,7 +2940,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 41,
             port: port_,
           );
         },
@@ -2645,7 +2983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 42,
             port: port_,
           );
         },
@@ -2689,7 +3027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 43,
             port: port_,
           );
         },
@@ -2740,7 +3078,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 44,
             port: port_,
           );
         },
@@ -2798,7 +3136,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 45,
             port: port_,
           );
         },
@@ -2855,7 +3193,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 46,
             port: port_,
           );
         },
@@ -2891,6 +3229,47 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<ProjectTranscriptionModelView>
+  crateApiProjectProjectHostHandleRemoveTranscriptionModel({
+    required ProjectHostHandle that,
+    required String modelId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(modelId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 47,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_transcription_model_view,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleRemoveTranscriptionModelConstMeta,
+        argValues: [that, modelId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleRemoveTranscriptionModelConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_remove_transcription_model",
+        argNames: ["that", "modelId"],
+      );
+
+  @override
   Future<ProjectActionResult> crateApiProjectProjectHostHandleRename({
     required ProjectHostHandle that,
     required String projectId,
@@ -2913,7 +3292,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 48,
             port: port_,
           );
         },
@@ -2966,7 +3345,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 49,
             port: port_,
           );
         },
@@ -3021,7 +3400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 50,
             port: port_,
           );
         },
@@ -3062,7 +3441,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 51,
             port: port_,
           );
         },
@@ -3117,7 +3496,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 52,
             port: port_,
           );
         },
@@ -3184,7 +3563,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 53,
             port: port_,
           );
         },
@@ -3246,7 +3625,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 54,
             port: port_,
           );
         },
@@ -3299,7 +3678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 55,
             port: port_,
           );
         },
@@ -3318,6 +3697,181 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(
         debugName: "ProjectHostHandle_save",
         argNames: ["that"],
+      );
+
+  @override
+  Future<ProjectTranscriptionModelView>
+  crateApiProjectProjectHostHandleSelectTranscriptionModel({
+    required ProjectHostHandle that,
+    required String modelId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(modelId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 56,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_transcription_model_view,
+          decodeErrorData: sse_decode_project_bridge_error,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleSelectTranscriptionModelConstMeta,
+        argValues: [that, modelId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleSelectTranscriptionModelConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_select_transcription_model",
+        argNames: ["that", "modelId"],
+      );
+
+  @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSetTimelineClipFrozen({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_bool(frozen, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 57,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleSetTimelineClipFrozenConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          frozen,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleSetTimelineClipFrozenConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_set_timeline_clip_frozen",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "frozen",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleSetTimelineClipReversed({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_bool(reversed, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 58,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleSetTimelineClipReversedConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          reversed,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleSetTimelineClipReversedConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_set_timeline_clip_reversed",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "reversed",
+        ],
       );
 
   @override
@@ -3347,7 +3901,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 59,
             port: port_,
           );
         },
@@ -3411,7 +3965,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 60,
             port: port_,
           );
         },
@@ -3476,7 +4030,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 61,
             port: port_,
           );
         },
@@ -3541,7 +4095,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 56,
+            funcId: 62,
             port: port_,
           );
         },
@@ -3607,7 +4161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 57,
+            funcId: 63,
             port: port_,
           );
         },
@@ -3652,6 +4206,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -3665,10 +4220,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(projectInstanceId, serializer);
           sse_encode_u_64(expectedRevision, serializer);
           sse_encode_String(destination, serializer);
+          sse_encode_opt_String(quality, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 58,
+            funcId: 64,
             port: port_,
           );
         },
@@ -3683,6 +4239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           projectInstanceId,
           expectedRevision,
           destination,
+          quality,
         ],
         apiImpl: this,
       ),
@@ -3698,6 +4255,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "projectInstanceId",
           "expectedRevision",
           "destination",
+          "quality",
         ],
       );
 
@@ -3725,7 +4283,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 59,
+            funcId: 65,
             port: port_,
           );
         },
@@ -3777,7 +4335,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 60,
+              funcId: 66,
               port: port_,
             );
           },
@@ -3822,7 +4380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 61,
+              funcId: 67,
               port: port_,
             );
           },
@@ -3862,7 +4420,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 68,
             port: port_,
           );
         },
@@ -3899,7 +4457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 69,
             port: port_,
           );
         },
@@ -3940,7 +4498,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 70,
             port: port_,
           );
         },
@@ -3978,7 +4536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 71,
             port: port_,
           );
         },
@@ -4001,6 +4559,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<List<ProjectTranscriptionModelOptionView>>
+  crateApiProjectProjectHostHandleTranscriptionModels({
+    required ProjectHostHandle that,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 72,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_list_project_transcription_model_option_view,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleTranscriptionModelsConstMeta,
+        argValues: [that],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleTranscriptionModelsConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_transcription_models",
+        argNames: ["that"],
+      );
+
+  @override
   Future<ProjectTranscriptProposalView?>
   crateApiProjectProjectHostHandleTranscriptionProposal({
     required ProjectHostHandle that,
@@ -4018,7 +4616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 73,
             port: port_,
           );
         },
@@ -4073,7 +4671,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 74,
             port: port_,
           );
         },
@@ -4136,7 +4734,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 75,
             port: port_,
           );
         },
@@ -4193,7 +4791,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 76,
             port: port_,
           );
         },
@@ -4234,6 +4832,73 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<ProjectActionResult>
+  crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate({
+    required ProjectHostHandle that,
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle(
+            that,
+            serializer,
+          );
+          sse_encode_String(projectId, serializer);
+          sse_encode_String(projectInstanceId, serializer);
+          sse_encode_u_64(expectedRevision, serializer);
+          sse_encode_String(trackId, serializer);
+          sse_encode_String(clipId, serializer);
+          sse_encode_box_autoadd_rational_rate_view(rate, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 77,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_project_action_result,
+          decodeErrorData: null,
+        ),
+        constMeta:
+            kCrateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRateConstMeta,
+        argValues: [
+          that,
+          projectId,
+          projectInstanceId,
+          expectedRevision,
+          trackId,
+          clipId,
+          rate,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRateConstMeta =>
+      const TaskConstMeta(
+        debugName: "ProjectHostHandle_update_timeline_clip_playback_rate",
+        argNames: [
+          "that",
+          "projectId",
+          "projectInstanceId",
+          "expectedRevision",
+          "trackId",
+          "clipId",
+          "rate",
+        ],
+      );
+
+  @override
+  Future<ProjectActionResult>
   crateApiProjectProjectHostHandleUpdateTimelineClipVisualSettings({
     required ProjectHostHandle that,
     required String projectId,
@@ -4263,7 +4928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 78,
             port: port_,
           );
         },
@@ -4341,7 +5006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 79,
             port: port_,
           );
         },
@@ -4397,7 +5062,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 80,
             port: port_,
           );
         },
@@ -4427,7 +5092,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 81,
             port: port_,
           );
         },
@@ -4454,7 +5119,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 74,
+            funcId: 82,
             port: port_,
           );
         },
@@ -4486,7 +5151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 75,
+            funcId: 83,
             port: port_,
           );
         },
@@ -4520,7 +5185,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
+            funcId: 84,
             port: port_,
           );
         },
@@ -4547,7 +5212,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 85,
             port: port_,
           );
         },
@@ -4577,7 +5242,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 86,
             port: port_,
           );
         },
@@ -4617,7 +5282,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 87,
             port: port_,
           );
         },
@@ -4677,7 +5342,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 88,
             port: port_,
           );
         },
@@ -4715,6 +5380,733 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetImportImage({
+    required String root,
+    required String sourcePath,
+    required String name,
+    String? category,
+    required List<String> tags,
+    required int width,
+    required int height,
+    required int seconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sourcePath, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_opt_String(category, serializer);
+          sse_encode_list_String(tags, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 89,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetImportImageConstMeta,
+        argValues: [
+          root,
+          sourcePath,
+          name,
+          category,
+          tags,
+          width,
+          height,
+          seconds,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetImportImageConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_import_image",
+        argNames: [
+          "root",
+          "sourcePath",
+          "name",
+          "category",
+          "tags",
+          "width",
+          "height",
+          "seconds",
+        ],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetLoad({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 90,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetLoadConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetLoadConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_load",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionAssetMaterialize({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 91,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetMaterializeConstMeta,
+        argValues: [
+          root,
+          assetId,
+          valuesJson,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetMaterializeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_materialize",
+        argNames: [
+          "root",
+          "assetId",
+          "valuesJson",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+        ],
+      );
+
+  @override
+  Future<MotionAssetMutationView> crateApiMotionLibraryMotionAssetRemove({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 92,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_mutation_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetRemoveConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetRemoveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_remove",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionAssetSave({
+    required String root,
+    required String documentJson,
+    String? category,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(documentJson, serializer);
+          sse_encode_opt_String(category, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 93,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetSaveConstMeta,
+        argValues: [root, documentJson, category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetSaveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_save",
+        argNames: ["root", "documentJson", "category"],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionAssetScene({
+    required String root,
+    required String assetId,
+    required String valuesJson,
+    String? sceneId,
+    String? name,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_opt_String(sceneId, serializer);
+          sse_encode_opt_String(name, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 94,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionAssetSceneConstMeta,
+        argValues: [root, assetId, valuesJson, sceneId, name],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionAssetSceneConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_asset_scene",
+        argNames: ["root", "assetId", "valuesJson", "sceneId", "name"],
+      );
+
+  @override
+  Future<MotionAssetLibraryView> crateApiMotionLibraryMotionLibrary({
+    required String root,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 95,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_library_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionLibraryConstMeta,
+        argValues: [root],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionLibraryConstMeta =>
+      const TaskConstMeta(debugName: "motion_library", argNames: ["root"]);
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneAppend({
+    required String root,
+    required String sceneJson,
+    required String assetId,
+    required String valuesJson,
+    required String prefix,
+    required double offsetX,
+    required double offsetY,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(assetId, serializer);
+          sse_encode_String(valuesJson, serializer);
+          sse_encode_String(prefix, serializer);
+          sse_encode_f_64(offsetX, serializer);
+          sse_encode_f_64(offsetY, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 96,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneAppendConstMeta,
+        argValues: [
+          root,
+          sceneJson,
+          assetId,
+          valuesJson,
+          prefix,
+          offsetX,
+          offsetY,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneAppendConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_append",
+        argNames: [
+          "root",
+          "sceneJson",
+          "assetId",
+          "valuesJson",
+          "prefix",
+          "offsetX",
+          "offsetY",
+        ],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneCompose({
+    required String root,
+    required String sceneId,
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+    required List<String> assetIds,
+    required List<String> valuesJson,
+    required List<double> offsetX,
+    required List<double> offsetY,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneId, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          sse_encode_list_String(assetIds, serializer);
+          sse_encode_list_String(valuesJson, serializer);
+          sse_encode_list_prim_f_64_loose(offsetX, serializer);
+          sse_encode_list_prim_f_64_loose(offsetY, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 97,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneComposeConstMeta,
+        argValues: [
+          root,
+          sceneId,
+          name,
+          width,
+          height,
+          seconds,
+          assetIds,
+          valuesJson,
+          offsetX,
+          offsetY,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneComposeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_compose",
+        argNames: [
+          "root",
+          "sceneId",
+          "name",
+          "width",
+          "height",
+          "seconds",
+          "assetIds",
+          "valuesJson",
+          "offsetX",
+          "offsetY",
+        ],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneEdit({
+    required String root,
+    required String sceneJson,
+    required String editJson,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(editJson, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 98,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneEditConstMeta,
+        argValues: [root, sceneJson, editJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneEditConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_edit",
+        argNames: ["root", "sceneJson", "editJson"],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneFromAsset({
+    required String root,
+    required String assetId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(assetId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 99,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneFromAssetConstMeta,
+        argValues: [root, assetId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneFromAssetConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_from_asset",
+        argNames: ["root", "assetId"],
+      );
+
+  @override
+  Future<MotionMaterializationView>
+  crateApiMotionLibraryMotionSceneMaterialize({
+    required String root,
+    required String sceneJson,
+    required String outputPath,
+    required int frameRateNumerator,
+    required int frameRateDenominator,
+    required int width,
+    required int height,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(outputPath, serializer);
+          sse_encode_u_32(frameRateNumerator, serializer);
+          sse_encode_u_32(frameRateDenominator, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 100,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_materialization_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneMaterializeConstMeta,
+        argValues: [
+          root,
+          sceneJson,
+          outputPath,
+          frameRateNumerator,
+          frameRateDenominator,
+          width,
+          height,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneMaterializeConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_materialize",
+        argNames: [
+          "root",
+          "sceneJson",
+          "outputPath",
+          "frameRateNumerator",
+          "frameRateDenominator",
+          "width",
+          "height",
+        ],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneNew({
+    required String name,
+    required int width,
+    required int height,
+    required int seconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(name, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(seconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 101,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneNewConstMeta,
+        argValues: [name, width, height, seconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneNewConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_new",
+        argNames: ["name", "width", "height", "seconds"],
+      );
+
+  @override
+  Future<MotionScenePreviewView> crateApiMotionLibraryMotionScenePreview({
+    required String root,
+    required String sceneJson,
+    required PlatformInt64 atMilliseconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_i_64(atMilliseconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 102,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_preview_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionScenePreviewConstMeta,
+        argValues: [root, sceneJson, atMilliseconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionScenePreviewConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_preview",
+        argNames: ["root", "sceneJson", "atMilliseconds"],
+      );
+
+  @override
+  Future<MotionSceneView> crateApiMotionLibraryMotionSceneRead({
+    required String root,
+    required String path,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(path, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 103,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_scene_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneReadConstMeta,
+        argValues: [root, path],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneReadConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_read",
+        argNames: ["root", "path"],
+      );
+
+  @override
+  Future<MotionAssetView> crateApiMotionLibraryMotionSceneSave({
+    required String root,
+    required String sceneJson,
+    required String name,
+    String? category,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(root, serializer);
+          sse_encode_String(sceneJson, serializer);
+          sse_encode_String(name, serializer);
+          sse_encode_opt_String(category, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 104,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_motion_asset_view,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiMotionLibraryMotionSceneSaveConstMeta,
+        argValues: [root, sceneJson, name, category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiMotionLibraryMotionSceneSaveConstMeta =>
+      const TaskConstMeta(
+        debugName: "motion_scene_save",
+        argNames: ["root", "sceneJson", "name", "category"],
+      );
+
+  @override
   Future<ProjectHostHandle> crateApiProjectOpenProject({required String path}) {
     return handler.executeNormal(
       NormalTask(
@@ -4724,7 +6116,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 105,
             port: port_,
           );
         },
@@ -4839,6 +6231,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -4850,6 +6248,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_media_artifact_bytes_view(raw);
+  }
+
+  @protected
+  ProjectTextBackgroundView dco_decode_box_autoadd_project_text_background_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_project_text_background_view(raw);
   }
 
   @protected
@@ -4937,6 +6343,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   FontIdentityView dco_decode_font_identity_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return FontIdentityView.values[raw as int];
@@ -4979,6 +6391,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<Capability> dco_decode_list_capability(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_capability).toList();
+  }
+
+  @protected
+  List<MotionAssetEntryView> dco_decode_list_motion_asset_entry_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_asset_entry_view)
+        .toList();
+  }
+
+  @protected
+  List<MotionAssetParameterView> dco_decode_list_motion_asset_parameter_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_asset_parameter_view)
+        .toList();
+  }
+
+  @protected
+  List<MotionSceneNodeView> dco_decode_list_motion_scene_node_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_motion_scene_node_view)
+        .toList();
+  }
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<double>;
+  }
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Float64List;
   }
 
   @protected
@@ -5043,6 +6497,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_project_transcript_segment_view)
+        .toList();
+  }
+
+  @protected
+  List<ProjectTranscriptionModelOptionView>
+  dco_decode_list_project_transcription_model_option_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_project_transcription_model_option_view)
         .toList();
   }
 
@@ -5132,6 +6595,99 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionAssetEntryView dco_decode_motion_asset_entry_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return MotionAssetEntryView(
+      assetId: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      category: dco_decode_String(arr[2]),
+      categorySource: dco_decode_String(arr[3]),
+      kind: dco_decode_String(arr[4]),
+      tags: dco_decode_list_String(arr[5]),
+      canvasWidth: dco_decode_u_32(arr[6]),
+      canvasHeight: dco_decode_u_32(arr[7]),
+      durationMilliseconds: dco_decode_i_64(arr[8]),
+      previewPath: dco_decode_String(arr[9]),
+    );
+  }
+
+  @protected
+  MotionAssetLibraryView dco_decode_motion_asset_library_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MotionAssetLibraryView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      root: dco_decode_String(arr[3]),
+      entries: dco_decode_list_motion_asset_entry_view(arr[4]),
+    );
+  }
+
+  @protected
+  MotionAssetMutationView dco_decode_motion_asset_mutation_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return MotionAssetMutationView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      removed: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  MotionAssetParameterView dco_decode_motion_asset_parameter_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return MotionAssetParameterView(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      kind: dco_decode_String(arr[2]),
+      nodeId: dco_decode_String(arr[3]),
+      field: dco_decode_String(arr[4]),
+      defaultJson: dco_decode_String(arr[5]),
+      min: dco_decode_opt_box_autoadd_f_64(arr[6]),
+      max: dco_decode_opt_box_autoadd_f_64(arr[7]),
+      choices: dco_decode_list_String(arr[8]),
+    );
+  }
+
+  @protected
+  MotionAssetView dco_decode_motion_asset_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return MotionAssetView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      assetId: dco_decode_String(arr[3]),
+      name: dco_decode_String(arr[4]),
+      category: dco_decode_String(arr[5]),
+      categorySource: dco_decode_String(arr[6]),
+      kind: dco_decode_String(arr[7]),
+      tags: dco_decode_list_String(arr[8]),
+      canvasWidth: dco_decode_u_32(arr[9]),
+      canvasHeight: dco_decode_u_32(arr[10]),
+      durationMilliseconds: dco_decode_i_64(arr[11]),
+      previewPath: dco_decode_String(arr[12]),
+      documentJson: dco_decode_String(arr[13]),
+      parameters: dco_decode_list_motion_asset_parameter_view(arr[14]),
+    );
+  }
+
+  @protected
   MotionMaterializationView dco_decode_motion_materialization_view(
     dynamic raw,
   ) {
@@ -5158,6 +6714,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionSceneNodeView dco_decode_motion_scene_node_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 25)
+      throw Exception('unexpected arr length: expect 25 but see ${arr.length}');
+    return MotionSceneNodeView(
+      nodeId: dco_decode_String(arr[0]),
+      kind: dco_decode_String(arr[1]),
+      text: dco_decode_String(arr[2]),
+      x: dco_decode_f_64(arr[3]),
+      y: dco_decode_f_64(arr[4]),
+      width: dco_decode_f_64(arr[5]),
+      height: dco_decode_f_64(arr[6]),
+      fontSize: dco_decode_f_64(arr[7]),
+      opacity: dco_decode_f_64(arr[8]),
+      hasFill: dco_decode_bool(arr[9]),
+      fillRed: dco_decode_u_32(arr[10]),
+      fillGreen: dco_decode_u_32(arr[11]),
+      fillBlue: dco_decode_u_32(arr[12]),
+      fillAlpha: dco_decode_u_32(arr[13]),
+      hasStroke: dco_decode_bool(arr[14]),
+      strokeRed: dco_decode_u_32(arr[15]),
+      strokeGreen: dco_decode_u_32(arr[16]),
+      strokeBlue: dco_decode_u_32(arr[17]),
+      strokeAlpha: dco_decode_u_32(arr[18]),
+      strokeWidth: dco_decode_f_64(arr[19]),
+      rotationDegrees: dco_decode_f_64(arr[20]),
+      resizable: dco_decode_bool(arr[21]),
+      strokeable: dco_decode_bool(arr[22]),
+      depth: dco_decode_u_32(arr[23]),
+      animated: dco_decode_bool(arr[24]),
+    );
+  }
+
+  @protected
+  MotionScenePreviewView dco_decode_motion_scene_preview_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return MotionScenePreviewView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      png: dco_decode_list_prim_u_8_strict(arr[3]),
+      width: dco_decode_u_32(arr[4]),
+      height: dco_decode_u_32(arr[5]),
+    );
+  }
+
+  @protected
+  MotionSceneView dco_decode_motion_scene_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return MotionSceneView(
+      ok: dco_decode_bool(arr[0]),
+      code: dco_decode_String(arr[1]),
+      message: dco_decode_String(arr[2]),
+      sceneJson: dco_decode_String(arr[3]),
+      sceneId: dco_decode_String(arr[4]),
+      name: dco_decode_String(arr[5]),
+      width: dco_decode_u_32(arr[6]),
+      height: dco_decode_u_32(arr[7]),
+      durationMilliseconds: dco_decode_i_64(arr[8]),
+      previewPng: dco_decode_list_prim_u_8_strict(arr[9]),
+      nodes: dco_decode_list_motion_scene_node_view(arr[10]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -5167,6 +6795,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_bool(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -5183,6 +6817,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_media_artifact_bytes_view(raw);
+  }
+
+  @protected
+  ProjectTextBackgroundView?
+  dco_decode_opt_box_autoadd_project_text_background_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_project_text_background_view(raw);
   }
 
   @protected
@@ -5372,14 +7015,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectModelDownloadView dco_decode_project_model_download_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return ProjectModelDownloadView(
       downloadId: dco_decode_String(arr[0]),
-      destination: dco_decode_String(arr[1]),
-      source: dco_decode_String(arr[2]),
-      sizeBytes: dco_decode_u_64(arr[3]),
-      license: dco_decode_String(arr[4]),
+      modelId: dco_decode_String(arr[1]),
+      destination: dco_decode_String(arr[2]),
+      source: dco_decode_String(arr[3]),
+      sizeBytes: dco_decode_u_64(arr[4]),
+      license: dco_decode_String(arr[5]),
     );
   }
 
@@ -5420,6 +7064,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView dco_decode_project_text_background_view(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return ProjectTextBackgroundView(
+      color: dco_decode_project_text_color_view(arr[0]),
+      paddingMilliPoints: dco_decode_u_32(arr[1]),
+    );
+  }
+
+  @protected
   ProjectTextColorView dco_decode_project_text_color_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -5439,14 +7097,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProjectTextFormattingView(
       font: dco_decode_font_identity_view(arr[0]),
       sizeMilliPoints: dco_decode_u_32(arr[1]),
       weight: dco_decode_text_weight_view(arr[2]),
       alignment: dco_decode_text_alignment_view(arr[3]),
       color: dco_decode_project_text_color_view(arr[4]),
+      anchor: dco_decode_text_vertical_anchor_view(arr[5]),
+      offsetXBasisPoints: dco_decode_i_16(arr[6]),
+      offsetYBasisPoints: dco_decode_i_16(arr[7]),
+      background: dco_decode_opt_box_autoadd_project_text_background_view(
+        arr[8],
+      ),
+      opacityBasisPoints: dco_decode_u_16(arr[9]),
     );
   }
 
@@ -5490,19 +7155,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return ProjectTimelineClipView(
       clipId: dco_decode_String(arr[0]),
       contentKind: dco_decode_timeline_clip_content_kind_view(arr[1]),
-      mediaId: dco_decode_opt_String(arr[2]),
-      text: dco_decode_opt_String(arr[3]),
+      playbackRate: dco_decode_rational_rate_view(arr[2]),
+      reversed: dco_decode_bool(arr[3]),
+      frozen: dco_decode_bool(arr[4]),
+      mediaId: dco_decode_opt_String(arr[5]),
+      text: dco_decode_opt_String(arr[6]),
       formatting: dco_decode_opt_box_autoadd_project_text_formatting_view(
-        arr[4],
+        arr[7],
       ),
-      timelineStart: dco_decode_rational_time_view(arr[5]),
-      timelineDuration: dco_decode_rational_time_view(arr[6]),
-      sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[7]),
+      timelineStart: dco_decode_rational_time_view(arr[8]),
+      timelineDuration: dco_decode_rational_time_view(arr[9]),
+      sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[10]),
     );
   }
 
@@ -5718,22 +7386,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTranscriptionModelOptionView
+  dco_decode_project_transcription_model_option_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return ProjectTranscriptionModelOptionView(
+      modelId: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      version: dco_decode_String(arr[2]),
+      license: dco_decode_String(arr[3]),
+      language: dco_decode_String(arr[4]),
+      sizeBytes: dco_decode_u_64(arr[5]),
+      source: dco_decode_String(arr[6]),
+      installed: dco_decode_bool(arr[7]),
+      providerAvailable: dco_decode_bool(arr[8]),
+      active: dco_decode_bool(arr[9]),
+    );
+  }
+
+  @protected
   ProjectTranscriptionModelView dco_decode_project_transcription_model_view(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProjectTranscriptionModelView(
       modelId: dco_decode_String(arr[0]),
-      version: dco_decode_String(arr[1]),
-      license: dco_decode_String(arr[2]),
-      language: dco_decode_String(arr[3]),
-      sizeBytes: dco_decode_u_64(arr[4]),
-      source: dco_decode_String(arr[5]),
-      installed: dco_decode_bool(arr[6]),
-      providerAvailable: dco_decode_bool(arr[7]),
+      label: dco_decode_String(arr[1]),
+      version: dco_decode_String(arr[2]),
+      license: dco_decode_String(arr[3]),
+      language: dco_decode_String(arr[4]),
+      sizeBytes: dco_decode_u_64(arr[5]),
+      source: dco_decode_String(arr[6]),
+      installed: dco_decode_bool(arr[7]),
+      providerAvailable: dco_decode_bool(arr[8]),
+      active: dco_decode_bool(arr[9]),
     );
   }
 
@@ -5811,6 +7502,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TextAlignmentView dco_decode_text_alignment_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return TextAlignmentView.values[raw as int];
+  }
+
+  @protected
+  TextVerticalAnchorView dco_decode_text_vertical_anchor_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TextVerticalAnchorView.values[raw as int];
   }
 
   @protected
@@ -6005,6 +7702,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_i_32(deserializer));
@@ -6016,6 +7719,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_media_artifact_bytes_view(deserializer));
+  }
+
+  @protected
+  ProjectTextBackgroundView sse_decode_box_autoadd_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_project_text_background_view(deserializer));
   }
 
   @protected
@@ -6116,6 +7827,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
   FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
@@ -6169,6 +7886,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ans_.add(sse_decode_capability(deserializer));
     }
     return ans_;
+  }
+
+  @protected
+  List<MotionAssetEntryView> sse_decode_list_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionAssetEntryView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_asset_entry_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MotionAssetParameterView> sse_decode_list_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionAssetParameterView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_asset_parameter_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MotionSceneNodeView> sse_decode_list_motion_scene_node_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MotionSceneNodeView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_motion_scene_node_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
+  }
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getFloat64List(len_);
   }
 
   @protected
@@ -6259,6 +8032,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ProjectTranscriptSegmentView>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_project_transcript_segment_view(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<ProjectTranscriptionModelOptionView>
+  sse_decode_list_project_transcription_model_option_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ProjectTranscriptionModelOptionView>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(
+        sse_decode_project_transcription_model_option_view(deserializer),
+      );
     }
     return ans_;
   }
@@ -6370,6 +8160,137 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionAssetEntryView sse_decode_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_assetId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_categorySource = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_canvasWidth = sse_decode_u_32(deserializer);
+    var var_canvasHeight = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPath = sse_decode_String(deserializer);
+    return MotionAssetEntryView(
+      assetId: var_assetId,
+      name: var_name,
+      category: var_category,
+      categorySource: var_categorySource,
+      kind: var_kind,
+      tags: var_tags,
+      canvasWidth: var_canvasWidth,
+      canvasHeight: var_canvasHeight,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPath: var_previewPath,
+    );
+  }
+
+  @protected
+  MotionAssetLibraryView sse_decode_motion_asset_library_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_root = sse_decode_String(deserializer);
+    var var_entries = sse_decode_list_motion_asset_entry_view(deserializer);
+    return MotionAssetLibraryView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      root: var_root,
+      entries: var_entries,
+    );
+  }
+
+  @protected
+  MotionAssetMutationView sse_decode_motion_asset_mutation_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_removed = sse_decode_bool(deserializer);
+    return MotionAssetMutationView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      removed: var_removed,
+    );
+  }
+
+  @protected
+  MotionAssetParameterView sse_decode_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_nodeId = sse_decode_String(deserializer);
+    var var_field = sse_decode_String(deserializer);
+    var var_defaultJson = sse_decode_String(deserializer);
+    var var_min = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_max = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_choices = sse_decode_list_String(deserializer);
+    return MotionAssetParameterView(
+      id: var_id,
+      label: var_label,
+      kind: var_kind,
+      nodeId: var_nodeId,
+      field: var_field,
+      defaultJson: var_defaultJson,
+      min: var_min,
+      max: var_max,
+      choices: var_choices,
+    );
+  }
+
+  @protected
+  MotionAssetView sse_decode_motion_asset_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_assetId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_categorySource = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_canvasWidth = sse_decode_u_32(deserializer);
+    var var_canvasHeight = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPath = sse_decode_String(deserializer);
+    var var_documentJson = sse_decode_String(deserializer);
+    var var_parameters = sse_decode_list_motion_asset_parameter_view(
+      deserializer,
+    );
+    return MotionAssetView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      assetId: var_assetId,
+      name: var_name,
+      category: var_category,
+      categorySource: var_categorySource,
+      kind: var_kind,
+      tags: var_tags,
+      canvasWidth: var_canvasWidth,
+      canvasHeight: var_canvasHeight,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPath: var_previewPath,
+      documentJson: var_documentJson,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
   MotionMaterializationView sse_decode_motion_materialization_view(
     SseDeserializer deserializer,
   ) {
@@ -6407,6 +8328,115 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  MotionSceneNodeView sse_decode_motion_scene_node_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_String(deserializer);
+    var var_kind = sse_decode_String(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_x = sse_decode_f_64(deserializer);
+    var var_y = sse_decode_f_64(deserializer);
+    var var_width = sse_decode_f_64(deserializer);
+    var var_height = sse_decode_f_64(deserializer);
+    var var_fontSize = sse_decode_f_64(deserializer);
+    var var_opacity = sse_decode_f_64(deserializer);
+    var var_hasFill = sse_decode_bool(deserializer);
+    var var_fillRed = sse_decode_u_32(deserializer);
+    var var_fillGreen = sse_decode_u_32(deserializer);
+    var var_fillBlue = sse_decode_u_32(deserializer);
+    var var_fillAlpha = sse_decode_u_32(deserializer);
+    var var_hasStroke = sse_decode_bool(deserializer);
+    var var_strokeRed = sse_decode_u_32(deserializer);
+    var var_strokeGreen = sse_decode_u_32(deserializer);
+    var var_strokeBlue = sse_decode_u_32(deserializer);
+    var var_strokeAlpha = sse_decode_u_32(deserializer);
+    var var_strokeWidth = sse_decode_f_64(deserializer);
+    var var_rotationDegrees = sse_decode_f_64(deserializer);
+    var var_resizable = sse_decode_bool(deserializer);
+    var var_strokeable = sse_decode_bool(deserializer);
+    var var_depth = sse_decode_u_32(deserializer);
+    var var_animated = sse_decode_bool(deserializer);
+    return MotionSceneNodeView(
+      nodeId: var_nodeId,
+      kind: var_kind,
+      text: var_text,
+      x: var_x,
+      y: var_y,
+      width: var_width,
+      height: var_height,
+      fontSize: var_fontSize,
+      opacity: var_opacity,
+      hasFill: var_hasFill,
+      fillRed: var_fillRed,
+      fillGreen: var_fillGreen,
+      fillBlue: var_fillBlue,
+      fillAlpha: var_fillAlpha,
+      hasStroke: var_hasStroke,
+      strokeRed: var_strokeRed,
+      strokeGreen: var_strokeGreen,
+      strokeBlue: var_strokeBlue,
+      strokeAlpha: var_strokeAlpha,
+      strokeWidth: var_strokeWidth,
+      rotationDegrees: var_rotationDegrees,
+      resizable: var_resizable,
+      strokeable: var_strokeable,
+      depth: var_depth,
+      animated: var_animated,
+    );
+  }
+
+  @protected
+  MotionScenePreviewView sse_decode_motion_scene_preview_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_png = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    return MotionScenePreviewView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      png: var_png,
+      width: var_width,
+      height: var_height,
+    );
+  }
+
+  @protected
+  MotionSceneView sse_decode_motion_scene_view(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_ok = sse_decode_bool(deserializer);
+    var var_code = sse_decode_String(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_sceneJson = sse_decode_String(deserializer);
+    var var_sceneId = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_durationMilliseconds = sse_decode_i_64(deserializer);
+    var var_previewPng = sse_decode_list_prim_u_8_strict(deserializer);
+    var var_nodes = sse_decode_list_motion_scene_node_view(deserializer);
+    return MotionSceneView(
+      ok: var_ok,
+      code: var_code,
+      message: var_message,
+      sceneJson: var_sceneJson,
+      sceneId: var_sceneId,
+      name: var_name,
+      width: var_width,
+      height: var_height,
+      durationMilliseconds: var_durationMilliseconds,
+      previewPng: var_previewPng,
+      nodes: var_nodes,
+    );
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -6423,6 +8453,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_bool(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
     } else {
       return null;
     }
@@ -6447,6 +8488,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_media_artifact_bytes_view(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ProjectTextBackgroundView?
+  sse_decode_opt_box_autoadd_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_project_text_background_view(
+        deserializer,
+      ));
     } else {
       return null;
     }
@@ -6724,12 +8781,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_downloadId = sse_decode_String(deserializer);
+    var var_modelId = sse_decode_String(deserializer);
     var var_destination = sse_decode_String(deserializer);
     var var_source = sse_decode_String(deserializer);
     var var_sizeBytes = sse_decode_u_64(deserializer);
     var var_license = sse_decode_String(deserializer);
     return ProjectModelDownloadView(
       downloadId: var_downloadId,
+      modelId: var_modelId,
       destination: var_destination,
       source: var_source,
       sizeBytes: var_sizeBytes,
@@ -6790,6 +8849,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTextBackgroundView sse_decode_project_text_background_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_color = sse_decode_project_text_color_view(deserializer);
+    var var_paddingMilliPoints = sse_decode_u_32(deserializer);
+    return ProjectTextBackgroundView(
+      color: var_color,
+      paddingMilliPoints: var_paddingMilliPoints,
+    );
+  }
+
+  @protected
   ProjectTextColorView sse_decode_project_text_color_view(
     SseDeserializer deserializer,
   ) {
@@ -6816,12 +8888,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_weight = sse_decode_text_weight_view(deserializer);
     var var_alignment = sse_decode_text_alignment_view(deserializer);
     var var_color = sse_decode_project_text_color_view(deserializer);
+    var var_anchor = sse_decode_text_vertical_anchor_view(deserializer);
+    var var_offsetXBasisPoints = sse_decode_i_16(deserializer);
+    var var_offsetYBasisPoints = sse_decode_i_16(deserializer);
+    var var_background =
+        sse_decode_opt_box_autoadd_project_text_background_view(deserializer);
+    var var_opacityBasisPoints = sse_decode_u_16(deserializer);
     return ProjectTextFormattingView(
       font: var_font,
       sizeMilliPoints: var_sizeMilliPoints,
       weight: var_weight,
       alignment: var_alignment,
       color: var_color,
+      anchor: var_anchor,
+      offsetXBasisPoints: var_offsetXBasisPoints,
+      offsetYBasisPoints: var_offsetYBasisPoints,
+      background: var_background,
+      opacityBasisPoints: var_opacityBasisPoints,
     );
   }
 
@@ -6879,6 +8962,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_contentKind = sse_decode_timeline_clip_content_kind_view(
       deserializer,
     );
+    var var_playbackRate = sse_decode_rational_rate_view(deserializer);
+    var var_reversed = sse_decode_bool(deserializer);
+    var var_frozen = sse_decode_bool(deserializer);
     var var_mediaId = sse_decode_opt_String(deserializer);
     var var_text = sse_decode_opt_String(deserializer);
     var var_formatting =
@@ -6891,6 +8977,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return ProjectTimelineClipView(
       clipId: var_clipId,
       contentKind: var_contentKind,
+      playbackRate: var_playbackRate,
+      reversed: var_reversed,
+      frozen: var_frozen,
       mediaId: var_mediaId,
       text: var_text,
       formatting: var_formatting,
@@ -7180,11 +9269,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ProjectTranscriptionModelView sse_decode_project_transcription_model_view(
+  ProjectTranscriptionModelOptionView
+  sse_decode_project_transcription_model_option_view(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_modelId = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
     var var_version = sse_decode_String(deserializer);
     var var_license = sse_decode_String(deserializer);
     var var_language = sse_decode_String(deserializer);
@@ -7192,8 +9283,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_source = sse_decode_String(deserializer);
     var var_installed = sse_decode_bool(deserializer);
     var var_providerAvailable = sse_decode_bool(deserializer);
-    return ProjectTranscriptionModelView(
+    var var_active = sse_decode_bool(deserializer);
+    return ProjectTranscriptionModelOptionView(
       modelId: var_modelId,
+      label: var_label,
       version: var_version,
       license: var_license,
       language: var_language,
@@ -7201,6 +9294,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       source: var_source,
       installed: var_installed,
       providerAvailable: var_providerAvailable,
+      active: var_active,
+    );
+  }
+
+  @protected
+  ProjectTranscriptionModelView sse_decode_project_transcription_model_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_modelId = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_version = sse_decode_String(deserializer);
+    var var_license = sse_decode_String(deserializer);
+    var var_language = sse_decode_String(deserializer);
+    var var_sizeBytes = sse_decode_u_64(deserializer);
+    var var_source = sse_decode_String(deserializer);
+    var var_installed = sse_decode_bool(deserializer);
+    var var_providerAvailable = sse_decode_bool(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    return ProjectTranscriptionModelView(
+      modelId: var_modelId,
+      label: var_label,
+      version: var_version,
+      license: var_license,
+      language: var_language,
+      sizeBytes: var_sizeBytes,
+      source: var_source,
+      installed: var_installed,
+      providerAvailable: var_providerAvailable,
+      active: var_active,
     );
   }
 
@@ -7290,6 +9413,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return TextAlignmentView.values[inner];
+  }
+
+  @protected
+  TextVerticalAnchorView sse_decode_text_vertical_anchor_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TextVerticalAnchorView.values[inner];
   }
 
   @protected
@@ -7510,6 +9642,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self, serializer);
@@ -7522,6 +9660,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_media_artifact_bytes_view(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_text_background_view(self, serializer);
   }
 
   @protected
@@ -7625,6 +9772,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
   void sse_encode_font_identity_view(
     FontIdentityView self,
     SseSerializer serializer,
@@ -7676,6 +9829,64 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     for (final item in self) {
       sse_encode_capability(item, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_list_motion_asset_entry_view(
+    List<MotionAssetEntryView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_asset_entry_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_motion_asset_parameter_view(
+    List<MotionAssetParameterView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_asset_parameter_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_motion_scene_node_view(
+    List<MotionSceneNodeView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_motion_scene_node_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(
+      self is Float64List ? self : Float64List.fromList(self),
+    );
+  }
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putFloat64List(self);
   }
 
   @protected
@@ -7757,6 +9968,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_project_transcript_segment_view(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_project_transcription_model_option_view(
+    List<ProjectTranscriptionModelOptionView> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_project_transcription_model_option_view(item, serializer);
     }
   }
 
@@ -7843,6 +10066,89 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_motion_asset_entry_view(
+    MotionAssetEntryView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.assetId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_String(self.categorySource, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_u_32(self.canvasWidth, serializer);
+    sse_encode_u_32(self.canvasHeight, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_String(self.previewPath, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_library_view(
+    MotionAssetLibraryView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.root, serializer);
+    sse_encode_list_motion_asset_entry_view(self.entries, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_mutation_view(
+    MotionAssetMutationView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_bool(self.removed, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_parameter_view(
+    MotionAssetParameterView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.nodeId, serializer);
+    sse_encode_String(self.field, serializer);
+    sse_encode_String(self.defaultJson, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.min, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.max, serializer);
+    sse_encode_list_String(self.choices, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_asset_view(
+    MotionAssetView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.assetId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_String(self.categorySource, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_u_32(self.canvasWidth, serializer);
+    sse_encode_u_32(self.canvasHeight, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_String(self.previewPath, serializer);
+    sse_encode_String(self.documentJson, serializer);
+    sse_encode_list_motion_asset_parameter_view(self.parameters, serializer);
+  }
+
+  @protected
   void sse_encode_motion_materialization_view(
     MotionMaterializationView self,
     SseSerializer serializer,
@@ -7862,6 +10168,72 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.durationNumerator, serializer);
     sse_encode_i_64(self.durationDenominator, serializer);
     sse_encode_u_64(self.bytesWritten, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_scene_node_view(
+    MotionSceneNodeView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.nodeId, serializer);
+    sse_encode_String(self.kind, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_f_64(self.x, serializer);
+    sse_encode_f_64(self.y, serializer);
+    sse_encode_f_64(self.width, serializer);
+    sse_encode_f_64(self.height, serializer);
+    sse_encode_f_64(self.fontSize, serializer);
+    sse_encode_f_64(self.opacity, serializer);
+    sse_encode_bool(self.hasFill, serializer);
+    sse_encode_u_32(self.fillRed, serializer);
+    sse_encode_u_32(self.fillGreen, serializer);
+    sse_encode_u_32(self.fillBlue, serializer);
+    sse_encode_u_32(self.fillAlpha, serializer);
+    sse_encode_bool(self.hasStroke, serializer);
+    sse_encode_u_32(self.strokeRed, serializer);
+    sse_encode_u_32(self.strokeGreen, serializer);
+    sse_encode_u_32(self.strokeBlue, serializer);
+    sse_encode_u_32(self.strokeAlpha, serializer);
+    sse_encode_f_64(self.strokeWidth, serializer);
+    sse_encode_f_64(self.rotationDegrees, serializer);
+    sse_encode_bool(self.resizable, serializer);
+    sse_encode_bool(self.strokeable, serializer);
+    sse_encode_u_32(self.depth, serializer);
+    sse_encode_bool(self.animated, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_scene_preview_view(
+    MotionScenePreviewView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_list_prim_u_8_strict(self.png, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+  }
+
+  @protected
+  void sse_encode_motion_scene_view(
+    MotionSceneView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.ok, serializer);
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_String(self.sceneJson, serializer);
+    sse_encode_String(self.sceneId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_i_64(self.durationMilliseconds, serializer);
+    sse_encode_list_prim_u_8_strict(self.previewPng, serializer);
+    sse_encode_list_motion_scene_node_view(self.nodes, serializer);
   }
 
   @protected
@@ -7885,6 +10257,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -7904,6 +10286,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_media_artifact_bytes_view(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_project_text_background_view(self, serializer);
     }
   }
 
@@ -8126,6 +10521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.downloadId, serializer);
+    sse_encode_String(self.modelId, serializer);
     sse_encode_String(self.destination, serializer);
     sse_encode_String(self.source, serializer);
     sse_encode_u_64(self.sizeBytes, serializer);
@@ -8169,6 +10565,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_project_text_background_view(
+    ProjectTextBackgroundView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_project_text_color_view(self.color, serializer);
+    sse_encode_u_32(self.paddingMilliPoints, serializer);
+  }
+
+  @protected
   void sse_encode_project_text_color_view(
     ProjectTextColorView self,
     SseSerializer serializer,
@@ -8191,6 +10597,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_text_weight_view(self.weight, serializer);
     sse_encode_text_alignment_view(self.alignment, serializer);
     sse_encode_project_text_color_view(self.color, serializer);
+    sse_encode_text_vertical_anchor_view(self.anchor, serializer);
+    sse_encode_i_16(self.offsetXBasisPoints, serializer);
+    sse_encode_i_16(self.offsetYBasisPoints, serializer);
+    sse_encode_opt_box_autoadd_project_text_background_view(
+      self.background,
+      serializer,
+    );
+    sse_encode_u_16(self.opacityBasisPoints, serializer);
   }
 
   @protected
@@ -8230,6 +10644,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.clipId, serializer);
     sse_encode_timeline_clip_content_kind_view(self.contentKind, serializer);
+    sse_encode_rational_rate_view(self.playbackRate, serializer);
+    sse_encode_bool(self.reversed, serializer);
+    sse_encode_bool(self.frozen, serializer);
     sse_encode_opt_String(self.mediaId, serializer);
     sse_encode_opt_String(self.text, serializer);
     sse_encode_opt_box_autoadd_project_text_formatting_view(
@@ -8418,12 +10835,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_project_transcription_model_view(
-    ProjectTranscriptionModelView self,
+  void sse_encode_project_transcription_model_option_view(
+    ProjectTranscriptionModelOptionView self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.modelId, serializer);
+    sse_encode_String(self.label, serializer);
     sse_encode_String(self.version, serializer);
     sse_encode_String(self.license, serializer);
     sse_encode_String(self.language, serializer);
@@ -8431,6 +10849,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.source, serializer);
     sse_encode_bool(self.installed, serializer);
     sse_encode_bool(self.providerAvailable, serializer);
+    sse_encode_bool(self.active, serializer);
+  }
+
+  @protected
+  void sse_encode_project_transcription_model_view(
+    ProjectTranscriptionModelView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.modelId, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.version, serializer);
+    sse_encode_String(self.license, serializer);
+    sse_encode_String(self.language, serializer);
+    sse_encode_u_64(self.sizeBytes, serializer);
+    sse_encode_String(self.source, serializer);
+    sse_encode_bool(self.installed, serializer);
+    sse_encode_bool(self.providerAvailable, serializer);
+    sse_encode_bool(self.active, serializer);
   }
 
   @protected
@@ -8493,6 +10930,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_text_alignment_view(
     TextAlignmentView self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_text_vertical_anchor_view(
+    TextVerticalAnchorView self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8654,11 +11100,12 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
   Future<ProjectActionResult> autosaveCheckpoint() => RustLib.instance.api
       .crateApiProjectProjectHostHandleAutosaveCheckpoint(that: this);
 
-  Future<ProjectModelDownloadView> beginTranscriptionModelDownload() => RustLib
-      .instance
-      .api
+  Future<ProjectModelDownloadView> beginTranscriptionModelDownload({
+    required String modelId,
+  }) => RustLib.instance.api
       .crateApiProjectProjectHostHandleBeginTranscriptionModelDownload(
         that: this,
+        modelId: modelId,
       );
 
   Future<ProjectExportJobView> cancelExport({
@@ -8748,6 +11195,25 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         expectedRevision: expectedRevision,
         markerId: markerId,
       );
+
+  Future<ProjectActionResult> duckTimelineClip({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckMillidecibels,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleDuckTimelineClip(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    trackId: trackId,
+    clipId: clipId,
+    voiceTrackId: voiceTrackId,
+    duckMillidecibels: duckMillidecibels,
+  );
 
   Future<ProjectExportJobView> exportStatus({
     required String projectId,
@@ -8973,6 +11439,30 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     timelineStartDenominator: timelineStartDenominator,
   );
 
+  /// Moves every listed clip on one track by the same delta, as one undo step.
+  ///
+  /// A group drag is one gesture: five separate moves would cost five undos
+  /// and could stop half-applied, so the whole selection travels in a single
+  /// command whose change carries the track before and after.
+  Future<ProjectActionResult> moveTimelineClips({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required List<String> clipIds,
+    required PlatformInt64 deltaNumerator,
+    required int deltaDenominator,
+  }) => RustLib.instance.api.crateApiProjectProjectHostHandleMoveTimelineClips(
+    that: this,
+    projectId: projectId,
+    projectInstanceId: projectInstanceId,
+    expectedRevision: expectedRevision,
+    trackId: trackId,
+    clipIds: clipIds,
+    deltaNumerator: deltaNumerator,
+    deltaDenominator: deltaDenominator,
+  );
+
   Future<ProjectActionResult> moveTimelineMarker({
     required String projectId,
     required String projectInstanceId,
@@ -9126,6 +11616,14 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         trackId: trackId,
       );
 
+  Future<ProjectTranscriptionModelView> removeTranscriptionModel({
+    required String modelId,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleRemoveTranscriptionModel(
+        that: this,
+        modelId: modelId,
+      );
+
   Future<ProjectActionResult> rename({
     required String projectId,
     required String projectInstanceId,
@@ -9228,6 +11726,59 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
   Future<ProjectActionResult> save() =>
       RustLib.instance.api.crateApiProjectProjectHostHandleSave(that: this);
 
+  Future<ProjectTranscriptionModelView> selectTranscriptionModel({
+    required String modelId,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleSelectTranscriptionModel(
+        that: this,
+        modelId: modelId,
+      );
+
+  /// Holds one frame for the clip's whole duration, or releases it.
+  ///
+  /// The source range is left untouched, so unfreezing restores the original
+  /// footage instead of a shortened clip.
+  Future<ProjectActionResult> setTimelineClipFrozen({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleSetTimelineClipFrozen(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        clipId: clipId,
+        frozen: frozen,
+      );
+
+  /// Flip the direction a media clip plays without touching its duration.
+  ///
+  /// Reverse is not a rate: the clip still covers the same source span and the same
+  /// timeline span, so only the direction changes and the caller keeps every other
+  /// property of the clip.
+  Future<ProjectActionResult> setTimelineClipReversed({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleSetTimelineClipReversed(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        clipId: clipId,
+        reversed: reversed,
+      );
+
   Future<ProjectActionResult> setTimelineSequenceFrameRate({
     required String projectId,
     required String projectInstanceId,
@@ -9316,12 +11867,14 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
     required String projectInstanceId,
     required BigInt expectedRevision,
     required String destination,
+    String? quality,
   }) => RustLib.instance.api.crateApiProjectProjectHostHandleStartExport(
     that: this,
     projectId: projectId,
     projectInstanceId: projectInstanceId,
     expectedRevision: expectedRevision,
     destination: destination,
+    quality: quality,
   );
 
   Future<ProjectTranscriptionJobView> startTranscription({
@@ -9363,6 +11916,11 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
       .instance
       .api
       .crateApiProjectProjectHostHandleTranscriptionModel(that: this);
+
+  Future<List<ProjectTranscriptionModelOptionView>> transcriptionModels() =>
+      RustLib.instance.api.crateApiProjectProjectHostHandleTranscriptionModels(
+        that: this,
+      );
 
   Future<ProjectTranscriptProposalView?> transcriptionProposal({
     required String jobId,
@@ -9420,6 +11978,24 @@ class ProjectHostHandleImpl extends RustOpaque implements ProjectHostHandle {
         trackId: trackId,
         clipId: clipId,
         settings: settings,
+      );
+
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required RationalRateView rate,
+  }) => RustLib.instance.api
+      .crateApiProjectProjectHostHandleUpdateTimelineClipPlaybackRate(
+        that: this,
+        projectId: projectId,
+        projectInstanceId: projectInstanceId,
+        expectedRevision: expectedRevision,
+        trackId: trackId,
+        clipId: clipId,
+        rate: rate,
       );
 
   Future<ProjectActionResult> updateTimelineClipVisualSettings({

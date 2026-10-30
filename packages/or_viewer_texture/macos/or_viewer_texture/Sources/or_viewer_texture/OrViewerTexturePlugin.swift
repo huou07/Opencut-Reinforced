@@ -17,25 +17,6 @@ private struct ViewerFfi {
   let release: ReleaseFrame
 }
 
-private final class PixelBufferRelease {
-  let context: UnsafeMutableRawPointer?
-  let release: ReleaseFrame
-
-  init(context: UnsafeMutableRawPointer?, release: @escaping ReleaseFrame) {
-    self.context = context
-    self.release = release
-  }
-
-  func run() {
-    release(context)
-  }
-}
-
-private let releasePixelBufferBytes: CVPixelBufferReleaseBytesCallback = { refcon, _ in
-  guard let refcon else { return }
-  Unmanaged<PixelBufferRelease>.fromOpaque(refcon).takeRetainedValue().run()
-}
-
 private func viewerFfi() -> ViewerFfi? {
   for index in 0..<_dyld_image_count() {
     guard let image = _dyld_get_image_name(index),
@@ -67,31 +48,39 @@ private final class OrViewerTexture: NSObject, FlutterTexture {
     }
     guard ffi.acquire(UnsafeMutableRawPointer(framePointer)) != 0 else { return nil }
     let frame = framePointer.pointee
+    defer { ffi.release(frame.releaseContext) }
     guard let pixels = frame.pixels, frame.width > 0, frame.height > 0,
           frame.width <= Int.max / frame.height / 4,
           frame.width * frame.height * 4 <= 256 * 1024 * 1024 else {
-      ffi.release(frame.releaseContext)
       return nil
     }
 
-    let release = PixelBufferRelease(context: frame.releaseContext, release: ffi.release)
-    let refcon = Unmanaged.passRetained(release).toOpaque()
+    let attributes = [
+      kCVPixelBufferMetalCompatibilityKey as String: true,
+      kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any](),
+    ] as CFDictionary
     var pixelBuffer: CVPixelBuffer?
-    let status = CVPixelBufferCreateWithBytes(
+    let status = CVPixelBufferCreate(
       kCFAllocatorDefault,
       frame.width,
       frame.height,
       kCVPixelFormatType_32BGRA,
-      UnsafeMutableRawPointer(mutating: pixels),
-      frame.width * 4,
-      releasePixelBufferBytes,
-      refcon,
-      nil,
+      attributes,
       &pixelBuffer
     )
     guard status == kCVReturnSuccess, let pixelBuffer else {
-      Unmanaged<PixelBufferRelease>.fromOpaque(refcon).takeRetainedValue().run()
       return nil
+    }
+    guard CVPixelBufferLockBaseAddress(pixelBuffer, []) == kCVReturnSuccess else { return nil }
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+    guard let destination = CVPixelBufferGetBaseAddress(pixelBuffer) else { return nil }
+    let sourceBytesPerRow = frame.width * 4
+    let destinationBytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+    for row in 0..<frame.height {
+      destination.advanced(by: row * destinationBytesPerRow).copyMemory(
+        from: UnsafeRawPointer(pixels.advanced(by: row * sourceBytesPerRow)),
+        byteCount: sourceBytesPerRow
+      )
     }
     return Unmanaged.passRetained(pixelBuffer)
   }
@@ -101,15 +90,13 @@ public class OrViewerTexturePlugin: NSObject, FlutterPlugin {
   private static let channelName = "or_viewer_texture"
 
   private var registrar: FlutterPluginRegistrar?
-  private var textureId: Int64 = -1
+  private var textureId: Int64?
   private var texture: OrViewerTexture?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let plugin = OrViewerTexturePlugin()
-    let texture = OrViewerTexture()
     plugin.registrar = registrar
-    plugin.texture = texture
-    plugin.textureId = registrar.textures.register(texture)
+    plugin.texture = OrViewerTexture()
     registrar.addMethodCallDelegate(
       plugin,
       channel: FlutterMethodChannel(
@@ -122,17 +109,33 @@ public class OrViewerTexturePlugin: NSObject, FlutterPlugin {
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "textureId":
-      guard textureId >= 0 else {
+      guard let registrar, let texture else {
         result(FlutterError(
           code: "TEXTURE_UNAVAILABLE",
-          message: "The viewer texture could not be registered.",
+          message: "The viewer texture registrar is unavailable.",
           details: nil
         ))
         return
       }
-      result(textureId)
+      let resolvedTextureId: Int64
+      if let textureId {
+        resolvedTextureId = textureId
+      } else {
+        let registeredId = registrar.textures.register(texture)
+        guard registeredId != 0 else {
+          result(FlutterError(
+            code: "TEXTURE_UNAVAILABLE",
+            message: "The viewer texture could not be registered.",
+            details: nil
+          ))
+          return
+        }
+        textureId = registeredId
+        resolvedTextureId = registeredId
+      }
+      result(resolvedTextureId)
     case "frameAvailable":
-      guard textureId >= 0, let registrar else {
+      guard let textureId, textureId != 0, let registrar else {
         result(false)
         return
       }

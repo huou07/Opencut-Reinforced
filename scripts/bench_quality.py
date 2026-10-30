@@ -35,7 +35,7 @@ Method and limits
   automatically a product regression; the report prints MemAvailable and any
   foreign Gradle/Kotlin daemon so the difference is visible.
 
-Calibration host (named in ``docs/QUALITY.md``): Debian 13 (trixie) x86_64
+Calibration host (named in ``docs/reference/quality.md``): Debian 13 (trixie) x86_64
 OptiPlex-class workstation, 13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD,
 Intel UHD 770 through Vulkan. Baselines measured 2026-10-18. Hosted runners keep
 their own thresholds and this script never runs there.

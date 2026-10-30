@@ -8,20 +8,56 @@ import 'package:or_app/project/project_file_picker.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test.or_app/saf_storage');
+  const macFileAccessChannel = MethodChannel('or_macos_file_access');
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(macFileAccessChannel, null);
   });
 
-  test('mobile offers WebM by default while retaining lossless Matroska', () {
-    expect(ExportProfile.defaultForPlatform, ExportProfile.webmVp9Opus);
+  test('available export profiles match the platform encoder set', () {
+    expect(
+      ExportProfile.defaultForPlatform,
+      Platform.isMacOS ? ExportProfile.mp4H264Aac : ExportProfile.webmVp9Opus,
+    );
     expect(ExportProfile.available, contains(ExportProfile.webmVp9Opus));
     expect(
       ExportProfile.available,
       contains(ExportProfile.matroskaFfv1PcmS16le),
     );
+    expect(
+      ExportProfile.available.contains(ExportProfile.mp4H264Aac),
+      Platform.isMacOS,
+    );
   });
+
+  test('macOS export selection uses the scoped folder picker', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(macFileAccessChannel, (call) async {
+          calls.add(call);
+          return switch (call.method) {
+            'restoreBookmarks' => 1,
+            'saveExport' => '/private/tmp/demo.webm',
+            _ => null,
+          };
+        });
+    const picker = FileSelectorProjectPicker();
+
+    final path = await picker.saveExportPath(
+      suggestedName: 'demo.webm',
+      profile: ExportProfile.webmVp9Opus,
+    );
+
+    expect(path, '/private/tmp/demo.webm');
+    expect(calls.map((call) => call.method), [
+      'restoreBookmarks',
+      'saveExport',
+    ]);
+    expect(calls.last.arguments, {'suggestedName': 'demo.webm'});
+  }, skip: !Platform.isMacOS);
 
   test('Android media picker returns multiple validated SAF URIs', () async {
     var pickerCalled = false;
@@ -110,10 +146,19 @@ void main() {
       await File('${directory.path}/take-01.MP4').create();
       await File('${directory.path}/notes.txt').create();
       await Directory('${directory.path}/nested').create();
+      await File('${directory.path}/nested/still-01.png').create();
+      await File('${directory.path}/nested/still-02.JPG').create();
+      await File('${directory.path}/nested/still-03.jpeg').create();
+      await File('${directory.path}/nested/still-04.webp').create();
+      await File('${directory.path}/nested/unsupported.bmp').create();
       await File('${directory.path}/nested/music.wav').create();
 
       expect(await enumerateMediaFolderSources(directory), [
         '${directory.path}/nested/music.wav',
+        '${directory.path}/nested/still-01.png',
+        '${directory.path}/nested/still-02.JPG',
+        '${directory.path}/nested/still-03.jpeg',
+        '${directory.path}/nested/still-04.webp',
         '${directory.path}/take-01.MP4',
         '${directory.path}/take-02.mkv',
       ]);

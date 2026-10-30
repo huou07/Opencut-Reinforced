@@ -8,9 +8,9 @@
 > must not guess the current phase, and a model claim is not evidence. What no
 > longer holds is the mechanism. The checkpoint graph, the supervisor and the
 > `NEXT` cursor were paused and moved to `docs/archive/execution/`. Active work
-> is now selected from `docs/PRODUCT_ROADMAP.md`, and completion is evidenced by
+> is now selected from `docs/reference/roadmap.md`, and completion is evidenced by
 > a claim record under `docs/evidence/claims/`. See
-> [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) for the current contract.
+> [DEVELOPMENT_WORKFLOW.md](../operations/workflow.md) for the current contract.
 > Keep this record: it explains why the guards existed, and it still governs any
 > future reintroduction of autonomous sequencing.
 

@@ -1,0 +1,167 @@
+{
+  "name": "timeline-scrub",
+  "harness": "or_ui",
+  "description": "CapCut-style playhead scrubbing. A one second audio clip gives the sequence a known end, the ruler is pressed and dragged with the pointer, and the viewer's time readout must follow to the clamped end and back to zero. Demonstrated through the real Rust preview: the readout shows the position the preview transport reports, so a passing step means the drag reached the seek command instead of only repainting the ruler.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Timeline scrub"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "expect",
+      "key": "timeline-ruler-scrub"
+    },
+    {
+      "op": "expect",
+      "key": "timeline-playhead-handle"
+    },
+    {
+      "op": "shot",
+      "name": "before-scrub"
+    },
+    {
+      "op": "tree",
+      "name": "before-scrub"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "timeline-ruler-scrub"
+      },
+      "from": "topLeft",
+      "from_dx": 4,
+      "from_dy": 12,
+      "dx": 600,
+      "steps": 12
+    },
+    {
+      "op": "wait",
+      "text": "00:00:01:00",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "at-sequence-end"
+    },
+    {
+      "op": "tree",
+      "name": "at-sequence-end"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key": "timeline-ruler-scrub"
+      },
+      "from": "topLeft",
+      "from_dx": 604,
+      "from_dy": 12,
+      "dx": -900,
+      "steps": 12
+    },
+    {
+      "op": "wait",
+      "text": "00:00:00:00",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "back-at-zero"
+    },
+    {
+      "op": "tree",
+      "name": "back-at-zero"
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-playhead-grab-.*$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-marquee-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "00:00:01:00",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "lane-press-seeks"
+    },
+    {
+      "op": "tree",
+      "name": "lane-press-seeks"
+    }
+  ]
+}

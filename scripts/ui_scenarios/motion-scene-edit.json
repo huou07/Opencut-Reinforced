@@ -1,0 +1,322 @@
+{
+  "name": "motion-scene-edit",
+  "harness": "or_ui",
+  "description": "Compose a scene from a library cutout, then edit the objects on the canvas: add text, retitle it, recolour it, nudge and drag it, open the expanded editor, delete it, and insert the edited scene on the timeline.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [
+    "copy:scripts/ui_scenarios/mountain.png"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Motion scene edit journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-motion"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Motion library",
+      "budget_ms": 10000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-library-import-image"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "mountain",
+      "budget_ms": 30000
+    },
+    {
+      "op": "wait",
+      "text": "Opacity",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-add-to-scene"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Added to the scene",
+      "budget_ms": 30000
+    },
+    {
+      "op": "expect",
+      "key": "motion-add-text"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-add-text"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "New text",
+      "budget_ms": 30000
+    },
+    {
+      "op": "shot",
+      "name": "scene-text-added"
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "motion-node-text"
+      },
+      "value": "Hello from the GUI"
+    },
+    {
+      "op": "wait",
+      "text": "Hello from the GUI",
+      "budget_ms": 30000
+    },
+    {
+      "op": "shot",
+      "name": "scene-text-edited"
+    },
+    {
+      "op": "tree",
+      "name": "scene-edited"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-scene-expand"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Edit scene",
+      "budget_ms": 10000
+    },
+    {
+      "op": "shot",
+      "name": "scene-editor-expanded"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-layer-text-1"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-swatch-224-90-90"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-size-up"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-nudge-right"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "scene-editor-selected"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-add-asset"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Add an asset to the scene",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-add-asset-0",
+        "within": {
+          "type": "AlertDialog"
+        }
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Added to the scene",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-delete"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "key": "motion-editor-layer-text-1"
+    },
+    {
+      "op": "shot",
+      "name": "scene-text-deleted"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "motion-editor-layer-a0:"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "scene-shape-selected"
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key_regex": "motion-editor-resize-a0:.*-0$"
+      },
+      "dx": 40,
+      "dy": 20,
+      "steps": 6
+    },
+    {
+      "op": "drag",
+      "selector": {
+        "key_regex": "motion-editor-rotate-a0:.*"
+      },
+      "dx": 24,
+      "dy": 24,
+      "steps": 6
+    },
+    {
+      "op": "shot",
+      "name": "scene-shape-resized"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-undo"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-redo"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-select-all"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "motion-editor-bulk-inspector"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-bulk-swatch-224-90-90"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "scene-multi-selected"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-undo"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-selection-delete"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "key": "motion-editor-bulk-inspector"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-undo"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "scene-multi-restored"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-close"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-insert-draft"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Motion clip added to the timeline.",
+      "budget_ms": 240000
+    },
+    {
+      "op": "shot",
+      "name": "scene-inserted"
+    },
+    {
+      "op": "tree",
+      "name": "scene-inserted"
+    }
+  ]
+}

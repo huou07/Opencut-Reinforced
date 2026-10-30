@@ -1,10 +1,20 @@
 mod commands;
+mod mcp;
 
 use std::ffi::{OsStr, OsString};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.first().is_some_and(|argument| is(argument, "mcp")) {
+        return match mcp::run(&args[1..]) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("{message}");
+                ExitCode::from(2)
+            }
+        };
+    }
     if args
         .first()
         .is_some_and(|argument| is_semantic_command(argument))
@@ -125,13 +135,24 @@ fn usage() -> &'static str {
   or motion evaluate --file PATH --at NUM/DEN [--json]
   or motion render --file PATH --at NUM/DEN --output PATH.png [--json]
   or motion from-code --source PATH --output PATH.ormotion.json [--title T] [--json]
-  or media clean-audio --source PATH --out PATH [--noise-floor-db N] [--reduction N] [--json]\n  or timeline markers --project PATH|--attach DESCRIPTOR [--offset N] [--limit N] [--json]\n  or timeline settings --project PATH|--attach DESCRIPTOR [--json]\n  or timeline set-frame-rate --project PATH|--attach DESCRIPTOR --rate NUM/DEN [--json]\n  or timeline clear-frame-rate --project PATH|--attach DESCRIPTOR [--json]\n  or timeline add-marker --project PATH|--attach DESCRIPTOR --at NUM/DEN --label LABEL [--id MARKER_ID] [--json]\n  or timeline move-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID --to NUM/DEN [--json]\n  or timeline rename-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID --label LABEL [--json]\n  or timeline delete-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID [--json]\n  or timeline snap --project PATH|--attach DESCRIPTOR --clip CLIP_ID --operation move|trim-start|trim-end --at NUM/DEN [--track TRACK_ID] [--json]\n  or timeline trim-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID --edge start|end --to NUM/DEN [--json]\n  or timeline split-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID --at NUM/DEN [--id NEW_RIGHT_CLIP_ID] [--json]\n  or timeline ripple-delete-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID [--json]\n  or session serve --file PATH [--descriptor PATH] [--json]\n  or session describe --attach DESCRIPTOR [--json]\n  or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]\n  or --help"
+  or motion materialize --attach DESCRIPTOR (--source PATH | --scene PATH) --output PATH [--frame-rate NUM/DEN] [--width N] [--height N] [--title T] [--json]
+  or motion asset list (--library PATH | --attach DESCRIPTOR) [--json]
+  or motion asset validate --file PATH [--json]
+  or motion asset save (--library PATH | --attach DESCRIPTOR) --file PATH [--category CATEGORY] [--json]
+  or motion asset instantiate (--library PATH | --attach DESCRIPTOR) --id ASSET_ID [--values JSON] --output PATH [--scene-id UUID] [--name NAME] [--json]
+  or motion asset remove (--library PATH | --attach DESCRIPTOR) --id ASSET_ID [--json]
+  or motion asset import (--library PATH | --attach DESCRIPTOR) --source PATH [--name NAME] [--category CATEGORY] [--tags a,b] [--width N] [--height N] [--seconds N] [--json]
+  or mcp --descriptor PATH | --pointer PATH
+  or media clean-audio --source PATH --out PATH [--noise-floor-db N] [--reduction N] [--json]
+  or captions transcribe --attach DESCRIPTOR --media MEDIA_ID [--srt-out PATH.srt] [--json]
+  or timeline import-captions --project PATH|--attach DESCRIPTOR --file PATH.srt|PATH.vtt [--json]\n  or timeline markers --project PATH|--attach DESCRIPTOR [--offset N] [--limit N] [--json]\n  or timeline settings --project PATH|--attach DESCRIPTOR [--json]\n  or timeline set-frame-rate --project PATH|--attach DESCRIPTOR --rate NUM/DEN [--json]\n  or timeline clear-frame-rate --project PATH|--attach DESCRIPTOR [--json]\n  or timeline add-marker --project PATH|--attach DESCRIPTOR --at NUM/DEN --label LABEL [--id MARKER_ID] [--json]\n  or timeline move-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID --to NUM/DEN [--json]\n  or timeline rename-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID --label LABEL [--json]\n  or timeline delete-marker --project PATH|--attach DESCRIPTOR --id MARKER_ID [--json]\n  or timeline snap --project PATH|--attach DESCRIPTOR --clip CLIP_ID --operation move|trim-start|trim-end --at NUM/DEN [--track TRACK_ID] [--json]\n  or timeline trim-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID --edge start|end --to NUM/DEN [--json]\n  or timeline split-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID --at NUM/DEN [--id NEW_RIGHT_CLIP_ID] [--json]
+  or timeline duck-clip --project PATH|--attach DESCRIPTOR --track TRACK_ID --clip CLIP_ID --voice-track TRACK_ID [--duck-db N] [--json]\n  or timeline ripple-delete-clip --project PATH|--attach DESCRIPTOR --clip CLIP_ID [--json]\n  or session serve --file PATH [--descriptor PATH] [--json]\n  or session describe --attach DESCRIPTOR [--json]\n  or session shutdown --attach DESCRIPTOR [--discard-unsaved] [--json]\n  or --help\n\nA DESCRIPTOR may be the endpoint descriptor itself or a session pointer the\napp keeps current, such as the workspace project.json; a pointer is followed\nthrough its descriptor_path so one command line survives a project switch."
 }
 
 fn is_semantic_command(value: &OsStr) -> bool {
     [
-        "commands", "queries", "project", "history", "recovery", "media", "timeline", "motion",
-        "session",
+        "commands", "queries", "project", "history", "recovery", "media", "timeline", "captions",
+        "motion", "session",
     ]
     .iter()
     .any(|command| is(value, command))

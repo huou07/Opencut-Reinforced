@@ -1,0 +1,1233 @@
+//! The app-level motion asset library (ADR 0010).
+//!
+//! The library is a plain directory under application support: one bounded
+//! `catalog.json` index plus one validated `.ormotionasset.json` per entry. It is
+//! deliberately not a database and not project state; a project records only an
+//! asset id and digest as provenance for materialised media.
+//!
+//! Writes are atomic (temporary file plus rename). Reads are bounded. Paths inside
+//! an asset are relative to the library root and validated by the asset module, so
+//! an entry cannot point outside it.
+
+use crate::{
+    MAX_MOTION_ASSET_NAME_BYTES, MotionAsset, MotionAssetCategory, MotionAssetCategorySource,
+    MotionAssetDocument, MotionAssetKind, MotionAssetParameter, MotionAssetPayload, MotionCanvas,
+    MotionDiagnostic, MotionImage, MotionNode, MotionNodeKind, MotionParameterField,
+    MotionParameterKind, MotionParameterTarget, MotionParameterValue, MotionPoint, MotionScene,
+    MotionSize, classify_motion_asset, duration_milliseconds, is_safe_relative_path, is_uuid_v4,
+    new_motion_asset_id, parse_motion_asset, validate_motion_asset,
+};
+use or_core::RationalTime;
+use serde::{Deserialize, Serialize};
+use std::{
+    fmt, fs,
+    path::{Path, PathBuf},
+};
+
+/// The `format` value the catalog carries.
+pub const MOTION_LIBRARY_FORMAT: &str = "opencut-reinforced-motion-library";
+/// The catalog schema version this crate reads and writes.
+pub const MOTION_LIBRARY_SCHEMA_VERSION: u32 = 1;
+/// The largest catalog this accepts.
+pub const MAX_MOTION_LIBRARY_BYTES: usize = 4 * 1024 * 1024;
+/// The most entries one library may hold.
+pub const MAX_MOTION_LIBRARY_ENTRIES: usize = 4096;
+/// The largest image file one import accepts.
+pub const MAX_MOTION_IMAGE_BYTES: usize = 16 * 1024 * 1024;
+
+/// One browseable row. It is a projection of the asset document, not a second
+/// source of truth: saving rewrites both from the document.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionLibraryEntry {
+    pub asset_id: String,
+    pub name: String,
+    pub category: MotionAssetCategory,
+    pub category_source: MotionAssetCategorySource,
+    pub kind: MotionAssetKind,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub canvas: MotionCanvas,
+    pub duration_milliseconds: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+}
+
+/// The bounded index. Entries are sorted by name and then id on every write.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionLibraryCatalog {
+    pub format: String,
+    pub schema_version: u32,
+    #[serde(default)]
+    pub entries: Vec<MotionLibraryEntry>,
+}
+
+impl Default for MotionLibraryCatalog {
+    fn default() -> Self {
+        Self {
+            format: MOTION_LIBRARY_FORMAT.to_owned(),
+            schema_version: MOTION_LIBRARY_SCHEMA_VERSION,
+            entries: Vec::new(),
+        }
+    }
+}
+
+/// Why a library operation failed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MotionLibraryError {
+    /// The directory or a file could not be read or written.
+    Io(String),
+    /// The catalog is larger than [`MAX_MOTION_LIBRARY_BYTES`].
+    TooLarge,
+    /// The catalog is not valid for this version.
+    InvalidCatalog(String),
+    /// An asset document did not validate.
+    InvalidAsset(Vec<MotionDiagnostic>),
+    /// An asset id is not a UUIDv4, so it cannot name a file safely.
+    UnsafeAssetId(String),
+    /// The id is not in the library.
+    NotFound(String),
+    /// The library already holds [`MAX_MOTION_LIBRARY_ENTRIES`] entries.
+    Full,
+    /// A stored relative path would leave the library root.
+    UnsafePath(String),
+    /// An imported image is larger than [`MAX_MOTION_IMAGE_BYTES`].
+    ImageTooLarge,
+    /// An imported file is not a PNG.
+    InvalidImage(String),
+    /// A scene names an image file that is not in the library.
+    MissingImage(String),
+}
+
+impl MotionLibraryError {
+    /// The stable wire spelling.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "MOTION_LIBRARY_IO",
+            Self::TooLarge => "MOTION_LIBRARY_TOO_LARGE",
+            Self::InvalidCatalog(_) => "MOTION_LIBRARY_INVALID_CATALOG",
+            Self::InvalidAsset(_) => "MOTION_LIBRARY_INVALID_ASSET",
+            Self::UnsafeAssetId(_) => "MOTION_LIBRARY_UNSAFE_ASSET_ID",
+            Self::NotFound(_) => "MOTION_LIBRARY_NOT_FOUND",
+            Self::Full => "MOTION_LIBRARY_FULL",
+            Self::UnsafePath(_) => "MOTION_LIBRARY_UNSAFE_PATH",
+            Self::ImageTooLarge => "MOTION_LIBRARY_IMAGE_TOO_LARGE",
+            Self::InvalidImage(_) => "MOTION_LIBRARY_INVALID_IMAGE",
+            Self::MissingImage(_) => "MOTION_LIBRARY_MISSING_IMAGE",
+        }
+    }
+}
+
+impl fmt::Display for MotionLibraryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(message) => {
+                write!(formatter, "the motion library could not be read: {message}")
+            }
+            Self::TooLarge => formatter.write_str("the motion library catalog is too large"),
+            Self::InvalidCatalog(message) => {
+                write!(
+                    formatter,
+                    "the motion library catalog is invalid: {message}"
+                )
+            }
+            Self::InvalidAsset(diagnostics) => write!(
+                formatter,
+                "the asset does not validate: {}",
+                diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::UnsafeAssetId(id) => write!(formatter, "the asset id is not a UUIDv4: {id}"),
+            Self::NotFound(id) => write!(formatter, "no asset in the library has id {id}"),
+            Self::Full => formatter.write_str("the motion library is full"),
+            Self::UnsafePath(path) => write!(formatter, "the path leaves the library root: {path}"),
+            Self::ImageTooLarge => {
+                formatter.write_str("the image is larger than this version accepts")
+            }
+            Self::InvalidImage(message) => {
+                write!(
+                    formatter,
+                    "the image is not a PNG this version imports: {message}"
+                )
+            }
+            Self::MissingImage(path) => {
+                write!(formatter, "the library does not hold the image: {path}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for MotionLibraryError {}
+
+/// A library rooted at one directory.
+#[derive(Clone, Debug)]
+pub struct MotionLibrary {
+    root: PathBuf,
+}
+
+impl MotionLibrary {
+    /// Opens (and creates) a library at `root`.
+    pub fn open(root: impl Into<PathBuf>) -> Result<Self, MotionLibraryError> {
+        let root = root.into();
+        for path in [
+            root.clone(),
+            root.join("assets"),
+            root.join("previews"),
+            root.join("images"),
+        ] {
+            fs::create_dir_all(&path).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        }
+        Ok(Self { root })
+    }
+
+    /// The directory this library owns.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// The catalog path.
+    pub fn catalog_path(&self) -> PathBuf {
+        self.root.join("catalog.json")
+    }
+
+    /// Lists the catalog entries in their stored order.
+    pub fn list(&self) -> Result<Vec<MotionLibraryEntry>, MotionLibraryError> {
+        let catalog = self.read_catalog()?;
+        if catalog.entries.len() > MAX_MOTION_LIBRARY_ENTRIES {
+            return Err(MotionLibraryError::TooLarge);
+        }
+        Ok(catalog.entries)
+    }
+
+    /// Loads and validates one asset by id.
+    pub fn load(&self, asset_id: &str) -> Result<MotionAssetDocument, MotionLibraryError> {
+        if !is_uuid_v4(asset_id) {
+            return Err(MotionLibraryError::UnsafeAssetId(asset_id.to_owned()));
+        }
+        let path = self.asset_path(asset_id);
+        let bytes =
+            fs::read(&path).map_err(|_| MotionLibraryError::NotFound(asset_id.to_owned()))?;
+        let asset = parse_motion_asset(&bytes).map_err(|error| {
+            MotionLibraryError::InvalidAsset(vec![MotionDiagnostic::new(
+                error.code(),
+                "/",
+                error.to_string(),
+            )])
+        })?;
+        if asset.asset_id != asset_id {
+            return Err(MotionLibraryError::InvalidAsset(vec![
+                MotionDiagnostic::new(
+                    "MOTION_LIBRARY_ASSET_ID_MISMATCH",
+                    "/asset_id",
+                    "the file name and the document's asset_id disagree",
+                ),
+            ]));
+        }
+        let validation = validate_motion_asset(&asset);
+        if !validation.ok {
+            return Err(MotionLibraryError::InvalidAsset(validation.errors));
+        }
+        Ok(asset)
+    }
+
+    /// Saves (or replaces) one asset.
+    ///
+    /// When [`MotionAssetCategorySource::Explicit`] is recorded, the stored
+    /// category wins. Otherwise the classifier recomputes it from the name and
+    /// tags, and the entry records which rule fired. `explicit_category` is the
+    /// user's manual pick from the CLI or the library UI and always wins.
+    pub fn save(
+        &self,
+        document: &MotionAssetDocument,
+        explicit_category: Option<MotionAssetCategory>,
+    ) -> Result<MotionLibraryEntry, MotionLibraryError> {
+        let validation = validate_motion_asset(document);
+        if !validation.ok {
+            return Err(MotionLibraryError::InvalidAsset(validation.errors));
+        }
+        let mut document = document.clone();
+        if let Some(category) = explicit_category {
+            document.category = category;
+            document.category_source = MotionAssetCategorySource::Explicit;
+        } else if document.category_source != MotionAssetCategorySource::Explicit {
+            let classification =
+                classify_motion_asset(&document.name, &document.tags, document.kind, None);
+            document.category = classification.category;
+            document.category_source = classification.source;
+        }
+
+        let mut catalog = self.read_catalog()?;
+        let existing = catalog
+            .entries
+            .iter()
+            .position(|entry| entry.asset_id == document.asset_id);
+        if existing.is_none() && catalog.entries.len() >= MAX_MOTION_LIBRARY_ENTRIES {
+            return Err(MotionLibraryError::Full);
+        }
+
+        let bytes = serde_json::to_vec_pretty(&document)
+            .map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        write_atomic(&self.asset_path(&document.asset_id), &bytes)?;
+
+        let entry = MotionLibraryEntry::from(&document);
+        match existing {
+            Some(index) => catalog.entries[index] = entry.clone(),
+            None => catalog.entries.push(entry.clone()),
+        }
+        catalog.entries.sort_by(|left, right| {
+            left.name
+                .to_lowercase()
+                .cmp(&right.name.to_lowercase())
+                .then_with(|| left.asset_id.cmp(&right.asset_id))
+        });
+        self.write_catalog(&catalog)?;
+        Ok(entry)
+    }
+
+    /// Removes one asset and its preview. Returns false when the id is absent.
+    pub fn remove(&self, asset_id: &str) -> Result<bool, MotionLibraryError> {
+        if !is_uuid_v4(asset_id) {
+            return Err(MotionLibraryError::UnsafeAssetId(asset_id.to_owned()));
+        }
+        let mut catalog = self.read_catalog()?;
+        let Some(index) = catalog
+            .entries
+            .iter()
+            .position(|entry| entry.asset_id == asset_id)
+        else {
+            return Ok(false);
+        };
+        let entry = catalog.entries.remove(index);
+        // Capture the asset's own image files while its document still reads.
+        let removed_images = self.images_named_by(asset_id);
+        let asset_path = self.asset_path(asset_id);
+        if asset_path.exists() {
+            fs::remove_file(&asset_path)
+                .map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        }
+        if let Some(preview) = entry.preview {
+            // A missing or unremovable preview must not leave the catalog and the
+            // asset file disagreeing; the next save rewrites it.
+            if let Ok(preview_path) = self.resolve_relative(&preview) {
+                let _ = fs::remove_file(preview_path);
+            }
+        }
+        // Adopted or imported images live in the shared `images/` directory. Only
+        // the removed asset's own copies are candidates: an image another saved
+        // asset still names is kept, and a draft that was never saved references
+        // only its own copies, so an unrelated removal cannot break it.
+        self.write_catalog(&catalog)?;
+        for relative in removed_images {
+            if !self.referenced_images()?.contains(&relative)
+                && let Ok(path) = self.resolve_relative(&relative)
+            {
+                let _ = fs::remove_file(path);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Library-relative image files a saved asset names, if its document reads.
+    ///
+    /// An unreadable document yields no candidates: a corrupt entry must not let
+    /// removal guess which shared files are safe to delete.
+    fn images_named_by(&self, asset_id: &str) -> Vec<String> {
+        let Ok(document) = self.load(asset_id) else {
+            return Vec::new();
+        };
+        let Some(scene) = document.scene else {
+            return Vec::new();
+        };
+        scene
+            .assets
+            .into_iter()
+            .map(|asset| asset.path)
+            .filter(|path| path.starts_with("images/"))
+            .collect()
+    }
+
+    /// Every image file the catalog still names, across every saved asset.
+    fn referenced_images(&self) -> Result<std::collections::HashSet<String>, MotionLibraryError> {
+        let catalog = self.read_catalog()?;
+        let mut referenced = std::collections::HashSet::new();
+        for entry in &catalog.entries {
+            if let Ok(document) = self.load(&entry.asset_id)
+                && let Some(scene) = document.scene
+            {
+                for asset in scene.assets {
+                    if asset.path.starts_with("images/") {
+                        referenced.insert(asset.path);
+                    }
+                }
+            }
+        }
+        Ok(referenced)
+    }
+
+    /// Resolves a document-relative path under the library root.
+    pub fn resolve_relative(&self, relative: &str) -> Result<PathBuf, MotionLibraryError> {
+        if !is_safe_relative_path(relative) {
+            return Err(MotionLibraryError::UnsafePath(relative.to_owned()));
+        }
+        Ok(self
+            .root
+            .join(relative.replace('/', std::path::MAIN_SEPARATOR_STR)))
+    }
+
+    /// Imports a PNG as an adjustable image asset.
+    ///
+    /// The file is copied into `images/`, a preview copy is written into
+    /// `previews/`, and the document carries one image node with parameters for
+    /// opacity, width, height and rotation. A failed save removes both copies, so a
+    /// refusal leaves no orphan file.
+    pub fn import_image(
+        &self,
+        import: MotionImageImport<'_>,
+    ) -> Result<MotionAssetDocument, MotionLibraryError> {
+        let bytes =
+            fs::read(import.source).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        if bytes.len() > MAX_MOTION_IMAGE_BYTES {
+            return Err(MotionLibraryError::ImageTooLarge);
+        }
+        if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err(MotionLibraryError::InvalidImage(
+                "the file does not start with a PNG signature".to_owned(),
+            ));
+        }
+        let asset_id = new_motion_asset_id();
+        let file = format!("images/{asset_id}.png");
+        let preview = format!("previews/{asset_id}.png");
+        let image_path = self.resolve_relative(&file)?;
+        let preview_path = self.resolve_relative(&preview)?;
+        write_atomic(&image_path, &bytes)?;
+        if let Err(error) = write_atomic(&preview_path, &bytes) {
+            let _ = fs::remove_file(&image_path);
+            return Err(error);
+        }
+        let sha256 = sha256_hex(&bytes);
+        let name = imported_asset_name(import.name, import.source);
+        let width = f64::from(import.canvas.width);
+        let height = f64::from(import.canvas.height);
+        let node = MotionNode {
+            node_id: "image".to_owned(),
+            kind: MotionNodeKind::Image,
+            children: None,
+            text: None,
+            position: Some(MotionPoint { x: 0.0, y: 0.0 }),
+            size: Some(MotionSize { width, height }),
+            end: None,
+            fill: None,
+            stroke: None,
+            stroke_width: None,
+            font_size: None,
+            asset_id: Some(asset_id.clone()),
+            opacity: Some(1.0),
+            rotation_degrees: Some(0.0),
+            spans: None,
+        };
+        let parameter =
+            |id: &str, label: &str, field, default: f64, min: f64, max: f64| MotionAssetParameter {
+                id: id.to_owned(),
+                label: label.to_owned(),
+                kind: MotionParameterKind::Number,
+                target: MotionParameterTarget {
+                    node_id: "image".to_owned(),
+                    field,
+                },
+                default: MotionParameterValue::Number(default),
+                min: Some(min),
+                max: Some(max),
+                choices: None,
+            };
+        let parameters = vec![
+            parameter(
+                "opacity",
+                "Opacity",
+                MotionParameterField::Opacity,
+                1.0,
+                0.0,
+                1.0,
+            ),
+            parameter(
+                "width",
+                "Width",
+                MotionParameterField::SizeWidth,
+                width,
+                1.0,
+                16_384.0,
+            ),
+            parameter(
+                "height",
+                "Height",
+                MotionParameterField::SizeHeight,
+                height,
+                1.0,
+                16_384.0,
+            ),
+            parameter(
+                "rotation",
+                "Rotation",
+                MotionParameterField::RotationDegrees,
+                0.0,
+                -360.0,
+                360.0,
+            ),
+        ];
+        let scene_asset_id = asset_id.clone();
+        let mut document = MotionAssetDocument {
+            format: crate::MOTION_ASSET_FORMAT.to_owned(),
+            schema_version: crate::MOTION_ASSET_SCHEMA_VERSION,
+            asset_id,
+            name: name.clone(),
+            category: MotionAssetCategory::Object,
+            category_source: MotionAssetCategorySource::Default,
+            tags: import.tags.clone(),
+            kind: MotionAssetKind::Image,
+            canvas: import.canvas,
+            duration: import.duration,
+            parameters,
+            scene: Some(MotionAssetPayload {
+                assets: vec![MotionAsset {
+                    asset_id: scene_asset_id,
+                    sha256: Some(sha256.clone()),
+                    path: file.clone(),
+                }],
+                nodes: vec![node],
+                animations: vec![],
+                camera: None,
+            }),
+            preset: None,
+            image: Some(MotionImage {
+                file,
+                sha256: Some(sha256),
+            }),
+            preview: Some(preview),
+        };
+        let classification = classify_motion_asset(
+            &document.name,
+            &document.tags,
+            MotionAssetKind::Image,
+            import.category,
+        );
+        document.category = classification.category;
+        document.category_source = classification.source;
+        if let Err(error) = self.save(&document, None) {
+            let _ = fs::remove_file(&image_path);
+            let _ = fs::remove_file(&preview_path);
+            return Err(error);
+        }
+        Ok(document)
+    }
+
+    /// Writes a generated preview for an asset and returns its library-relative
+    /// path. The caller owns the PNG bytes; this only bounds and stores them.
+    pub fn write_preview(&self, asset_id: &str, png: &[u8]) -> Result<String, MotionLibraryError> {
+        if !is_uuid_v4(asset_id) {
+            return Err(MotionLibraryError::UnsafeAssetId(asset_id.to_owned()));
+        }
+        if png.len() > MAX_MOTION_IMAGE_BYTES {
+            return Err(MotionLibraryError::ImageTooLarge);
+        }
+        let relative = format!("previews/{asset_id}.png");
+        let path = self.resolve_relative(&relative)?;
+        write_atomic(&path, png)?;
+        Ok(relative)
+    }
+
+    /// Copies every image a scene names into `directory` and rewrites the asset
+    /// paths to those copies.
+    ///
+    /// A materialiser then resolves images relative to the scene file, which keeps
+    /// the scene portable and never lets a library path leak into a project.
+    pub fn prepare_scene_assets(
+        &self,
+        scene: &MotionScene,
+        directory: &Path,
+    ) -> Result<MotionScene, MotionLibraryError> {
+        // The caller writes the prepared scene into this directory, so it must
+        // exist even when the scene names no images.
+        fs::create_dir_all(directory).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        if scene.assets.is_empty() {
+            return Ok(scene.clone());
+        }
+        let mut prepared = scene.clone();
+        for (index, asset) in prepared.assets.iter_mut().enumerate() {
+            if !is_safe_relative_path(&asset.path) {
+                return Err(MotionLibraryError::UnsafePath(asset.path.clone()));
+            }
+            let source = self.resolve_relative(&asset.path)?;
+            let bytes = fs::read(&source)
+                .map_err(|_| MotionLibraryError::MissingImage(asset.path.clone()))?;
+            if bytes.len() > MAX_MOTION_IMAGE_BYTES {
+                return Err(MotionLibraryError::ImageTooLarge);
+            }
+            if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                return Err(MotionLibraryError::InvalidImage(asset.path.clone()));
+            }
+            let file = format!("{index}.png");
+            write_atomic(&directory.join(&file), &bytes)?;
+            asset.path = file;
+        }
+        Ok(prepared)
+    }
+
+    /// Copies a scene file's referenced PNGs into this library and rewrites the
+    /// scene's asset paths so the document no longer depends on where the file
+    /// was opened from.
+    ///
+    /// Importing a `.ormotion.json` hands the editor a scene it can edit and
+    /// materialise like any composed draft. Leaving the original relative paths
+    /// would make a scene opened from another folder render its images as
+    /// placeholders after the first edit, so the bytes are adopted here, once,
+    /// and every path becomes library-relative.
+    pub fn adopt_scene_images(
+        &self,
+        scene: &MotionScene,
+        source_directory: &Path,
+    ) -> Result<MotionScene, MotionLibraryError> {
+        if scene.assets.is_empty() {
+            return Ok(scene.clone());
+        }
+        let mut adopted: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        let mut rewritten = scene.clone();
+        for asset in &mut rewritten.assets {
+            if !is_safe_relative_path(&asset.path) {
+                return Err(MotionLibraryError::UnsafePath(asset.path.clone()));
+            }
+            if let Some(path) = adopted.get(&asset.path) {
+                asset.path = path.clone();
+                continue;
+            }
+            let bytes = fs::read(source_directory.join(&asset.path))
+                .map_err(|_| MotionLibraryError::MissingImage(asset.path.clone()))?;
+            if bytes.len() > MAX_MOTION_IMAGE_BYTES {
+                return Err(MotionLibraryError::ImageTooLarge);
+            }
+            if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+                return Err(MotionLibraryError::InvalidImage(asset.path.clone()));
+            }
+            let file = format!("images/{}.png", new_motion_asset_id());
+            let destination = self.resolve_relative(&file)?;
+            write_atomic(&destination, &bytes)?;
+            adopted.insert(asset.path.clone(), file.clone());
+            asset.path = file;
+        }
+        Ok(rewritten)
+    }
+
+    fn asset_path(&self, asset_id: &str) -> PathBuf {
+        self.root
+            .join("assets")
+            .join(format!("{asset_id}.ormotionasset.json"))
+    }
+
+    fn read_catalog(&self) -> Result<MotionLibraryCatalog, MotionLibraryError> {
+        let path = self.catalog_path();
+        if !path.exists() {
+            return Ok(MotionLibraryCatalog::default());
+        }
+        let bytes = fs::read(&path).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        if bytes.len() > MAX_MOTION_LIBRARY_BYTES {
+            return Err(MotionLibraryError::TooLarge);
+        }
+        let catalog: MotionLibraryCatalog = serde_json::from_slice(&bytes)
+            .map_err(|error| MotionLibraryError::InvalidCatalog(error.to_string()))?;
+        if catalog.format != MOTION_LIBRARY_FORMAT {
+            return Err(MotionLibraryError::InvalidCatalog(
+                "the catalog format is not a MotionLibrary format".to_owned(),
+            ));
+        }
+        if catalog.schema_version != MOTION_LIBRARY_SCHEMA_VERSION {
+            return Err(MotionLibraryError::InvalidCatalog(
+                "the catalog schema_version is not one this version reads".to_owned(),
+            ));
+        }
+        Ok(catalog)
+    }
+
+    fn write_catalog(&self, catalog: &MotionLibraryCatalog) -> Result<(), MotionLibraryError> {
+        let mut bytes = serde_json::to_vec_pretty(catalog)
+            .map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+        bytes.push(b'\n');
+        write_atomic(&self.catalog_path(), &bytes)
+    }
+}
+
+impl From<&MotionAssetDocument> for MotionLibraryEntry {
+    fn from(document: &MotionAssetDocument) -> Self {
+        Self {
+            asset_id: document.asset_id.clone(),
+            name: document.name.clone(),
+            category: document.category,
+            category_source: document.category_source,
+            kind: document.kind,
+            tags: document.tags.clone(),
+            canvas: document.canvas,
+            duration_milliseconds: duration_milliseconds(document.duration),
+            preview: document.preview.clone(),
+        }
+    }
+}
+
+/// One image import request.
+pub struct MotionImageImport<'a> {
+    pub source: &'a Path,
+    /// Empty falls back to the file stem.
+    pub name: &'a str,
+    /// A manual category; otherwise the classifier decides.
+    pub category: Option<MotionAssetCategory>,
+    pub tags: Vec<String>,
+    pub canvas: MotionCanvas,
+    pub duration: RationalTime,
+}
+
+fn imported_asset_name(name: &str, source: &Path) -> String {
+    let trimmed = name.trim();
+    let candidate = if trimmed.is_empty() {
+        source
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .filter(|stem| !stem.trim().is_empty())
+            .unwrap_or_else(|| "Image asset".to_owned())
+    } else {
+        trimmed.to_owned()
+    };
+    let mut output = String::new();
+    for character in candidate.chars() {
+        if output.len() + character.len_utf8() > MAX_MOTION_ASSET_NAME_BYTES {
+            break;
+        }
+        output.push(character);
+    }
+    output
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+    let digest = Sha256::digest(bytes);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    output
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), MotionLibraryError> {
+    let parent = path.parent().ok_or_else(|| {
+        MotionLibraryError::Io(format!("{} has no parent directory", path.display()))
+    })?;
+    fs::create_dir_all(parent).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| MotionLibraryError::Io(format!("{} has no file name", path.display())))?;
+    let temporary = parent.join(format!(".{name}.{}.tmp", std::process::id()));
+    fs::write(&temporary, bytes).map_err(|error| MotionLibraryError::Io(error.to_string()))?;
+    fs::rename(&temporary, path).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        MotionLibraryError::Io(error.to_string())
+    })?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{MAX_MOTION_ASSET_BYTES, MOTION_ASSET_SCHEMA_VERSION};
+    use serde_json::json;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "or-motion-library-{}-{}",
+                std::process::id(),
+                NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn asset(
+            &self,
+            name: &str,
+            category: &str,
+            source: &str,
+            tags: Vec<&str>,
+        ) -> MotionAssetDocument {
+            let value = json!({
+                "format": crate::MOTION_ASSET_FORMAT,
+                "schema_version": MOTION_ASSET_SCHEMA_VERSION,
+                "asset_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+                "name": name,
+                "category": category,
+                "category_source": source,
+                "tags": tags,
+                "kind": "scene",
+                "canvas": {"width": 1920, "height": 1080},
+                "duration": {"numerator": 4, "denominator": 1},
+                "parameters": [],
+                "scene": {
+                    "assets": [],
+                    "nodes": [
+                        {
+                            "node_id": "title",
+                            "kind": "text",
+                            "text": name,
+                            "position": {"x": 0, "y": 0},
+                            "font_size": 40
+                        }
+                    ],
+                    "animations": []
+                }
+            });
+            parse_motion_asset(&serde_json::to_vec(&value).unwrap()).unwrap()
+        }
+
+        fn library(&self) -> MotionLibrary {
+            MotionLibrary::open(&self.0).unwrap()
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_saved_asset_lists_loads_and_removes() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let asset = directory.asset("Explainer", "text", "explicit", vec!["title"]);
+
+        let entry = library.save(&asset, None).unwrap();
+        assert_eq!(entry.asset_id, asset.asset_id);
+        assert_eq!(entry.category, MotionAssetCategory::Text);
+        assert_eq!(entry.category_source, MotionAssetCategorySource::Explicit);
+        assert_eq!(entry.duration_milliseconds, 4000);
+
+        let entries = library.list().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].asset_id, asset.asset_id);
+        assert_eq!(library.load(&asset.asset_id).unwrap(), asset);
+
+        // The index survives a reopen.
+        let reopened = MotionLibrary::open(&directory.0).unwrap();
+        assert_eq!(reopened.list().unwrap().len(), 1);
+
+        assert!(library.remove(&asset.asset_id).unwrap());
+        assert!(library.list().unwrap().is_empty());
+        assert_eq!(
+            library.load(&asset.asset_id).unwrap_err(),
+            MotionLibraryError::NotFound(asset.asset_id.clone())
+        );
+        assert!(!library.remove(&asset.asset_id).unwrap());
+    }
+
+    #[test]
+    fn adopting_scene_images_copies_them_into_the_library() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("opened-scene");
+        fs::create_dir_all(source.join("art")).unwrap();
+        // The adoption path only checks the PNG signature; the renderer validates
+        // decoded pixels later.
+        let bytes = b"\x89PNG\r\n\x1a\nscene-image".to_vec();
+        fs::write(source.join("art/logo.png"), &bytes).unwrap();
+        let scene = MotionScene {
+            format: crate::MOTION_SCENE_FORMAT.to_owned(),
+            schema_version: crate::MOTION_SCENE_SCHEMA_VERSION,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            name: "Imported".to_owned(),
+            duration: RationalTime::new(4, 1).unwrap(),
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            assets: vec![MotionAsset {
+                asset_id: "logo".to_owned(),
+                sha256: None,
+                path: "art/logo.png".to_owned(),
+            }],
+            nodes: Vec::new(),
+            animations: Vec::new(),
+            camera: None,
+        };
+
+        let adopted = library.adopt_scene_images(&scene, &source).unwrap();
+
+        let path = adopted.assets[0].path.clone();
+        assert!(path.starts_with("images/"), "{path}");
+        assert!(path.ends_with(".png"), "{path}");
+        assert_eq!(fs::read(directory.0.join(&path)).unwrap(), bytes);
+        assert_eq!(scene.assets[0].path, "art/logo.png");
+    }
+
+    #[test]
+    fn adopting_scene_images_refuses_a_path_that_escapes_the_scene_folder() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let scene = MotionScene {
+            format: crate::MOTION_SCENE_FORMAT.to_owned(),
+            schema_version: crate::MOTION_SCENE_SCHEMA_VERSION,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            name: "Escaping".to_owned(),
+            duration: RationalTime::new(4, 1).unwrap(),
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            assets: vec![MotionAsset {
+                asset_id: "logo".to_owned(),
+                sha256: None,
+                path: "../outside.png".to_owned(),
+            }],
+            nodes: Vec::new(),
+            animations: Vec::new(),
+            camera: None,
+        };
+
+        assert_eq!(
+            library
+                .adopt_scene_images(&scene, &directory.0)
+                .unwrap_err(),
+            MotionLibraryError::UnsafePath("../outside.png".to_owned())
+        );
+    }
+
+    #[test]
+    fn removing_an_imported_image_deletes_its_copy() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("logo.png");
+        fs::write(&source, b"\x89PNG\r\n\x1a\nlogo").unwrap();
+        let asset = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Logo",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap();
+        let image = asset.scene.as_ref().unwrap().assets[0].path.clone();
+        assert!(directory.0.join(&image).exists());
+
+        assert!(library.remove(&asset.asset_id).unwrap());
+        assert!(!directory.0.join(&image).exists());
+    }
+
+    #[test]
+    fn removing_an_asset_keeps_an_image_another_asset_still_names() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("logo.png");
+        fs::write(&source, b"\x89PNG\r\n\x1a\nlogo").unwrap();
+        let image_asset = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Logo",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap();
+        let image = image_asset.scene.as_ref().unwrap().assets[0].path.clone();
+        let scene_id = new_motion_asset_id();
+        let scene = MotionAssetDocument {
+            format: crate::MOTION_ASSET_FORMAT.to_owned(),
+            schema_version: crate::MOTION_ASSET_SCHEMA_VERSION,
+            asset_id: scene_id.clone(),
+            name: "Shared image".to_owned(),
+            category: MotionAssetCategory::Object,
+            category_source: MotionAssetCategorySource::Default,
+            tags: vec![],
+            kind: MotionAssetKind::Scene,
+            canvas: MotionCanvas {
+                width: 1920,
+                height: 1080,
+            },
+            duration: RationalTime::new(4, 1).unwrap(),
+            parameters: vec![],
+            scene: Some(MotionAssetPayload {
+                assets: vec![MotionAsset {
+                    asset_id: "logo".to_owned(),
+                    sha256: None,
+                    path: image.clone(),
+                }],
+                nodes: vec![MotionNode {
+                    node_id: "logo".to_owned(),
+                    kind: MotionNodeKind::Image,
+                    children: None,
+                    text: None,
+                    position: Some(MotionPoint { x: 0.0, y: 0.0 }),
+                    size: Some(MotionSize {
+                        width: 1920.0,
+                        height: 1080.0,
+                    }),
+                    end: None,
+                    fill: None,
+                    stroke: None,
+                    stroke_width: None,
+                    font_size: None,
+                    asset_id: Some("logo".to_owned()),
+                    opacity: Some(1.0),
+                    rotation_degrees: Some(0.0),
+                    spans: None,
+                }],
+                animations: vec![],
+                camera: None,
+            }),
+            preset: None,
+            image: None,
+            preview: None,
+        };
+        library.save(&scene, None).unwrap();
+
+        assert!(library.remove(&image_asset.asset_id).unwrap());
+        assert!(
+            directory.0.join(&image).exists(),
+            "the scene still names it"
+        );
+
+        assert!(library.remove(&scene_id).unwrap());
+        assert!(!directory.0.join(&image).exists());
+    }
+
+    #[test]
+    fn saving_recomputes_a_non_explicit_category() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let asset = directory.asset("Mountain background", "object", "default", vec![]);
+
+        let entry = library.save(&asset, None).unwrap();
+        assert_eq!(entry.category, MotionAssetCategory::Background);
+        assert_eq!(entry.category_source, MotionAssetCategorySource::Filename);
+
+        let stored = library.load(&asset.asset_id).unwrap();
+        assert_eq!(stored.category, MotionAssetCategory::Background);
+        assert_eq!(stored.category_source, MotionAssetCategorySource::Filename);
+    }
+
+    #[test]
+    fn a_manual_category_override_wins() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let asset = directory.asset("Car", "object", "default", vec![]);
+
+        let entry = library
+            .save(&asset, Some(MotionAssetCategory::People))
+            .unwrap();
+        assert_eq!(entry.category, MotionAssetCategory::People);
+        assert_eq!(entry.category_source, MotionAssetCategorySource::Explicit);
+
+        // Reloading keeps the manual choice: it is now recorded as explicit.
+        let stored = library.load(&asset.asset_id).unwrap();
+        let entry = library.save(&stored, None).unwrap();
+        assert_eq!(entry.category, MotionAssetCategory::People);
+    }
+
+    #[test]
+    fn an_invalid_asset_is_refused_with_diagnostics() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let mut asset = directory.asset("Explainer", "text", "explicit", vec![]);
+        asset.parameters.push(crate::MotionAssetParameter {
+            id: "title".to_owned(),
+            label: "Title".to_owned(),
+            kind: crate::MotionParameterKind::Text,
+            target: crate::MotionParameterTarget {
+                node_id: "missing".to_owned(),
+                field: crate::MotionParameterField::Text,
+            },
+            default: crate::MotionParameterValue::Text("x".to_owned()),
+            min: None,
+            max: None,
+            choices: None,
+        });
+
+        let error = library.save(&asset, None).unwrap_err();
+        let MotionLibraryError::InvalidAsset(diagnostics) = error else {
+            panic!("expected InvalidAsset");
+        };
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "MOTION_ASSET_UNKNOWN_PARAMETER_NODE")
+        );
+        assert!(library.list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_unsafe_asset_id_cannot_name_a_file() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        assert!(matches!(
+            library.load("../../etc/passwd"),
+            Err(MotionLibraryError::UnsafeAssetId(_))
+        ));
+        assert!(matches!(
+            library.remove("../x"),
+            Err(MotionLibraryError::UnsafeAssetId(_))
+        ));
+    }
+
+    #[test]
+    fn removing_an_entry_also_removes_its_preview() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let mut asset = directory.asset("Explainer", "text", "explicit", vec![]);
+        asset.preview = Some("previews/6f1c2f5e.png".to_owned());
+        let preview = library.resolve_relative("previews/6f1c2f5e.png").unwrap();
+        fs::write(&preview, b"not really a png").unwrap();
+
+        library.save(&asset, None).unwrap();
+        assert!(library.remove(&asset.asset_id).unwrap());
+        assert!(!preview.exists());
+    }
+
+    #[test]
+    fn the_catalog_refuses_an_unknown_format() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        fs::write(
+            library.catalog_path(),
+            serde_json::to_vec(&json!({
+                "format": "something-else",
+                "schema_version": 1,
+                "entries": []
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(
+            library.list(),
+            Err(MotionLibraryError::InvalidCatalog(_))
+        ));
+    }
+
+    #[test]
+    fn a_preview_path_cannot_leave_the_library() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        assert!(matches!(
+            library.resolve_relative("../outside.png"),
+            Err(MotionLibraryError::UnsafePath(_))
+        ));
+    }
+
+    #[test]
+    fn entries_are_sorted_by_name() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let mut zebra = directory.asset("Zebra", "animal", "explicit", vec![]);
+        zebra.asset_id = "0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f".to_owned();
+        let mut apple = directory.asset("apple", "object", "explicit", vec![]);
+        apple.asset_id = "1c8e3a7f-6d2b-4a4c-8e9f-0b1c2d3e4f5a".to_owned();
+
+        library.save(&zebra, None).unwrap();
+        library.save(&apple, None).unwrap();
+        let names: Vec<String> = library
+            .list()
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.name)
+            .collect();
+        assert_eq!(names, vec!["apple".to_owned(), "Zebra".to_owned()]);
+    }
+
+    #[test]
+    fn importing_a_png_creates_an_adjustable_image_asset() {
+        use crate::{MotionCanvas, instantiate_motion_asset};
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("background.png");
+        let bytes = b"\x89PNG\r\n\x1a\nnot-a-real-png-body".to_vec();
+        fs::write(&source, &bytes).unwrap();
+
+        let asset = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Mountain background",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap();
+        assert_eq!(asset.kind, MotionAssetKind::Image);
+        assert_eq!(asset.category, MotionAssetCategory::Background);
+        assert_eq!(asset.category_source, MotionAssetCategorySource::Filename);
+        assert_eq!(asset.parameters.len(), 4);
+        assert!(asset.preview.as_deref().unwrap().starts_with("previews/"));
+        assert_eq!(library.load(&asset.asset_id).unwrap(), asset);
+        assert_eq!(library.list().unwrap().len(), 1);
+
+        let scene = instantiate_motion_asset(
+            &asset,
+            &std::collections::BTreeMap::new(),
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "Imported",
+        )
+        .unwrap();
+        let generated = directory.0.join("generated");
+        let prepared = library.prepare_scene_assets(&scene, &generated).unwrap();
+        assert_eq!(prepared.assets[0].path, "0.png");
+        assert!(generated.join("0.png").exists());
+    }
+
+    #[test]
+    fn a_non_png_import_is_refused_without_writing_an_asset() {
+        let directory = TestDirectory::new();
+        let library = directory.library();
+        let source = directory.0.join("not.png");
+        fs::write(&source, b"plain text").unwrap();
+        let error = library
+            .import_image(MotionImageImport {
+                source: &source,
+                name: "Not an image",
+                category: None,
+                tags: vec![],
+                canvas: MotionCanvas {
+                    width: 1920,
+                    height: 1080,
+                },
+                duration: RationalTime::new(4, 1).unwrap(),
+            })
+            .unwrap_err();
+        assert!(matches!(error, MotionLibraryError::InvalidImage(_)));
+        assert!(library.list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn the_asset_file_is_bounded_by_the_asset_parser() {
+        // MAX_MOTION_ASSET_BYTES is exported for the caller; this test pins that
+        // the library and the parser agree on the bound.
+        #[allow(clippy::assertions_on_constants)]
+        {
+            assert!(MAX_MOTION_ASSET_BYTES >= 1024 * 1024);
+        }
+    }
+}

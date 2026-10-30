@@ -5,8 +5,27 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(git -C "$script_dir/.." rev-parse --show-toplevel)"
 cd "$repo_root"
 
+# The repository checks use tomllib and Python 3.10+ type syntax. Prefer an
+# already-installed macOS package-manager interpreter over Apple's older one.
+python_executable="$(command -v python3 || true)"
+if [[ -z "$python_executable" ]] || ! "$python_executable" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
+  for candidate in /opt/homebrew/bin/python3 /usr/local/bin/python3 /opt/local/bin/python3; do
+    if [[ -x "$candidate" ]] && "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
+      python_executable="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$python_executable" ]] || ! "$python_executable" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
+  printf 'FAIL: repository checks require Python 3.11 or newer\n' >&2
+  exit 1
+fi
+PATH="$(dirname "$python_executable"):$PATH"
+export PATH
+
 failed=0
 tracked_count=0
+host_os="$(uname -s)"
 max_bytes=$((25 * 1024 * 1024))
 
 fail() {
@@ -18,32 +37,49 @@ required_files=(
   README.md
   LICENSE
   AGENTS.md
-  DESIGN.md
   CONTRIBUTING.md
   SECURITY.md
-  docs/INDEX.md
-  docs/PRODUCT.md
-  docs/PROJECT_FORMAT.md
+  docs/design/design-language.md
+  docs/design/ux-invariants.md
+  docs/architecture/system-overview.md
+  docs/architecture/control-plane.md
+  docs/architecture/realtime-plane.md
+  docs/architecture/media-pipeline.md
+  docs/architecture/project-format.md
+  docs/architecture/platforms.md
+  docs/architecture/security-boundaries.md
+  docs/features/project-lifecycle.md
+  docs/features/editing.md
+  docs/features/media-library.md
+  docs/features/preview-playback.md
+  docs/features/text-captions.md
+  docs/features/effects-audio.md
+  docs/features/export.md
+  docs/features/motionscene.md
+  docs/features/motion-assets.md
+  docs/features/workspace-ui.md
+  docs/features/assistant.md
+  docs/features/agent-workspace.md
+  docs/operations/workflow.md
+  docs/operations/verification.md
+  docs/operations/local-macos.md
+  docs/operations/ui-harness.md
+  docs/operations/git.md
+  docs/operations/permissions.md
+  docs/operations/docs-maintenance.md
+  docs/operations/skills.md
+  docs/reference/product.md
+  docs/reference/roadmap.md
+  docs/reference/quality.md
+  docs/reference/testing.md
+  docs/reference/tooling.md
+  docs/reference/security-licensing.md
+  docs/reference/release.md
+  docs/reference/developer-preview-install.md
+  docs/evidence/claims/README.md
   scripts/stage_codec_licences.sh
   scripts/run_local_lane.sh
   scripts/run_android_lane.sh
-  docs/ARCHITECTURE.md
-  docs/TECHNICAL_PLAN.md
-  docs/DEVELOPMENT_WORKFLOW.md
-  docs/ROADMAP.md
-  docs/TESTING.md
-  docs/SECURITY_LICENSING.md
-  docs/RELEASE.md
-  docs/TOOLING.md
-  docs/UX_ACCEPTANCE.md
-  docs/QUALITY.md
-  docs/AGENT-AUTHORITY.md
-  docs/PAUSE_MIGRATION_HANDOFF.md
-  docs/evidence/PRODUCT_ROADMAP_HISTORY.md
-  docs/prompts/README.md
-  docs/prompts/OR-BUILD.md
-  docs/skills.md
-  docs/evidence/claims/README.md
   docs/adr/README.md
   docs/adr/0001-control-and-realtime-planes.md
   docs/adr/0002-wgpu-render-spine-and-native-interop.md
@@ -181,8 +217,12 @@ fi
 # mirroring a read-only Flutter SDK. A silent break there only shows up as a
 # confusing permission error minutes into a native run, so its hermetic unit
 # tests run with the other gates.
-if ! python3 scripts/test_linux_ui_preflight.py; then
-  fail "the bounded Linux preflight preparation checks failed"
+if [[ "$host_os" == "Linux" ]]; then
+  if ! python3 scripts/test_linux_ui_preflight.py; then
+    fail "the bounded Linux preflight preparation checks failed"
+  fi
+else
+  printf 'SKIP: Linux UI preflight tests require Linux (current host: %s)\n' "$host_os"
 fi
 
 # Two hermetic Android report/runner suites existed without a runner, which made
@@ -201,16 +241,24 @@ fi
 # DIRTY for a dirty tree, and must never claim acceptance. Those rules are what
 # stop a local guest run from being mistaken for Android acceptance, so they are
 # checked without a device.
-if ! python3 scripts/test_android_lane.py; then
-  fail "the local Android lane control-flow checks failed"
+if [[ "$host_os" == "Linux" ]]; then
+  if ! python3 scripts/test_android_lane.py; then
+    fail "the local Android lane control-flow checks failed"
+  fi
+else
+  printf 'SKIP: Android lane shell tests require Linux (current host: %s)\n' "$host_os"
 fi
 
 # The emulator start script must bind the serial the lane reserved. When it did
 # not, the lane waited 120 s for a serial nothing listened on and left a guest
 # running; these checks pin the port, the named port conflict and the guest size
 # without a device, an emulator or /dev/kvm.
-if ! python3 scripts/test_android_emulator_start.py; then
-  fail "the Android emulator start checks failed"
+if [[ "$host_os" == "Linux" ]]; then
+  if ! python3 scripts/test_android_emulator_start.py; then
+    fail "the Android emulator start checks failed"
+  fi
+else
+  printf 'SKIP: Android emulator-start shell tests require Linux (current host: %s)\n' "$host_os"
 fi
 
 # A native method is declared in Kotlin, wrapped in C++ and implemented in Rust. It can
@@ -237,7 +285,7 @@ fi
 # The performance budget is only meaningful if a breach fails and every row
 # declares where its threshold came from. Those properties are checked without a
 # compiler or a GPU; the injected-regression command that proves a real slowdown
-# trips the CLI row is documented in docs/QUALITY.md and run at phase boundaries.
+# trips the CLI row is documented in docs/reference/quality.md and run at phase boundaries.
 if ! python3 scripts/test_bench_quality.py; then
   fail "the performance budget checks failed"
 fi
@@ -284,4 +332,4 @@ if (( failed != 0 )); then
   exit 1
 fi
 
-printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, doc-link, doc-freshness, claim-source-identity, preflight-preparation, Android-report and release-gate-logic checks).\n' "$tracked_count"
+printf 'Repository hygiene checks passed (%s tracked files; whitespace, paths, size, license, key-file, docs, claims, dependency boundary and host-appropriate hermetic checks).\n' "$tracked_count"

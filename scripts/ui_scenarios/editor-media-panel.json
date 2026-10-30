@@ -1,0 +1,68 @@
+{
+  "name": "editor-media-panel",
+  "harness": "or_ui",
+  "description": "Open a new project and the Media tool: the library pane renders its header, import actions and empty state after the panel moved out of the editor screen.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Media panel check"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-media"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "project-media-panel"
+    },
+    {
+      "op": "expect",
+      "key": "media-import"
+    },
+    {
+      "op": "expect_text",
+      "text": "Import a video, image or audio file to start."
+    },
+    {
+      "op": "shot",
+      "name": "media-panel-empty"
+    }
+  ]
+}

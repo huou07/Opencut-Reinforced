@@ -5,6 +5,32 @@ export 'src/rust/api/motion.dart'
         MotionMaterializationView,
         materializeMotionScene,
         materializeMotionSceneFromCode;
+export 'src/rust/api/motion_library.dart'
+    show
+        MotionAssetEntryView,
+        MotionAssetLibraryView,
+        MotionAssetMutationView,
+        MotionAssetParameterView,
+        MotionAssetView,
+        MotionSceneNodeView,
+        MotionScenePreviewView,
+        MotionSceneView,
+        motionAssetImportImage,
+        motionAssetLoad,
+        motionAssetMaterialize,
+        motionAssetRemove,
+        motionAssetSave,
+        motionAssetScene,
+        motionLibrary,
+        motionSceneAppend,
+        motionSceneCompose,
+        motionSceneEdit,
+        motionSceneFromAsset,
+        motionSceneMaterialize,
+        motionSceneNew,
+        motionScenePreview,
+        motionSceneRead,
+        motionSceneSave;
 export 'src/rust/api/project.dart'
     show
         ProjectActionResult,
@@ -24,6 +50,7 @@ export 'src/rust/api/project.dart'
         ProjectHostEventView,
         ProjectHostHandle,
         ProjectExportJobView,
+        ProjectTranscriptionModelOptionView,
         ProjectTranscriptionModelView,
         ProjectModelDownloadView,
         ProjectTranscriptionJobView,
@@ -32,8 +59,10 @@ export 'src/rust/api/project.dart'
         ProjectPreviewStateView,
         ProjectTimelineClipPageView,
         ProjectTimelineClipView,
+        ProjectTextBackgroundView,
         ProjectTextColorView,
         ProjectTextFormattingView,
+        TextVerticalAnchorView,
         ProjectTimelineMarkerPageView,
         ProjectTimelineMarkerView,
         ProjectTimelineSequenceSettingsView,
@@ -63,3 +92,6 @@ export 'src/rust/api/project.dart'
         inspectRecovery,
         openProject;
 export 'src/rust/frb_generated.dart' show RustLib;
+
+export 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;

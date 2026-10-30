@@ -429,7 +429,7 @@ void main() {
     expect(relinkedMedia.mediaId, media.mediaId);
     expect(
       Uri.parse(relinkedMedia.sourceUri).toFilePath(),
-      replacementAudioPath,
+      await File(replacementAudioPath).resolveSymbolicLinks(),
     );
 
     final addedTrack = await gateway.addTimelineTrack(
@@ -480,6 +480,59 @@ void main() {
     );
     expect(updated.succeeded, isTrue);
     current = updated.view!;
+
+    final rateUpdated = await gateway.updateTimelineClipPlaybackRate(
+      session,
+      current,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+      rate: const ProjectRationalRate(2, 1),
+    );
+    expect(rateUpdated.succeeded, isTrue, reason: rateUpdated.message);
+    current = rateUpdated.view!;
+    var spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '2/1');
+    expect(spedClip.timelineDuration.canonical, '1/8');
+
+    final staleRate = await gateway.updateTimelineClipPlaybackRate(
+      session,
+      updated.view!,
+      trackId: track.trackId,
+      clipId: clip.clipId,
+      rate: const ProjectRationalRate(3, 1),
+    );
+    expect(staleRate.succeeded, isFalse);
+    expect(staleRate.errorCode, 'REVISION_CONFLICT');
+
+    final undo = await gateway.undo(session, current);
+    expect(undo.succeeded, isTrue);
+    current = undo.view!;
+    spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '1/1');
+    expect(spedClip.timelineDuration.canonical, '1/4');
+
+    final redo = await gateway.redo(session, current);
+    expect(redo.succeeded, isTrue);
+    current = redo.view!;
+    spedClip = (await gateway.listTimelineClips(
+      session,
+      trackId: track.trackId,
+      offset: 0,
+      limit: 10,
+    )).items.single;
+    expect(spedClip.playbackRate.canonical, '2/1');
+    expect(spedClip.timelineDuration.canonical, '1/8');
+
     expect((await gateway.save(session)).succeeded, isTrue);
     await gateway.close(session, discardUnsaved: false);
     activeSession = null;
@@ -508,6 +561,8 @@ void main() {
     expect(reopened.panBasisPoints, -3750);
     expect(reopened.fadeIn.canonical, '1/8');
     expect(reopened.fadeOut.canonical, '1/16');
+    expect(reopenedClip.playbackRate.canonical, '2/1');
+    expect(reopenedClip.timelineDuration.canonical, '1/8');
     expect(tester.takeException(), isNull);
   });
 
@@ -1683,6 +1738,10 @@ Uint8List _silentWave({required int sampleRate, required int frames}) {
 }
 
 class _ObservedRustProjectGateway implements ProjectGateway {
+  int reversedCalls = 0;
+  bool? lastReversed;
+  int frozenCalls = 0;
+  bool? lastFrozen;
   ProjectSessionHandle? activeSession;
   Object? lastError;
   final Completer<void> _projectCreationCompletion = Completer<void>();
@@ -1850,6 +1909,65 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) => _gateway.updateTimelineClipPlaybackRate(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    rate: rate,
+  );
+
+  int moveClipsCalls = 0;
+  List<String>? lastMovedClipIds;
+  ProjectRationalTime? lastMoveDelta;
+
+  @override
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  }) async {
+    moveClipsCalls += 1;
+    lastMovedClipIds = List<String>.of(clipIds);
+    lastMoveDelta = delta;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) async {
+    reversedCalls += 1;
+    lastReversed = reversed;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) async {
+    frozenCalls += 1;
+    lastFrozen = frozen;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {
     required int offset,
@@ -1906,9 +2024,27 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.transcriptionModel(session);
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) => _gateway.transcriptionModels(session);
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => _gateway.selectTranscriptionModel(session, modelId);
+
+  @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => _gateway.removeTranscriptionModel(session, modelId);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
-  ) => _gateway.beginTranscriptionModelDownload(session);
+    String modelId,
+  ) => _gateway.beginTranscriptionModelDownload(session, modelId);
 
   @override
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
@@ -2171,6 +2307,23 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) => _gateway.duckTimelineClip(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    voiceTrackId: voiceTrackId,
+    duckDecibels: duckDecibels,
+  );
+
+  @override
   Future<ProjectActionResult> rippleDeleteTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -2283,8 +2436,9 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  ) => _gateway.startExport(session, current, destination);
+    String destination, {
+    String? quality,
+  }) => _gateway.startExport(session, current, destination, quality: quality);
 
   @override
   Future<ProjectExportJob> exportStatus(

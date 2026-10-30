@@ -17,5 +17,5 @@ For items that do not apply, explain why in Documentation or Risk / follow-up.
 - [ ] Relevant tests pass, or explained as not applicable
 - [ ] Documentation is updated if applicable
 - [ ] No secrets or generated artifacts are committed
-- [ ] UI changes follow DESIGN.md, or are not applicable
-- [ ] Architecture changes follow docs/ARCHITECTURE.md, or are not applicable
+- [ ] UI changes follow docs/design/design-language.md, or are not applicable
+- [ ] Architecture changes follow docs/architecture/system-overview.md, or are not applicable

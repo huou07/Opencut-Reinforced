@@ -1,11 +1,15 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipContent, ClipId, ClipSettings, CommandEnvelope,
-    CommandResult, MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId,
-    MediaItem, OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError,
-    ProjectFileSession, ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate,
-    RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
-    TrackId, TrackKind, TrackState, VisualSettings, apply_project_recovery, command_catalog,
-    discard_project_recovery, inspect_project_recovery, prepare_media_import, query_catalog,
+    ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipContent, ClipId, ClipSettings,
+    CommandEnvelope, CommandResult, FontIdentity, ImportedCaption, JobState,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
+    MotionMaterializeRequest, OperationError, ProjectFileMediaImportError,
+    ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
+    QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, TextAlignment, TextBackground, TextColor, TextFormatting,
+    TextVerticalAnchor, TextWeight, TimelineClipState, TrackId, TrackKind, TrackState,
+    TranscriptionRequest, TranscriptionResponse, VisualSettings, apply_project_recovery,
+    command_catalog, discard_project_recovery, encode_caption_file, inspect_project_recovery,
+    parse_caption_file, prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -13,9 +17,11 @@ use or_ipc::{
 };
 use serde_json::{Value, json};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     ffi::{OsStr, OsString},
     path::{Path, PathBuf},
+    thread,
+    time::{Duration, Instant},
 };
 
 pub(super) enum CommandOutput {
@@ -142,6 +148,16 @@ impl CliError {
         Self::new(4, json, "motion_scene", error.code(), error.to_string())
     }
 
+    /// A MotionAsset that could not be read or instantiated.
+    fn motion_asset(error: or_motion::MotionAssetError, json: bool) -> Self {
+        Self::new(4, json, "motion_asset", error.code(), error.to_string())
+    }
+
+    /// A motion library operation failure.
+    fn motion_library(error: or_motion::MotionLibraryError, json: bool) -> Self {
+        Self::new(4, json, "motion_library", error.code(), error.to_string())
+    }
+
     /// A noise-reduction failure, reported with the same shape as the other media
     /// categories so a caller can switch on the code.
     fn cleanup(error: or_core::AudioCleanupError, json: bool) -> Self {
@@ -261,6 +277,12 @@ impl CliError {
         }
     }
 
+    /// Names the step that failed without hiding the underlying error.
+    fn with_context(mut self, step: &str) -> Self {
+        self.message = format!("{step}: {}", self.message);
+        self
+    }
+
     fn new(
         exit_code: u8,
         json: bool,
@@ -329,6 +351,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "media" => run_media(&args[1..], json)?,
         "motion" => run_motion(&args[1..], json)?,
         "timeline" => run_timeline(&args[1..], json)?,
+        "captions" => run_captions(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
     };
@@ -365,7 +388,7 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
         "save" => {
             let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
             let path = required_path(&options, "--attach", json)?;
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             let saved = client.save().map_err(|error| CliError::ipc(error, json))?;
             Ok(if json {
                 json_string(serde_json::to_value(saved).expect("save response is serializable"))
@@ -482,13 +505,878 @@ fn run_motion(args: &[OsString], json: bool) -> Result<String, CliError> {
         "validate" => run_motion_validate(&args[1..], json),
         "inspect" => run_motion_inspect(&args[1..], json),
         "evaluate" => run_motion_evaluate(&args[1..], json),
+        "layout" => run_motion_layout(&args[1..], json),
         "render" => run_motion_render(&args[1..], json),
         "from-code" => run_motion_from_code(&args[1..], json),
+        "materialize" => run_motion_materialize(&args[1..], json),
+        "publish" => run_motion_publish(&args[1..], json),
+        "asset" => run_motion_asset(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown motion action; expected validate, inspect, evaluate, render or from-code",
+            "unknown motion action; expected validate, inspect, evaluate, layout, render, from-code, materialize, publish or asset",
         )),
     }
+}
+
+/// Materialises a code file or an authored scene into a video through the live
+/// application runtime.
+///
+/// Only the application links the FFmpeg encoder, so this verb attaches to the
+/// running app over local IPC instead of linking a second encoder into the CLI.
+/// Materialisation writes a persistent file and never mutates the project; the
+/// caller registers the result with the ordinary media and timeline commands.
+fn run_motion_materialize(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--attach",
+            "--source",
+            "--scene",
+            "--output",
+            "--frame-rate",
+            "--width",
+            "--height",
+            "--title",
+        ],
+        &[],
+        json,
+    )?;
+    let descriptor_path = required_path(&options, "--attach", json)?;
+    let output = required_path(&options, "--output", json)?;
+    if !output.is_absolute() {
+        return Err(CliError::usage(
+            json,
+            "--output must be an absolute destination path",
+        ));
+    }
+    let source = options.optional_path("--source");
+    let scene = options.optional_path("--scene");
+    if source.is_some() == scene.is_some() {
+        return Err(CliError::usage(
+            json,
+            "pass exactly one of --source or --scene",
+        ));
+    }
+    let rate = match options.value("--frame-rate") {
+        Some(value) => parse_cli_rate(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--frame-rate must be valid UTF-8"))?,
+            "--frame-rate",
+            json,
+        )?,
+        None => RationalRate::new(30, 1).expect("30/1 is a valid rate"),
+    };
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(1920);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(1080);
+    let title = options
+        .value("--title")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let client = attached_client(&descriptor_path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let request = match (source, scene) {
+        (Some(source), None) => MotionMaterializeRequest::FromCode {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            source_path: source.display().to_string(),
+            destination: output.display().to_string(),
+            frame_rate_numerator: rate.numerator(),
+            frame_rate_denominator: rate.denominator(),
+            width,
+            height,
+            title,
+        },
+        (None, Some(scene)) => MotionMaterializeRequest::FromScene {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            scene_path: scene.display().to_string(),
+            destination: output.display().to_string(),
+            frame_rate_numerator: rate.numerator(),
+            frame_rate_denominator: rate.denominator(),
+            width,
+            height,
+        },
+        _ => unreachable!("exactly one input was required above"),
+    };
+    let response = client
+        .application(ApplicationRequest::MotionMaterialize(request))
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = match response {
+        ApplicationSuccess::MotionMaterialize(response) => response,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the project host returned an unexpected response",
+            ));
+        }
+    };
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            response.error_code.clone(),
+            response.message.clone(),
+            serde_json::to_value(&response).ok(),
+        ));
+    }
+    if json {
+        return Ok(json_string(json!({"motion_materialization": response})));
+    }
+    Ok(format!(
+        "Materialised {} frames ({}/{} s) to {} ({} bytes).",
+        response.frame_count,
+        response.duration.numerator(),
+        response.duration.denominator(),
+        response.output_path,
+        response.bytes_written
+    ))
+}
+
+/// Reads a session pointer's JSON. A descriptor path read as JSON simply fails,
+/// so `--attach` keeps accepting both forms.
+fn pointer_json(path: &Path) -> Option<Value> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// The app-level motion library the session pointer records.
+fn motion_library_from_pointer(attach: &Path) -> Option<PathBuf> {
+    pointer_json(attach)?
+        .get("motion_library_path")
+        .and_then(Value::as_str)
+        .filter(|path| !path.trim().is_empty())
+        .map(PathBuf::from)
+}
+
+/// A persistent destination beside the open project, like the app's own
+/// materialisation default.
+fn default_motion_publish_output(attach: &Path, name: &str) -> PathBuf {
+    let base = pointer_json(attach)
+        .and_then(|value| {
+            value
+                .get("project_path")
+                .and_then(Value::as_str)
+                .map(PathBuf::from)
+        })
+        .and_then(|path| path.parent().map(Path::to_path_buf))
+        .unwrap_or_else(std::env::temp_dir);
+    let directory = base.join("generated");
+    let _ = std::fs::create_dir_all(&directory);
+    let slug = name
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let slug = slug.trim_matches('-');
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    directory.join(format!(
+        "{}-{stamp}.mkv",
+        if slug.is_empty() {
+            "motion-scene"
+        } else {
+            slug
+        }
+    ))
+}
+
+fn first_editable_video_track(
+    attach: &Path,
+    client: &LocalIpcClient,
+    description: &DescribeResponse,
+    json: bool,
+) -> Result<TrackId, CliError> {
+    let query =
+        QueryEnvelope::timeline_tracks_v2(description.project_id, description.project_instance_id);
+    let result = expect_remote_query(
+        client
+            .application(ApplicationRequest::Query(query))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )?;
+    let tracks = result.timeline_tracks_v2.ok_or_else(|| {
+        CliError::operation_message(json, "the timeline tracks response was empty")
+    })?;
+    if let Some(track) = tracks
+        .iter()
+        .find(|track| track.kind == TrackKind::Video && !track.state.locked())
+    {
+        return Ok(track.track_id);
+    }
+    // An empty project has no video track yet. Adding one is the same validated
+    // command the app's own insert flow issues, so the result is ordinary state.
+    let track_id = TrackId::generate();
+    timeline_mutation(
+        attach,
+        true,
+        "timeline.track.add",
+        json!({"track_id": track_id, "kind": TrackKind::Video}),
+        json,
+    )?;
+    Ok(track_id)
+}
+
+fn timeline_track_end(
+    client: &LocalIpcClient,
+    description: &DescribeResponse,
+    track_id: TrackId,
+    json: bool,
+) -> Result<RationalTime, CliError> {
+    let query = QueryEnvelope::timeline_clips_v2(
+        description.project_id,
+        description.project_instance_id,
+        track_id,
+        0,
+        MAX_TIMELINE_CLIP_PAGE_SIZE,
+    );
+    let result = expect_remote_query(
+        client
+            .application(ApplicationRequest::Query(query))
+            .map_err(|error| CliError::ipc(error, json))?,
+        json,
+    )?;
+    let page = result
+        .timeline_clip_page_v2
+        .ok_or_else(|| CliError::operation_message(json, "the timeline clip page was empty"))?;
+    let mut end = RationalTime::ZERO;
+    for clip in page.items {
+        let clip_end = clip
+            .timeline_start
+            .checked_add(clip.timeline_duration)
+            .map_err(|_| CliError::usage(json, "a clip end is outside the supported range"))?;
+        if clip_end > end {
+            end = clip_end;
+        }
+    }
+    Ok(end)
+}
+
+/// Materialises one scene through the running app, imports the result and
+/// inserts it as an ordinary clip. This is the one path both `motion publish`
+/// and `motion asset insert` use, so the CLI does exactly what the app does.
+#[allow(clippy::too_many_arguments)]
+fn materialize_and_insert_motion(
+    attach: &Path,
+    scene_path: &Path,
+    width: u32,
+    height: u32,
+    rate: RationalRate,
+    output: &Path,
+    at: Option<&str>,
+    track: Option<TrackId>,
+    provenance: Value,
+    json: bool,
+) -> Result<Value, CliError> {
+    let client = attached_client(attach, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let request = MotionMaterializeRequest::FromScene {
+        project_id: description.project_id,
+        project_instance_id: description.project_instance_id,
+        scene_path: scene_path.display().to_string(),
+        destination: output.display().to_string(),
+        frame_rate_numerator: rate.numerator(),
+        frame_rate_denominator: rate.denominator(),
+        width,
+        height,
+    };
+    let response = client
+        .application(ApplicationRequest::MotionMaterialize(request))
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = match response {
+        ApplicationSuccess::MotionMaterialize(response) => response,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the project host returned an unexpected response",
+            ));
+        }
+    };
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            response.error_code.clone(),
+            response.message.clone(),
+            serde_json::to_value(&response).ok(),
+        ));
+    }
+
+    let (item, _) = attached_media_add(attach, output, json)
+        .map_err(|error| error.with_context("media add"))?;
+    let media_id = item.id().to_string();
+    let track_id = match track {
+        Some(track_id) => track_id,
+        None => first_editable_video_track(attach, &client, &description, json)
+            .map_err(|error| error.with_context("choose a video track"))?,
+    };
+    let timeline_start = match at {
+        Some(value) => parse_cli_rational(value, "--at", json)?,
+        None => timeline_track_end(&client, &description, track_id, json)
+            .map_err(|error| error.with_context("read the track end"))?,
+    };
+    let duration = response.duration;
+    let clip_id = ClipId::generate();
+    let insert_arguments = json!({
+        "clip_id": clip_id,
+        "track_id": track_id,
+        "media_id": media_id,
+        "timeline_start": rational_value(timeline_start),
+        "source_range": {
+            "start": rational_value(RationalTime::ZERO),
+            "duration": rational_value(duration),
+        },
+        "mode": "insert",
+    });
+    let inserted = timeline_mutation(attach, true, "timeline.clip.insert", insert_arguments, json)
+        .map_err(|error| error.with_context("timeline.clip.insert"))?;
+
+    let sidecar = format!("{}.provenance.json", output.display());
+    let mut document = provenance;
+    if let Some(object) = document.as_object_mut() {
+        object.insert("version".to_owned(), json!(1));
+        object.insert("scene_id".to_owned(), json!(response.scene_id));
+        object.insert("scene_name".to_owned(), json!(response.scene_name));
+        object.insert("frame_count".to_owned(), json!(response.frame_count));
+        object.insert("media_id".to_owned(), json!(media_id));
+        object.insert(
+            "output_path".to_owned(),
+            json!(output.display().to_string()),
+        );
+    }
+    if let Ok(encoded) = serde_json::to_vec_pretty(&document) {
+        let _ = std::fs::write(&sidecar, encoded);
+    }
+    Ok(json!({
+        "output_path": output.display().to_string(),
+        "media_id": media_id,
+        "track_id": track_id.to_string(),
+        "at": rational_value(timeline_start),
+        "duration": rational_value(duration),
+        "clip_id": clip_id.to_string(),
+        "scene_name": response.scene_name,
+        "frame_count": response.frame_count,
+        "provenance": sidecar,
+        "insert": inserted,
+        "next": "The clip is on the timeline but the project is not saved yet. Run project save when the edit is complete.",
+    }))
+}
+
+/// `or motion publish` — validate, save to the library, render, import and
+/// insert in one call. It is the CLI equivalent of the assistant's MCP path and
+/// the reason that path no longer has to carry assets by hand.
+fn run_motion_publish(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--attach",
+            "--scene",
+            "--source",
+            "--library",
+            "--name",
+            "--category",
+            "--title",
+            "--width",
+            "--height",
+            "--frame-rate",
+            "--output",
+            "--at",
+            "--track",
+        ],
+        &["--no-library"],
+        json,
+    )?;
+    let attach = required_path(&options, "--attach", json)?;
+    let scene_path = options.optional_path("--scene");
+    let source_path = options.optional_path("--source");
+    if scene_path.is_some() == source_path.is_some() {
+        return Err(CliError::usage(
+            json,
+            "pass exactly one of --scene or --source",
+        ));
+    }
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(1920);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(1080);
+    let rate = match options.value("--frame-rate") {
+        Some(value) => parse_cli_rate(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--frame-rate must be valid UTF-8"))?,
+            "--frame-rate",
+            json,
+        )?,
+        None => RationalRate::new(30, 1).expect("30/1 is a valid rate"),
+    };
+    let title = options
+        .value("--title")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let (scene, original_path, source_language) = match (&scene_path, &source_path) {
+        (Some(path), None) => {
+            let bytes = std::fs::read(path).map_err(|error| {
+                CliError::usage(json, format!("the scene could not be read: {error}"))
+            })?;
+            let scene = or_motion::parse_motion_scene(&bytes)
+                .map_err(|error| CliError::motion(error, json))?;
+            (scene, Some(path.clone()), None)
+        }
+        (None, Some(path)) => {
+            let bytes = std::fs::read(path).map_err(|error| {
+                CliError::usage(json, format!("the source could not be read: {error}"))
+            })?;
+            let language = or_motion::CodeLanguage::from_path(&path.display().to_string());
+            let scene_options = or_motion::CodeSceneOptions {
+                title: if title.is_empty() {
+                    path.file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "Code".to_owned())
+                } else {
+                    title.clone()
+                },
+                canvas: or_motion::MotionCanvas { width, height },
+                ..or_motion::CodeSceneOptions::default()
+            };
+            let scene = or_motion::scene_from_source(&bytes, language, &scene_options)
+                .map_err(|error| CliError::code_scene(error, json))?;
+            (scene, None, Some(language))
+        }
+        _ => unreachable!("exactly one input was required above"),
+    };
+    let validation = or_motion::validate_scene(&scene);
+    if !validation.ok {
+        return Err(CliError::new(
+            5,
+            json,
+            "motion_scene",
+            "MOTION_SCENE_INVALID",
+            format!(
+                "the scene does not validate: {}",
+                validation
+                    .errors
+                    .iter()
+                    .map(|error| error.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        ));
+    }
+    if !scene.assets.is_empty() {
+        return Err(CliError::usage(
+            json,
+            "a scene with image assets is published from the app; this verb accepts vector scenes",
+        ));
+    }
+
+    let library_root = match (
+        options.optional_path("--library"),
+        options.has_flag("--no-library"),
+    ) {
+        (Some(_), true) => {
+            return Err(CliError::usage(
+                json,
+                "choose either --library or --no-library",
+            ));
+        }
+        (Some(root), false) => Some(root),
+        (None, true) => None,
+        (None, false) => motion_library_from_pointer(&attach),
+    };
+
+    let name = options
+        .value("--name")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|| scene.name.clone());
+    if name.trim().is_empty() {
+        return Err(CliError::usage(json, "--name must not be empty"));
+    }
+    let category = match options.value("--category") {
+        Some(value) => Some(parse_motion_category(value, json)?),
+        None => None,
+    };
+
+    let mut saved_asset = None;
+    if let Some(root) = &library_root {
+        let library = or_motion::MotionLibrary::open(root)
+            .map_err(|error| CliError::motion_library(error, json))?;
+        let asset_id = or_motion::new_motion_asset_id();
+        let preview = (|| {
+            let frame = or_motion::evaluate_scene(&scene, RationalTime::ZERO).ok()?;
+            let canvas = or_render::rasterize_motion_frame(&frame).ok()?;
+            let png =
+                or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels()).ok()?;
+            library.write_preview(&asset_id, &png).ok()
+        })();
+        let classification = or_motion::classify_motion_asset(
+            &name,
+            &[],
+            or_motion::MotionAssetKind::Scene,
+            category,
+        );
+        let document = or_motion::MotionAssetDocument {
+            format: or_motion::MOTION_ASSET_FORMAT.to_owned(),
+            schema_version: or_motion::MOTION_ASSET_SCHEMA_VERSION,
+            asset_id,
+            name: name.clone(),
+            category: classification.category,
+            category_source: classification.source,
+            tags: Vec::new(),
+            kind: or_motion::MotionAssetKind::Scene,
+            canvas: scene.canvas,
+            duration: scene.duration,
+            parameters: Vec::new(),
+            scene: Some(or_motion::MotionAssetPayload {
+                assets: Vec::new(),
+                nodes: scene.nodes.clone(),
+                animations: scene.animations.clone(),
+                camera: scene.camera.clone(),
+            }),
+            preset: None,
+            image: None,
+            preview,
+        };
+        saved_asset = Some(
+            library
+                .save(&document, category)
+                .map_err(|error| CliError::motion_library(error, json))?,
+        );
+    }
+
+    // The materialiser reads the scene from a file. A generated code scene has no
+    // original file, so it is written into a bounded scratch directory first.
+    let scene_file = match original_path {
+        Some(path) => path,
+        None => {
+            let directory = std::env::temp_dir().join(format!(
+                "or-motion-publish-{}",
+                or_motion::new_motion_asset_id()
+            ));
+            std::fs::create_dir_all(&directory).map_err(|error| {
+                CliError::usage(
+                    json,
+                    format!("the scratch directory could not be created: {error}"),
+                )
+            })?;
+            let file = directory.join("scene.ormotion.json");
+            let encoded = serde_json::to_vec_pretty(&scene).map_err(|error| {
+                CliError::usage(json, format!("the scene could not be encoded: {error}"))
+            })?;
+            std::fs::write(&file, encoded).map_err(|error| {
+                CliError::usage(json, format!("the scene could not be written: {error}"))
+            })?;
+            file
+        }
+    };
+
+    let output = match options.optional_path("--output") {
+        Some(path) => path,
+        None => default_motion_publish_output(&attach, &name),
+    };
+    if !output.is_absolute() {
+        return Err(CliError::usage(
+            json,
+            "--output must be an absolute destination path",
+        ));
+    }
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            CliError::usage(
+                json,
+                format!("could not create {}: {error}", parent.display()),
+            )
+        })?;
+    }
+    let track = match options.value("--track") {
+        Some(value) => Some(parse_track_id(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--track must be valid UTF-8"))?,
+            json,
+        )?),
+        None => None,
+    };
+    let at = options.value("--at").and_then(|value| value.to_str());
+
+    let mut provenance = json!({
+        "kind": "motion-scene",
+        "name": name,
+    });
+    if let Some(entry) = &saved_asset {
+        provenance["kind"] = json!("motion-asset");
+        provenance["asset_id"] = json!(entry.asset_id);
+        provenance["library"] = json!(library_root.as_ref().map(|root| root.display().to_string()));
+    }
+    if let Some(language) = source_language {
+        provenance["language"] = json!(language.name());
+    }
+
+    let result = materialize_and_insert_motion(
+        &attach,
+        &scene_file,
+        width,
+        height,
+        rate,
+        &output,
+        at,
+        track,
+        provenance,
+        json,
+    )?;
+    let mut result = result;
+    if let Some(entry) = saved_asset
+        && let Some(object) = result.as_object_mut()
+    {
+        object.insert(
+            "motion_asset".to_owned(),
+            serde_json::to_value(entry).unwrap_or(Value::Null),
+        );
+    }
+    if json {
+        return Ok(json_string(result));
+    }
+    Ok(format!(
+        "Published {} and inserted media {} at {} on track {} ({}).",
+        result
+            .get("output_path")
+            .and_then(Value::as_str)
+            .unwrap_or("the scene"),
+        result
+            .get("media_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?"),
+        result.get("at").and_then(Value::as_str).unwrap_or("?"),
+        result
+            .get("track_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?"),
+        result.get("next").and_then(Value::as_str).unwrap_or(""),
+    ))
+}
+
+/// `or motion asset insert` — instantiate a stored library asset, render it,
+/// import it and place it, without starting from a scene file.
+fn run_motion_asset_insert(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--attach",
+            "--asset-id",
+            "--values",
+            "--library",
+            "--output",
+            "--at",
+            "--track",
+            "--frame-rate",
+            "--width",
+            "--height",
+        ],
+        &[],
+        json,
+    )?;
+    let attach = required_path(&options, "--attach", json)?;
+    let library_root = match options.optional_path("--library") {
+        Some(root) => root,
+        None => motion_library_from_pointer(&attach).ok_or_else(|| {
+            CliError::usage(
+                json,
+                "no motion library is recorded by this session; pass --library",
+            )
+        })?,
+    };
+    let library = or_motion::MotionLibrary::open(&library_root)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let asset_id = required_name(&options, "--asset-id", json)?;
+    let asset = library
+        .load(&asset_id)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let values = match options.value("--values") {
+        Some(value) => parse_motion_values(value, json)?,
+        None => BTreeMap::new(),
+    };
+    let scene_id = or_motion::new_motion_asset_id();
+    let scene = or_motion::instantiate_motion_asset(&asset, &values, &scene_id, &asset.name)
+        .map_err(|error| CliError::motion_asset(error, json))?;
+    let scratch = std::env::temp_dir().join(format!("or-motion-asset-insert-{scene_id}"));
+    let prepared = library
+        .prepare_scene_assets(&scene, &scratch)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let scene_file = scratch.join("scene.ormotion.json");
+    let encoded = serde_json::to_vec_pretty(&prepared).map_err(|error| {
+        CliError::usage(
+            json,
+            format!("the composed scene could not be encoded: {error}"),
+        )
+    })?;
+    std::fs::write(&scene_file, encoded).map_err(|error| {
+        CliError::usage(
+            json,
+            format!("the composed scene could not be written: {error}"),
+        )
+    })?;
+
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(asset.canvas.width);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(asset.canvas.height);
+    let rate = match options.value("--frame-rate") {
+        Some(value) => parse_cli_rate(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--frame-rate must be valid UTF-8"))?,
+            "--frame-rate",
+            json,
+        )?,
+        None => RationalRate::new(30, 1).expect("30/1 is a valid rate"),
+    };
+    let output = match options.optional_path("--output") {
+        Some(path) => path,
+        None => default_motion_publish_output(&attach, &asset.name),
+    };
+    if !output.is_absolute() {
+        return Err(CliError::usage(
+            json,
+            "--output must be an absolute destination path",
+        ));
+    }
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            CliError::usage(
+                json,
+                format!("could not create {}: {error}", parent.display()),
+            )
+        })?;
+    }
+    let track = match options.value("--track") {
+        Some(value) => Some(parse_track_id(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--track must be valid UTF-8"))?,
+            json,
+        )?),
+        None => None,
+    };
+    let at = options.value("--at").and_then(|value| value.to_str());
+    let provenance = json!({
+        "kind": "motion-asset",
+        "asset_id": asset.asset_id,
+        "asset_name": asset.name,
+        "values": values,
+        "library": library_root.display().to_string(),
+    });
+    let result = materialize_and_insert_motion(
+        &attach,
+        &scene_file,
+        width,
+        height,
+        rate,
+        &output,
+        at,
+        track,
+        provenance,
+        json,
+    )?;
+    let _ = std::fs::remove_dir_all(&scratch);
+    if json {
+        return Ok(json_string(result));
+    }
+    Ok(format!(
+        "Inserted {} from the motion library as media {} on track {}.",
+        asset.name,
+        result
+            .get("media_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?"),
+        result
+            .get("track_id")
+            .and_then(Value::as_str)
+            .unwrap_or("?"),
+    ))
+}
+
+fn motion_node_kind_label(kind: or_motion::MotionNodeKind) -> &'static str {
+    match kind {
+        or_motion::MotionNodeKind::Group => "group",
+        or_motion::MotionNodeKind::Text => "text",
+        or_motion::MotionNodeKind::Rectangle => "rectangle",
+        or_motion::MotionNodeKind::Ellipse => "ellipse",
+        or_motion::MotionNodeKind::Arrow => "arrow",
+        or_motion::MotionNodeKind::Image => "image",
+    }
+}
+
+/// Prints the evaluated node boxes, which is how an agent reads a scene's
+/// composition instead of looking at a screenshot.
+fn run_motion_layout(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file", "--at"], &[], json)?;
+    let scene = read_motion_scene(&options, json)?;
+    let time = match options.value("--at") {
+        Some(value) => parse_cli_rational(
+            value
+                .to_str()
+                .ok_or_else(|| CliError::usage(json, "--at must be valid UTF-8"))?,
+            "--at",
+            json,
+        )?,
+        None => RationalTime::ZERO,
+    };
+    if time.is_negative() || time >= scene.duration {
+        return Err(CliError::usage(
+            json,
+            format!(
+                "--at must be inside [0, {}/{}] s",
+                scene.duration.numerator(),
+                scene.duration.denominator()
+            ),
+        ));
+    }
+    let boxes = or_motion::scene_node_boxes_at(&scene, time);
+    if json {
+        return Ok(json_string(json!({
+            "scene_id": scene.scene_id,
+            "name": scene.name,
+            "at": rational_value(time),
+            "canvas": scene.canvas,
+            "node_count": boxes.len(),
+            "nodes": boxes,
+        })));
+    }
+    let mut lines = vec![format!(
+        "{} at {}/{}s on {}x{}: {} nodes",
+        scene.name,
+        time.numerator(),
+        time.denominator(),
+        scene.canvas.width,
+        scene.canvas.height,
+        boxes.len()
+    )];
+    for node in boxes {
+        lines.push(format!(
+            "{:indent$}{} {} at ({:.1}, {:.1}) {:.1}x{:.1} rotation {:.1} deg opacity {:.2}{}{}",
+            "",
+            node.node_id,
+            motion_node_kind_label(node.kind),
+            node.position.x,
+            node.position.y,
+            node.size.width,
+            node.size.height,
+            node.rotation_degrees,
+            node.opacity,
+            if node.text.is_empty() {
+                String::new()
+            } else {
+                format!(" \"{}\"", node.text)
+            },
+            if node.animated { " [animated]" } else { "" },
+            indent = node.depth * 2
+        ));
+    }
+    Ok(lines.join("\n"))
 }
 
 /// Evaluates a scene at one exact time and prints the resolved instructions.
@@ -666,12 +1554,16 @@ fn parse_positive_u32(options: &Options, flag: &str, json: bool) -> Result<Optio
 fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> {
     let options = Options::parse(args, &["--file", "--at", "--output"], &[], json)?;
     let scene = read_motion_scene(&options, json)?;
+    let scene_path = required_path(&options, "--file", json)?;
     let output = required_path(&options, "--output", json)?;
     let at = required_name(&options, "--at", json)?;
     let time = parse_cli_rational(&at, "--at", json)?;
+    let base = scene_path.parent().unwrap_or_else(|| Path::new("."));
+    let images = or_render::load_motion_scene_images(&scene, base)
+        .map_err(|error| CliError::new(4, json, "motion_image", error.code(), error.to_string()))?;
     let frame = or_motion::evaluate_scene(&scene, time)
         .map_err(|error| CliError::motion_evaluation(error, json))?;
-    let canvas = or_render::rasterize_motion_frame(&frame)
+    let canvas = or_render::rasterize_motion_frame_with_images(&frame, &images)
         .map_err(|error| CliError::motion_raster(error, json))?;
     let png = or_render::encode_png(canvas.width(), canvas.height(), canvas.pixels())
         .map_err(|error| CliError::motion_raster(error, json))?;
@@ -700,6 +1592,343 @@ fn run_motion_render(args: &[OsString], json: bool) -> Result<String, CliError> 
         time.numerator(),
         time.denominator()
     ))
+}
+
+/// `or motion asset` — the app-level motion library (ADR 0010).
+///
+/// The library is a plain directory; these verbs are pure reads and writes of it.
+/// They never open a project, render frames, or contact a provider.
+fn run_motion_asset(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(
+            json,
+            "expected motion asset list, validate, save, instantiate, remove or import",
+        ));
+    };
+    match action {
+        "list" => run_motion_asset_list(&args[1..], json),
+        "validate" => run_motion_asset_validate(&args[1..], json),
+        "save" => run_motion_asset_save(&args[1..], json),
+        "instantiate" => run_motion_asset_instantiate(&args[1..], json),
+        "remove" => run_motion_asset_remove(&args[1..], json),
+        "import" => run_motion_asset_import(&args[1..], json),
+        "insert" => run_motion_asset_insert(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown motion asset action; expected list, validate, save, instantiate, insert, remove or import",
+        )),
+    }
+}
+
+fn run_motion_asset_list(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--library", "--attach"], &[], json)?;
+    let library = open_motion_library(&options, json)?;
+    let entries = library
+        .list()
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "count": entries.len(),
+            "entries": entries,
+        })));
+    }
+    if entries.is_empty() {
+        return Ok(format!("No motion assets in {}", library.root().display()));
+    }
+    Ok(entries
+        .into_iter()
+        .map(|entry| {
+            format!(
+                "{}  {:<10}  {:<8}  {}",
+                entry.asset_id,
+                entry.category.as_str(),
+                entry.kind.as_str(),
+                entry.name
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+fn run_motion_asset_validate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--file"], &[], json)?;
+    let asset = read_motion_asset(&options, json)?;
+    let validation = or_motion::validate_motion_asset(&asset);
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&validation).expect("validation is serializable"),
+        ));
+    }
+    if validation.ok {
+        Ok(format!("{} is a valid MotionAsset", asset.name))
+    } else {
+        Ok(validation
+            .errors
+            .iter()
+            .map(|error| format!("{} {} {}", error.code, error.path, error.message))
+            .collect::<Vec<_>>()
+            .join("\n"))
+    }
+}
+
+fn run_motion_asset_save(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--library", "--attach", "--file", "--category"],
+        &[],
+        json,
+    )?;
+    let asset = read_motion_asset(&options, json)?;
+    let category = match options.value("--category") {
+        Some(value) => Some(parse_motion_category(value, json)?),
+        None => None,
+    };
+    let library = open_motion_library(&options, json)?;
+    let entry = library
+        .save(&asset, category)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "motion_asset": entry,
+        })));
+    }
+    Ok(format!(
+        "Saved {} ({}, {}, classified by {}) to {}",
+        entry.name,
+        entry.category.as_str(),
+        entry.kind.as_str(),
+        entry.category_source.as_str(),
+        library.root().display()
+    ))
+}
+
+fn run_motion_asset_instantiate(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--library",
+            "--attach",
+            "--id",
+            "--values",
+            "--output",
+            "--scene-id",
+            "--name",
+        ],
+        &[],
+        json,
+    )?;
+    let library = open_motion_library(&options, json)?;
+    let asset_id = required_name(&options, "--id", json)?;
+    let asset = library
+        .load(&asset_id)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let overrides = match options.value("--values") {
+        Some(value) => parse_motion_values(value, json)?,
+        None => BTreeMap::new(),
+    };
+    let scene_id = match options.value("--scene-id") {
+        Some(value) => value
+            .to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| CliError::usage(json, "--scene-id must be valid UTF-8"))?,
+        None => or_motion::new_motion_asset_id(),
+    };
+    let name = options
+        .value("--name")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let output = required_path(&options, "--output", json)?;
+    let scene = or_motion::instantiate_motion_asset(&asset, &overrides, &scene_id, &name)
+        .map_err(|error| CliError::motion_asset(error, json))?;
+    let mut encoded = serde_json::to_vec_pretty(&scene).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be encoded: {error}"))
+    })?;
+    encoded.push(b'\n');
+    std::fs::write(&output, &encoded).map_err(|error| {
+        CliError::usage(json, format!("the scene could not be written: {error}"))
+    })?;
+    let inspection = or_motion::inspect_motion_scene(&scene);
+    if json {
+        return Ok(json_string(json!({
+            "asset_id": asset.asset_id,
+            "scene_id": scene.scene_id,
+            "output": output.display().to_string(),
+            "bytes_written": encoded.len(),
+            "node_count": inspection.node_count,
+            "duration_milliseconds": inspection.duration_milliseconds,
+            "validation_ok": inspection.validation.ok,
+        })));
+    }
+    Ok(format!(
+        "Instantiated {} as {} ({} nodes, {} ms)",
+        asset.name, scene.scene_id, inspection.node_count, inspection.duration_milliseconds
+    ))
+}
+
+fn run_motion_asset_remove(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--library", "--attach", "--id"], &[], json)?;
+    let library = open_motion_library(&options, json)?;
+    let asset_id = required_name(&options, "--id", json)?;
+    let removed = library
+        .remove(&asset_id)
+        .map_err(|error| CliError::motion_library(error, json))?;
+    if json {
+        return Ok(json_string(
+            json!({"asset_id": asset_id, "removed": removed}),
+        ));
+    }
+    Ok(if removed {
+        format!("Removed {asset_id} from {}", library.root().display())
+    } else {
+        format!("No asset in {} has id {asset_id}", library.root().display())
+    })
+}
+
+fn run_motion_asset_import(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--library",
+            "--attach",
+            "--source",
+            "--name",
+            "--category",
+            "--tags",
+            "--width",
+            "--height",
+            "--seconds",
+        ],
+        &[],
+        json,
+    )?;
+    let library = open_motion_library(&options, json)?;
+    let source = required_path(&options, "--source", json)?;
+    let name = options
+        .value("--name")
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let category = match options.value("--category") {
+        Some(value) => Some(parse_motion_category(value, json)?),
+        None => None,
+    };
+    let tags = options
+        .value("--tags")
+        .map(|value| {
+            value
+                .to_string_lossy()
+                .split(',')
+                .map(str::trim)
+                .filter(|tag| !tag.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let width = parse_positive_u32(&options, "--width", json)?.unwrap_or(1920);
+    let height = parse_positive_u32(&options, "--height", json)?.unwrap_or(1080);
+    let seconds = parse_positive_u32(&options, "--seconds", json)?.unwrap_or(5);
+    let duration = RationalTime::new(i64::from(seconds), 1)
+        .map_err(|_| CliError::usage(json, "--seconds is not a valid duration"))?;
+    let asset = library
+        .import_image(or_motion::MotionImageImport {
+            source: &source,
+            name: &name,
+            category,
+            tags,
+            canvas: or_motion::MotionCanvas { width, height },
+            duration,
+        })
+        .map_err(|error| CliError::motion_library(error, json))?;
+    let entry = or_motion::MotionLibraryEntry::from(&asset);
+    if json {
+        return Ok(json_string(json!({
+            "library": library.root().display().to_string(),
+            "motion_asset": entry,
+        })));
+    }
+    Ok(format!(
+        "Imported {} as {} ({} {}, classified by {}) into {}",
+        source.display(),
+        entry.name,
+        entry.category.as_str(),
+        entry.kind.as_str(),
+        entry.category_source.as_str(),
+        library.root().display()
+    ))
+}
+
+/// Opens the app-level motion library.
+///
+/// `--library` names it directly; otherwise the pointer given with `--attach`
+/// supplies the recorded path, which is how the workspace `project.json` makes
+/// the asset verbs work without repeating the folder on every call.
+fn open_motion_library(
+    options: &Options,
+    json: bool,
+) -> Result<or_motion::MotionLibrary, CliError> {
+    let path = match (
+        options.optional_path("--library"),
+        options.optional_path("--attach"),
+    ) {
+        (Some(path), _) => path,
+        (None, Some(attach)) => motion_library_from_pointer(&attach).ok_or_else(|| {
+            CliError::usage(
+                json,
+                format!(
+                    "{} records no motion library; pass --library PATH",
+                    attach.display()
+                ),
+            )
+        })?,
+        (None, None) => {
+            return Err(CliError::usage(
+                json,
+                "pass --library PATH, or --attach a session pointer that records the library",
+            ));
+        }
+    };
+    or_motion::MotionLibrary::open(&path).map_err(|error| CliError::motion_library(error, json))
+}
+
+fn read_motion_asset(
+    options: &Options,
+    json: bool,
+) -> Result<or_motion::MotionAssetDocument, CliError> {
+    let path = required_path(options, "--file", json)?;
+    let bytes = std::fs::read(&path)
+        .map_err(|error| CliError::usage(json, format!("the asset could not be read: {error}")))?;
+    or_motion::parse_motion_asset(&bytes).map_err(|error| CliError::motion_asset(error, json))
+}
+
+fn parse_motion_category(
+    value: &OsStr,
+    json: bool,
+) -> Result<or_motion::MotionAssetCategory, CliError> {
+    value
+        .to_str()
+        .and_then(or_motion::MotionAssetCategory::parse)
+        .ok_or_else(|| {
+            CliError::usage(
+                json,
+                "--category must be one of background, people, nature, animal, vehicle, object, text, shape, icon, chart, effect or motion",
+            )
+        })
+}
+
+fn parse_motion_values(
+    value: &OsStr,
+    json: bool,
+) -> Result<BTreeMap<String, or_motion::MotionParameterValue>, CliError> {
+    let text = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "--values must be valid UTF-8"))?;
+    serde_json::from_str(text).map_err(|error| {
+        CliError::usage(
+            json,
+            format!("--values must be a JSON object of parameter values: {error}"),
+        )
+    })
 }
 
 fn read_motion_scene(options: &Options, json: bool) -> Result<or_motion::MotionScene, CliError> {
@@ -834,6 +2063,224 @@ fn run_media_relink(args: &[OsString], json: bool) -> Result<String, CliError> {
         headless_media_relink(&path, id, &source, json)?
     };
     Ok(render_media_relink(&item, &result, attached, json))
+}
+
+fn run_captions(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(json, "expected captions transcribe"));
+    };
+    match action {
+        "transcribe" => run_captions_transcribe(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown captions action; expected transcribe",
+        )),
+    }
+}
+
+/// Starts a host-owned local transcription job, polls it, and returns the
+/// bounded transcript proposal. The project is never changed here; the caller
+/// reviews the cues and imports them with `timeline import-captions`.
+fn run_captions_transcribe(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--project", "--attach", "--media", "--srt-out"],
+        &[],
+        json,
+    )?;
+    let (path, attached) = media_project_path(&options, json)?;
+    if !attached {
+        return Err(CliError::usage(
+            json,
+            "local transcription needs the running app; pass --attach project.json",
+        ));
+    }
+    let media_id = parse_media_id(&required_name(&options, "--media", json)?, json)?;
+    let srt_out = options.optional_path("--srt-out");
+    let client = attached_client(&path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+
+    if !json {
+        eprintln!("Transcribing locally in the running app…");
+    }
+    let started = Instant::now();
+    let mut job = match request_transcription(
+        &client,
+        TranscriptionRequest::Start {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            expected_project_revision: description.project_revision,
+            media_id,
+        },
+        json,
+    )? {
+        TranscriptionResponse::Job(job) => job,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the host did not start a transcription job",
+            ));
+        }
+    };
+    loop {
+        match job.state {
+            JobState::Succeeded => break,
+            JobState::Failed => {
+                return Err(CliError::application_failure(
+                    json,
+                    "TRANSCRIPTION_FAILED",
+                    job.failure_message
+                        .unwrap_or_else(|| "Local transcription did not complete.".to_owned()),
+                    None,
+                ));
+            }
+            JobState::Cancelled => {
+                return Err(CliError::application_failure(
+                    json,
+                    "TRANSCRIPTION_CANCELLED",
+                    "Local transcription was cancelled.",
+                    None,
+                ));
+            }
+            JobState::Queued | JobState::Running => {}
+        }
+        if started.elapsed() >= Duration::from_secs(4 * 60 * 60) {
+            return Err(CliError::application_failure(
+                json,
+                "TRANSCRIPTION_TIMEOUT",
+                "Local transcription exceeded its four-hour time limit.",
+                None,
+            ));
+        }
+        thread::sleep(Duration::from_millis(500));
+        job = match request_transcription(
+            &client,
+            TranscriptionRequest::Status {
+                project_id: description.project_id,
+                project_instance_id: description.project_instance_id,
+                job_id: job.job_id,
+            },
+            json,
+        )? {
+            TranscriptionResponse::Job(job) => job,
+            _ => {
+                return Err(CliError::ipc_message(
+                    json,
+                    "the host did not return a transcription job",
+                ));
+            }
+        };
+    }
+    let proposal = match request_transcription(
+        &client,
+        TranscriptionRequest::Proposal {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            job_id: job.job_id,
+        },
+        json,
+    )? {
+        TranscriptionResponse::Proposal(proposal) => proposal,
+        _ => {
+            return Err(CliError::ipc_message(
+                json,
+                "the host did not return a transcript proposal",
+            ));
+        }
+    };
+    if let Some(srt_out) = srt_out {
+        let format = match srt_out.extension().and_then(OsStr::to_str) {
+            Some("srt") => CaptionFileFormat::Srt,
+            Some("vtt") => CaptionFileFormat::WebVtt,
+            _ => {
+                return Err(CliError::usage(json, "--srt-out must end in .srt or .vtt"));
+            }
+        };
+        let captions = proposal
+            .segments
+            .iter()
+            .map(|segment| {
+                if segment.end_ms <= segment.start_ms {
+                    return Err(CliError::usage(
+                        json,
+                        "a transcript cue ends before it starts",
+                    ));
+                }
+                let start = RationalTime::new(segment.start_ms as i64, 1000).map_err(|_| {
+                    CliError::usage(json, "a transcript cue has an invalid start time")
+                })?;
+                let duration = RationalTime::new((segment.end_ms - segment.start_ms) as i64, 1000)
+                    .map_err(|_| {
+                        CliError::usage(json, "a transcript cue has an invalid duration")
+                    })?;
+                Ok(ImportedCaption {
+                    start,
+                    duration,
+                    text: segment.text.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, CliError>>()?;
+        let bytes = encode_caption_file(format, &captions).map_err(|error| {
+            CliError::new(3, json, "application", error.code(), error.to_string())
+        })?;
+        std::fs::write(&srt_out, bytes).map_err(|error| {
+            CliError::new(
+                3,
+                json,
+                "application",
+                "CAPTION_FILE_UNWRITABLE",
+                format!("The subtitle file could not be written: {error}"),
+            )
+        })?;
+    }
+    if json {
+        Ok(json_string(json!({"transcription": proposal, "job": job})))
+    } else {
+        let mut output = format!(
+            "Local {} transcript ({} cues, model {}):",
+            proposal.language.to_uppercase(),
+            proposal.segments.len(),
+            proposal.model_id
+        );
+        for segment in &proposal.segments {
+            output.push_str(&format!(
+                "\n{} – {}  {}",
+                format_caption_time(segment.start_ms),
+                format_caption_time(segment.end_ms),
+                segment.text.trim()
+            ));
+        }
+        Ok(output)
+    }
+}
+
+fn request_transcription(
+    client: &LocalIpcClient,
+    request: TranscriptionRequest,
+    json: bool,
+) -> Result<TranscriptionResponse, CliError> {
+    match client
+        .application(ApplicationRequest::Transcription(request))
+        .map_err(|error| CliError::ipc(error, json))?
+    {
+        ApplicationSuccess::Transcription(TranscriptionResponse::Failure(failure)) => Err(
+            CliError::application_failure(json, failure.code, failure.message, None),
+        ),
+        ApplicationSuccess::Transcription(response) => Ok(response),
+        _ => Err(CliError::ipc_message(
+            json,
+            "server returned an unexpected application response",
+        )),
+    }
+}
+
+fn format_caption_time(milliseconds: u64) -> String {
+    let minutes = milliseconds / 60_000;
+    let seconds = (milliseconds / 1_000) % 60;
+    let millis = milliseconds % 1_000;
+    format!("{minutes:02}:{seconds:02}.{millis:03}")
 }
 
 fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
@@ -1272,6 +2719,63 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "import-captions" => {
+            let options =
+                Options::parse(action_args, &["--project", "--attach", "--file"], &[], json)?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let file = options
+                .optional_path("--file")
+                .ok_or_else(|| CliError::usage(json, "--file requires a subtitle path"))?;
+            let bytes = std::fs::read(&file).map_err(|error| {
+                CliError::new(
+                    3,
+                    json,
+                    "application",
+                    "CAPTION_FILE_UNREADABLE",
+                    format!("The subtitle file could not be read: {error}"),
+                )
+            })?;
+            let plan = parse_caption_file(&bytes).map_err(|error| {
+                CliError::new(3, json, "application", error.code(), error.to_string())
+            })?;
+            let track_id = TrackId::generate();
+            let imported = plan.captions.len();
+            let clips = plan
+                .captions
+                .into_iter()
+                .map(|caption| TimelineClipState {
+                    clip_id: ClipId::generate(),
+                    timeline_start: caption.start,
+                    timeline_duration: caption.duration,
+                    content: ClipContent::Caption {
+                        text: caption.text,
+                        formatting: TextFormatting::default(),
+                    },
+                    settings: ClipSettings::Visual(VisualSettings::default()),
+                })
+                .collect::<Vec<_>>();
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.captions.import",
+                json!({"track_id": track_id, "clips": clips}),
+                json,
+            )?;
+            if json {
+                Ok(json_string(json!({
+                    "imported": imported,
+                    "track_id": track_id,
+                    "cues_with_formatting_loss": plan.cues_with_formatting_loss,
+                    "empty_cues_skipped": plan.empty_cues_skipped,
+                    "command": result,
+                })))
+            } else {
+                Ok(format!(
+                    "Imported {imported} captions into a new caption track at revision {}.",
+                    result.after_revision
+                ))
+            }
+        }
         "insert-text" | "insert-caption" => {
             let options = Options::parse(
                 action_args,
@@ -1338,6 +2842,220 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "set-text" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--clip",
+                    "--text",
+                    "--duration",
+                    "--font",
+                    "--size-pt",
+                    "--weight",
+                    "--align",
+                    "--color",
+                    "--anchor",
+                    "--offset-x",
+                    "--offset-y",
+                    "--opacity",
+                    "--background",
+                    "--background-padding",
+                    "--background-opacity",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let page = timeline_query(
+                &path,
+                attached,
+                "timeline.clips",
+                json!({
+                    "track_id": track_id,
+                    "offset": 0,
+                    "limit": MAX_TIMELINE_CLIP_PAGE_SIZE,
+                }),
+                json,
+            )?;
+            let page = page.timeline_clip_page_v2.ok_or_else(|| {
+                CliError::operation_message(json, "timeline.clips returned no page")
+            })?;
+            let clip = page
+                .items
+                .iter()
+                .find(|clip| clip.clip_id == clip_id)
+                .ok_or_else(|| {
+                    CliError::operation_message(json, "the clip is not on that track")
+                })?;
+            let (mut text, mut formatting, is_caption) = match &clip.content {
+                ClipContent::Text { text, formatting } => (text.clone(), *formatting, false),
+                ClipContent::Caption { text, formatting } => (text.clone(), *formatting, true),
+                ClipContent::Media { .. } => {
+                    return Err(CliError::usage(
+                        json,
+                        "set-text needs a title or caption clip",
+                    ));
+                }
+            };
+            if let Some(value) = options.value("--text") {
+                text = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--text must be valid UTF-8"))?
+                    .to_owned();
+            }
+            if let Some(value) = options.value("--font") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--font must be valid UTF-8"))?;
+                formatting.font = match name {
+                    "inter" => FontIdentity::BundledInter,
+                    "be-vietnam-pro" => FontIdentity::BeVietnamPro,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--font must be inter or be-vietnam-pro",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--size-pt") {
+                let points = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--size-pt must be valid UTF-8"))?
+                    .parse::<f64>()
+                    .map_err(|_| CliError::usage(json, "--size-pt must be a number"))?;
+                if !(4.0..=256.0).contains(&points) {
+                    return Err(CliError::usage(json, "--size-pt must be 4..256"));
+                }
+                formatting.size_milli_points = (points * 1000.0).round() as u32;
+            }
+            if let Some(value) = options.value("--weight") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--weight must be valid UTF-8"))?;
+                formatting.weight = match name {
+                    "regular" => TextWeight::Regular,
+                    "medium" => TextWeight::Medium,
+                    "semibold" => TextWeight::Semibold,
+                    "bold" => TextWeight::Bold,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--weight must be regular, medium, semibold or bold",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--align") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--align must be valid UTF-8"))?;
+                formatting.alignment = match name {
+                    "left" => TextAlignment::Start,
+                    "center" => TextAlignment::Center,
+                    "right" => TextAlignment::End,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--align must be left, center or right",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--color") {
+                formatting.color = parse_text_color(value, json)?;
+            }
+            if let Some(value) = options.value("--anchor") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--anchor must be valid UTF-8"))?;
+                formatting.anchor = match name {
+                    "top" => TextVerticalAnchor::Top,
+                    "center" => TextVerticalAnchor::Center,
+                    "bottom" => TextVerticalAnchor::Bottom,
+                    _ => {
+                        return Err(CliError::usage(
+                            json,
+                            "--anchor must be top, center or bottom",
+                        ));
+                    }
+                };
+            }
+            if let Some(value) = options.value("--offset-x") {
+                formatting.offset_x_basis_points = parse_i16(value, "--offset-x", json)?;
+            }
+            if let Some(value) = options.value("--offset-y") {
+                formatting.offset_y_basis_points = parse_i16(value, "--offset-y", json)?;
+            }
+            if let Some(value) = options.value("--opacity") {
+                formatting.opacity_basis_points = parse_u16(value, "--opacity", json)?;
+                if formatting.opacity_basis_points > 10_000 {
+                    return Err(CliError::usage(json, "--opacity must be 0..10000"));
+                }
+            }
+            if let Some(value) = options.value("--background") {
+                let name = value
+                    .to_str()
+                    .ok_or_else(|| CliError::usage(json, "--background must be valid UTF-8"))?;
+                if name == "none" {
+                    formatting.background = None;
+                } else {
+                    let color = parse_text_color(value, json)?;
+                    let padding = match options.value("--background-padding") {
+                        Some(padding) => parse_u32(padding, "--background-padding", json)?,
+                        None => formatting
+                            .background
+                            .map_or(8_000, |background| background.padding_milli_points),
+                    };
+                    formatting.background = Some(TextBackground {
+                        color,
+                        padding_milli_points: padding,
+                    });
+                }
+            }
+            if let Some(value) = options.value("--background-opacity") {
+                let alpha = parse_u16(value, "--background-opacity", json)?;
+                if alpha > 255 {
+                    return Err(CliError::usage(json, "--background-opacity must be 0..255"));
+                }
+                if let Some(background) = formatting.background.as_mut() {
+                    background.color.alpha = alpha as u8;
+                }
+            }
+            let duration = match options.value("--duration") {
+                Some(value) => parse_cli_rational(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--duration must be valid UTF-8"))?,
+                    "--duration",
+                    json,
+                )?,
+                None => clip.timeline_duration,
+            };
+            let content = if is_caption {
+                ClipContent::Caption { text, formatting }
+            } else {
+                ClipContent::Text { text, formatting }
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.update",
+                json!({
+                    "clip_id": clip_id,
+                    "timeline_duration": rational_value(duration),
+                    "content": content,
+                    "settings": clip.settings,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "move-clip" => {
             let options = Options::parse(
                 action_args,
@@ -1366,15 +3084,8 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         "trim-clip" => {
             let options = Options::parse(
                 action_args,
-                &[
-                    "--project",
-                    "--attach",
-                    "--clip",
-                    "--edge",
-                    "--to",
-                    "--ripple",
-                ],
-                &[],
+                &["--project", "--attach", "--clip", "--edge", "--to"],
+                &["--ripple"],
                 json,
             )?;
             let (path, attached) = media_project_path(&options, json)?;
@@ -1394,7 +3105,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "edge": edge,
                     "timeline_time": rational_value(timeline_time),
                     // Opt-in: absent means the plain trim meaning, unchanged.
-                    "ripple": options.value("--ripple").is_some(),
+                    "ripple": options.has_flag("--ripple"),
                 }),
                 json,
             )?;
@@ -1545,6 +3256,52 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
         }
+        "duck-clip" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--track",
+                    "--clip",
+                    "--voice-track",
+                    "--duck-db",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let voice_track_id =
+                parse_track_id(&required_name(&options, "--voice-track", json)?, json)?;
+            let duck_db = match options.value("--duck-db") {
+                Some(value) => value
+                    .to_str()
+                    .and_then(|text| text.parse::<i32>().ok())
+                    .ok_or_else(|| CliError::usage(json, "--duck-db must be a whole dB value"))?,
+                None => -12,
+            };
+            if !(-40..=-1).contains(&duck_db) {
+                return Err(CliError::usage(
+                    json,
+                    "--duck-db must be between -40 and -1",
+                ));
+            }
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.duck",
+                json!({
+                    "track_id": track_id,
+                    "clip_id": clip_id,
+                    "voice_track_id": voice_track_id,
+                    "duck_millidecibels": duck_db * 1000,
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
         "delete-clip" => {
             let options =
                 Options::parse(action_args, &["--project", "--attach", "--clip"], &[], json)?;
@@ -1561,7 +3318,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, move-clip, trim-clip, split-clip, delete-clip, or ripple-delete-clip",
+            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, set-text, import-captions, move-clip, trim-clip, split-clip, duck-clip, delete-clip, or ripple-delete-clip",
         )),
     }
 }
@@ -1574,7 +3331,7 @@ fn timeline_query(
     json: bool,
 ) -> Result<QueryResult, CliError> {
     if attached {
-        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let client = attached_client(path, json)?;
         let description = client
             .describe()
             .map_err(|error| CliError::ipc(error, json))?;
@@ -1616,7 +3373,7 @@ fn timeline_mutation(
     json: bool,
 ) -> Result<CommandResult, CliError> {
     if attached {
-        let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+        let client = attached_client(path, json)?;
         let description = client
             .describe()
             .map_err(|error| CliError::ipc(error, json))?;
@@ -1742,6 +3499,8 @@ fn render_timeline_clips(result: &QueryResult, json: bool) -> Result<String, Cli
                 media_id,
                 source_range,
                 playback_rate: _,
+                reversed: _,
+                frozen: _,
             } => format!(
                 "{} media={} at={} source={} duration={}",
                 clip.clip_id,
@@ -1889,6 +3648,12 @@ fn render_timeline_command(
     }
 }
 
+fn parse_media_id(value: &str, json: bool) -> Result<MediaId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "media ID must be a canonical lowercase UUIDv4"))
+}
+
 fn parse_track_id(value: &str, json: bool) -> Result<TrackId, CliError> {
     value
         .parse()
@@ -1999,7 +3764,7 @@ fn attached_media_list(
     limit: usize,
     json: bool,
 ) -> Result<QueryResult, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2044,8 +3809,7 @@ fn attached_media_add(
     source_path: &Path,
     json: bool,
 ) -> Result<(MediaItem, CommandResult), CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2101,8 +3865,7 @@ fn attached_media_relink(
     source_path: &Path,
     json: bool,
 ) -> Result<(MediaItem, CommandResult), CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2176,8 +3939,7 @@ fn attached_media_remove(
     id: MediaId,
     json: bool,
 ) -> Result<CommandResult, CliError> {
-    let client =
-        LocalIpcClient::open(descriptor_path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(descriptor_path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2444,7 +4206,7 @@ fn run_history(args: &[OsString], json: bool) -> Result<String, CliError> {
     }
     let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
     let path = required_path(&options, "--attach", json)?;
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2544,7 +4306,7 @@ fn run_session(args: &[OsString], json: bool) -> Result<CommandOutput, CliError>
         "describe" => {
             let options = Options::parse(&args[1..], &["--attach"], &[], json)?;
             let path = required_path(&options, "--attach", json)?;
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             let description = client
                 .describe()
                 .map_err(|error| CliError::ipc(error, json))?;
@@ -2560,7 +4322,7 @@ fn run_session(args: &[OsString], json: bool) -> Result<CommandOutput, CliError>
             let options = Options::parse(&args[1..], &["--attach"], &["--discard-unsaved"], json)?;
             let path = required_path(&options, "--attach", json)?;
             let discard_unsaved = options.has_flag("--discard-unsaved");
-            let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+            let client = attached_client(path, json)?;
             client
                 .shutdown(discard_unsaved)
                 .map_err(|error| CliError::ipc(error, json))?;
@@ -2625,7 +4387,7 @@ fn headless_rename(path: &Path, name: String, json: bool) -> Result<String, CliE
 }
 
 fn attached_summary(path: &Path, json: bool) -> Result<String, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2644,7 +4406,7 @@ fn attached_summary(path: &Path, json: bool) -> Result<String, CliError> {
 }
 
 fn attached_rename(path: &Path, name: String, json: bool) -> Result<String, CliError> {
-    let client = LocalIpcClient::open(path).map_err(|error| CliError::ipc(error, json))?;
+    let client = attached_client(path, json)?;
     let description = client
         .describe()
         .map_err(|error| CliError::ipc(error, json))?;
@@ -2922,6 +4684,86 @@ fn project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliErr
     }
 }
 
+/// Opens the live session behind an `--attach` operand.
+///
+/// The operand may be the endpoint descriptor itself or a session pointer the
+/// app keeps current: the workspace `project.json` and the assistant
+/// `session-pointer.json` both name the descriptor in `descriptor_path`. The
+/// pointer is followed on every call, so one command line survives a project
+/// switch and never attaches to a stale descriptor.
+fn attached_client(path: impl AsRef<Path>, json: bool) -> Result<LocalIpcClient, CliError> {
+    let path = path.as_ref();
+    let target = pointer_descriptor(path).unwrap_or_else(|| path.to_path_buf());
+    LocalIpcClient::open(target).map_err(|error| CliError::ipc(error, json))
+}
+
+/// Reads `descriptor_path` from a session pointer; `None` when `path` is not one.
+fn pointer_descriptor(path: &Path) -> Option<PathBuf> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    let descriptor = value.get("descriptor_path")?.as_str()?;
+    if descriptor.is_empty() {
+        return None;
+    }
+    let descriptor = PathBuf::from(descriptor);
+    if descriptor.is_absolute() {
+        Some(descriptor)
+    } else {
+        Some(path.parent().unwrap_or(Path::new("")).join(descriptor))
+    }
+}
+
+fn parse_text_color(value: &std::ffi::OsStr, json: bool) -> Result<TextColor, CliError> {
+    let raw = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "color must be valid UTF-8"))?;
+    let hex = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
+    if hex.len() != 6 && hex.len() != 8 {
+        return Err(CliError::usage(json, "color must be #RRGGBB or #RRGGBBAA"));
+    }
+    let parsed = u32::from_str_radix(hex, 16)
+        .map_err(|_| CliError::usage(json, "color must be hexadecimal"))?;
+    if hex.len() == 6 {
+        Ok(TextColor {
+            red: ((parsed >> 16) & 0xFF) as u8,
+            green: ((parsed >> 8) & 0xFF) as u8,
+            blue: (parsed & 0xFF) as u8,
+            alpha: 255,
+        })
+    } else {
+        Ok(TextColor {
+            red: ((parsed >> 24) & 0xFF) as u8,
+            green: ((parsed >> 16) & 0xFF) as u8,
+            blue: ((parsed >> 8) & 0xFF) as u8,
+            alpha: (parsed & 0xFF) as u8,
+        })
+    }
+}
+
+fn parse_i16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<i16, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
+        .parse::<i16>()
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
+}
+
+fn parse_u16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u16, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
+        .parse::<u16>()
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
+}
+
+fn parse_u32(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u32, CliError> {
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
+        .parse::<u32>()
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
+}
+
 fn media_project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliError> {
     match (
         options.optional_path("--project"),
@@ -3088,6 +4930,22 @@ fn error_message_for_remote(code: IpcErrorCode) -> String {
 }
 
 impl CliError {
+    fn application_failure(
+        json: bool,
+        code: impl Into<String>,
+        message: impl Into<String>,
+        details: Option<Value>,
+    ) -> Self {
+        Self {
+            exit_code: 3,
+            json,
+            category: "application",
+            code: code.into(),
+            message: message.into(),
+            details,
+        }
+    }
+
     fn operation_message(json: bool, message: impl Into<String>) -> Self {
         Self::new(3, json, "application", "APPLICATION_ERROR", message)
     }

@@ -10,8 +10,9 @@ mod transcription;
 
 pub use model::{
     InstalledModel, MAX_MODEL_ARTIFACT_BYTES, ModelManifest, ModelValidationError,
-    cleanup_abandoned_model_staging, install_verified_model, remove_installed_model,
-    verify_installed_model, whisper_tiny_en_manifest,
+    cleanup_abandoned_model_staging, default_whisper_model, install_verified_model,
+    model_artifact_present, remove_installed_model, verify_installed_model, whisper_model,
+    whisper_model_label, whisper_models,
 };
 pub use protocol::{
     AiTask, MAX_CONTROL_MESSAGE_BYTES, ManagedFileRef, ProtocolEnvelope, ProtocolError,

@@ -1,37 +1,38 @@
+use super::media_artifact_config::create_media_artifact_service;
 #[cfg(target_os = "android")]
 use crate::android_media_io::capability_for;
 use crate::frb_generated::StreamSink;
-use crate::preview::{PreviewError, PreviewPreparationAction, PreviewRuntime, PreviewSnapshot};
-use crate::transcription::{ModelDownload, TranscriptionModelInfo, TranscriptionService};
+use crate::preview::PreviewRuntime;
+use crate::transcription::TranscriptionService;
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CacheKey,
-    CacheStoreConfig, CaptionFileFormat, ClipContent, ClipId, ClipSettings, CommandEnvelope, Crop,
-    EffectReference, ExportRequest, ExportResponse, FontIdentity, ImportedCaption, JobId,
-    JobManagerConfig, JobSnapshot, JobState, MarkerId, MediaArtifactEvent, MediaArtifactEventState,
-    MediaArtifactRequest, MediaArtifactRequestState, MediaArtifactService,
-    MediaArtifactServiceConfig, MediaId, MediaItem, MediaStreamMetadata, Opacity, OperationError,
+    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CaptionFileFormat,
+    ClipContent, ClipId, ClipSettings, CommandEnvelope, EffectReference, ExportRequest,
+    ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
+    MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState,
+    MediaArtifactService, MediaId, MediaItem, MediaStreamMetadata, OperationError,
     OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
-    ProjectRevision, QueryEnvelope, QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome,
-    RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor, TextFormatting,
-    TextWeight, TimeRange, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
+    ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor,
+    TextFormatting, TextWeight, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
     TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
-    TimelineSnapTargetKind, TimelineTrackSummaryV2, TimelineTrimEdge, TrackId, TrackKind,
-    TrackState, Transform, TransitionKind, TransitionReference, VisualSettings,
+    TimelineSnapTargetKind, TimelineTrackSummaryV2, TrackId, TrackKind, TranscriptionFailure,
+    TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView, TransitionKind, TransitionReference, VisualSettings,
     apply_project_recovery, discard_project_recovery, encode_caption_file,
-    ffmpeg_executable_from_environment, inspect_project_recovery, parse_caption_file,
-    prepare_media_import,
+    inspect_project_recovery, parse_caption_file, prepare_media_import,
+    prepare_media_import_with_probe,
 };
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
 use or_ipc::{
-    ExportRequestHandler, LiveProjectHost, LiveProjectHostError, ProjectHostEvent,
-    ProjectHostEventKind,
+    ExportRequestHandler, LiveProjectHost, LiveProjectHostError, MotionMaterializeHandler,
+    ProjectHostEvent, ProjectHostEventKind, TranscriptionRequestHandler,
 };
 use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
     sync::{
         Arc,
@@ -41,605 +42,15 @@ use std::{
     thread,
 };
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CaptionFileFormatView {
-    Srt,
-    WebVtt,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub revision: u64,
-    pub name: String,
-    pub dirty: bool,
-    pub descriptor_path: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectActionResult {
-    pub succeeded: bool,
-    pub error_code: String,
-    pub message: String,
-    pub view: Option<ProjectView>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectCaptionImportPreviewView {
-    pub format_name: String,
-    pub cue_count: u64,
-    pub formatting_loss_count: u64,
-    pub empty_cues_skipped: u64,
-    pub max_caption_text_bytes: u64,
-    pub cues: Vec<ProjectCaptionCueView>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectCaptionCueView {
-    pub start_ms: u64,
-    pub end_ms: u64,
-    pub text: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectExportJobView {
-    pub succeeded: bool,
-    pub error_code: String,
-    pub message: String,
-    pub job_id: String,
-    pub state: String,
-    pub progress_completed: Option<u64>,
-    pub progress_total: Option<u64>,
-    pub failure_message: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTranscriptionModelView {
-    pub model_id: String,
-    pub version: String,
-    pub license: String,
-    pub language: String,
-    pub size_bytes: u64,
-    pub source: String,
-    pub installed: bool,
-    pub provider_available: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectModelDownloadView {
-    pub download_id: String,
-    pub destination: String,
-    pub source: String,
-    pub size_bytes: u64,
-    pub license: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTranscriptionJobView {
-    pub job_id: String,
-    pub state: String,
-    pub progress_completed: Option<u64>,
-    pub progress_total: Option<u64>,
-    pub failure_message: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTranscriptSegmentView {
-    pub start_ms: u64,
-    pub end_ms: u64,
-    pub text: String,
-    pub confidence: f32,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTranscriptProposalView {
-    pub project_id: String,
-    pub project_revision: u64,
-    pub media_id: String,
-    pub media_sha256: String,
-    pub provider_id: String,
-    pub model_id: String,
-    pub model_version: String,
-    pub model_license: String,
-    pub language: String,
-    pub max_caption_text_bytes: u64,
-    pub segments: Vec<ProjectTranscriptSegmentView>,
-}
-
-fn transcription_model_view(info: TranscriptionModelInfo) -> ProjectTranscriptionModelView {
-    ProjectTranscriptionModelView {
-        model_id: info.model_id,
-        version: info.version,
-        license: info.license,
-        language: info.language,
-        size_bytes: info.size_bytes,
-        source: info.source,
-        installed: info.installed,
-        provider_available: info.provider_available,
-    }
-}
-
-fn model_download_view(download: ModelDownload) -> ProjectModelDownloadView {
-    ProjectModelDownloadView {
-        download_id: download.download_id,
-        destination: download.destination,
-        source: download.source,
-        size_bytes: download.size_bytes,
-        license: download.license,
-    }
-}
-
-fn transcription_job_view(job: JobSnapshot) -> ProjectTranscriptionJobView {
-    ProjectTranscriptionJobView {
-        job_id: job.id.to_string(),
-        state: job_state_name(job.state).to_owned(),
-        progress_completed: job.progress.map(|progress| progress.completed),
-        progress_total: job.progress.map(|progress| progress.total),
-        failure_message: job.failure_message,
-    }
-}
-
-fn job_state_name(state: JobState) -> &'static str {
-    match state {
-        JobState::Queued => "queued",
-        JobState::Running => "running",
-        JobState::Succeeded => "succeeded",
-        JobState::Failed => "failed",
-        JobState::Cancelled => "cancelled",
-    }
-}
-
-fn transcription_proposal_view(
-    proposal: or_ai::TranscriptProposal,
-) -> ProjectTranscriptProposalView {
-    ProjectTranscriptProposalView {
-        project_id: proposal.project_id.to_string(),
-        project_revision: proposal.project_revision,
-        media_id: proposal.media_id.to_string(),
-        media_sha256: proposal.media_sha256,
-        provider_id: proposal.provider_id,
-        model_id: proposal.model_id,
-        model_version: proposal.model_version,
-        model_license: proposal.model_license,
-        language: proposal.language,
-        max_caption_text_bytes: or_core::MAX_TIMELINE_CAPTION_BYTES as u64,
-        segments: proposal
-            .segments
-            .into_iter()
-            .map(|segment| ProjectTranscriptSegmentView {
-                start_ms: segment.start_ms,
-                end_ms: segment.end_ms,
-                text: segment.text,
-                confidence: segment.confidence,
-            })
-            .collect(),
-    }
-}
-
-fn transcription_error(
-    error: crate::transcription::TranscriptionServiceError,
-) -> ProjectBridgeError {
-    ProjectBridgeError {
-        code: "TRANSCRIPTION_UNAVAILABLE".to_owned(),
-        message: error.to_string(),
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectMediaItemView {
-    pub media_id: String,
-    pub source_uri: String,
-    pub format_names: Vec<String>,
-    pub duration: Option<String>,
-    pub video_details: Option<String>,
-    pub audio_details: Option<String>,
-    pub container_duration: Option<RationalTimeView>,
-    pub first_video_duration: Option<RationalTimeView>,
-    pub first_audio_duration: Option<RationalTimeView>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RationalTimeView {
-    pub numerator: i64,
-    pub denominator: u32,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RationalRateView {
-    pub numerator: u32,
-    pub denominator: u32,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineSequenceSettingsView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub sequence_frame_rate: Option<RationalRateView>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PreviewFrameStepView {
-    Previous,
-    Next,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum PreviewPreparationActionView {
-    Seek,
-    Play,
-    StepPrevious,
-    StepNext,
-    Tick,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectPreviewPreparationView {
-    pub request_id: Option<u64>,
-    pub sources: Vec<String>,
-    pub state: ProjectPreviewStateView,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectPreviewStateView {
-    pub position: RationalTimeView,
-    pub presented_time: Option<RationalTimeView>,
-    pub sequence_frame_rate: Option<RationalRateView>,
-    pub content_end: Option<RationalTimeView>,
-    pub playing: bool,
-    pub generation: u64,
-    pub frame_sequence: u64,
-    pub width: u32,
-    pub height: u32,
-    pub error_code: Option<String>,
-    pub error_message: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineTrackKindView {
-    Video,
-    Audio,
-    Text,
-    Caption,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineTrimEdgeView {
-    Start,
-    End,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineSnapOperationView {
-    Move,
-    TrimStart,
-    TrimEnd,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineSnapMovingAnchorView {
-    None,
-    Start,
-    End,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineSnapTargetKindView {
-    None,
-    TimelineZero,
-    ClipStart,
-    ClipEnd,
-    Marker,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineTrackView {
-    pub track_id: String,
-    pub kind: TimelineTrackKindView,
-    pub state: ProjectTimelineTrackStateView,
-    pub clip_count: u64,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProjectTimelineTrackStateView {
-    pub locked: bool,
-    pub visible: bool,
-    pub muted: bool,
-    pub solo: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineTracksView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub items: Vec<ProjectTimelineTrackView>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TimelineClipContentKindView {
-    Media,
-    Text,
-    Caption,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FontIdentityView {
-    BundledInter,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TextWeightView {
-    Regular,
-    Medium,
-    Semibold,
-    Bold,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TextAlignmentView {
-    Start,
-    Center,
-    End,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProjectTextColorView {
-    pub red: u8,
-    pub green: u8,
-    pub blue: u8,
-    pub alpha: u8,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProjectTextFormattingView {
-    pub font: FontIdentityView,
-    pub size_milli_points: u32,
-    pub weight: TextWeightView,
-    pub alignment: TextAlignmentView,
-    pub color: ProjectTextColorView,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineClipView {
-    pub clip_id: String,
-    pub content_kind: TimelineClipContentKindView,
-    pub media_id: Option<String>,
-    pub text: Option<String>,
-    pub formatting: Option<ProjectTextFormattingView>,
-    pub timeline_start: RationalTimeView,
-    pub timeline_duration: RationalTimeView,
-    pub source_start: Option<RationalTimeView>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineClipPageView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub track_id: String,
-    pub items: Vec<ProjectTimelineClipView>,
-    pub total_count: u64,
-    pub offset: u64,
-    pub limit: u64,
-    pub next_offset: Option<u64>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProjectTimelineVisualSettingsView {
-    pub x_milli_canvas: i32,
-    pub y_milli_canvas: i32,
-    pub scale_x_milli: u32,
-    pub scale_y_milli: u32,
-    pub rotation_milli_degrees: i32,
-    pub anchor_x_basis_points: u16,
-    pub anchor_y_basis_points: u16,
-    pub crop_left_basis_points: u16,
-    pub crop_top_basis_points: u16,
-    pub crop_right_basis_points: u16,
-    pub crop_bottom_basis_points: u16,
-    pub opacity_basis_points: u16,
-    pub brightness_amount_milli: i16,
-    pub contrast_amount_milli: u16,
-    pub saturation_amount_milli: u16,
-    pub gaussian_blur_radius_milli: u32,
-    pub update_brightness: bool,
-    pub update_contrast: bool,
-    pub update_saturation: bool,
-    pub update_gaussian_blur: bool,
-    pub transition_in_kind: u8,
-    pub transition_in_duration: RationalTimeView,
-    pub transition_out_kind: u8,
-    pub transition_out_duration: RationalTimeView,
-    pub update_transition_in: bool,
-    pub update_transition_out: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ProjectTimelineAudioSettingsView {
-    pub gain_millidecibels: i32,
-    pub pan_basis_points: i16,
-    pub fade_in: RationalTimeView,
-    pub fade_out: RationalTimeView,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineMarkerView {
-    pub marker_id: String,
-    pub timeline_time: RationalTimeView,
-    pub label: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineMarkerPageView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub items: Vec<ProjectTimelineMarkerView>,
-    pub total_count: u64,
-    pub offset: u64,
-    pub limit: u64,
-    pub next_offset: Option<u64>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectTimelineSnapView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub raw_target_time: RationalTimeView,
-    pub resolved_target_time: RationalTimeView,
-    pub snapped: bool,
-    pub moving_anchor: TimelineSnapMovingAnchorView,
-    pub target_kind: TimelineSnapTargetKindView,
-    pub target_time: RationalTimeView,
-    pub target_track_id: Option<String>,
-    pub target_clip_id: Option<String>,
-    pub target_marker_id: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectMediaPageView {
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub project_revision: u64,
-    pub items: Vec<ProjectMediaItemView>,
-    pub total_count: u64,
-    pub offset: u64,
-    pub limit: u64,
-    pub next_offset: Option<u64>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ProjectHostEventView {
-    pub sequence: u64,
-    pub kind: String,
-    pub project_id: String,
-    pub project_instance_id: String,
-    pub revision: u64,
-    pub dirty: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MediaArtifactKindView {
-    Thumbnail,
-    Waveform,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MediaArtifactRequestStateView {
-    Ready,
-    Queued,
-    Running,
-    NotApplicable,
-    Failed,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MediaArtifactEventStateView {
-    Succeeded,
-    Failed,
-    Cancelled,
-}
-
-#[derive(Clone, Debug)]
-pub struct MediaArtifactRequestView {
-    pub media_id: String,
-    pub kind: MediaArtifactKindView,
-    pub cache_key: Option<String>,
-    pub job_id: Option<String>,
-    pub state: MediaArtifactRequestStateView,
-    pub error_code: Option<String>,
-    pub message: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct MediaArtifactBytesView {
-    pub bytes: Vec<u8>,
-    pub mime_type: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct MediaArtifactEventView {
-    pub sequence: u64,
-    pub media_id: String,
-    pub kind: MediaArtifactKindView,
-    pub cache_key: String,
-    pub job_id: String,
-    pub state: MediaArtifactEventStateView,
-    pub error_code: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub struct RecoveryInspectionView {
-    pub status: String,
-    pub project_id: String,
-    pub base_revision: u64,
-    pub recovery_revision: u64,
-    pub recovery_name: String,
-    pub conflict_reason: String,
-    pub message: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct RecoveryActionResult {
-    pub succeeded: bool,
-    pub changed: bool,
-    pub message: String,
-}
-
-/// The outcome of reducing noise in a media file.
-///
-/// A failure carries the caller-facing code and message; a success carries what was
-/// written and the floor the filter was given, so a client can show both and a test
-/// can assert the derivation.
-#[derive(Clone, Debug)]
-pub struct MediaCleanupResultView {
-    pub succeeded: bool,
-    pub error_code: String,
-    pub message: String,
-    pub destination: String,
-    pub noise_floor_db: i32,
-    pub reduction_db: u32,
-    pub bytes_written: u64,
-}
-
-impl MediaCleanupResultView {
-    fn failure(code: &str, message: impl Into<String>) -> Self {
-        Self {
-            succeeded: false,
-            error_code: code.to_owned(),
-            message: message.into(),
-            destination: String::new(),
-            noise_floor_db: 0,
-            reduction_db: 0,
-            bytes_written: 0,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ProjectBridgeError {
-    pub code: String,
-    pub message: String,
-}
-
-impl std::fmt::Display for ProjectBridgeError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}: {}", self.code, self.message)
-    }
-}
-
-impl std::error::Error for ProjectBridgeError {}
+pub use super::views::*;
 
 /// Rust-owned opaque handle; it is the only bridge path to the live project host.
 #[frb(opaque)]
 pub struct ProjectHostHandle {
-    host: LiveProjectHost,
-    media_artifact_service: Option<MediaArtifactService>,
-    transcription_service: Option<TranscriptionService>,
-    preview_runtime: Arc<PreviewRuntime>,
+    pub(crate) host: LiveProjectHost,
+    pub(crate) media_artifact_service: Option<MediaArtifactService>,
+    pub(crate) transcription_service: Option<Arc<TranscriptionService>>,
+    pub(crate) preview_runtime: Arc<PreviewRuntime>,
 }
 
 pub fn create_project(path: String, name: String) -> Result<ProjectHostHandle, ProjectBridgeError> {
@@ -658,98 +69,261 @@ fn start_project_host(
 ) -> Result<ProjectHostHandle, ProjectBridgeError> {
     let preview_runtime = Arc::new(PreviewRuntime::new());
     let export_handler: Arc<dyn ExportRequestHandler> = preview_runtime.clone();
+    let transcription_service = TranscriptionService::new().map(Arc::new);
+    let transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>> =
+        transcription_service.as_ref().map(|service| {
+            Arc::new(BridgeTranscriptionHandler {
+                service: Arc::clone(service),
+            }) as Arc<dyn TranscriptionRequestHandler>
+        });
     #[cfg(target_os = "android")]
-    let host = LiveProjectHost::in_process_with_export_handler(session, export_handler);
+    let host = LiveProjectHost::in_process_with_runtimes(
+        session,
+        Some(export_handler),
+        None,
+        transcription_handler,
+    );
     #[cfg(not(target_os = "android"))]
-    let host = LiveProjectHost::start_with_export_handler(session, None, export_handler)
-        .map_err(host_error)?;
+    let host = {
+        let motion_handler: Arc<dyn MotionMaterializeHandler> = preview_runtime.clone();
+        LiveProjectHost::start_with_runtimes(
+            session,
+            None,
+            Some(export_handler),
+            Some(motion_handler),
+            transcription_handler,
+        )
+        .map_err(host_error)?
+    };
     Ok(ProjectHostHandle {
         host,
         media_artifact_service: create_media_artifact_service(),
-        transcription_service: TranscriptionService::new(),
+        transcription_service,
         preview_runtime,
     })
 }
 
-fn create_media_artifact_service() -> Option<MediaArtifactService> {
-    #[cfg(target_os = "android")]
-    {
-        None
+/// Bridges the runtime transcription service onto the IPC application contract.
+///
+/// The host holds the project lock while this runs, so every branch returns
+/// immediately: the model runs in the service's own background job.
+struct BridgeTranscriptionHandler {
+    service: Arc<TranscriptionService>,
+}
+
+impl TranscriptionRequestHandler for BridgeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        let (project_id, project_instance_id) = match request_identity(&request) {
+            Some(identity) => identity,
+            None => {
+                return transcription_failure(
+                    "TRANSCRIPTION_REQUEST_INVALID",
+                    "The transcription request is incomplete.",
+                );
+            }
+        };
+        if session.project_id() != project_id
+            || session.project_instance_id() != project_instance_id
+        {
+            return transcription_failure(
+                "PROJECT_SESSION_MISMATCH",
+                "The transcription request belongs to another project session.",
+            );
+        }
+        match request {
+            TranscriptionRequest::Start {
+                expected_project_revision,
+                media_id,
+                ..
+            } => {
+                if session.project_revision() != expected_project_revision {
+                    return transcription_failure(
+                        "PROJECT_REVISION_CONFLICT",
+                        "The project changed before transcription started.",
+                    );
+                }
+                let Some(media) = session
+                    .project()
+                    .media_items()
+                    .iter()
+                    .find(|item| item.id() == media_id)
+                    .cloned()
+                else {
+                    return transcription_failure(
+                        "MEDIA_NOT_FOUND",
+                        "The media item is not part of this project.",
+                    );
+                };
+                let project_uuid = match uuid::Uuid::parse_str(&project_id.to_string()) {
+                    Ok(uuid) => uuid,
+                    Err(_) => {
+                        return transcription_failure(
+                            "TRANSCRIPTION_REQUEST_INVALID",
+                            "The project identity is invalid.",
+                        );
+                    }
+                };
+                match self
+                    .service
+                    .start(project_uuid, expected_project_revision.value(), media)
+                {
+                    Ok(job) => transcription_job(job),
+                    Err(error) => transcription_service_failure(error),
+                }
+            }
+            TranscriptionRequest::Status { job_id, .. } => match self.service.snapshot(job_id) {
+                Some(job) => transcription_job(job),
+                None => transcription_failure(
+                    "JOB_NOT_FOUND",
+                    "The transcription job is no longer available.",
+                ),
+            },
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                let Some(proposal) = self.service.proposal(job_id) else {
+                    return transcription_failure(
+                        "PROPOSAL_UNAVAILABLE",
+                        "The transcript proposal is no longer available.",
+                    );
+                };
+                if proposal.project_id.to_string() != project_id.to_string() {
+                    return transcription_failure(
+                        "PROJECT_SESSION_MISMATCH",
+                        "The transcript proposal belongs to another project.",
+                    );
+                }
+                let media_id = match MediaId::from_str(&proposal.media_id.to_string()) {
+                    Ok(media_id) => media_id,
+                    Err(_) => {
+                        return transcription_failure(
+                            "PROPOSAL_UNAVAILABLE",
+                            "The transcript proposal media identity is invalid.",
+                        );
+                    }
+                };
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id,
+                    project_revision: ProjectRevision::new(proposal.project_revision),
+                    media_id,
+                    provider_id: proposal.provider_id,
+                    model_id: proposal.model_id,
+                    model_version: proposal.model_version,
+                    model_license: proposal.model_license,
+                    language: proposal.language,
+                    segments: proposal
+                        .segments
+                        .into_iter()
+                        .map(|segment| TranscriptionSegmentView {
+                            start_ms: segment.start_ms,
+                            end_ms: segment.end_ms,
+                            text: segment.text,
+                        })
+                        .collect(),
+                })
+            }
+            TranscriptionRequest::Cancel { job_id, .. } => match self.service.cancel(job_id) {
+                Ok(_) => match self.service.snapshot(job_id) {
+                    Some(job) => transcription_job(job),
+                    None => transcription_failure(
+                        "JOB_NOT_FOUND",
+                        "The transcription job is no longer available.",
+                    ),
+                },
+                Err(_) => transcription_failure(
+                    "JOB_NOT_FOUND",
+                    "The transcription job is no longer available.",
+                ),
+            },
+        }
     }
+}
 
-    #[cfg(not(target_os = "android"))]
-    {
-        let cache_root = media_artifact_cache_root()?;
-        let jobs = JobManagerConfig::new(2, 32, 128).ok()?;
-        let cache = CacheStoreConfig::new(8 * 1024 * 1024, 256 * 1024 * 1024).ok()?;
-        MediaArtifactService::new(MediaArtifactServiceConfig::new(
-            cache_root,
-            jobs,
-            cache,
-            ffmpeg_executable_from_environment(),
-        ))
-        .ok()
+fn request_identity(request: &TranscriptionRequest) -> Option<(ProjectId, ProjectInstanceId)> {
+    match request {
+        TranscriptionRequest::Start {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Status {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Proposal {
+            project_id,
+            project_instance_id,
+            ..
+        }
+        | TranscriptionRequest::Cancel {
+            project_id,
+            project_instance_id,
+            ..
+        } => Some((*project_id, *project_instance_id)),
     }
 }
 
-#[allow(dead_code)] // Every desktop target constructs only its own variant; tests cover all paths.
-#[derive(Clone, Copy)]
-enum CachePlatform {
-    MacOs,
-    Linux,
-    Windows,
-    Unsupported,
+pub(crate) fn transcription_job(job: JobSnapshot) -> TranscriptionResponse {
+    TranscriptionResponse::Job(TranscriptionJobView {
+        job_id: job.id,
+        state: job.state,
+        failure_message: job.failure_message,
+    })
 }
 
-fn configured_media_artifact_cache_root(
-    platform: CachePlatform,
-    home: Option<PathBuf>,
-    xdg_cache_home: Option<PathBuf>,
-    local_app_data: Option<PathBuf>,
-) -> Option<PathBuf> {
-    match platform {
-        CachePlatform::MacOs => home.map(|home| {
-            home.join("Library")
-                .join("Caches")
-                .join("Opencut-Reinforced")
-                .join("media-artifacts")
-        }),
-        CachePlatform::Linux => xdg_cache_home
-            .or_else(|| home.map(|home| home.join(".cache")))
-            .map(|root| root.join("opencut-reinforced").join("media-artifacts")),
-        CachePlatform::Windows => local_app_data.map(|root| {
-            root.join("Opencut Reinforced")
-                .join("Cache")
-                .join("media-artifacts")
-        }),
-        CachePlatform::Unsupported => None,
-    }
+pub(crate) fn transcription_failure(code: &str, message: &str) -> TranscriptionResponse {
+    TranscriptionResponse::Failure(TranscriptionFailure::new(code, message))
 }
 
-fn non_empty_environment_path(name: &str) -> Option<PathBuf> {
-    std::env::var_os(name)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
+pub(crate) fn transcription_service_failure(
+    error: crate::transcription::TranscriptionServiceError,
+) -> TranscriptionResponse {
+    let code = match error {
+        crate::transcription::TranscriptionServiceError::AudioRequired => {
+            "TRANSCRIPTION_AUDIO_REQUIRED"
+        }
+        crate::transcription::TranscriptionServiceError::DownloadBusy => "MODEL_DOWNLOAD_BUSY",
+        crate::transcription::TranscriptionServiceError::DownloadNotFound => {
+            "MODEL_DOWNLOAD_NOT_FOUND"
+        }
+        crate::transcription::TranscriptionServiceError::InvalidId => {
+            "TRANSCRIPTION_REQUEST_INVALID"
+        }
+        crate::transcription::TranscriptionServiceError::JobBusy => "TRANSCRIPTION_BUSY",
+        crate::transcription::TranscriptionServiceError::JobUnavailable => "JOB_NOT_FOUND",
+        crate::transcription::TranscriptionServiceError::LocalFileRequired => {
+            "TRANSCRIPTION_LOCAL_FILE_REQUIRED"
+        }
+        crate::transcription::TranscriptionServiceError::ModelAlreadyInstalled => {
+            "MODEL_ALREADY_INSTALLED"
+        }
+        crate::transcription::TranscriptionServiceError::ModelUnavailable => {
+            "TRANSCRIPTION_MODEL_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::ModelNotFound => {
+            "TRANSCRIPTION_MODEL_UNKNOWN"
+        }
+        crate::transcription::TranscriptionServiceError::ModelNotInstalled => {
+            "TRANSCRIPTION_MODEL_NOT_INSTALLED"
+        }
+        crate::transcription::TranscriptionServiceError::PreferenceUnavailable => {
+            "TRANSCRIPTION_PREFERENCE_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::ProviderUnavailable => {
+            "TRANSCRIPTION_RUNTIME_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::StorageUnavailable => {
+            "TRANSCRIPTION_STORAGE_UNAVAILABLE"
+        }
+        crate::transcription::TranscriptionServiceError::JobSubmit => {
+            "TRANSCRIPTION_QUEUE_UNAVAILABLE"
+        }
+    };
+    TranscriptionResponse::Failure(TranscriptionFailure::new(code, error.to_string()))
 }
-
-fn media_artifact_cache_root() -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    let platform = CachePlatform::MacOs;
-    #[cfg(target_os = "linux")]
-    let platform = CachePlatform::Linux;
-    #[cfg(target_os = "windows")]
-    let platform = CachePlatform::Windows;
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    let platform = CachePlatform::Unsupported;
-
-    configured_media_artifact_cache_root(
-        platform,
-        non_empty_environment_path("HOME"),
-        non_empty_environment_path("XDG_CACHE_HOME"),
-        non_empty_environment_path("LOCALAPPDATA"),
-    )
-}
-
 impl Drop for ProjectHostHandle {
     fn drop(&mut self) {
         if let Some(service) = self.media_artifact_service.take() {
@@ -843,162 +417,6 @@ pub fn discard_recovery(path: String) -> RecoveryActionResult {
 }
 
 impl ProjectHostHandle {
-    pub fn transcription_model(&self) -> ProjectTranscriptionModelView {
-        let info = self
-            .transcription_service
-            .as_ref()
-            .map(TranscriptionService::model_info)
-            .unwrap_or_else(TranscriptionModelInfo::unavailable);
-        transcription_model_view(info)
-    }
-
-    pub fn begin_transcription_model_download(
-        &self,
-    ) -> Result<ProjectModelDownloadView, ProjectBridgeError> {
-        let download = self
-            .transcription_service()?
-            .begin_model_download()
-            .map_err(transcription_error)?;
-        Ok(model_download_view(download))
-    }
-
-    pub fn finish_transcription_model_download(
-        &self,
-        download_id: String,
-    ) -> Result<ProjectTranscriptionModelView, ProjectBridgeError> {
-        let info = self
-            .transcription_service()?
-            .finish_model_download(&download_id)
-            .map_err(transcription_error)?;
-        Ok(transcription_model_view(info))
-    }
-
-    pub fn cancel_transcription_model_download(
-        &self,
-        download_id: String,
-    ) -> Result<(), ProjectBridgeError> {
-        self.transcription_service()?
-            .cancel_model_download(&download_id)
-            .map_err(transcription_error)
-    }
-
-    pub fn start_transcription(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        media_id: String,
-    ) -> Result<ProjectTranscriptionJobView, ProjectBridgeError> {
-        let (project_id, project_instance_id, revision) =
-            parse_session_identity(&project_id, &project_instance_id, expected_revision)?;
-        let id = MediaId::from_str(&media_id).map_err(|error| ProjectBridgeError {
-            code: "INVALID_MEDIA_ID".to_owned(),
-            message: error.to_string(),
-        })?;
-        let summary = self.host.describe().map_err(host_error)?;
-        if summary.summary.project_id != project_id
-            || summary.summary.project_instance_id != project_instance_id
-            || summary.summary.project_revision != revision
-        {
-            return Err(revision_conflict_error());
-        }
-        let request = QueryEnvelope::media_get(project_id, project_instance_id, id);
-        let media = match self
-            .host
-            .handle_application_request(ApplicationRequest::Query(request))
-            .map_err(host_error)?
-        {
-            ApplicationResponse::Query(result) => result
-                .media_item
-                .map(|item| *item)
-                .ok_or_else(unexpected_response_error)?,
-            ApplicationResponse::Error(error) => return Err(operation_bridge_error(error)),
-            _ => return Err(unexpected_response_error()),
-        };
-        let job = self
-            .transcription_service()?
-            .start(
-                uuid::Uuid::parse_str(&project_id.to_string()).map_err(|error| {
-                    ProjectBridgeError {
-                        code: "INVALID_PROJECT_ID".to_owned(),
-                        message: error.to_string(),
-                    }
-                })?,
-                revision.value(),
-                media,
-            )
-            .map_err(transcription_error)?;
-        Ok(transcription_job_view(job))
-    }
-
-    pub fn transcription_job(
-        &self,
-        job_id: String,
-    ) -> Result<ProjectTranscriptionJobView, ProjectBridgeError> {
-        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
-            code: "INVALID_JOB_ID".to_owned(),
-            message: error.to_string(),
-        })?;
-        let job = self
-            .transcription_service()?
-            .snapshot(id)
-            .ok_or_else(|| ProjectBridgeError {
-                code: "JOB_NOT_FOUND".to_owned(),
-                message: "The transcription job is no longer available.".to_owned(),
-            })?;
-        Ok(transcription_job_view(job))
-    }
-
-    pub fn transcription_proposal(
-        &self,
-        job_id: String,
-    ) -> Result<Option<ProjectTranscriptProposalView>, ProjectBridgeError> {
-        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
-            code: "INVALID_JOB_ID".to_owned(),
-            message: error.to_string(),
-        })?;
-        Ok(self
-            .transcription_service()?
-            .proposal(id)
-            .map(transcription_proposal_view))
-    }
-
-    pub fn clear_transcription_proposal(&self, job_id: String) -> Result<(), ProjectBridgeError> {
-        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
-            code: "INVALID_JOB_ID".to_owned(),
-            message: error.to_string(),
-        })?;
-        self.transcription_service()?.clear_proposal(id);
-        Ok(())
-    }
-
-    pub fn cancel_transcription(&self, job_id: String) -> Result<String, ProjectBridgeError> {
-        let id = JobId::from_str(&job_id).map_err(|error| ProjectBridgeError {
-            code: "INVALID_JOB_ID".to_owned(),
-            message: error.to_string(),
-        })?;
-        let outcome = self
-            .transcription_service()?
-            .cancel(id)
-            .map_err(|_| ProjectBridgeError {
-                code: "JOB_NOT_FOUND".to_owned(),
-                message: "The transcription job is no longer available.".to_owned(),
-            })?;
-        Ok(match outcome {
-            or_core::JobCancelOutcome::CancelledQueued => "cancelled".to_owned(),
-            or_core::JobCancelOutcome::CancellationRequested => "cancelling".to_owned(),
-            or_core::JobCancelOutcome::AlreadyTerminal(state) => job_state_name(state).to_owned(),
-        })
-    }
-
-    fn transcription_service(&self) -> Result<&TranscriptionService, ProjectBridgeError> {
-        self.transcription_service.as_ref().ok_or_else(|| {
-            transcription_error(
-                crate::transcription::TranscriptionServiceError::ProviderUnavailable,
-            )
-        })
-    }
-
     pub fn export_timeline_captions(
         &self,
         project_id: String,
@@ -1197,7 +615,7 @@ impl ProjectHostHandle {
                 timeline_duration,
                 content: ClipContent::Caption {
                     text: cue.text,
-                    formatting: TextFormatting::DEFAULT,
+                    formatting: TextFormatting::CAPTION_DEFAULT,
                 },
                 settings: ClipSettings::Visual(VisualSettings::default()),
             });
@@ -1317,161 +735,6 @@ impl ProjectHostHandle {
         Ok(timeline_clip_page_view(&result, page))
     }
 
-    pub fn get_timeline_clip_visual_settings(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        clip_id: String,
-    ) -> Result<ProjectTimelineVisualSettingsView, ProjectBridgeError> {
-        let (_, _, _, clip) = self.find_visual_clip(
-            &project_id,
-            &project_instance_id,
-            expected_revision,
-            &track_id,
-            &clip_id,
-        )?;
-        let ClipSettings::Visual(settings) = clip.settings else {
-            return Err(unsupported_visual_settings());
-        };
-        Ok(visual_settings_view(&settings))
-    }
-
-    pub fn update_timeline_clip_visual_settings(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        clip_id: String,
-        settings: ProjectTimelineVisualSettingsView,
-    ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision, clip) = match self.find_visual_clip(
-            &project_id,
-            &project_instance_id,
-            expected_revision,
-            &track_id,
-            &clip_id,
-        ) {
-            Ok(result) => result,
-            Err(error) => return action_error(error),
-        };
-        let ClipSettings::Visual(mut visual) = clip.settings else {
-            return action_error(unsupported_visual_settings());
-        };
-        visual.transform = Transform {
-            x_milli_canvas: settings.x_milli_canvas,
-            y_milli_canvas: settings.y_milli_canvas,
-            scale_x_milli: settings.scale_x_milli,
-            scale_y_milli: settings.scale_y_milli,
-            rotation_milli_degrees: settings.rotation_milli_degrees,
-            anchor_x_basis_points: settings.anchor_x_basis_points,
-            anchor_y_basis_points: settings.anchor_y_basis_points,
-        };
-        visual.crop = Crop {
-            left_basis_points: settings.crop_left_basis_points,
-            top_basis_points: settings.crop_top_basis_points,
-            right_basis_points: settings.crop_right_basis_points,
-            bottom_basis_points: settings.crop_bottom_basis_points,
-        };
-        visual.opacity = Opacity {
-            basis_points: settings.opacity_basis_points,
-        };
-        visual.effects = effects_from_view(&visual.effects, &settings);
-        if settings.update_transition_in {
-            visual.transition_in = match transition_from_view(
-                settings.transition_in_kind,
-                settings.transition_in_duration,
-            ) {
-                Ok(transition) => transition,
-                Err(error) => return action_error(error),
-            };
-        }
-        if settings.update_transition_out {
-            visual.transition_out = match transition_from_view(
-                settings.transition_out_kind,
-                settings.transition_out_duration,
-            ) {
-                Ok(transition) => transition,
-                Err(error) => return action_error(error),
-            };
-        }
-        self.dispatch_command(CommandEnvelope::update_timeline_clip(
-            project_id,
-            project_instance_id,
-            revision,
-            clip.clip_id,
-            clip.timeline_duration,
-            clip.content,
-            ClipSettings::Visual(visual),
-        ))
-    }
-
-    pub fn get_timeline_clip_audio_settings(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        clip_id: String,
-    ) -> Result<ProjectTimelineAudioSettingsView, ProjectBridgeError> {
-        let (_, _, _, clip) = self.find_audio_clip(
-            &project_id,
-            &project_instance_id,
-            expected_revision,
-            &track_id,
-            &clip_id,
-        )?;
-        let ClipSettings::Audio(settings) = clip.settings else {
-            return Err(unsupported_audio_settings());
-        };
-        Ok(audio_settings_view(settings))
-    }
-
-    pub fn update_timeline_clip_audio_settings(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        clip_id: String,
-        settings: ProjectTimelineAudioSettingsView,
-    ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision, clip) = match self.find_audio_clip(
-            &project_id,
-            &project_instance_id,
-            expected_revision,
-            &track_id,
-            &clip_id,
-        ) {
-            Ok(result) => result,
-            Err(error) => return action_error(error),
-        };
-        let fade_in = match time_from_view(settings.fade_in) {
-            Ok(time) => time,
-            Err(error) => return action_error(error),
-        };
-        let fade_out = match time_from_view(settings.fade_out) {
-            Ok(time) => time,
-            Err(error) => return action_error(error),
-        };
-        self.dispatch_command(CommandEnvelope::update_timeline_clip(
-            project_id,
-            project_instance_id,
-            revision,
-            clip.clip_id,
-            clip.timeline_duration,
-            clip.content,
-            ClipSettings::Audio(AudioSettings {
-                gain_millidecibels: settings.gain_millidecibels,
-                pan_basis_points: settings.pan_basis_points,
-                fade_in,
-                fade_out,
-            }),
-        ))
-    }
-
     pub fn list_timeline_markers(
         &self,
         offset: u64,
@@ -1545,122 +808,6 @@ impl ProjectHostHandle {
                 )
             },
         )
-    }
-
-    pub fn preview_state(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .status(&self.host)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_seek(
-        &self,
-        position: RationalTimeView,
-    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        let position =
-            RationalTime::new(position.numerator, position.denominator).map_err(|error| {
-                ProjectBridgeError {
-                    code: "INVALID_PREVIEW_TIME".to_owned(),
-                    message: error.to_string(),
-                }
-            })?;
-        self.preview_runtime
-            .seek(&self.host, position)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_play(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .play(&self.host)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_pause(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .pause(&self.host)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_step(
-        &self,
-        direction: PreviewFrameStepView,
-    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .step(
-                &self.host,
-                match direction {
-                    PreviewFrameStepView::Previous => or_runtime::PreviewFrameStep::Previous,
-                    PreviewFrameStepView::Next => or_runtime::PreviewFrameStep::Next,
-                },
-            )
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_tick(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .tick(&self.host)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_prepare(
-        &self,
-        action: PreviewPreparationActionView,
-        position: Option<RationalTimeView>,
-    ) -> Result<ProjectPreviewPreparationView, ProjectBridgeError> {
-        let action = match action {
-            PreviewPreparationActionView::Seek => {
-                let position = position.ok_or_else(|| ProjectBridgeError {
-                    code: "INVALID_PREVIEW_TIME".to_owned(),
-                    message: "Seek requires a preview position.".to_owned(),
-                })?;
-                PreviewPreparationAction::Seek(
-                    RationalTime::new(position.numerator, position.denominator).map_err(
-                        |error| ProjectBridgeError {
-                            code: "INVALID_PREVIEW_TIME".to_owned(),
-                            message: error.to_string(),
-                        },
-                    )?,
-                )
-            }
-            PreviewPreparationActionView::Play => PreviewPreparationAction::Play,
-            PreviewPreparationActionView::StepPrevious => {
-                PreviewPreparationAction::Step(or_runtime::PreviewFrameStep::Previous)
-            }
-            PreviewPreparationActionView::StepNext => {
-                PreviewPreparationAction::Step(or_runtime::PreviewFrameStep::Next)
-            }
-            PreviewPreparationActionView::Tick => PreviewPreparationAction::Tick,
-        };
-        self.preview_runtime
-            .prepare(&self.host, action)
-            .map(|prepared| ProjectPreviewPreparationView {
-                request_id: prepared.request_id,
-                sources: prepared.sources,
-                state: preview_state_view(prepared.snapshot),
-            })
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_complete_prepared(
-        &self,
-        request_id: u64,
-    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
-        self.preview_runtime
-            .complete_prepared(&self.host, request_id)
-            .map(preview_state_view)
-            .map_err(preview_bridge_error)
-    }
-
-    pub fn preview_abort_prepared(&self, request_id: u64) -> Result<(), ProjectBridgeError> {
-        self.preview_runtime
-            .abort_prepared(request_id)
-            .map_err(preview_bridge_error)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1752,7 +899,7 @@ impl ProjectHostHandle {
                 timeline_duration: caption.duration,
                 content: ClipContent::Caption {
                     text: caption.text,
-                    formatting: TextFormatting::DEFAULT,
+                    formatting: TextFormatting::CAPTION_DEFAULT,
                 },
                 settings: ClipSettings::Visual(VisualSettings::default()),
             })
@@ -1780,1041 +927,10 @@ impl ProjectHostHandle {
         result
     }
 
-    pub fn add_timeline_track(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        kind: TimelineTrackKindView,
-    ) -> ProjectActionResult {
-        let track_id = TrackId::generate();
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::add_timeline_track(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    track_id,
-                    match kind {
-                        TimelineTrackKindView::Video => TrackKind::Video,
-                        TimelineTrackKindView::Audio => TrackKind::Audio,
-                        TimelineTrackKindView::Text => TrackKind::Text,
-                        TimelineTrackKindView::Caption => TrackKind::Caption,
-                    },
-                )
-            },
-        )
-    }
-
-    pub fn remove_timeline_track(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-    ) -> ProjectActionResult {
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::remove_timeline_track(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    track_id,
-                )
-            },
-        )
-    }
-
-    pub fn set_timeline_track_state(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        state: ProjectTimelineTrackStateView,
-    ) -> ProjectActionResult {
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        let state = TrackState::new(state.locked, state.visible, state.muted, state.solo);
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::set_timeline_track_state(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    track_id,
-                    state,
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn insert_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        media_id: String,
-        timeline_start_numerator: i64,
-        timeline_start_denominator: u32,
-        source_start_numerator: i64,
-        source_start_denominator: u32,
-        duration_numerator: i64,
-        duration_denominator: u32,
-        // `insert` (the default) or `overwrite`: an explicit command input, never
-        // canonical project state.
-        mode: Option<String>,
-        // Only read by overwrite when the new span lands strictly inside one
-        // existing clip, mirroring `timeline.clip.split`'s `new_clip_id`.
-        overwrite_split_clip_id: Option<String>,
-    ) -> ProjectActionResult {
-        let edit_mode = match mode.as_deref() {
-            None => or_core::TimelineEditMode::Insert,
-            Some(value) => match or_core::TimelineEditMode::parse_wire(value) {
-                Some(edit_mode) => edit_mode,
-                None => return action_error(timeline_arguments_error()),
-            },
-        };
-        // The bridge owns id generation for this command, exactly as it does for
-        // the inserted clip itself. A client may name the fragment; when it does
-        // not, one is generated here so an overwrite that lands inside an existing
-        // clip completes instead of refusing for want of an id no user could type.
-        let split_clip_id = match overwrite_split_clip_id {
-            None => None,
-            Some(value) => match ClipId::from_str(&value) {
-                Ok(clip_id) => Some(clip_id),
-                Err(_) => return action_error(timeline_arguments_error()),
-            },
-        };
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        let media_id = match MediaId::from_str(&media_id) {
-            Ok(media_id) => media_id,
-            Err(error) => return invalid_timeline_id("INVALID_MEDIA_ID", error.to_string()),
-        };
-        let timeline_start =
-            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        let source_start = match RationalTime::new(source_start_numerator, source_start_denominator)
-        {
-            Ok(time) => time,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        let duration = match RationalTime::new(duration_numerator, duration_denominator) {
-            Ok(time) => time,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        let source_range = match TimeRange::new(source_start, duration) {
-            Ok(range) => range,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::insert_timeline_clip_with_mode(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    ClipId::generate(),
-                    track_id,
-                    media_id,
-                    timeline_start,
-                    source_range,
-                    edit_mode,
-                    if edit_mode == or_core::TimelineEditMode::Overwrite {
-                        Some(split_clip_id.unwrap_or_else(ClipId::generate))
-                    } else {
-                        None
-                    },
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn insert_timeline_text_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        content_kind: TimelineClipContentKindView,
-        timeline_start_numerator: i64,
-        timeline_start_denominator: u32,
-        timeline_duration_numerator: i64,
-        timeline_duration_denominator: u32,
-        text: String,
-        formatting: ProjectTextFormattingView,
-    ) -> ProjectActionResult {
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        let timeline_start =
-            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        let timeline_duration =
-            match RationalTime::new(timeline_duration_numerator, timeline_duration_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        let content = match text_clip_content(content_kind, text, formatting) {
-            Ok(content) => content,
-            Err(error) => return action_error(error),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::insert_timeline_clip_content(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    ClipId::generate(),
-                    track_id,
-                    timeline_start,
-                    timeline_duration,
-                    content,
-                    ClipSettings::Visual(VisualSettings::default()),
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn update_timeline_text_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        clip_id: String,
-        content_kind: TimelineClipContentKindView,
-        timeline_duration_numerator: i64,
-        timeline_duration_denominator: u32,
-        text: String,
-        formatting: ProjectTextFormattingView,
-    ) -> ProjectActionResult {
-        let (_, _, _, track_kind, clip) = match self.find_timeline_clip_state(
-            &project_id,
-            &project_instance_id,
-            expected_revision,
-            &track_id,
-            &clip_id,
-        ) {
-            Ok(found) => found,
-            Err(error) => return action_error(error),
-        };
-        let content = match text_clip_content(content_kind, text, formatting) {
-            Ok(content) => content,
-            Err(error) => return action_error(error),
-        };
-        let matching_content = matches!(
-            (&clip.content, content_kind),
-            (ClipContent::Text { .. }, TimelineClipContentKindView::Text)
-                | (
-                    ClipContent::Caption { .. },
-                    TimelineClipContentKindView::Caption
-                )
-        );
-        let matching_track = matches!(
-            (track_kind, content_kind),
-            (TrackKind::Text, TimelineClipContentKindView::Text)
-                | (TrackKind::Caption, TimelineClipContentKindView::Caption)
-        );
-        if !matching_content || !matching_track {
-            return action_error(ProjectBridgeError {
-                code: "TIMELINE_CLIP_CONTENT_MISMATCH".to_owned(),
-                message: "The selected clip is not the requested text or caption type.".to_owned(),
-            });
-        }
-        let timeline_duration =
-            match RationalTime::new(timeline_duration_numerator, timeline_duration_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::update_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    timeline_duration,
-                    content,
-                    clip.settings,
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn move_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        track_id: String,
-        timeline_start_numerator: i64,
-        timeline_start_denominator: u32,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        let timeline_start =
-            match RationalTime::new(timeline_start_numerator, timeline_start_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::move_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    track_id,
-                    timeline_start,
-                )
-            },
-        )
-    }
-
-    pub fn delete_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::delete_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn trim_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        edge: TimelineTrimEdgeView,
-        timeline_time_numerator: i64,
-        timeline_time_denominator: u32,
-        // Opt-in end-edge ripple; absent keeps the plain trim meaning exactly.
-        ripple: Option<bool>,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let timeline_time =
-            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::trim_timeline_clip_with_ripple(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    match edge {
-                        TimelineTrimEdgeView::Start => TimelineTrimEdge::Start,
-                        TimelineTrimEdgeView::End => TimelineTrimEdge::End,
-                    },
-                    timeline_time,
-                    ripple.unwrap_or(false),
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    /// Moves a track to another position in the track list.
-    pub fn move_timeline_track(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        track_id: String,
-        to_index: u32,
-    ) -> ProjectActionResult {
-        let track_id = match TrackId::from_str(&track_id) {
-            Ok(track_id) => track_id,
-            Err(error) => return invalid_timeline_id("INVALID_TRACK_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::move_timeline_track(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    track_id,
-                    to_index as usize,
-                )
-            },
-        )
-    }
-
-    /// Moves a clip's source window by the given delta without moving the clip.
-    pub fn slip_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        delta_numerator: i64,
-        delta_denominator: u32,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
-            Ok(time) => time,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::slip_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    delta,
-                )
-            },
-        )
-    }
-
-    /// Moves the boundary between two adjacent clips by the given delta.
-    pub fn roll_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        delta_numerator: i64,
-        delta_denominator: u32,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
-            Ok(time) => time,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::roll_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    delta,
-                )
-            },
-        )
-    }
-
-    /// Moves a clip in time by the given delta, letting its neighbours absorb it.
-    pub fn slide_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        delta_numerator: i64,
-        delta_denominator: u32,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let delta = match RationalTime::new(delta_numerator, delta_denominator) {
-            Ok(time) => time,
-            Err(_) => return action_error(timeline_arguments_error()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::slide_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    delta,
-                )
-            },
-        )
-    }
-
-    pub fn split_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-        timeline_time_numerator: i64,
-        timeline_time_denominator: u32,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        let timeline_time =
-            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        let new_clip_id = ClipId::generate();
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::split_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                    new_clip_id,
-                    timeline_time,
-                )
-            },
-        )
-    }
-
-    pub fn ripple_delete_timeline_clip(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        clip_id: String,
-    ) -> ProjectActionResult {
-        let clip_id = match ClipId::from_str(&clip_id) {
-            Ok(clip_id) => clip_id,
-            Err(error) => return invalid_timeline_id("INVALID_CLIP_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::ripple_delete_timeline_clip(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    clip_id,
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn add_timeline_marker(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        timeline_time_numerator: i64,
-        timeline_time_denominator: u32,
-        label: String,
-    ) -> ProjectActionResult {
-        let timeline_time =
-            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::add_timeline_marker(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    MarkerId::generate(),
-                    timeline_time,
-                    label,
-                )
-            },
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn move_timeline_marker(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        marker_id: String,
-        timeline_time_numerator: i64,
-        timeline_time_denominator: u32,
-    ) -> ProjectActionResult {
-        let marker_id = match MarkerId::from_str(&marker_id) {
-            Ok(marker_id) => marker_id,
-            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
-        };
-        let timeline_time =
-            match RationalTime::new(timeline_time_numerator, timeline_time_denominator) {
-                Ok(time) => time,
-                Err(_) => return action_error(timeline_arguments_error()),
-            };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::move_timeline_marker(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    marker_id,
-                    timeline_time,
-                )
-            },
-        )
-    }
-
-    pub fn rename_timeline_marker(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        marker_id: String,
-        label: String,
-    ) -> ProjectActionResult {
-        let marker_id = match MarkerId::from_str(&marker_id) {
-            Ok(marker_id) => marker_id,
-            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::rename_timeline_marker(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    marker_id,
-                    label,
-                )
-            },
-        )
-    }
-
-    pub fn delete_timeline_marker(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        marker_id: String,
-    ) -> ProjectActionResult {
-        let marker_id = match MarkerId::from_str(&marker_id) {
-            Ok(marker_id) => marker_id,
-            Err(error) => return invalid_timeline_id("INVALID_MARKER_ID", error.to_string()),
-        };
-        self.timeline_command(
-            project_id,
-            project_instance_id,
-            expected_revision,
-            |project_id, project_instance_id, revision| {
-                CommandEnvelope::delete_timeline_marker(
-                    project_id,
-                    project_instance_id,
-                    revision,
-                    marker_id,
-                )
-            },
-        )
-    }
-
-    pub fn request_media_thumbnail(&self, media_id: String) -> MediaArtifactRequestView {
-        self.request_media_artifact(media_id, MediaArtifactKindView::Thumbnail)
-    }
-
-    pub fn request_media_waveform(&self, media_id: String) -> MediaArtifactRequestView {
-        self.request_media_artifact(media_id, MediaArtifactKindView::Waveform)
-    }
-
-    pub fn read_media_artifact(
-        &self,
-        kind: MediaArtifactKindView,
-        cache_key: String,
-    ) -> Result<Option<MediaArtifactBytesView>, ProjectBridgeError> {
-        let cache_key = CacheKey::from_hex(&cache_key).map_err(|error| ProjectBridgeError {
-            code: "INVALID_CACHE_KEY".to_owned(),
-            message: error.to_string(),
-        })?;
-        let service = self
-            .media_artifact_service
-            .as_ref()
-            .ok_or_else(cache_unavailable_error)?;
-        let bytes = service
-            .read_artifact(cache_artifact_kind(kind), cache_key)
-            .map_err(|error| ProjectBridgeError {
-                code: error.code().to_owned(),
-                message: error.to_string(),
-            })?;
-        Ok(bytes.map(|bytes| MediaArtifactBytesView {
-            bytes,
-            mime_type: "image/png".to_owned(),
-        }))
-    }
-
-    pub fn subscribe_media_artifact_events(
-        &self,
-        sink: StreamSink<MediaArtifactEventView>,
-    ) -> Result<(), ProjectBridgeError> {
-        // A platform without cached artifacts has no events to deliver, so the
-        // subscription is empty rather than failed. The generated stream wrapper
-        // discards this call's future, so an error here would surface as an
-        // unobserved bridge error instead of anything the caller could handle.
-        let Some(receiver) = self.media_artifact_event_receiver() else {
-            return Ok(());
-        };
-        thread::Builder::new()
-            .name("or-flutter-media-artifact-events".to_owned())
-            .spawn(move || forward_media_artifact_events(receiver, sink))
-            .map_err(|error| ProjectBridgeError {
-                code: "EVENT_SUBSCRIPTION_FAILED".to_owned(),
-                message: error.to_string(),
-            })?;
-        Ok(())
-    }
-
-    fn media_artifact_event_receiver(&self) -> Option<mpsc::Receiver<MediaArtifactEvent>> {
-        self.media_artifact_service
-            .as_ref()
-            .map(MediaArtifactService::subscribe_events)
-    }
-
-    fn request_media_artifact(
-        &self,
-        media_id: String,
-        kind: MediaArtifactKindView,
-    ) -> MediaArtifactRequestView {
-        let id = match MediaId::from_str(&media_id) {
-            Ok(id) => id,
-            Err(error) => {
-                return MediaArtifactRequestView::failed(
-                    media_id,
-                    kind,
-                    "INVALID_MEDIA_ID",
-                    error.to_string(),
-                );
-            }
-        };
-        let summary = match self.host.describe() {
-            Ok(summary) => summary,
-            Err(error) => {
-                let error = host_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-        };
-        let request = QueryEnvelope::media_get(
-            summary.summary.project_id,
-            summary.summary.project_instance_id,
-            id,
-        );
-        let item = match self
-            .host
-            .handle_application_request(ApplicationRequest::Query(request))
-        {
-            Ok(ApplicationResponse::Query(result)) => match result.media_item {
-                Some(item) => *item,
-                None => {
-                    let error = unexpected_response_error();
-                    return MediaArtifactRequestView::failed(
-                        media_id,
-                        kind,
-                        error.code,
-                        error.message,
-                    );
-                }
-            },
-            Ok(ApplicationResponse::Error(error)) => {
-                let error = operation_bridge_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-            Ok(_) => {
-                let error = unexpected_response_error();
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-            Err(error) => {
-                let error = host_error(error);
-                return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-            }
-        };
-        let Some(service) = self.media_artifact_service.as_ref() else {
-            let error = cache_unavailable_error();
-            return MediaArtifactRequestView::failed(media_id, kind, error.code, error.message);
-        };
-        let result = match kind {
-            MediaArtifactKindView::Thumbnail => service.request_thumbnail(&item),
-            MediaArtifactKindView::Waveform => service.request_waveform(&item),
-        };
-        match result {
-            Ok(result) => MediaArtifactRequestView::from_request(media_id, kind, result),
-            Err(error) => {
-                MediaArtifactRequestView::failed(media_id, kind, error.code(), error.to_string())
-            }
-        }
-    }
-
     /// Prepares media without holding the live-host lock, then dispatches with the
-    /// identity and revision captured by the caller before probing started.
-    pub fn import_media(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        path: String,
-    ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision) =
-            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
-                Ok(identity) => identity,
-                Err(error) => return action_error(error),
-            };
-        let item = match prepare_import_source(&path) {
-            Ok(item) => item,
-            Err(error) => {
-                return ProjectActionResult {
-                    succeeded: false,
-                    error_code: error.code_str().to_owned(),
-                    message: error.to_string(),
-                    view: None,
-                };
-            }
-        };
-        self.dispatch_command(CommandEnvelope::add_media(
-            project_id,
-            project_instance_id,
-            revision,
-            item,
-        ))
-    }
-
-    /// Reduces noise in one media file and writes the result to `destination`.
-    ///
-    /// This is a file-to-file media operation, not a project mutation: no project is
-    /// opened, nothing in one changes, and the result is ordinary media the caller
-    /// can import and compare. The noise floor is derived from the material when
-    /// `noise_floor_db` is `None`, because a constant would leave the noise in one
-    /// recording and eat the audio in another.
-    pub fn clean_up_audio(
-        &self,
-        source: String,
-        destination: String,
-        noise_floor_db: Option<i32>,
-        reduction_db: u32,
-    ) -> MediaCleanupResultView {
-        if reduction_db == 0 {
-            return MediaCleanupResultView::failure(
-                "INVALID_ARGUMENTS",
-                "reduction cannot be zero",
-            );
-        }
-        let source_path = std::path::PathBuf::from(&source);
-        let destination_path = std::path::PathBuf::from(&destination);
-        let noise_floor_db = match noise_floor_db {
-            Some(value) => value,
-            None => match or_core::measure_noise_floor(&source_path) {
-                Ok(value) => value,
-                Err(error) => {
-                    return MediaCleanupResultView::failure(
-                        error.code().as_str(),
-                        format!(
-                            "could not measure the noise floor: {}",
-                            error.code().as_str()
-                        ),
-                    );
-                }
-            },
-        };
-        match or_core::clean_audio_file(
-            &source_path,
-            &destination_path,
-            noise_floor_db,
-            reduction_db,
-        ) {
-            Ok(result) => MediaCleanupResultView {
-                succeeded: true,
-                error_code: String::new(),
-                message: String::new(),
-                destination: result.destination.display().to_string(),
-                noise_floor_db: result.noise_floor_db,
-                reduction_db: result.reduction_db,
-                bytes_written: result.bytes_written,
-            },
-            Err(error) => MediaCleanupResultView::failure(
-                error.code().as_str(),
-                format!("noise reduction failed: {}", error.code().as_str()),
-            ),
-        }
-    }
-
-    /// Re-probes a replacement source without changing the target media identity.
-    pub fn relink_media(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        media_id: String,
-        path: String,
-    ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision) =
-            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
-                Ok(identity) => identity,
-                Err(error) => return action_error(error),
-            };
-        let media_id = match MediaId::from_str(&media_id) {
-            Ok(media_id) => media_id,
-            Err(error) => {
-                return action_error(ProjectBridgeError {
-                    code: "INVALID_MEDIA_ID".to_owned(),
-                    message: error.to_string(),
-                });
-            }
-        };
-        let prepared = match prepare_import_source(&path) {
-            Ok(item) => item,
-            Err(error) => {
-                return ProjectActionResult {
-                    succeeded: false,
-                    error_code: error.code_str().to_owned(),
-                    message: error.to_string(),
-                    view: None,
-                };
-            }
-        };
-        let item = match MediaItem::new(
-            media_id,
-            prepared.source().clone(),
-            prepared.metadata().clone(),
-        ) {
-            Ok(item) => item,
-            Err(error) => {
-                return action_error(ProjectBridgeError {
-                    code: "INVALID_MEDIA_METADATA".to_owned(),
-                    message: error.to_string(),
-                });
-            }
-        };
-        self.dispatch_command(CommandEnvelope::relink_media(
-            project_id,
-            project_instance_id,
-            revision,
-            item,
-        ))
-    }
-
-    pub fn remove_media(
-        &self,
-        project_id: String,
-        project_instance_id: String,
-        expected_revision: u64,
-        media_id: String,
-    ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision) =
-            match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
-                Ok(identity) => identity,
-                Err(error) => return action_error(error),
-            };
-        let media_id = match MediaId::from_str(&media_id) {
-            Ok(media_id) => media_id,
-            Err(error) => {
-                return action_error(ProjectBridgeError {
-                    code: "INVALID_MEDIA_ID".to_owned(),
-                    message: error.to_string(),
-                });
-            }
-        };
-        self.dispatch_command(CommandEnvelope::remove_media(
-            project_id,
-            project_instance_id,
-            revision,
-            media_id,
-        ))
-    }
-
+    /// identity and revision captured by the caller before probing started. The
+    /// probe and the command therefore see the same project revision even when
+    /// another client edits the project in between.
     pub fn rename(
         &self,
         project_id: String,
@@ -2895,7 +1011,19 @@ impl ProjectHostHandle {
         project_instance_id: String,
         expected_revision: u64,
         destination: String,
+        quality: Option<String>,
     ) -> ProjectExportJobView {
+        // An optional argument keeps every existing generated caller compiling and
+        // gives an old client the quality preference rather than the fastest mode.
+        let quality = match quality
+            .as_deref()
+            .map(str::trim)
+            .map(str::to_ascii_lowercase)
+            .as_deref()
+        {
+            Some("speed") => or_core::ExportQuality::Speed,
+            _ => or_core::ExportQuality::Quality,
+        };
         let profile = std::path::Path::new(&destination)
             .extension()
             .and_then(std::ffi::OsStr::to_str)
@@ -2904,12 +1032,13 @@ impl ProjectHostHandle {
             .and_then(|extension| match extension {
                 "mkv" => Some(or_core::ExportProfile::MatroskaFfv1PcmS16le),
                 "webm" => Some(or_core::ExportProfile::WebmVp9Opus),
+                "mp4" => Some(or_core::ExportProfile::Mp4H264Aac),
                 _ => None,
             });
         let Some(profile) = profile else {
             return export_job_view(ExportResponse::failure(
                 "INVALID_EXPORT_PROFILE",
-                "choose a destination ending in .mkv or .webm",
+                "choose a destination ending in .mp4, .mkv, or .webm",
             ));
         };
         let (project_id, project_instance_id, expected_project_revision) =
@@ -2925,6 +1054,7 @@ impl ProjectHostHandle {
             expected_project_revision,
             destination,
             profile,
+            quality,
         })
     }
 
@@ -3055,67 +1185,7 @@ impl ProjectHostHandle {
         Ok(())
     }
 
-    fn find_visual_clip(
-        &self,
-        project_id: &str,
-        project_instance_id: &str,
-        expected_revision: u64,
-        track_id: &str,
-        clip_id: &str,
-    ) -> Result<
-        (
-            ProjectId,
-            ProjectInstanceId,
-            ProjectRevision,
-            TimelineClipState,
-        ),
-        ProjectBridgeError,
-    > {
-        let (project_id, project_instance_id, revision, track_kind, clip) = self
-            .find_timeline_clip_state(
-                project_id,
-                project_instance_id,
-                expected_revision,
-                track_id,
-                clip_id,
-            )?;
-        if !track_kind.is_visual() {
-            return Err(unsupported_visual_settings());
-        }
-        Ok((project_id, project_instance_id, revision, clip))
-    }
-
-    fn find_audio_clip(
-        &self,
-        project_id: &str,
-        project_instance_id: &str,
-        expected_revision: u64,
-        track_id: &str,
-        clip_id: &str,
-    ) -> Result<
-        (
-            ProjectId,
-            ProjectInstanceId,
-            ProjectRevision,
-            TimelineClipState,
-        ),
-        ProjectBridgeError,
-    > {
-        let (project_id, project_instance_id, revision, track_kind, clip) = self
-            .find_timeline_clip_state(
-                project_id,
-                project_instance_id,
-                expected_revision,
-                track_id,
-                clip_id,
-            )?;
-        if track_kind != TrackKind::Audio {
-            return Err(unsupported_audio_settings());
-        }
-        Ok((project_id, project_instance_id, revision, clip))
-    }
-
-    fn find_timeline_clip_state(
+    pub(crate) fn find_timeline_clip_state(
         &self,
         project_id: &str,
         project_instance_id: &str,
@@ -3230,7 +1300,7 @@ impl ProjectHostHandle {
         self.dispatch_command(envelope)
     }
 
-    fn timeline_command(
+    pub(crate) fn timeline_command(
         &self,
         project_id: String,
         project_instance_id: String,
@@ -3257,7 +1327,7 @@ impl ProjectHostHandle {
         }
     }
 
-    fn dispatch_command(&self, envelope: CommandEnvelope) -> ProjectActionResult {
+    pub(crate) fn dispatch_command(&self, envelope: CommandEnvelope) -> ProjectActionResult {
         match self
             .host
             .handle_application_request(ApplicationRequest::Command(envelope))
@@ -3307,7 +1377,7 @@ fn caption_time_error() -> ProjectBridgeError {
     }
 }
 
-fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
+pub(crate) fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
     #[cfg(target_os = "android")]
     if source.starts_with("content://") {
         let source = MediaSourceRef::android_saf_document_uri(source)
@@ -3318,11 +1388,40 @@ fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImport
             .map_err(|_| or_core::MediaImportError::SourceUnavailable)?;
         return prepare_media_import_from_probe(source, &probe_output, capability.len());
     }
-    prepare_media_import(Path::new(source))
+    let path = Path::new(source);
+    match prepare_media_import(path) {
+        Ok(item) => Ok(item),
+        // The packaged helper is a separate executable. If it cannot start or
+        // exits without reading the file, fall back to the libavformat this
+        // process already links for playback and export. A file the helper
+        // rejects on its import matrix is not retried: the fallback would refuse
+        // it for the same reason and the helper's diagnostic is the better one.
+        Err(error) => {
+            let helper_failed = matches!(
+                &error,
+                or_core::MediaImportError::Probe(probe)
+                    if matches!(
+                        probe.code(),
+                        or_core::MediaProbeErrorCode::ProbeFailed
+                            | or_core::MediaProbeErrorCode::ProbeBackendUnavailable
+                            | or_core::MediaProbeErrorCode::InvalidProbeOutput
+                    )
+            );
+            if !helper_failed {
+                return Err(error);
+            }
+            match or_media::probe_media_path(path) {
+                Ok(probe_output) => {
+                    prepare_media_import_with_probe(path, &probe_output).map_err(|_| error)
+                }
+                Err(_) => Err(error),
+            }
+        }
+    }
 }
 
 impl MediaArtifactRequestView {
-    fn failed(
+    pub(crate) fn failed(
         media_id: String,
         kind: MediaArtifactKindView,
         error_code: impl Into<String>,
@@ -3339,7 +1438,7 @@ impl MediaArtifactRequestView {
         }
     }
 
-    fn from_request(
+    pub(crate) fn from_request(
         media_id: String,
         kind: MediaArtifactKindView,
         request: MediaArtifactRequest,
@@ -3363,21 +1462,21 @@ impl MediaArtifactRequestView {
     }
 }
 
-fn cache_artifact_kind(kind: MediaArtifactKindView) -> CacheArtifactKind {
+pub(crate) fn cache_artifact_kind(kind: MediaArtifactKindView) -> CacheArtifactKind {
     match kind {
         MediaArtifactKindView::Thumbnail => CacheArtifactKind::Thumbnail,
         MediaArtifactKindView::Waveform => CacheArtifactKind::Waveform,
     }
 }
 
-fn cache_unavailable_error() -> ProjectBridgeError {
+pub(crate) fn cache_unavailable_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "CACHE_UNAVAILABLE".to_owned(),
         message: "media preview cache is unavailable".to_owned(),
     }
 }
 
-fn parse_session_identity(
+pub(crate) fn parse_session_identity(
     project_id: &str,
     project_instance_id: &str,
     expected_revision: u64,
@@ -3430,7 +1529,7 @@ fn read_bounded_caption_file(path: &Path) -> Result<Vec<u8>, ProjectBridgeError>
     Ok(bytes)
 }
 
-fn revision_conflict_error() -> ProjectBridgeError {
+pub(crate) fn revision_conflict_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "REVISION_CONFLICT".to_owned(),
         message: "The project changed while captions were being exported.".to_owned(),
@@ -3547,33 +1646,17 @@ fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
     }
 }
 
-fn rational_time_view(time: RationalTime) -> RationalTimeView {
+pub(crate) fn rational_time_view(time: RationalTime) -> RationalTimeView {
     RationalTimeView {
         numerator: time.numerator(),
         denominator: time.denominator(),
     }
 }
 
-fn rational_rate_view(rate: RationalRate) -> RationalRateView {
+pub(crate) fn rational_rate_view(rate: RationalRate) -> RationalRateView {
     RationalRateView {
         numerator: rate.numerator(),
         denominator: rate.denominator(),
-    }
-}
-
-fn preview_state_view(snapshot: PreviewSnapshot) -> ProjectPreviewStateView {
-    ProjectPreviewStateView {
-        position: rational_time_view(snapshot.playback.position),
-        presented_time: snapshot.playback.presented_time.map(rational_time_view),
-        sequence_frame_rate: snapshot.playback.frame_rate.map(rational_rate_view),
-        content_end: snapshot.playback.content_end.map(rational_time_view),
-        playing: snapshot.playback.playing,
-        generation: snapshot.playback.generation,
-        frame_sequence: snapshot.playback.frame_sequence,
-        width: snapshot.width,
-        height: snapshot.height,
-        error_code: snapshot.error_code,
-        error_message: snapshot.error_message,
     }
 }
 
@@ -3622,13 +1705,6 @@ fn export_job_view(response: ExportResponse) -> ProjectExportJobView {
     }
 }
 
-fn preview_bridge_error(error: PreviewError) -> ProjectBridgeError {
-    ProjectBridgeError {
-        code: error.code,
-        message: error.message,
-    }
-}
-
 fn timeline_track_view(track: &TimelineTrackSummaryV2) -> ProjectTimelineTrackView {
     ProjectTimelineTrackView {
         track_id: track.track_id.to_string(),
@@ -3673,6 +1749,8 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
             media_id,
             source_range,
             playback_rate: _,
+            reversed: _,
+            frozen: _,
         } => (
             TimelineClipContentKindView::Media,
             Some(media_id.to_string()),
@@ -3698,6 +1776,9 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     ProjectTimelineClipView {
         clip_id: clip.clip_id.to_string(),
         content_kind,
+        playback_rate: rational_rate_view(clip.content.playback_rate()),
+        reversed: clip.content.reversed(),
+        frozen: clip.content.frozen(),
         media_id,
         text,
         formatting,
@@ -3711,6 +1792,7 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
     ProjectTextFormattingView {
         font: match formatting.font {
             FontIdentity::BundledInter => FontIdentityView::BundledInter,
+            FontIdentity::BeVietnamPro => FontIdentityView::BeVietnamPro,
         },
         size_milli_points: formatting.size_milli_points,
         weight: match formatting.weight {
@@ -3730,6 +1812,25 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
             blue: formatting.color.blue,
             alpha: formatting.color.alpha,
         },
+        anchor: match formatting.anchor {
+            or_core::TextVerticalAnchor::Top => TextVerticalAnchorView::Top,
+            or_core::TextVerticalAnchor::Center => TextVerticalAnchorView::Center,
+            or_core::TextVerticalAnchor::Bottom => TextVerticalAnchorView::Bottom,
+        },
+        offset_x_basis_points: formatting.offset_x_basis_points,
+        offset_y_basis_points: formatting.offset_y_basis_points,
+        background: formatting
+            .background
+            .map(|background| ProjectTextBackgroundView {
+                color: ProjectTextColorView {
+                    red: background.color.red,
+                    green: background.color.green,
+                    blue: background.color.blue,
+                    alpha: background.color.alpha,
+                },
+                padding_milli_points: background.padding_milli_points,
+            }),
+        opacity_basis_points: formatting.opacity_basis_points,
     }
 }
 
@@ -3737,6 +1838,7 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
     TextFormatting {
         font: match view.font {
             FontIdentityView::BundledInter => FontIdentity::BundledInter,
+            FontIdentityView::BeVietnamPro => FontIdentity::BeVietnamPro,
         },
         size_milli_points: view.size_milli_points,
         weight: match view.weight {
@@ -3756,10 +1858,27 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
             blue: view.color.blue,
             alpha: view.color.alpha,
         },
+        anchor: match view.anchor {
+            TextVerticalAnchorView::Top => or_core::TextVerticalAnchor::Top,
+            TextVerticalAnchorView::Center => or_core::TextVerticalAnchor::Center,
+            TextVerticalAnchorView::Bottom => or_core::TextVerticalAnchor::Bottom,
+        },
+        offset_x_basis_points: view.offset_x_basis_points,
+        offset_y_basis_points: view.offset_y_basis_points,
+        background: view.background.map(|background| or_core::TextBackground {
+            color: TextColor {
+                red: background.color.red,
+                green: background.color.green,
+                blue: background.color.blue,
+                alpha: background.color.alpha,
+            },
+            padding_milli_points: background.padding_milli_points,
+        }),
+        opacity_basis_points: view.opacity_basis_points,
     }
 }
 
-fn text_clip_content(
+pub(crate) fn text_clip_content(
     kind: TimelineClipContentKindView,
     text: String,
     formatting: ProjectTextFormattingView,
@@ -3775,7 +1894,7 @@ fn text_clip_content(
     }
 }
 
-fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSettingsView {
+pub(crate) fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSettingsView {
     let mut brightness_amount_milli = 0;
     let mut contrast_amount_milli = 1_000;
     let mut saturation_amount_milli = 1_000;
@@ -3832,7 +1951,7 @@ fn visual_settings_view(settings: &VisualSettings) -> ProjectTimelineVisualSetti
     }
 }
 
-fn effects_from_view(
+pub(crate) fn effects_from_view(
     existing: &[EffectReference],
     settings: &ProjectTimelineVisualSettingsView,
 ) -> Vec<EffectReference> {
@@ -3907,7 +2026,7 @@ fn transition_kind_code(transition: Option<TransitionReference>) -> u8 {
     }
 }
 
-fn transition_from_view(
+pub(crate) fn transition_from_view(
     kind: u8,
     duration: RationalTimeView,
 ) -> Result<Option<TransitionReference>, ProjectBridgeError> {
@@ -3929,7 +2048,7 @@ fn transition_from_view(
     Ok(Some(TransitionReference { kind, duration }))
 }
 
-fn audio_settings_view(settings: AudioSettings) -> ProjectTimelineAudioSettingsView {
+pub(crate) fn audio_settings_view(settings: AudioSettings) -> ProjectTimelineAudioSettingsView {
     ProjectTimelineAudioSettingsView {
         gain_millidecibels: settings.gain_millidecibels,
         pan_basis_points: settings.pan_basis_points,
@@ -3938,7 +2057,7 @@ fn audio_settings_view(settings: AudioSettings) -> ProjectTimelineAudioSettingsV
     }
 }
 
-fn time_from_view(time: RationalTimeView) -> Result<RationalTime, ProjectBridgeError> {
+pub(crate) fn time_from_view(time: RationalTimeView) -> Result<RationalTime, ProjectBridgeError> {
     RationalTime::new(time.numerator, time.denominator).map_err(|error| ProjectBridgeError {
         code: "INVALID_TIMELINE_TIME".to_owned(),
         message: error.to_string(),
@@ -3963,7 +2082,7 @@ fn ensure_visual_settings_snapshot(
     Ok(())
 }
 
-fn unsupported_visual_settings() -> ProjectBridgeError {
+pub(crate) fn unsupported_visual_settings() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
         message: "Transform, effect, and transition settings are only available for visual clips."
@@ -3971,7 +2090,7 @@ fn unsupported_visual_settings() -> ProjectBridgeError {
     }
 }
 
-fn unsupported_audio_settings() -> ProjectBridgeError {
+pub(crate) fn unsupported_audio_settings() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
         message: "Audio gain, pan, and fade settings are only available for audio clips."
@@ -4032,14 +2151,14 @@ fn timeline_snap_view(result: &QueryResult, snap: &TimelineSnapResult) -> Projec
     }
 }
 
-fn invalid_timeline_id(code: &str, message: String) -> ProjectActionResult {
+pub(crate) fn invalid_timeline_id(code: &str, message: String) -> ProjectActionResult {
     action_error(ProjectBridgeError {
         code: code.to_owned(),
         message,
     })
 }
 
-fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
+pub(crate) fn operation_bridge_error(error: OperationError) -> ProjectBridgeError {
     ProjectBridgeError {
         code: operation_error_code(error.code).to_owned(),
         message: error.to_string(),
@@ -4053,7 +2172,7 @@ fn invalid_arguments() -> ProjectBridgeError {
     }
 }
 
-fn timeline_arguments_error() -> ProjectBridgeError {
+pub(crate) fn timeline_arguments_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "INVALID_ARGUMENTS".to_owned(),
         message: "timeline time values are invalid".to_owned(),
@@ -4074,7 +2193,7 @@ fn timeline_marker_query_arguments_error() -> ProjectBridgeError {
     }
 }
 
-fn unexpected_response_error() -> ProjectBridgeError {
+pub(crate) fn unexpected_response_error() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNEXPECTED_RESPONSE".to_owned(),
         message: "The project host returned an unexpected response.".to_owned(),
@@ -4108,7 +2227,7 @@ fn forward_events(
     }
 }
 
-fn forward_media_artifact_events(
+pub(crate) fn forward_media_artifact_events(
     receiver: mpsc::Receiver<MediaArtifactEvent>,
     sink: StreamSink<MediaArtifactEventView>,
 ) {
@@ -4168,7 +2287,7 @@ fn action_operation_error(error: OperationError) -> ProjectActionResult {
     }
 }
 
-fn action_error(error: ProjectBridgeError) -> ProjectActionResult {
+pub(crate) fn action_error(error: ProjectBridgeError) -> ProjectActionResult {
     ProjectActionResult {
         succeeded: false,
         error_code: error.code,
@@ -4184,7 +2303,7 @@ fn project_session_error(error: or_core::ProjectFileSessionError) -> ProjectBrid
     }
 }
 
-fn host_error(error: LiveProjectHostError) -> ProjectBridgeError {
+pub(crate) fn host_error(error: LiveProjectHostError) -> ProjectBridgeError {
     match error {
         LiveProjectHostError::Session(error) => project_session_error(error),
         LiveProjectHostError::Operation(error) => ProjectBridgeError {
@@ -4244,6 +2363,7 @@ fn operation_error_code(code: OperationErrorCode) -> &'static str {
         OperationErrorCode::TimelineClipNotFound => "TIMELINE_CLIP_NOT_FOUND",
         OperationErrorCode::TimelineMediaIncompatible => "TIMELINE_MEDIA_INCOMPATIBLE",
         OperationErrorCode::TimelineOverlap => "TIMELINE_OVERLAP",
+        OperationErrorCode::TimelineNothingToDuck => "TIMELINE_NOTHING_TO_DUCK",
         OperationErrorCode::TimelineOverwriteSplitRequiresClipId => {
             "TIMELINE_OVERWRITE_SPLIT_REQUIRES_CLIP_ID"
         }
@@ -4271,15 +2391,22 @@ fn recovery_conflict_name(reason: RecoveryConflictReason) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CachePlatform, MediaArtifactKindView, PreviewRuntime, ProjectCaptionCueView,
-        ProjectHostHandle, audio_settings_view, configured_media_artifact_cache_root,
-        effects_from_view, media_artifact_event_view, operation_error_code, rational_time_millis,
-        rational_time_view, timeline_clip_page_view, timeline_marker_page_view, timeline_snap_view,
-        timeline_track_view, visual_settings_view,
+    use super::super::media_artifact_config::{
+        CachePlatform, configured_media_artifact_cache_root, media_artifact_worker_count_for,
     };
-    use or_core::{ExportRequest, ExportResponse, ProjectFileSession};
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use super::BridgeTranscriptionHandler;
+    use super::{
+        MediaArtifactKindView, PreviewRuntime, ProjectCaptionCueView, ProjectHostHandle,
+        audio_settings_view, effects_from_view, media_artifact_event_view, operation_error_code,
+        rational_time_millis, rational_time_view, timeline_clip_page_view,
+        timeline_marker_page_view, timeline_snap_view, timeline_track_view, visual_settings_view,
+    };
+    use crate::transcription::TranscriptionService;
+    use or_core::{
+        ExportRequest, ExportResponse, ProjectFileSession, TranscriptionRequest,
+        TranscriptionResponse,
+    };
+    use or_ipc::{ExportRequestHandler, LiveProjectHost, TranscriptionRequestHandler};
     use std::sync::Arc;
 
     struct TestHostDirectory(PathBuf);
@@ -4305,6 +2432,17 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// Two workers keep playback responsive on small machines; four halve the
+    /// cold-import fill time once a machine has cores to spare.
+    #[test]
+    fn artifact_pool_width_follows_core_count() {
+        assert_eq!(media_artifact_worker_count_for(1), 2);
+        assert_eq!(media_artifact_worker_count_for(4), 2);
+        assert_eq!(media_artifact_worker_count_for(5), 2);
+        assert_eq!(media_artifact_worker_count_for(6), 4);
+        assert_eq!(media_artifact_worker_count_for(10), 4);
     }
 
     fn handle_without_artifact_service(directory: &TestHostDirectory) -> ProjectHostHandle {
@@ -4518,6 +2656,8 @@ mod tests {
                     timeline_duration: RationalTime::new(5, 2).unwrap(),
                     content: ClipContent::Media {
                         playback_rate: or_core::RationalRate::ONE,
+                        reversed: false,
+                        frozen: false,
                         media_id,
                         source_range: TimeRange::new(
                             RationalTime::new(1, 2).unwrap(),
@@ -4883,5 +3023,59 @@ mod tests {
                 expected
             );
         }
+    }
+    #[test]
+    fn bridge_transcription_rejects_another_session_a_stale_revision_and_an_unknown_job() {
+        let directory = TestHostDirectory::new();
+        let session =
+            ProjectFileSession::create_new(directory.0.join("captions.orproj"), "B").unwrap();
+        let Some(service) = TranscriptionService::new() else {
+            return;
+        };
+        let handler = BridgeTranscriptionHandler {
+            service: Arc::new(service),
+        };
+        let project_id = session.session().project_id();
+        let project_instance_id = session.session().project_instance_id();
+
+        let other_session = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Status {
+                project_id: ProjectId::generate(),
+                project_instance_id,
+                job_id: JobId::generate(),
+            },
+        );
+        assert!(matches!(
+            other_session,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROJECT_SESSION_MISMATCH"
+        ));
+
+        let stale = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Start {
+                project_id,
+                project_instance_id,
+                expected_project_revision: ProjectRevision::new(99),
+                media_id: MediaId::generate(),
+            },
+        );
+        assert!(matches!(
+            stale,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROJECT_REVISION_CONFLICT"
+        ));
+
+        let unknown = handler.handle_transcription_request(
+            session.session(),
+            TranscriptionRequest::Proposal {
+                project_id,
+                project_instance_id,
+                job_id: JobId::generate(),
+            },
+        );
+        assert!(matches!(
+            unknown,
+            TranscriptionResponse::Failure(failure) if failure.code == "PROPOSAL_UNAVAILABLE"
+        ));
     }
 }

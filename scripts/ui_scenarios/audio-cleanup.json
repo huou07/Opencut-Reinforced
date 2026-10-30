@@ -86,8 +86,7 @@
     },
     {
       "op": "wait_label",
-      "label_regex": "^Cleaned audio added to the project",
-      "budget_ms": 60000
+      "label_regex": "^Cleaned audio added to the project"
     },
     {
       "op": "tree",

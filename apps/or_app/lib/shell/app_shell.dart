@@ -1,10 +1,13 @@
 import 'dart:async';
-import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../design/or_colors.dart';
+import '../design/or_typography.dart';
+
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
@@ -15,18 +18,36 @@ import '../project/export_profile.dart';
 import '../project/project_file_picker.dart';
 import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
-import '../screens/asset_library_screen.dart';
+import '../project/source_path.dart';
+import '../project/timeline_clip_clipboard.dart';
+import '../production/audio_tool_flows.dart';
+import '../production/media_import_flow.dart';
+import '../production/media_artifact_mailbox.dart';
+import '../production/media_preview_publisher.dart';
+import '../production/media_preview_plan.dart';
+import '../production/media_preview_queue.dart';
+import '../production/media_preview_reader.dart';
+import '../production/media_preview_kinds.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
 import '../screens/settings_screen.dart';
-import '../screens/templates_screen.dart';
+import '../assistant/assistant_controller.dart';
 import '../widgets/or_widgets.dart';
 import 'app_navigation.dart';
+import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'autosave_controller.dart';
+import 'project_error_message.dart';
+import 'project_recovery.dart';
+import 'project_recovery_dialogs.dart';
+import 'export_flow.dart';
+import 'caption_import_dialog.dart';
+import 'speech_model_messages.dart';
 import 'motion_materialize_dialog.dart';
+import '../motion/motion_insert_log.dart';
 
 const _mediaPageSize = 50;
 const _timelineClipPageSize = 100;
@@ -69,24 +90,6 @@ Future<String?> registerAndroidMediaSource(
   }
 }
 
-/// Whether this process can create and remove a file in `directory`.
-///
-/// A cheap probe rather than a permission inspection: the encoder needs to create a
-/// staging directory and move a file, and only an attempt answers that.
-bool _directoryIsWritable(Directory directory) {
-  try {
-    if (!directory.existsSync()) return false;
-    final probe = File(
-      '${directory.path}/.or-write-probe-${DateTime.now().microsecondsSinceEpoch}',
-    );
-    probe.createSync(exclusive: true);
-    probe.deleteSync();
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -95,6 +98,7 @@ class AppShell extends StatefulWidget {
     required this.projectFilePicker,
     required this.recentProjectStore,
     this.audioCleanupDirectory,
+    this.assistantController,
   });
 
   final CoreGateway gateway;
@@ -105,11 +109,98 @@ class AppShell extends StatefulWidget {
   /// Where cleaned audio is written. Injectable so a test does not need a plugin.
   final Future<Directory> Function()? audioCleanupDirectory;
 
+  /// Injectable so widget tests never spawn a harness process.
+  final AssistantController? assistantController;
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
+/// Shortcuts that are safe while a text field owns the keyboard.
+///
+/// Anything that types a character, moves the caret, deletes text or is a
+/// standard text-editing command (undo, copy, paste) must stay out of this map:
+/// a [Shortcuts] layer consumes a matched key before the focused field sees it,
+/// so an action that merely no-ops is not enough.
+const Map<ShortcutActivator, Intent> _alwaysShortcuts = {
+  OrCommandActivator(LogicalKeyboardKey.keyK): OpenCommandPaletteIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyS): SaveProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyE): ExportProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyA, shift: true):
+      ShowAssistantIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyI): ImportMediaIntent(),
+};
+
+/// Editing verbs. They are installed only while no text field has focus.
+const Map<ShortcutActivator, Intent> _editingShortcuts = {
+  OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true): RedoProjectIntent(),
+  SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
+  SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(-1),
+  SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(1),
+  SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
+      StepPreviewFrameIntent(true),
+  SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
+      StepPreviewFrameIntent(false),
+  SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(true),
+  SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(false),
+  SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
+  SingleActivator(LogicalKeyboardKey.numpadAdd): ZoomTimelineIntent(1.25),
+  SingleActivator(LogicalKeyboardKey.minus): ZoomTimelineIntent(0.8),
+  SingleActivator(LogicalKeyboardKey.numpadSubtract): ZoomTimelineIntent(0.8),
+  SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
+  SingleActivator(LogicalKeyboardKey.keyI, shift: true): ImportFolderIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyD): DuplicateTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.delete): DeleteTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.backspace): DeleteTimelineClipIntent(),
+  SingleActivator(LogicalKeyboardKey.escape): ClearTimelineSelectionIntent(),
+  // Editing verbs. `S` and the command form of `B` both split, so a
+  // CapCut-style single key and the broadcast-editor shortcut agree.
+  SingleActivator(LogicalKeyboardKey.keyS): SplitClipIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyB): SplitClipIntent(),
+  // Blade mode is a mode, not a one-shot command: `C` arms the pointer and
+  // `V` puts it back. Both are plain letters, so they stop at a focused text
+  // field like the rest of the editing verbs.
+  OrCommandActivator(LogicalKeyboardKey.keyC): CopyClipIntent(),
+  OrCommandActivator(LogicalKeyboardKey.keyV): PasteClipIntent(),
+  SingleActivator(LogicalKeyboardKey.keyC): SetBladeModeIntent(true),
+  SingleActivator(LogicalKeyboardKey.keyV): SetBladeModeIntent(false),
+  SingleActivator(LogicalKeyboardKey.delete, shift: true):
+      RippleDeleteClipIntent(),
+  SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
+  SingleActivator(LogicalKeyboardKey.digit1): SelectToolIntent('Media'),
+  SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
+  SingleActivator(LogicalKeyboardKey.digit3): SelectToolIntent('Audio'),
+  SingleActivator(LogicalKeyboardKey.digit4): SelectToolIntent('Motion'),
+  // Alt + arrows nudge the selected clip inside the frame. Plain arrows stay
+  // on the playhead, which is the more frequent verb.
+  SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true):
+      NudgeSelectedClipIntent(-10, 0),
+  SingleActivator(LogicalKeyboardKey.arrowRight, alt: true):
+      NudgeSelectedClipIntent(10, 0),
+  SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
+      NudgeSelectedClipIntent(0, 10),
+  SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+      NudgeSelectedClipIntent(0, -10),
+};
+
+/// The shell's key map for the current focus owner.
+///
+/// The split exists because [Shortcuts] resolves before the focused text field:
+/// an editor verb that merely checks focus inside its action still swallows the
+/// keystroke, which broke typing, Backspace, Space and copy/paste.
+@visibleForTesting
+Map<ShortcutActivator, Intent> orShellShortcuts({
+  required bool textInputFocused,
+}) => textInputFocused
+    ? _alwaysShortcuts
+    : {..._alwaysShortcuts, ..._editingShortcuts};
+
 class _AppShellState extends State<AppShell> {
+  late final AssistantController _assistant =
+      widget.assistantController ?? AssistantController();
+  bool _ownsAssistant = false;
+  bool _assistantSyncScheduled = false;
   AppDestination _destination = AppDestination.home;
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
@@ -118,30 +209,43 @@ class _AppShellState extends State<AppShell> {
   bool _recentProjectsLoaded = false;
   bool _recentProjectsUnavailable = false;
   String? _projectNotice;
+
+  /// A stale-checkpoint notice is the only one that offers a discard action.
+  /// The kind comes from the recovery outcome, not from parsing the sentence.
+  bool get _projectNoticeIsStale =>
+      _projectNotice?.startsWith('A stale recovery checkpoint') ?? false;
   StreamSubscription<ProjectHostEvent>? _eventSubscription;
   StreamSubscription<ProjectMediaArtifactEvent>? _mediaArtifactSubscription;
-  Timer? _autosaveTimer;
-  Timer? _exportPollTimer;
+  late final AutosaveController _autosave;
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
-  bool _autosaveInFlight = false;
-  String? _autosaveStatus;
-  bool _autosaveFailed = false;
-  bool _exportPollInFlight = false;
-  bool _exportPublishing = false;
-  bool _exportFailed = false;
-  ProjectExportJob? _exportJob;
-  String? _exportDestinationPath;
-  String? _exportStatus;
+  String? get _autosaveStatus => _autosave.status.label;
+  bool get _autosaveFailed => _autosave.status.failed;
+  late final ExportFlow _export;
+
+  /// Non-null only while a batch import is running. It owns the top bar's
+  /// transient slot so a slow import reports its own progress instead of an
+  /// unrelated autosave line or nothing at all.
+  String? _importStatus;
   ProjectMediaPage? _mediaPage;
   final Map<String, ProjectMediaPreview> _mediaPreviews = {};
-  final Queue<ProjectMediaItem> _mediaPreviewQueue = Queue();
-  final Set<String> _queuedMediaPreviewIds = {};
-  final List<_MediaPreviewTicket> _pendingMediaPreviewTickets = [];
-  final Map<String, ProjectMediaArtifactEvent> _earlyMediaArtifactEvents = {};
-  int _activeMediaPreviewRequests = 0;
-  int _mediaPreviewSubmissionsInFlight = 0;
+
+  /// Preview updates published without a shell rebuild. The media pane listens
+  /// to this value so a thumbnail finishing for media that is not on the
+  /// timeline never rebuilds the whole editor.
+  final ValueNotifier<Map<String, ProjectMediaPreview>> _mediaPreviewUpdates =
+      ValueNotifier<Map<String, ProjectMediaPreview>>(const {});
+  late final MediaPreviewQueue _mediaPreviewQueue = MediaPreviewQueue(
+    isCurrentSession: (session) =>
+        mounted && identical(session, _activeSession),
+    visibleItems: () => _mediaPage?.items,
+    onStart: (session, item, kind) => unawaited(
+      _requestMediaPreview(session as ProjectSessionHandle, item, kind),
+    ),
+    maxActive: _maxActiveMediaPreviewRequests,
+  );
+  final MediaArtifactMailbox _mediaArtifactMailbox = MediaArtifactMailbox();
   BigInt _lastMediaArtifactSequence = BigInt.zero;
   bool _mediaLoading = false;
   bool _mediaLoadingMore = false;
@@ -150,12 +254,15 @@ class _AppShellState extends State<AppShell> {
   ProjectTimelineTracks? _timelineTracks;
   final Map<String, ProjectTimelineClipPage> _timelineClipPages = {};
   ProjectTimelineMarkerPage? _timelineMarkerPage;
+  ProjectRationalTime? _pendingMotionPreviewPosition;
+  String? _pendingMotionPreviewProjectInstanceId;
   final Set<String> _timelineLoadingMoreTracks = {};
   bool _timelineLoadingMoreMarkers = false;
   bool _timelineLoading = false;
   String? _timelineLoadError;
   int _timelineRefreshGeneration = 0;
   late final AppLifecycleListener _lifecycleListener;
+  bool _textInputFocused = false;
 
   bool get _hasProjectWorkspace =>
       _destination == AppDestination.editorPreview && _activeSession != null;
@@ -163,28 +270,71 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _autosaveTimer = Timer.periodic(
-      _autosaveInterval,
-      (_) => unawaited(_autosaveProject()),
-    );
+    _ownsAssistant = widget.assistantController == null;
+    _export = ExportFlow(
+      gateway: widget.projectGateway,
+      picker: widget.projectFilePicker,
+      chooseOptions: _chooseExportOptions,
+      onProjectSummary: (current) {
+        if (mounted) setState(() => _activeProject = current);
+      },
+      onExported: (path) => unawaited(_showExportReceipt(path)),
+    )..addListener(_handleExportChanged);
+    FocusManager.instance.addListener(_handleFocusChange);
+    _autosave = AutosaveController(
+      attempt: _autosaveAttempt,
+      interval: _autosaveInterval,
+      onChanged: (_) {
+        if (mounted) setState(() {});
+      },
+    )..start();
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _onExitRequested,
     );
     unawaited(_loadRecentProjects());
   }
 
+  /// The last motion clip the Motion panel put on the timeline. Owned here so
+  /// it survives panel rebuilds and resets when the project changes.
+  final MotionInsertLog _motionInsertLog = MotionInsertLog();
+
   @override
   void dispose() {
-    _autosaveTimer?.cancel();
-    _exportPollTimer?.cancel();
+    _motionInsertLog.dispose();
+    _mediaPreviewUpdates.dispose();
+    FocusManager.instance.removeListener(_handleFocusChange);
+    _autosave.stop();
+    _export.dispose();
     _lifecycleListener.dispose();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
+    if (_ownsAssistant) _assistant.dispose();
     super.dispose();
+  }
+
+  /// Keeps the assistant's MCP pointer in step with the open project. The
+  /// pointer is what lets a running harness session edit the project the user
+  /// switched to, without restarting the conversation.
+  void _scheduleAssistantProjectSync() {
+    if (_assistantSyncScheduled) return;
+    _assistantSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _assistantSyncScheduled = false;
+      if (!mounted) return;
+      final project = _activeProject;
+      unawaited(
+        _assistant.updateProject(
+          descriptorPath: project?.descriptorPath ?? '',
+          projectPath: _activeProjectPath ?? '',
+          projectName: project?.name ?? '',
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    _scheduleAssistantProjectSync();
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = OrBreakpoints.isCompact(constraints.maxWidth);
@@ -194,47 +344,7 @@ class _AppShellState extends State<AppShell> {
             : _destination.label;
 
         return Shortcuts(
-          shortcuts: const {
-            OrCommandActivator(LogicalKeyboardKey.keyK):
-                OpenCommandPaletteIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyS): SaveProjectIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyZ): UndoProjectIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyZ, shift: true):
-                RedoProjectIntent(),
-            SingleActivator(LogicalKeyboardKey.space): PlayPausePreviewIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft): SeekPreviewIntent(
-              -1,
-            ),
-            SingleActivator(LogicalKeyboardKey.arrowRight): SeekPreviewIntent(
-              1,
-            ),
-            SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
-                StepPreviewFrameIntent(true),
-            SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
-                StepPreviewFrameIntent(false),
-            SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(
-              true,
-            ),
-            SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(
-              false,
-            ),
-            SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
-            SingleActivator(LogicalKeyboardKey.numpadAdd): ZoomTimelineIntent(
-              1.25,
-            ),
-            SingleActivator(LogicalKeyboardKey.minus): ZoomTimelineIntent(0.8),
-            SingleActivator(LogicalKeyboardKey.numpadSubtract):
-                ZoomTimelineIntent(0.8),
-            SingleActivator(LogicalKeyboardKey.f5): FitTimelineIntent(),
-            OrCommandActivator(LogicalKeyboardKey.keyD):
-                DuplicateTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.delete):
-                DeleteTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.backspace):
-                DeleteTimelineClipIntent(),
-            SingleActivator(LogicalKeyboardKey.escape):
-                ClearTimelineSelectionIntent(),
-          },
+          shortcuts: orShellShortcuts(textInputFocused: _textInputFocused),
           child: Actions(
             actions: {
               OpenCommandPaletteIntent:
@@ -289,6 +399,26 @@ class _AppShellState extends State<AppShell> {
                   return null;
                 },
               ),
+              ImportMediaIntent: CallbackAction<ImportMediaIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      widget.projectFilePicker.supportsMediaImport) {
+                    unawaited(_importMedia());
+                  }
+                  return null;
+                },
+              ),
+              ImportFolderIntent: CallbackAction<ImportFolderIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      widget.projectFilePicker.supportsMediaImport) {
+                    unawaited(_importMediaFolder());
+                  }
+                  return null;
+                },
+              ),
               ZoomTimelineIntent: CallbackAction<ZoomTimelineIntent>(
                 onInvoke: (intent) {
                   if (editor && !_textInputFocused) {
@@ -332,69 +462,221 @@ class _AppShellState extends State<AppShell> {
                       return null;
                     },
                   ),
+              NudgeSelectedClipIntent: CallbackAction<NudgeSelectedClipIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.nudgeSelectedTransform(
+                      intent.dxMilliCanvas,
+                      intent.dyMilliCanvas,
+                    );
+                  }
+                  return null;
+                },
+              ),
+              SplitClipIntent: CallbackAction<SplitClipIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.splitSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              CopyClipIntent: CallbackAction<CopyClipIntent>(
+                onInvoke: (intent) {
+                  if (!editor || _textInputFocused) return null;
+                  _editorKey.currentState?.copySelectedClip();
+                  return null;
+                },
+              ),
+              PasteClipIntent: CallbackAction<PasteClipIntent>(
+                onInvoke: (intent) {
+                  if (!editor || _textInputFocused) return null;
+                  _editorKey.currentState?.pasteClipboardClip();
+                  return null;
+                },
+              ),
+              SetBladeModeIntent: CallbackAction<SetBladeModeIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.setBladeMode(intent.enabled);
+                  }
+                  return null;
+                },
+              ),
+              RippleDeleteClipIntent: CallbackAction<RippleDeleteClipIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.rippleDeleteSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              AddMarkerIntent: CallbackAction<AddMarkerIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.addMarkerAtPlayhead();
+                  }
+                  return null;
+                },
+              ),
+              ShowAssistantIntent: CallbackAction<ShowAssistantIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.showAssistantPanel();
+                  }
+                  return null;
+                },
+              ),
+              ExportProjectIntent: CallbackAction<ExportProjectIntent>(
+                onInvoke: (_) {
+                  if (editor &&
+                      !_textInputFocused &&
+                      _activeSession != null &&
+                      widget.projectFilePicker.supportsExport &&
+                      !_export.isActive) {
+                    unawaited(_startExport());
+                  }
+                  return null;
+                },
+              ),
+              SelectToolIntent: CallbackAction<SelectToolIntent>(
+                onInvoke: (intent) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.selectTool(intent.tool);
+                  }
+                  return null;
+                },
+              ),
             },
             child: Focus(
               autofocus: true,
-              child: Scaffold(
-                body: SafeArea(
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      AppTopBar(
-                        title: title,
-                        compact: compact,
-                        statusLabel: editor
-                            ? (_exportStatus ?? _autosaveStatus)
-                            : null,
-                        statusIsError: _exportStatus != null
-                            ? _exportFailed
-                            : _autosaveFailed,
-                        onExport:
-                            editor &&
-                                _activeSession != null &&
-                                widget.projectFilePicker.supportsExport &&
-                                !(_exportJob?.isActive ?? false) &&
-                                !_exportPublishing
-                            ? _startExport
-                            : null,
-                        onCancelExport:
-                            _exportJob?.isActive == true || _exportPublishing
-                            ? _cancelExport
-                            : null,
-                        exportIsActive:
-                            (_exportJob?.isActive ?? false) ||
-                            _exportPublishing,
-                        onHome: () => _select(AppDestination.home),
-                        onOpenCommandPalette: _openCommandPalette,
-                        onExitEditorPreview: editor
-                            ? (_activeSession == null
-                                  ? () => _select(AppDestination.home)
-                                  : _closeProject)
-                            : null,
-                      ),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            if (!compact && !editor) ...[
-                              DesktopNavigation(
-                                selected: _destination,
-                                onSelected: _select,
-                              ),
-                              const VerticalDivider(width: 1),
-                            ],
-                            Expanded(child: _screen()),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                bottomNavigationBar: compact
-                    ? CompactNavigation(
-                        selected: _destination,
-                        onSelected: _select,
-                      )
+              child: PlatformMenus(
+                isEditor: editor,
+                textInputFocused: _textInputFocused,
+                canExport:
+                    editor &&
+                    _activeSession != null &&
+                    widget.projectFilePicker.supportsExport &&
+                    !_export.isActive,
+                canEditProject: editor && _activeSession != null,
+                canImport:
+                    editor && widget.projectFilePicker.supportsMediaImport,
+                onNewProject: _createProject,
+                onOpenProject: _openProject,
+                onSaveProject: _saveProject,
+                onExport: () => unawaited(_startExport()),
+                onUndo: _undoProject,
+                onRedo: _redoProject,
+                onCloseProject: _closeProject,
+                onHome: () => _select(AppDestination.home),
+                onProjects: () => _select(AppDestination.projects),
+                onSettings: () => _select(AppDestination.settings),
+                onCommandPalette: _openCommandPalette,
+                onSplit: () => _editorKey.currentState?.splitSelectedClip(),
+                onDuplicate: () =>
+                    _editorKey.currentState?.duplicateSelectedClip(),
+                onCopy: () => _editorKey.currentState?.copySelectedClip(),
+                onPaste: () => _editorKey.currentState?.pasteClipboardClip(),
+                onDelete: () =>
+                    _editorKey.currentState?.confirmDeleteSelectedClip(),
+                onRippleDelete: () =>
+                    _editorKey.currentState?.rippleDeleteSelectedClip(),
+                onFreezeClip: () =>
+                    _editorKey.currentState?.toggleSelectedClipFrozen(),
+                onImportMedia:
+                    editor && widget.projectFilePicker.supportsMediaImport
+                    ? () => unawaited(_importMedia())
                     : null,
+                onImportFolder:
+                    editor && widget.projectFilePicker.supportsMediaImport
+                    ? () => unawaited(_importMediaFolder())
+                    : null,
+                onAddMarker: () =>
+                    _editorKey.currentState?.addMarkerAtPlayhead(),
+                onToggleSnapping: () =>
+                    _editorKey.currentState?.toggleSnapping(),
+                onReverseClip: () =>
+                    _editorKey.currentState?.toggleSelectedClipReverse(),
+                child: Scaffold(
+                  body: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        AppTopBar(
+                          title: title,
+                          compact: compact,
+                          statusLabel:
+                              _importStatus ??
+                              (editor
+                                  ? (_export.status ?? _autosaveStatus)
+                                  : null),
+                          statusIsError: _importStatus != null
+                              ? false
+                              : (_export.status != null
+                                    ? _export.failed
+                                    : _autosaveFailed),
+                          statusIcon: _importStatus != null
+                              ? Icons.download_outlined
+                              : null,
+                          // The bar is the workspace's only title row: it also
+                          // owns save state, history and the project menu.
+                          projectDirty: editor && _activeSession != null
+                              ? (_activeProject?.dirty ?? false)
+                              : null,
+                          onUndo: editor ? _undoProject : null,
+                          onRedo: editor ? _redoProject : null,
+                          onRenameProject: editor ? _renameProject : null,
+                          onSaveProject: editor ? _saveProject : null,
+                          onCloseProject: editor ? _closeProject : null,
+                          onExport:
+                              editor &&
+                                  _activeSession != null &&
+                                  widget.projectFilePicker.supportsExport &&
+                                  !_export.isActive
+                              ? _startExport
+                              : null,
+                          onCancelExport: _export.isActive
+                              ? _cancelExport
+                              : null,
+                          exportIsActive: _export.isActive,
+                          onHome: () => _select(AppDestination.home),
+                          onOpenCommandPalette: _openCommandPalette,
+                          onExitEditorPreview: editor
+                              ? (_activeSession == null
+                                    ? () => _select(AppDestination.home)
+                                    : _closeProject)
+                              : null,
+                        ),
+                        Expanded(
+                          // Stretch, not the Row default of center: a short page
+                          // (Settings) otherwise shrank to its content
+                          // height and floated in the middle of the workspace, so
+                          // the same page title sat at y=120 on Projects and
+                          // y=302 on Settings at 1280x800 (measured 2026-10-25).
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (!compact && !editor) ...[
+                                DesktopNavigation(
+                                  selected: _destination,
+                                  onSelected: _select,
+                                ),
+                                const VerticalDivider(width: 1),
+                              ],
+                              Expanded(child: _screen()),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  bottomNavigationBar: compact
+                      ? CompactNavigation(
+                          selected: _destination,
+                          onSelected: _select,
+                        )
+                      : null,
+                ),
               ),
             ),
           ),
@@ -409,8 +691,17 @@ class _AppShellState extends State<AppShell> {
     debugLabel: 'editor shell preview',
   );
 
-  bool get _textInputFocused =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  /// Tracks whether a text field owns the keyboard. The shell rebuilds its key
+  /// map when this changes, because a matching shortcut would otherwise consume
+  /// typing keys before the field receives them.
+  void _handleFocusChange() {
+    if (!mounted) return;
+    final focused = orTextFieldHasFocus();
+    if (focused == _textInputFocused) return;
+    setState(() => _textInputFocused = focused);
+  }
+
+  TimelineClipClipboard? _clipboardClip;
 
   Widget _screen() => switch (_destination) {
     AppDestination.home => HomeScreen(
@@ -437,12 +728,6 @@ class _AppShellState extends State<AppShell> {
       onSaveProject: _saveProject,
       onCloseProject: _closeProject,
     ),
-    AppDestination.templates => TemplatesScreen(
-      onUnavailable: _showUnavailable,
-    ),
-    AppDestination.assets => AssetLibraryScreen(
-      onUnavailable: _showUnavailable,
-    ),
     AppDestination.settings => SettingsScreen(
       gateway: widget.gateway,
       project: _activeProject,
@@ -451,17 +736,32 @@ class _AppShellState extends State<AppShell> {
     ),
     AppDestination.editorPreview =>
       _activeSession == null
-          ? const EditorShellPreviewScreen()
+          ? EditorShellPreviewScreen(
+              assistant: _assistant,
+              onRecordVoice: _recordVoice,
+              onAdjustClipVolume: _adjustClipVolume,
+            )
           : EditorShellPreviewScreen(
+              assistant: _assistant,
+              onRecordVoice: _recordVoice,
+              onAdjustClipVolume: _adjustClipVolume,
               key: _editorKey,
               isProjectWorkspace: true,
               project: _activeProject,
               projectGateway: widget.projectGateway,
               projectSession: _activeSession,
+              previewSeekPosition:
+                  _activeProject?.projectInstanceId ==
+                      _pendingMotionPreviewProjectInstanceId
+                  ? _pendingMotionPreviewPosition
+                  : null,
+              onPreviewSeekConsumed: _consumeMotionPreviewPosition,
+              onSetSequenceFrameRate: _setSequenceFrameRate,
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,
               mediaPreviews: Map.unmodifiable(_mediaPreviews),
+              mediaPreviewUpdates: _mediaPreviewUpdates,
               mediaLoading: _mediaLoading,
               mediaLoadingMore: _mediaLoadingMore,
               mediaLoadError: _mediaLoadError,
@@ -492,10 +792,22 @@ class _AppShellState extends State<AppShell> {
                   _addTimelineTrack(ProjectTimelineTrackKind.text),
               onAddCaptionTrack: () =>
                   _addTimelineTrack(ProjectTimelineTrackKind.caption),
+              onOpenMotion: () => unawaited(_openMotionMaterialize()),
+              onCopyClip: _copyTimelineClip,
+              onPasteClip: _pasteTimelineClip,
+              motionOutputDirectory: _motionOutputDirectory,
+              motionInsertLog: _motionInsertLog,
+              onInsertMotionClip: _addMaterializedIllustration,
+              pickMotionImage: _pickMotionImage,
+              pickMotionScene: _pickMotionScene,
               onImportCaptions: _importTimelineCaptions,
               onExportCaptions: _exportTimelineCaptions,
               onGenerateCaptions: _generateCaptions,
+              onManageSpeechModel: _manageSpeechModel,
+              onGenerateVoiceover: _generateVoiceover,
+              onGenerateMusic: _generateMusic,
               onCleanUpAudio: _cleanUpMediaAudio,
+              onRetryMediaPreview: _retryMediaPreview,
               onRemoveTimelineTrack: _removeTimelineTrack,
               onSetTimelineTrackState: _setTimelineTrackState,
               onMoveTimelineTrack: _moveTimelineTrack,
@@ -503,13 +815,18 @@ class _AppShellState extends State<AppShell> {
               onLoadMoreTimelineMarkers: _loadMoreTimelineMarkers,
               onRefreshTimeline: _refreshTimelineFromUi,
               onAddMediaToTimeline: _insertMediaIntoTimeline,
+              onEnsureTrack: _ensureTimelineTrack,
               onInsertTimelineTextClip: _insertTimelineTextClip,
               onUpdateTimelineTextClip: _updateTimelineTextClip,
               onUpdateTimelineClipVisualSettings:
                   _updateTimelineClipVisualSettings,
               onUpdateTimelineClipAudioSettings:
                   _updateTimelineClipAudioSettings,
+              onUpdateTimelineClipPlaybackRate: _updateTimelineClipPlaybackRate,
+              onSetTimelineClipReversed: _setTimelineClipReversed,
+              onSetTimelineClipFrozen: _setTimelineClipFrozen,
               onMoveTimelineClip: _moveTimelineClip,
+              onMoveTimelineClips: _moveTimelineClips,
               onDuplicateTimelineClip: _duplicateTimelineClip,
               onResolveTimelineSnap: _resolveTimelineSnap,
               onDeleteTimelineClip: _deleteTimelineClip,
@@ -528,7 +845,9 @@ class _AppShellState extends State<AppShell> {
               onUndo: _undoProject,
               onRedo: _redoProject,
               onClose: _closeProject,
-              onDiscardRecovery: _discardStaleRecovery,
+              onDiscardRecovery: _projectNoticeIsStale
+                  ? _discardStaleRecovery
+                  : null,
             ),
   };
 
@@ -561,46 +880,441 @@ class _AppShellState extends State<AppShell> {
           label: 'Illustration Video',
           onSelected: () => unawaited(_openMotionMaterialize()),
         ),
+        // Editing commands live where the editing happens: a pointer user
+        // finds them in the timeline menu, a keyboard user types them here.
+        if (_destination == AppDestination.editorPreview) ...[
+          CommandPaletteAction(
+            label: 'Split Clip at Playhead',
+            onSelected: () => _editorKey.currentState?.splitSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Ripple Delete Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.rippleDeleteSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Delete Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.confirmDeleteSelectedClip(),
+          ),
+          CommandPaletteAction(
+            label: 'Zoom Timeline In',
+            onSelected: () => _editorKey.currentState?.zoomTimelineBy(1.25),
+          ),
+          CommandPaletteAction(
+            label: 'Zoom Timeline Out',
+            onSelected: () => _editorKey.currentState?.zoomTimelineBy(0.8),
+          ),
+          CommandPaletteAction(
+            label: 'Fit Timeline to Window',
+            onSelected: () => _editorKey.currentState?.fitTimeline(),
+          ),
+          CommandPaletteAction(
+            label: 'Reverse Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.toggleSelectedClipReverse(),
+          ),
+          CommandPaletteAction(
+            label: 'Freeze Selected Clip',
+            onSelected: () =>
+                _editorKey.currentState?.toggleSelectedClipFrozen(),
+          ),
+          CommandPaletteAction(
+            label: 'Toggle Snapping',
+            onSelected: () => _editorKey.currentState?.toggleSnapping(),
+          ),
+          CommandPaletteAction(
+            label: 'Add Marker at Playhead',
+            onSelected: () => _editorKey.currentState?.addMarkerAtPlayhead(),
+          ),
+          if (widget.projectFilePicker.supportsMediaImport) ...[
+            CommandPaletteAction(
+              label: 'Import Media…',
+              onSelected: () => unawaited(_importMedia()),
+            ),
+            CommandPaletteAction(
+              label: 'Import Media Folder…',
+              onSelected: () => unawaited(_importMediaFolder()),
+            ),
+          ],
+          for (final tool in const ['Media', 'Text', 'Audio', 'Motion'])
+            CommandPaletteAction(
+              label: 'Show $tool Panel',
+              onSelected: () => _editorKey.currentState?.selectTool(tool),
+            ),
+          if (widget.projectFilePicker.supportsExport)
+            CommandPaletteAction(
+              label: 'Export Video',
+              onSelected: () => unawaited(_startExport()),
+            ),
+        ],
       ],
     ],
   );
 
-  /// Turns a code file into an illustration video through the shared gateway.
-  ///
-  /// The default destination is the application documents directory rather than the
-  /// project directory: the result is media, not canonical project state, and writing
-  /// beside the project would invite a client to treat it as part of the document.
+  /// The project-adjacent folder for materialised motion clips. A project file
+  /// always has a directory, and `generated/` is the same convention `or mcp`
+  /// uses, so a rendered clip survives restarts like any imported media.
+  String? get _motionOutputDirectory {
+    final path = _activeProjectPath;
+    if (path == null || path.isEmpty) return null;
+    try {
+      final directory = Directory(
+        '${Directory(path).parent.path}${Platform.pathSeparator}generated',
+      );
+      directory.createSync(recursive: true);
+      return directory.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Picks one PNG cutout through the shared picker, so the same path works on
+  /// macOS and Android SAF and can be driven by the UI harness.
+  Future<String?> _pickMotionImage() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      for (final source in sources) {
+        if (source.toLowerCase().endsWith('.png')) return source;
+      }
+      _showUnavailable('Choose a PNG image to import.');
+      return null;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('An image could not be selected.');
+      return null;
+    }
+  }
+
+  /// Picks one `.ormotion.json` scene through the shared picker so a scene
+  /// authored by the CLI or an agent can be opened and edited in the canvas.
+  Future<String?> _pickMotionScene() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      final scenes = sources
+          .where((source) => source.toLowerCase().endsWith('.json'))
+          .toList(growable: false);
+      if (scenes.isEmpty) {
+        _showUnavailable('Choose a motion scene file (.ormotion.json).');
+        return null;
+      }
+      return scenes.first;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('A scene file could not be selected.');
+      return null;
+    }
+  }
+
+  /// Turns a code file into a persistent, ordinary media item in the active project.
   Future<void> _openMotionMaterialize() async {
     if (_activeSession == null) return;
-    // The default must be somewhere this process can actually write. The encoder
-    // stages a private sibling beside the destination and moves it into place, so an
-    // unwritable parent fails late and confusingly -- the hosted harness saw
-    // "MOTION_ENCODER_UNAVAILABLE: could not create export staging directory:
-    // Permission denied" because the documents directory it reported was not writable
-    // by the app's user. A probe here keeps the default honest and the field editable.
-    String destination = '${Directory.systemTemp.path}/illustration.mkv';
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      if (_directoryIsWritable(directory)) {
-        destination = '${directory.path}/illustration.mkv';
-      }
-    } catch (_) {
-      // The system temporary directory is the default already.
-    }
-    if (!mounted) return;
     await showMotionMaterializeDialog(
       context: context,
-      initialDestinationPath: destination,
-      render: (request) => widget.projectGateway.materializeIllustration(
-        sourcePath: request.sourcePath,
-        destinationPath: request.destinationPath,
-        frameRateNumerator: request.frameRate,
-        frameRateDenominator: 1,
-        width: request.width,
-        height: request.height,
-        title: request.title,
-      ),
+      chooseSource: _pickMotionSource,
+      chooseDestination: _pickMotionDestination,
+      render: (request) async {
+        final outcome = await widget.projectGateway.materializeIllustration(
+          sourcePath: request.sourcePath,
+          destinationPath: request.destinationPath,
+          frameRateNumerator: request.frameRate,
+          frameRateDenominator: 1,
+          width: request.width,
+          height: request.height,
+          title: request.title,
+        );
+        return outcome;
+      },
+      addToTimeline: _addMaterializedIllustrationOutcome,
     );
+  }
+
+  Future<String?> _pickMotionSource() async {
+    try {
+      final sources = await widget.projectFilePicker.openMediaSources();
+      if (sources.isEmpty) return null;
+      if (sources.length != 1) {
+        _showUnavailable('Select one code file to illustrate.');
+        return null;
+      }
+      final source = sources.single;
+      // The picker offers every file the platform will show, so a project file
+      // can be chosen here; naming the requirement beats failing at render time.
+      if (!source.toLowerCase().endsWith('.rs')) {
+        _showUnavailable('Choose a Rust source file (.rs) to illustrate.');
+        return null;
+      }
+      return source;
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('A code file could not be selected.');
+      return null;
+    }
+  }
+
+  Future<String?> _pickMotionDestination(String suggestedName) async {
+    if (!widget.projectFilePicker.supportsExport) {
+      _showUnavailable('Choose an output location is unavailable here.');
+      return null;
+    }
+    try {
+      return await widget.projectFilePicker.saveExportPath(
+        suggestedName: suggestedName,
+        profile: ExportProfile.matroskaFfv1PcmS16le,
+      );
+    } on ProjectSafStorageException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    } catch (_) {
+      _showUnavailable('An output location could not be selected.');
+      return null;
+    }
+  }
+
+  /// The dialog owns the rendered outcome, so it records the clip it inserted.
+  Future<bool> _addMaterializedIllustrationOutcome(
+    MotionMaterializationOutcome outcome,
+  ) async {
+    final added = await _addMaterializedIllustration(outcome.destinationPath);
+    if (added) {
+      _motionInsertLog.record(
+        MotionInsertRecord(
+          outputPath: outcome.destinationPath,
+          sceneName: outcome.destinationPath.split(Platform.pathSeparator).last,
+          width: outcome.width,
+          height: outcome.height,
+          frameCount: outcome.frameCount,
+          source: MotionInsertSource.dialog,
+        ),
+      );
+    }
+    return added;
+  }
+
+  Future<bool> _addMaterializedIllustration(String path) async {
+    final session = _activeSession;
+    var project = _activeProject;
+    if (session == null || project == null || _busy) {
+      return false;
+    }
+
+    try {
+      var media = await _findMaterializedMedia(session, project, path);
+      if (media == null) {
+        final imported = await _runProjectActionAtSnapshot(
+          project,
+          (session, current) =>
+              widget.projectGateway.importMedia(session, current, path),
+        );
+        if (imported == null || !identical(session, _activeSession)) {
+          return false;
+        }
+        project = imported;
+        media = await _findMaterializedMedia(session, project, path);
+      }
+      if (media == null) {
+        _showUnavailable(
+          'The rendered video could not be found in the media library.',
+        );
+        return false;
+      }
+
+      var tracks = await widget.projectGateway.listTimelineTracks(session);
+      if (!_matchesTimelineProject(tracks, project)) {
+        await _refreshProjectState(session);
+        _showUnavailable(
+          'The timeline changed. Try adding the rendered video again.',
+        );
+        return false;
+      }
+      var videoTrack = _firstUnlockedVideoTrack(tracks.items);
+      if (videoTrack == null) {
+        final updated = await _runProjectActionAtSnapshot(
+          project,
+          (session, current) => widget.projectGateway.addTimelineTrack(
+            session,
+            current,
+            ProjectTimelineTrackKind.video,
+          ),
+        );
+        if (updated == null || !identical(session, _activeSession)) {
+          return false;
+        }
+        project = updated;
+        tracks = await widget.projectGateway.listTimelineTracks(session);
+        if (!_matchesTimelineProject(tracks, project)) {
+          await _refreshProjectState(session);
+          _showUnavailable('The new video track could not be loaded.');
+          return false;
+        }
+        videoTrack = _firstUnlockedVideoTrack(tracks.items);
+      }
+      if (videoTrack == null) {
+        _showUnavailable('An unlocked video track could not be created.');
+        return false;
+      }
+
+      final timelineStart = await _projectContentEnd(session, project, tracks);
+      final duration =
+          media.firstVideoDuration ??
+          media.containerDuration ??
+          ProjectRationalTime.tryParse(media.duration ?? '');
+      if (duration == null || !duration.isPositive) {
+        _showUnavailable('The rendered video has no readable duration.');
+        return false;
+      }
+
+      final inserted = await _runProjectActionAtSnapshot(
+        project,
+        (session, current) => widget.projectGateway.insertTimelineClip(
+          session,
+          current,
+          trackId: videoTrack!.trackId,
+          mediaId: media!.mediaId,
+          timelineStart: timelineStart,
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          duration: duration,
+        ),
+      );
+      if (inserted == null || !identical(session, _activeSession)) {
+        return false;
+      }
+      _pendingMotionPreviewPosition = timelineStart;
+      _pendingMotionPreviewProjectInstanceId = inserted.projectInstanceId;
+      _select(AppDestination.editorPreview);
+      setState(() => _projectNotice = 'Illustration added to the timeline.');
+      return true;
+    } on ProjectGatewayException catch (error) {
+      if (error.code == 'PROJECT_CHANGED' &&
+          identical(session, _activeSession)) {
+        await _refreshProjectState(session);
+      }
+      _showUnavailable(error.message);
+      return false;
+    } catch (_) {
+      _showUnavailable(
+        'The rendered video could not be added to the timeline.',
+      );
+      return false;
+    }
+  }
+
+  Future<ProjectMediaItem?> _findMaterializedMedia(
+    ProjectSessionHandle session,
+    ProjectReadModel project,
+    String path,
+  ) async {
+    final first = await widget.projectGateway.listMediaPage(
+      session,
+      offset: 0,
+      limit: _mediaPageSize,
+    );
+    if (!_matchesProject(first, project)) {
+      throw const ProjectGatewayException(
+        'PROJECT_CHANGED',
+        'The media library changed while the rendered video was being added.',
+      );
+    }
+    if (first.totalCount == 0) return null;
+
+    // The command path stores the source it read, which on macOS is the
+    // resolved file: `/tmp` is a symlink to `/private/tmp`, and a library on a
+    // linked volume resolves elsewhere again. Comparing raw absolute paths
+    // silently misses the media that was just imported.
+    final expectedPath = canonicalSourcePath(path);
+    var offset = ((first.totalCount - 1) ~/ first.limit) * first.limit;
+    while (true) {
+      final page = offset == 0
+          ? first
+          : await widget.projectGateway.listMediaPage(
+              session,
+              offset: offset,
+              limit: _mediaPageSize,
+            );
+      if (!_matchesProject(page, project)) {
+        throw const ProjectGatewayException(
+          'PROJECT_CHANGED',
+          'The media library changed while the rendered video was being added.',
+        );
+      }
+      for (final item in page.items.reversed) {
+        final sourcePath = _mediaSourcePath(item);
+        if (sourcePath != null &&
+            canonicalSourcePath(sourcePath) == expectedPath) {
+          return item;
+        }
+      }
+      if (offset == 0) return null;
+      offset = (offset - _mediaPageSize).clamp(0, offset).toInt();
+    }
+  }
+
+  ProjectTimelineTrack? _firstUnlockedVideoTrack(
+    List<ProjectTimelineTrack> tracks,
+  ) {
+    for (final track in tracks) {
+      if (track.kind == ProjectTimelineTrackKind.video && !track.state.locked) {
+        return track;
+      }
+    }
+    return null;
+  }
+
+  Future<ProjectRationalTime> _projectContentEnd(
+    ProjectSessionHandle session,
+    ProjectReadModel project,
+    ProjectTimelineTracks tracks,
+  ) async {
+    if (!_matchesTimelineProject(tracks, project)) {
+      throw const ProjectGatewayException(
+        'PROJECT_CHANGED',
+        'The timeline changed while its content end was being read.',
+      );
+    }
+    var end = ProjectRationalTime(BigInt.zero, 1);
+    for (final track in tracks.items) {
+      if (track.clipCount == 0) continue;
+      // Canonical tracks are time-ordered and reject overlap, so their last
+      // clip gives the exact end without paging through the whole project.
+      final offset = (track.clipCount - _timelineClipPageSize)
+          .clamp(0, track.clipCount)
+          .toInt();
+      final page = await widget.projectGateway.listTimelineClips(
+        session,
+        trackId: track.trackId,
+        offset: offset,
+        limit: _timelineClipPageSize,
+      );
+      if (!_matchesTimelineClipPage(
+        page,
+        project,
+        trackId: track.trackId,
+        offset: offset,
+        clipCount: track.clipCount,
+      )) {
+        throw const ProjectGatewayException(
+          'PROJECT_CHANGED',
+          'The timeline changed while its content end was being read.',
+        );
+      }
+      final trackEnd = page.items.last.timelineEnd;
+      if (trackEnd.compareTo(end) > 0) end = trackEnd;
+    }
+    return end;
+  }
+
+  void _consumeMotionPreviewPosition() {
+    if (_pendingMotionPreviewPosition == null || !mounted) return;
+    setState(() {
+      _pendingMotionPreviewPosition = null;
+      _pendingMotionPreviewProjectInstanceId = null;
+    });
   }
 
   void _openWorkspace() {
@@ -612,8 +1326,9 @@ class _AppShellState extends State<AppShell> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final name = await _askProjectName();
-      if (name == null || !mounted) return;
+      final request = await _askProjectName();
+      if (request == null || !mounted) return;
+      final name = request.name;
       final selectedPath = await widget.projectFilePicker.saveProjectPath(
         suggestedName: _suggestedProjectFileName(name),
       );
@@ -636,11 +1351,15 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       final session = await widget.projectGateway.createProject(path, name);
+      // Set the chosen rate before the workspace loads so the first summary,
+      // timeline fetch and preview already agree on it, and creation does not
+      // trigger a second refresh cycle.
+      await _applyInitialFrameRate(session, request.frameRate);
       final syncNotice = await _syncNotice(path);
       await _startProject(
         session,
         path,
-        notice: _combineNotices(resolvedRecovery.notice, syncNotice),
+        notice: combineNotices(resolvedRecovery.notice, syncNotice),
       );
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
@@ -650,6 +1369,30 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('The new project could not be created.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Applies the frame rate chosen in the create dialog through the same
+  /// validated setting command the Viewer uses. Without it a fresh project has
+  /// no sequence rate, so Play and frame stepping stay disabled until the user
+  /// finds that control.
+  Future<void> _applyInitialFrameRate(
+    ProjectSessionHandle session,
+    ProjectRationalRate? rate,
+  ) async {
+    if (rate == null) return;
+    try {
+      final current = await widget.projectGateway.summary(session);
+      final result = await widget.projectGateway.setTimelineSequenceFrameRate(
+        session,
+        current,
+        rate,
+      );
+      if (!result.succeeded && result.message.isNotEmpty) {
+        _showUnavailable(result.message);
+      }
+    } on ProjectGatewayException catch (error) {
+      _showProjectError(error);
     }
   }
 
@@ -705,8 +1448,8 @@ class _AppShellState extends State<AppShell> {
     return false;
   }
 
-  Future<String?> _askProjectName() async {
-    return showDialog<String>(
+  Future<_NewProjectRequest?> _askProjectName() async {
+    return showDialog<_NewProjectRequest>(
       context: context,
       builder: (_) => const _ProjectNameDialog(
         title: 'New Project',
@@ -714,6 +1457,7 @@ class _AppShellState extends State<AppShell> {
         fieldKey: 'new-project-name',
         confirmKey: 'confirm-new-project',
         confirmLabel: 'Continue',
+        showFrameRate: true,
       ),
     );
   }
@@ -739,195 +1483,83 @@ class _AppShellState extends State<AppShell> {
   String _withProjectExtension(String path) =>
       path.toLowerCase().endsWith('.orproj') ? path : '$path.orproj';
 
-  Future<_RecoveryPreparation> _prepareRecovery(
+  Future<RecoveryPreparation> _prepareRecovery(
     String path, {
     bool forCreate = false,
   }) async {
     final inspection = await widget.projectGateway.inspectRecovery(path);
-    if (forCreate && inspection.kind != ProjectRecoveryKind.none) {
-      _showUnavailable(
-        'A project or recovery checkpoint already exists at the selected location.',
-      );
-      return const _RecoveryPreparation(proceed: false);
-    }
-    switch (inspection.kind) {
-      case ProjectRecoveryKind.none:
-        return const _RecoveryPreparation(proceed: true);
-      case ProjectRecoveryKind.stale:
-        return const _RecoveryPreparation(
+    switch (planRecovery(inspection, forCreate: forCreate)) {
+      case RecoveryStep.refuseExisting:
+        _showUnavailable(recoveryExistingMessage);
+        return const RecoveryPreparation(proceed: false);
+      case RecoveryStep.openDirectly:
+        return const RecoveryPreparation(proceed: true);
+      case RecoveryStep.openWithStaleNotice:
+        return const RecoveryPreparation(
           proceed: true,
-          notice: 'A stale recovery checkpoint is present. The saved project was opened without applying it.',
+          notice: staleRecoveryNotice,
         );
-      case ProjectRecoveryKind.candidate:
-        final choice = await _askCandidateRecovery(inspection);
-        if (choice == null || choice == _RecoveryChoice.cancel) {
-          return const _RecoveryPreparation(proceed: false);
+      case RecoveryStep.askCandidate:
+        return preparationForChoice(await _askCandidateRecovery(inspection));
+      case RecoveryStep.askConflictDiscard:
+        if (!await _askConflictingRecoveryDiscard(inspection.conflictReason)) {
+          return const RecoveryPreparation(proceed: false);
         }
-        return _RecoveryPreparation(
-          proceed: true,
-          mutation: choice == _RecoveryChoice.recover
-              ? _RecoveryMutation.apply
-              : _RecoveryMutation.discard,
-        );
-      case ProjectRecoveryKind.conflict:
-        final discard = await _askConflictingRecoveryDiscard(
-          inspection.conflictReason,
-        );
-        if (!discard) return const _RecoveryPreparation(proceed: false);
-        return const _RecoveryPreparation(
-          proceed: true,
-          mutation: _RecoveryMutation.discard,
-        );
-      case ProjectRecoveryKind.invalid:
-        final discard = await _askInvalidRecoveryDiscard();
-        if (!discard) return const _RecoveryPreparation(proceed: false);
-        return const _RecoveryPreparation(
-          proceed: true,
-          mutation: _RecoveryMutation.discard,
-        );
+        return discardPreparation();
+      case RecoveryStep.askInvalidDiscard:
+        if (!await _askInvalidRecoveryDiscard()) {
+          return const RecoveryPreparation(proceed: false);
+        }
+        return discardPreparation();
     }
   }
 
-  Future<_RecoveryPreparation> _resolveRecovery(
+  Future<RecoveryChoice?> _askCandidateRecovery(
+    ProjectRecoveryInspection inspection,
+  ) => showRecoveryCheckpointDialog(context, inspection);
+
+  Future<bool> _askConflictingRecoveryDiscard(String reason) =>
+      showConflictingRecoveryDiscardDialog(context, reason);
+
+  Future<bool> _askInvalidRecoveryDiscard() =>
+      showInvalidRecoveryDiscardDialog(context);
+
+  Future<RecoveryPreparation> _resolveRecovery(
     String path,
-    _RecoveryPreparation preparation,
+    RecoveryPreparation preparation,
   ) async {
-    if (preparation.mutation == null) return preparation;
-    final result = preparation.mutation == _RecoveryMutation.apply
+    final mutation = preparation.mutation;
+    if (mutation == null) return preparation;
+    final result = mutation == RecoveryMutation.apply
         ? await widget.projectGateway.applyRecovery(path)
         : await widget.projectGateway.discardRecovery(path);
     if (!result.succeeded) {
       _showUnavailable(
-        result.message.isEmpty
-            ? 'Recovery could not be completed.'
-            : result.message,
+        result.message.isEmpty ? recoveryFailedMessage : result.message,
       );
-      return const _RecoveryPreparation(proceed: false);
+      return const RecoveryPreparation(proceed: false);
     }
-    final syncNotice = preparation.mutation == _RecoveryMutation.apply
+    final syncNotice = mutation == RecoveryMutation.apply
         ? await _syncNotice(path)
         : null;
-    return _RecoveryPreparation(
+    return RecoveryPreparation(
       proceed: true,
-      notice: _combineNotices(
-        preparation.mutation == _RecoveryMutation.apply &&
-                result.message.contains('cleanup is pending')
-            ? result.message
-            : preparation.notice,
-        syncNotice,
+      notice: recoveryNoticeAfter(
+        mutation: mutation,
+        resultMessage: result.message,
+        priorNotice: preparation.notice,
+        syncNotice: syncNotice,
       ),
     );
   }
-
-  Future<_RecoveryChoice?> _askCandidateRecovery(
-    ProjectRecoveryInspection inspection,
-  ) => showDialog<_RecoveryChoice>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Recovery checkpoint found'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'A recoverable project checkpoint is available${inspection.recoveryName.isEmpty ? '' : ' for “${inspection.recoveryName}”'}.',
-          ),
-          const SizedBox(height: OrSpacing.x3),
-          Text('Saved revision: ${inspection.baseRevision}'),
-          Text('Recovery revision: ${inspection.recoveryRevision}'),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.cancel),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.discard),
-          child: const Text('Discard'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, _RecoveryChoice.recover),
-          child: const Text('Recover'),
-        ),
-      ],
-    ),
-  );
-
-  Future<bool> _askConflictingRecoveryDiscard(String reason) async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Recovery checkpoint conflict'),
-        content: Text(
-          'This checkpoint does not match the project lineage${reason.isEmpty ? '.' : ' ($reason).'} No recovery data will be applied.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard checkpoint'),
-          ),
-        ],
-      ),
-    );
-    return discard == true && await _confirmRecoveryDiscard();
-  }
-
-  Future<bool> _askInvalidRecoveryDiscard() async {
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Invalid recovery checkpoint'),
-        content: const Text(
-          'This recovery checkpoint is malformed or failed validation. Its contents cannot be recovered, and the saved project will remain unchanged.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard checkpoint'),
-          ),
-        ],
-      ),
-    );
-    return discard == true && await _confirmRecoveryDiscard();
-  }
-
-  Future<bool> _confirmRecoveryDiscard() async =>
-      await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Discard recovery data?'),
-          content: const Text(
-            'This removes the recovery checkpoint permanently.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Discard'),
-            ),
-          ],
-        ),
-      ) ??
-      false;
 
   Future<bool> _leaveCurrentProject({
     Future<bool> Function()? beforeClose,
   }) async {
-    if (_exportJob?.isActive == true || _exportPublishing) {
+    if (_export.isActive) {
       _showUnavailable(
-        'Wait for the export to finish or cancel it before closing the project.',
+        'Wait for the export to finish, or cancel it from the top bar, before '
+        'closing the project.',
       );
       return false;
     }
@@ -991,7 +1623,10 @@ class _AppShellState extends State<AppShell> {
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Unsaved project changes'),
-      content: const Text('Save your changes before continuing?'),
+      content: const Text(
+        'Save your changes before continuing. Discard closes the project and '
+        'deletes its recovery copy.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, _LeaveChoice.cancel),
@@ -1040,17 +1675,15 @@ class _AppShellState extends State<AppShell> {
     _lastEventSequence = BigInt.zero;
     _lastMediaArtifactSequence = BigInt.zero;
     _timelineRefreshGeneration++;
-    _mediaPreviewQueue.clear();
-    _queuedMediaPreviewIds.clear();
-    _pendingMediaPreviewTickets.clear();
-    _earlyMediaArtifactEvents.clear();
-    _activeMediaPreviewRequests = 0;
-    _mediaPreviewSubmissionsInFlight = 0;
+    _mediaPreviewQueue.reset();
+    _mediaArtifactMailbox.reset();
+    _motionInsertLog.clear();
     setState(() {
       _activeSession = session;
       _activeProject = null;
       _mediaPage = null;
       _mediaPreviews.clear();
+      _mediaPreviewUpdates.value = const {};
       _mediaLoading = true;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
@@ -1073,9 +1706,10 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       setState(() => _activeProject = view);
-      await _recordRecentProject(path, view.name);
-      if (!mounted || !identical(session, _activeSession)) return;
+      // The recents write is local bookkeeping; awaiting it here made the first
+      // media and timeline fetch wait for a disk round trip.
       await Future.wait([
+        _recordRecentProject(path, view.name),
         _refreshMediaPage(
           session,
           project: view,
@@ -1083,6 +1717,7 @@ class _AppShellState extends State<AppShell> {
         ),
         _refreshTimeline(session, project: view),
       ]);
+      if (!mounted || !identical(session, _activeSession)) return;
     } catch (_) {
       await widget.projectGateway.close(session, discardUnsaved: true);
       _clearActiveProject(session);
@@ -1166,10 +1801,7 @@ class _AppShellState extends State<AppShell> {
     }
     if (event.kind == 'project_changed' || event.kind == 'project_saved') {
       if (event.kind == 'project_saved') {
-        setState(() {
-          _autosaveStatus = null;
-          _autosaveFailed = false;
-        });
+        setState(_autosave.clear);
       }
       await _refreshProjectState(session);
     }
@@ -1200,7 +1832,16 @@ class _AppShellState extends State<AppShell> {
   }) async {
     final session = _activeSession;
     final current = _activeProject;
-    if (session == null || current == null || _busy) return null;
+    if (session == null || current == null) return null;
+    if (_busy) {
+      // A silent no-op here read as a broken button: the owner clicked Import or
+      // Add track, nothing moved, and no message said why. The guard still
+      // refuses to stack commands, but it now says so.
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then try again.',
+      );
+      return null;
+    }
     if (!_sameProjectIdentity(expected, current)) {
       _showUnavailable(
         'The project changed while this action was open. Refresh the project before trying again.',
@@ -1238,6 +1879,18 @@ class _AppShellState extends State<AppShell> {
             'The project file changed outside OR. The save was blocked to protect those changes.',
             onFailure,
           );
+        } else if (result.errorCode == 'NOTHING_TO_UNDO') {
+          // The domain error is a sentence fragment; surface it as a complete,
+          // sentence-case message rather than the lowercase engine text.
+          _reportProjectActionFailure(
+            'Nothing to undo. This project has no earlier change in this session.',
+            onFailure,
+          );
+        } else if (result.errorCode == 'NOTHING_TO_REDO') {
+          _reportProjectActionFailure(
+            'Nothing to redo. Undo a change first.',
+            onFailure,
+          );
         } else {
           _reportProjectActionFailure(
             result.message.isEmpty
@@ -1256,12 +1909,12 @@ class _AppShellState extends State<AppShell> {
         setState(() {
           _activeProject = updated;
           if (changed) {
-            _mediaLoading = true;
-            _timelineLoading = true;
+            _mediaLoading = _mediaPage == null;
+            _timelineLoading = _timelineTracks == null;
             _timelineLoadingMoreMarkers = false;
           }
         });
-        if (changed) await _refreshProjectState(session);
+        if (changed) await _refreshProjectState(session, known: updated);
       }
       return updated;
     } on ProjectGatewayException catch (error) {
@@ -1345,265 +1998,73 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  static String? _combineNotices(String? first, String? second) {
-    if (first == null || first.isEmpty) return second;
-    if (second == null || second.isEmpty) return first;
-    return '$first\n$second';
-  }
-
   Future<void> _startExport() async {
     final session = _activeSession;
-    if (session == null || !widget.projectFilePicker.supportsExport) return;
-    String? destination;
+    if (session == null) return;
+    await _export.start(session);
+  }
+
+  void _handleExportChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _cancelExport() => _export.cancel();
+
+  /// A finished export is a file, not a message: name it, size it, and let the
+  /// owner take the path without hunting through Finder.
+  /// Ask the host to reveal a published file. Desktop-only by construction:
+  /// the channel is registered by the macOS runner, and other hosts fall back
+  /// to the copy-path action the receipt already offers.
+  static const MethodChannel _revealChannel = MethodChannel(
+    'or_macos_file_access',
+  );
+
+  Future<void> _revealInFinder(String path) async {
     try {
-      final current = await widget.projectGateway.summary(session);
-      if (!mounted || !identical(session, _activeSession)) return;
-      final profile = await _chooseExportProfile();
-      if (profile == null || !mounted || !identical(session, _activeSession)) {
-        return;
-      }
-      destination = await widget.projectFilePicker.saveExportPath(
-        suggestedName: profile.suggestedName(current.name),
-        profile: profile,
-      );
-      if (destination == null) {
-        return;
-      }
-      if (!mounted || !identical(session, _activeSession)) {
-        await _discardExportDestination(destination);
-        return;
-      }
-      final result = await widget.projectGateway.startExport(
-        session,
-        current,
-        destination,
-      );
-      if (!mounted || !identical(session, _activeSession)) {
-        await _discardExportDestination(destination);
-        return;
-      }
-      setState(() {
-        _activeProject = current;
-        _exportJob = result;
-        _exportDestinationPath = destination;
-        _exportFailed = !result.succeeded;
-        _exportStatus = _exportJobLabel(result);
-      });
-      if (result.succeeded && result.isActive) {
-        _exportPollTimer?.cancel();
-        _exportPollTimer = Timer.periodic(
-          const Duration(milliseconds: 400),
-          (_) => unawaited(_pollExport()),
-        );
-      } else if (!result.succeeded) {
-        await _discardExportDestination(destination);
-      }
-    } on ProjectGatewayException catch (error) {
-      if (destination != null) await _discardExportDestination(destination);
-      if (mounted && identical(session, _activeSession)) {
-        setState(() {
-          _exportStatus = error.message;
-          _exportFailed = true;
-        });
-      }
-    } catch (_) {
-      if (destination != null) await _discardExportDestination(destination);
-      if (mounted && identical(session, _activeSession)) {
-        setState(() {
-          _exportStatus = 'Export could not start';
-          _exportFailed = true;
-        });
-      }
+      await _revealChannel.invokeMethod<bool>('revealExport', {'path': path});
+    } on PlatformException catch (error) {
+      _showUnavailable(error.message ?? 'The file could not be revealed.');
+    } on MissingPluginException {
+      _showUnavailable('This build cannot open a Finder window.');
     }
   }
 
-  Future<void> _pollExport() async {
+  Future<void> _showExportReceipt(String destination) async {
+    final name = destination.split(Platform.pathSeparator).last;
+    var size = '';
+    try {
+      // The file can be gigabytes on a slow volume; a synchronous stat on the
+      // UI isolate would stall the frame that reports a finished export.
+      final bytes = await File(destination).length();
+      size = bytes >= 1024 * 1024
+          ? ' · ${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+          : ' · ${(bytes / 1024).toStringAsFixed(0)} KB';
+    } on FileSystemException {
+      size = '';
+    }
+    if (!mounted) return;
+    OrSnackBar.show(
+      context,
+      'Exported $name$size',
+      duration: const Duration(seconds: 8),
+      // One action, the one this host can actually do: macOS can reveal the
+      // file, other hosts can only hand the path to the clipboard.
+      actionLabel: Platform.isMacOS ? 'Show in Finder' : 'Copy path',
+      onAction: () => unawaited(
+        Platform.isMacOS
+            ? _revealInFinder(destination)
+            : Clipboard.setData(ClipboardData(text: destination)),
+      ),
+    );
+  }
+
+  Future<bool?> _autosaveAttempt() async {
     final session = _activeSession;
     final project = _activeProject;
-    final job = _exportJob;
-    if (session == null ||
-        project == null ||
-        job == null ||
-        _exportPollInFlight) {
-      return;
-    }
-    _exportPollInFlight = true;
-    try {
-      final status = await widget.projectGateway.exportStatus(
-        session,
-        project,
-        job.jobId,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      if (status.succeeded && status.state == 'succeeded') {
-        final destination = _exportDestinationPath;
-        if (destination != null) {
-          setState(() {
-            _exportJob = status;
-            _exportPublishing = true;
-            _exportFailed = false;
-            _exportStatus = 'Saving export to the selected location…';
-          });
-          try {
-            await widget.projectFilePicker.publishExportPath(destination);
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() => _exportStatus = 'Export complete');
-          } on ProjectSafStorageException catch (error) {
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() {
-              _exportStatus = error.message;
-              _exportFailed = true;
-            });
-            await _discardExportDestination(destination);
-          } catch (_) {
-            if (!mounted || !identical(session, _activeSession)) return;
-            setState(() {
-              _exportStatus =
-                  'The export could not be saved to the selected location.';
-              _exportFailed = true;
-            });
-            await _discardExportDestination(destination);
-          } finally {
-            _exportDestinationPath = null;
-            if (mounted) setState(() => _exportPublishing = false);
-            _exportPollTimer?.cancel();
-          }
-          return;
-        }
-      }
-      setState(() {
-        _exportJob = status;
-        _exportFailed = !status.succeeded || status.state == 'failed';
-        _exportStatus = _exportJobLabel(status);
-      });
-      if (!status.succeeded || !status.isActive) {
-        _exportPollTimer?.cancel();
-        if (!status.succeeded || status.state == 'cancelled') {
-          final destination = _exportDestinationPath;
-          _exportDestinationPath = null;
-          if (destination != null) await _discardExportDestination(destination);
-        }
-      }
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportStatus = 'Export status unavailable';
-        _exportFailed = true;
-      });
-      _exportPollTimer?.cancel();
-    } finally {
-      _exportPollInFlight = false;
-    }
-  }
-
-  Future<void> _cancelExport() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    final job = _exportJob;
-    final destination = _exportDestinationPath;
-    if (_exportPublishing && destination != null) {
-      try {
-        await widget.projectFilePicker.cancelExportPublish(destination);
-      } catch (_) {
-        if (mounted) {
-          setState(() {
-            _exportStatus = 'Export cancellation failed';
-            _exportFailed = true;
-          });
-        }
-      }
-      return;
-    }
-    if (session == null || project == null || job == null || !job.isActive) {
-      return;
-    }
-    try {
-      final result = await widget.projectGateway.cancelExport(
-        session,
-        project,
-        job.jobId,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportJob = result;
-        _exportFailed = !result.succeeded;
-        _exportStatus = _exportJobLabel(result);
-      });
-      if (!result.succeeded || !result.isActive) {
-        _exportPollTimer?.cancel();
-        if (result.state == 'cancelled') {
-          _exportDestinationPath = null;
-          if (destination != null) await _discardExportDestination(destination);
-        }
-      }
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _exportStatus = 'Export cancellation failed';
-        _exportFailed = true;
-      });
-    }
-  }
-
-  Future<void> _discardExportDestination(String path) async {
-    try {
-      await widget.projectFilePicker.discardExportPath(path);
-    } catch (_) {
-      // Preserve the primary export result if cleanup fails.
-    }
-  }
-
-  static String _exportJobLabel(ProjectExportJob job) {
-    if (!job.succeeded) {
-      return job.message.isEmpty ? 'Export failed' : job.message;
-    }
-    return switch (job.state) {
-      'queued' => 'Export queued',
-      'running' =>
-        job.progressCompleted != null && job.progressTotal != null
-            ? 'Export ${job.progressCompleted}/${job.progressTotal}'
-            : 'Exporting',
-      'succeeded' => 'Export complete',
-      'failed' => job.failureMessage ?? 'Export failed',
-      'cancelled' => 'Export cancelled',
-      _ => job.message,
-    };
-  }
-
-  Future<void> _autosaveProject() async {
-    final session = _activeSession;
-    final project = _activeProject;
-    if (session == null ||
-        project == null ||
-        !project.dirty ||
-        _autosaveInFlight) {
-      return;
-    }
-    _autosaveInFlight = true;
-    if (mounted) {
-      setState(() {
-        _autosaveStatus = 'Autosaving recovery';
-        _autosaveFailed = false;
-      });
-    }
-    try {
-      final result = await widget.projectGateway.autosaveCheckpoint(session);
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _autosaveFailed = !result.succeeded;
-        _autosaveStatus = result.succeeded
-            ? 'Recovery saved'
-            : 'Autosave needs attention';
-      });
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        _autosaveStatus = 'Autosave needs attention';
-        _autosaveFailed = true;
-      });
-    } finally {
-      _autosaveInFlight = false;
-    }
+    if (session == null || project == null || !project.dirty) return false;
+    final result = await widget.projectGateway.autosaveCheckpoint(session);
+    if (!identical(session, _activeSession)) return null;
+    return result.succeeded;
   }
 
   Future<void> _undoProject() async {
@@ -1614,11 +2075,61 @@ class _AppShellState extends State<AppShell> {
     await _runProjectAction(widget.projectGateway.redo);
   }
 
+  /// Sequence frame rate is a project setting, so it goes through the same
+  /// command runner as every other edit: revision check, notice and undo.
+  Future<void> _setSequenceFrameRate(ProjectRationalRate? rate) async {
+    await _runProjectAction(
+      (session, current) => widget.projectGateway.setTimelineSequenceFrameRate(
+        session,
+        current,
+        rate,
+      ),
+    );
+  }
+
   Future<void> _addTimelineTrack(ProjectTimelineTrackKind kind) async {
     await _runProjectAction(
       (session, current) =>
           widget.projectGateway.addTimelineTrack(session, current, kind),
     );
+  }
+
+  /// Adds the track a media insert needs and hands back the refreshed pair.
+  ///
+  /// Adding media to a timeline with no compatible track used to answer "Add a
+  /// compatible Video or Audio track first." -- a dead end the owner has to walk
+  /// out of by hand. The insert dialog now calls this once, so the track exists
+  /// before the dialog asks where the clip goes.
+  Future<(ProjectReadModel, ProjectTimelineTracks)?> _ensureTimelineTrack(
+    ProjectTimelineTrackKind kind,
+  ) async {
+    final session = _activeSession;
+    final current = _activeProject;
+    if (session == null || current == null || _busy) return null;
+    try {
+      final result = await widget.projectGateway.addTimelineTrack(
+        session,
+        current,
+        kind,
+      );
+      final view = result.view;
+      if (!result.succeeded || view == null) {
+        if (mounted) {
+          _showUnavailable('The track could not be added.');
+        }
+        return null;
+      }
+      final tracks = await widget.projectGateway.listTimelineTracks(session);
+      if (!mounted) return null;
+      setState(() {
+        _activeProject = view;
+        _timelineTracks = tracks;
+      });
+      return (view, tracks);
+    } on ProjectSafStorageException catch (error) {
+      if (mounted) _showUnavailable(error.message);
+      return null;
+    }
   }
 
   Future<void> _importTimelineCaptions() async {
@@ -1634,7 +2145,7 @@ class _AppShellState extends State<AppShell> {
         path,
       );
       if (!mounted) return;
-      final reviewed = await _reviewCaptionImport(preview);
+      final reviewed = await showCaptionImportDialog(context, preview);
       if (reviewed == null || !mounted) return;
       await _runProjectActionAtSnapshot(
         snapshot,
@@ -1678,7 +2189,14 @@ class _AppShellState extends State<AppShell> {
     var transcriptionDialogOpen = false;
     ValueNotifier<ProjectTranscriptionJob?>? transcriptionDialogState;
     try {
-      var model = await widget.projectGateway.transcriptionModel(session);
+      var models = await widget.projectGateway.transcriptionModels(session);
+      if (models.isEmpty) {
+        models = [await widget.projectGateway.transcriptionModel(session)];
+      }
+      var model = models.firstWhere(
+        (candidate) => candidate.active,
+        orElse: () => models.first,
+      );
       if (!model.providerAvailable) {
         _showUnavailable(
           'Local caption generation is not included in this installation.',
@@ -1686,12 +2204,20 @@ class _AppShellState extends State<AppShell> {
         return;
       }
       if (!model.installed) {
-        final install = await _confirmSpeechModelDownload(model);
-        if (!install || !mounted) return;
-        final downloadedModel = await _downloadSpeechModel(session);
-        if (downloadedModel == null) return;
-        model = downloadedModel;
-        if (!mounted) return;
+        final chosen = await _chooseSpeechModel(session, models);
+        if (chosen == null || !mounted) return;
+        model = chosen;
+        if (!model.installed) {
+          final install = await _confirmSpeechModelDownload(model);
+          if (!install || !mounted) return;
+          final downloadedModel = await _downloadSpeechModel(
+            session,
+            modelId: model.modelId,
+          );
+          if (downloadedModel == null) return;
+          model = downloadedModel;
+          if (!mounted) return;
+        }
       }
       if (!mounted) return;
 
@@ -1804,7 +2330,8 @@ class _AppShellState extends State<AppShell> {
             )
             .toList(growable: false),
       );
-      final reviewed = await _reviewCaptionImport(preview);
+      if (!mounted) return;
+      final reviewed = await showCaptionImportDialog(context, preview);
       if (reviewed == null || !mounted) return;
       setState(() => _busy = false);
       await _runProjectActionAtSnapshot(
@@ -1874,11 +2401,273 @@ class _AppShellState extends State<AppShell> {
       ) ??
       false;
 
-  Future<ProjectTranscriptionModel?> _downloadSpeechModel(
+  /// Audio tool workflows live in [AudioToolFlows]; these forward to them so
+  /// the shell keeps one place that knows how a result becomes a notice.
+  AudioToolFlows get _audioFlows => AudioToolFlows(
+    gateway: widget.projectGateway,
+    activeSession: () => _activeSession,
+    activeProject: () => _activeProject,
+    isBusy: () => _busy,
+    refresh: _refreshProjectState,
+    notice: (message) => setState(() => _projectNotice = message),
+    unavailable: _showUnavailable,
+  );
+
+  Future<void> _generateVoiceover() => _audioFlows.generateVoiceover(context);
+
+  Future<void> _recordVoice() => _audioFlows.recordVoice(context);
+
+  Future<void> _generateMusic() => _audioFlows.generateMusic(context);
+
+  /// Asks which local speech model to use and persists the choice.
+  ///
+  /// Selecting an installed model is immediate; a model that is not installed
+  /// is installed by the caller so the download prompt can show its real size.
+  Future<ProjectTranscriptionModel?> _chooseSpeechModel(
     ProjectSessionHandle session,
+    List<ProjectTranscriptionModel> models,
   ) async {
+    if (models.isEmpty) {
+      _showUnavailable('No local speech model catalog is available.');
+      return null;
+    }
+    var catalog = [...models];
+    var choice = catalog.firstWhere(
+      (candidate) => candidate.active,
+      orElse: () => catalog.first,
+    );
+    var errorText = '';
+    final selected = await showDialog<ProjectTranscriptionModel>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final installed = catalog.where((model) => model.installed).toList();
+          final installedBytes = installed.fold<BigInt>(
+            BigInt.zero,
+            (sum, model) => sum + model.sizeBytes,
+          );
+          return AlertDialog(
+            title: const Text('Speech model'),
+            content: SizedBox(
+              width: 600,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Choose the local model used for captions. Larger models take '
+                    'longer to download and run, and are more accurate — '
+                    'especially for Vietnamese. '
+                    '${installed.isEmpty ? 'No model is installed yet.' : 'Installed: ${_speechModelBytes(installedBytes)} across ${installed.length} ${installed.length == 1 ? 'model' : 'models'}.'}',
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 420),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (final model in catalog)
+                            ListTile(
+                              key: ValueKey('speech-model-${model.modelId}'),
+                              selected: model.modelId == choice.modelId,
+                              leading: Icon(
+                                model.modelId == choice.modelId
+                                    ? Icons.radio_button_checked
+                                    : Icons.radio_button_unchecked,
+                                size: 20,
+                              ),
+                              title: Text(
+                                model.label.isEmpty
+                                    ? model.modelId
+                                    : model.label,
+                              ),
+                              subtitle: Text(
+                                '${_speechModelSize(model)} · '
+                                '${model.installed ? 'Installed' : 'Download needed'} · '
+                                '${model.license}',
+                              ),
+                              trailing: model.installed
+                                  ? IconButton(
+                                      key: ValueKey(
+                                        'speech-model-remove-${model.modelId}',
+                                      ),
+                                      tooltip: 'Remove downloaded model',
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 20,
+                                      ),
+                                      onPressed: () async {
+                                        final confirmed = await showDialog<bool>(
+                                          context: dialogContext,
+                                          builder: (confirmContext) => AlertDialog(
+                                            title: const Text(
+                                              'Remove speech model?',
+                                            ),
+                                            content: Text(
+                                              'Remove ${model.label.isEmpty ? model.modelId : model.label} '
+                                              'and free ${_speechModelSize(model)}? '
+                                              'Captions that need it will offer the '
+                                              'download again.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(confirmContext)
+                                                        .pop(false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.of(confirmContext)
+                                                        .pop(true),
+                                                child: const Text('Remove'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (confirmed != true) return;
+                                        try {
+                                          await widget.projectGateway
+                                              .removeTranscriptionModel(
+                                                session,
+                                                model.modelId,
+                                              );
+                                          final refreshed = await widget
+                                              .projectGateway
+                                              .transcriptionModels(session);
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(() {
+                                            catalog = refreshed;
+                                            choice = catalog.firstWhere(
+                                              (candidate) => candidate.active,
+                                              orElse: () => catalog.first,
+                                            );
+                                            errorText = '';
+                                          });
+                                        } on ProjectGatewayException catch (
+                                          error
+                                        ) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText = error.message,
+                                          );
+                                        } catch (_) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText = 'The speech model could not be removed.',
+                                          );
+                                        }
+                                      },
+                                    )
+                                  : null,
+                              onTap: () => setDialogState(() => choice = model),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (errorText.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      errorText,
+                      key: const ValueKey('speech-model-error'),
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(choice),
+                child: const Text('Use model'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (selected == null) return null;
+    try {
+      return await widget.projectGateway.selectTranscriptionModel(
+        session,
+        selected.modelId,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    }
+  }
+
+  String _speechModelBytes(BigInt bytes) {
+    final mib = (bytes ~/ BigInt.from(1024 * 1024)).toInt();
+    return mib >= 1024 ? '${(mib / 1024).toStringAsFixed(1)} GiB' : '$mib MiB';
+  }
+
+  String _speechModelSize(ProjectTranscriptionModel model) =>
+      _speechModelBytes(model.sizeBytes);
+
+  /// Lets the user switch or install a speech model without starting a
+  /// transcription first.
+  Future<void> _manageSpeechModel() async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final models = await widget.projectGateway.transcriptionModels(session);
+      if (!mounted) return;
+      final chosen = await _chooseSpeechModel(session, models);
+      if (chosen == null || !mounted) return;
+      if (!chosen.providerAvailable) {
+        _showUnavailable(
+          'Local caption generation is not included in this installation.',
+        );
+        return;
+      }
+      if (!chosen.installed) {
+        final install = await _confirmSpeechModelDownload(chosen);
+        if (!install || !mounted) return;
+        final downloaded = await _downloadSpeechModel(
+          session,
+          modelId: chosen.modelId,
+        );
+        if (downloaded == null || !mounted) return;
+        setState(
+          () => _projectNotice =
+              '${downloaded.label.isEmpty ? downloaded.modelId : downloaded.label} '
+              'installed and selected.',
+        );
+      } else {
+        setState(
+          () => _projectNotice =
+              '${chosen.label.isEmpty ? chosen.modelId : chosen.label} selected.',
+        );
+      }
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+    } catch (error) {
+      // A refused download (non-HTTPS source, truncated transfer, unreachable
+      // network) used to collapse into 'could not be changed', which hides
+      // whether retrying is even useful.
+      _showUnavailable(speechModelFailureMessage(error));
+    } finally {
+      if (mounted && _busy) setState(() => _busy = false);
+    }
+  }
+
+  Future<ProjectTranscriptionModel?> _downloadSpeechModel(
+    ProjectSessionHandle session, {
+    String modelId = 'whisper-small-multilingual',
+  }) async {
     final download = await widget.projectGateway
-        .beginTranscriptionModelDownload(session);
+        .beginTranscriptionModelDownload(session, modelId);
     if (!mounted) {
       await widget.projectGateway.cancelTranscriptionModelDownload(
         session,
@@ -2033,121 +2822,6 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<List<ProjectCaptionCue>?> _reviewCaptionImport(
-    ProjectCaptionImportPreview preview,
-  ) => showDialog<List<ProjectCaptionCue>>(
-    context: context,
-    builder: (context) {
-      final reviewed = List<ProjectCaptionCue>.of(preview.cues);
-      final invalidCueIndexes = <int>{};
-      var blankCueCount = reviewed
-          .where((cue) => cue.text.trim().isEmpty)
-          .length;
-      final height = (MediaQuery.sizeOf(context).height * .65)
-          .clamp(280.0, 580.0)
-          .toDouble();
-      return StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('Review ${preview.formatName} captions'),
-          content: SizedBox(
-            width: 620,
-            height: height,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  [
-                    '${reviewed.length - blankCueCount} ${reviewed.length - blankCueCount == 1 ? 'caption' : 'captions'} will be added to a new caption track. Edit text below; timing stays as imported.',
-                    if (blankCueCount > 0)
-                      '$blankCueCount blank ${blankCueCount == 1 ? 'cue' : 'cues'} will be skipped.',
-                    if (preview.formattingLossCount > BigInt.zero)
-                      '${preview.formattingLossCount} cues contain styling or placement that will be simplified to plain text.',
-                    if (preview.emptyCuesSkipped > BigInt.zero)
-                      '${preview.emptyCuesSkipped} empty cues were skipped.',
-                  ].join('\n\n'),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView.separated(
-                    key: const ValueKey('caption-import-review-list'),
-                    itemCount: reviewed.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 16),
-                    itemBuilder: (context, index) {
-                      final cue = reviewed[index];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            '${_captionTimeLabel(cue.startMs)} – ${_captionTimeLabel(cue.endMs)}',
-                            style: Theme.of(context).textTheme.labelSmall,
-                          ),
-                          TextFormField(
-                            key: ValueKey('caption-import-text-$index'),
-                            initialValue: cue.text,
-                            minLines: 1,
-                            maxLines: 4,
-                            maxLength: preview.maxCaptionTextBytes.toInt(),
-                            decoration: InputDecoration(
-                              labelText: 'Caption ${index + 1} text',
-                              counterText: '',
-                              errorText: invalidCueIndexes.contains(index)
-                                  ? 'Caption exceeds the ${preview.maxCaptionTextBytes}-byte project limit.'
-                                  : null,
-                            ),
-                            onChanged: (text) {
-                              final previousWasBlank = reviewed[index].text
-                                  .trim()
-                                  .isEmpty;
-                              final isBlank = text.trim().isEmpty;
-                              final isTooLarge =
-                                  utf8.encode(text).length >
-                                  preview.maxCaptionTextBytes.toInt();
-                              setDialogState(() {
-                                reviewed[index] = ProjectCaptionCue(
-                                  startMs: cue.startMs,
-                                  endMs: cue.endMs,
-                                  text: text,
-                                );
-                                if (previousWasBlank != isBlank) {
-                                  blankCueCount += isBlank ? 1 : -1;
-                                }
-                                if (isTooLarge) {
-                                  invalidCueIndexes.add(index);
-                                } else {
-                                  invalidCueIndexes.remove(index);
-                                }
-                              });
-                            },
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed:
-                  invalidCueIndexes.isNotEmpty ||
-                      reviewed.length == blankCueCount
-                  ? null
-                  : () => Navigator.of(context)
-                        .pop(List<ProjectCaptionCue>.unmodifiable(reviewed)),
-              child: const Text('Import captions'),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-
   Future<void> _exportTimelineCaptions() async {
     final session = _activeSession;
     final snapshot = _activeProject;
@@ -2240,13 +2914,21 @@ class _AppShellState extends State<AppShell> {
         },
       );
 
-  Future<ExportProfile?> _chooseExportProfile() {
+  Future<({ExportProfile profile, ExportQuality quality})?>
+  _chooseExportOptions() {
     final profiles = ExportProfile.available;
-    if (profiles.length == 1) return Future.value(profiles.single);
-    return showDialog<ExportProfile>(
+    final defaultChoice = (
+      profile: ExportProfile.defaultForPlatform,
+      quality: ExportQuality.defaultChoice,
+    );
+    if (profiles.length == 1 && !profiles.single.hasQualityChoice) {
+      return Future.value(defaultChoice);
+    }
+    return showDialog<({ExportProfile profile, ExportQuality quality})>(
       context: context,
       builder: (context) {
-        var selected = ExportProfile.defaultForPlatform;
+        var selected = defaultChoice.profile;
+        var quality = defaultChoice.quality;
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Export video'),
@@ -2263,6 +2945,28 @@ class _AppShellState extends State<AppShell> {
                         ? const Icon(Icons.check)
                         : null,
                   ),
+                if (selected.hasQualityChoice) ...[
+                  const Divider(),
+                  for (final option in ExportQuality.values)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () => setDialogState(() => quality = option),
+                      title: Text(option.label),
+                      subtitle: Text(option.description),
+                      trailing: quality == option
+                          ? const Icon(Icons.check)
+                          : null,
+                    ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  'Next you choose where to save the file.',
+                  key: const ValueKey('export-destination-hint'),
+                  style: const TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataSize,
+                  ),
+                ),
               ],
             ),
             actions: [
@@ -2271,7 +2975,9 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(context).pop(selected),
+                onPressed: () =>
+                    Navigator.of(context)
+                        .pop((profile: selected, quality: quality)),
                 child: const Text('Continue'),
               ),
             ],
@@ -2424,6 +3130,144 @@ class _AppShellState extends State<AppShell> {
     ),
   );
 
+  /// Opens one gain slider for the selected audio clip and writes it as the
+  /// ordinary audio command, preserving pan and fades read from the clip.
+  Future<void> _adjustClipVolume(
+    ProjectReadModel project,
+    String trackId,
+    String clipId,
+  ) async {
+    final session = _activeSession;
+    if (session == null || _busy) return;
+    ProjectTimelineAudioSettings current;
+    try {
+      current = await widget.projectGateway.getTimelineClipAudioSettings(
+        session,
+        project,
+        trackId: trackId,
+        clipId: clipId,
+      );
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return;
+    }
+    if (!mounted) return;
+    var decibels = (current.gainMilliDecibels / 1000).clamp(-24.0, 12.0);
+    final chosen = await showDialog<double>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Clip volume'),
+          content: SizedBox(
+            width: 340,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${decibels.toStringAsFixed(1)} dB',
+                  key: const ValueKey('timeline-volume-value'),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Slider(
+                  key: const ValueKey('timeline-volume-slider'),
+                  value: decibels,
+                  min: -24,
+                  max: 12,
+                  divisions: 72,
+                  label: '${decibels.toStringAsFixed(1)} dB',
+                  onChanged: (value) => setDialogState(() => decibels = value),
+                ),
+                Text(
+                  '0 dB is the original level. −12 dB is a quiet background.',
+                  style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('timeline-volume-save'),
+              onPressed: () => Navigator.of(context).pop(decibels),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    await _runProjectActionAtSnapshot(
+      project,
+      (session, currentProject) =>
+          widget.projectGateway.updateTimelineClipAudioSettings(
+            session,
+            currentProject,
+            trackId: trackId,
+            clipId: clipId,
+            settings: ProjectTimelineAudioSettings(
+              gainMilliDecibels: (chosen * 1000).round(),
+              panBasisPoints: current.panBasisPoints,
+              fadeIn: current.fadeIn,
+              fadeOut: current.fadeOut,
+            ),
+          ),
+    );
+  }
+
+  Future<ProjectReadModel?> _updateTimelineClipPlaybackRate(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    ProjectRationalRate rate,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.updateTimelineClipPlaybackRate(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      rate: rate,
+    ),
+  );
+
+  Future<ProjectReadModel?> _setTimelineClipReversed(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool reversed,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.setTimelineClipReversed(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      reversed: reversed,
+    ),
+  );
+
+  Future<ProjectReadModel?> _setTimelineClipFrozen(
+    ProjectReadModel expected,
+    String trackId,
+    String clipId,
+    bool frozen,
+  ) => _runProjectActionAtSnapshot(
+    expected,
+    (session, current) => widget.projectGateway.setTimelineClipFrozen(
+      session,
+      current,
+      trackId: trackId,
+      clipId: clipId,
+      frozen: frozen,
+    ),
+  );
+
   Future<void> _moveTimelineClip(
     ProjectReadModel expected,
     ProjectTimelineClip clip,
@@ -2447,6 +3291,101 @@ class _AppShellState extends State<AppShell> {
         identical(session, _activeSession)) {
       await _refreshProjectState(session);
     }
+  }
+
+  /// Moves a multi-clip selection on one track as a single undo step.
+  Future<void> _moveTimelineClips(
+    ProjectReadModel expected,
+    String trackId,
+    List<String> clipIds,
+    ProjectRationalTime delta,
+  ) async {
+    final session = _activeSession;
+    final result = await _runProjectActionAtSnapshot(
+      expected,
+      (session, current) => widget.projectGateway.moveTimelineClips(
+        session,
+        current,
+        trackId: trackId,
+        clipIds: clipIds,
+        delta: delta,
+      ),
+    );
+    if (result == null &&
+        mounted &&
+        session != null &&
+        identical(session, _activeSession)) {
+      await _refreshProjectState(session);
+    }
+  }
+
+  void _copyTimelineClip(
+    ProjectReadModel project,
+    ProjectTimelineTrack track,
+    ProjectTimelineClip clip,
+  ) {
+    final copied = TimelineClipClipboard.fromClip(clip);
+    if (copied == null) {
+      _showUnavailable('This clip has nothing to copy.');
+      return;
+    }
+    setState(() => _clipboardClip = copied);
+    setState(() => _projectNotice = 'Clip copied.');
+  }
+
+  /// Paste at the playhead on the track the owner is working on. The content
+  /// kinds are gated here rather than at the command path so the refusal names
+  /// the reason instead of surfacing a raw overlap or kind error.
+  Future<void> _pasteTimelineClip(
+    ProjectReadModel expected,
+    ProjectTimelineTrack track,
+    ProjectRationalTime position,
+  ) async {
+    final clip = _clipboardClip;
+    if (clip == null) return;
+    final wantsTextTrack =
+        clip.contentKind == ProjectTimelineClipContentKind.text ||
+        clip.contentKind == ProjectTimelineClipContentKind.caption;
+    final trackIsText =
+        track.kind == ProjectTimelineTrackKind.text ||
+        track.kind == ProjectTimelineTrackKind.caption;
+    if (wantsTextTrack != trackIsText) {
+      _showUnavailable(
+        wantsTextTrack
+            ? 'Select a text or caption track to paste this clip.'
+            : 'Select a video or audio track to paste this clip.',
+      );
+      return;
+    }
+    if (clip.isMedia) {
+      final mediaId = clip.mediaId;
+      final sourceStart = clip.sourceStart;
+      if (mediaId == null || sourceStart == null) return;
+      await _runProjectActionAtSnapshot(
+        expected,
+        (session, current) => widget.projectGateway.insertTimelineClip(
+          session,
+          current,
+          trackId: track.trackId,
+          mediaId: mediaId,
+          timelineStart: position,
+          sourceStart: sourceStart,
+          duration: clip.duration,
+        ),
+      );
+      return;
+    }
+    await _insertTimelineTextClip(
+      expected,
+      track,
+      position,
+      clip.duration,
+      ProjectTimelineTextContent(
+        kind: clip.contentKind,
+        text: clip.text ?? '',
+        formatting: clip.formatting ?? ProjectTextFormatting.defaults,
+      ),
+    );
   }
 
   Future<void> _duplicateTimelineClip(
@@ -2740,7 +3679,13 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _importMediaSources({required bool folder}) async {
     final session = _activeSession;
-    if (session == null || _busy) return;
+    if (session == null) return;
+    if (_busy) {
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then import again.',
+      );
+      return;
+    }
     List<String> sources;
     try {
       sources = folder
@@ -2774,49 +3719,57 @@ class _AppShellState extends State<AppShell> {
       }
     }
 
-    var imported = 0;
-    final failures = <String>[];
-    for (final source in sources) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      if (Platform.isAndroid) {
-        final failure = await registerAndroidMediaSource(
-          source,
-          register: OrViewerTexture.registerMediaSourceForImport,
-        );
-        if (failure != null) {
-          failures.add(failure);
-          continue;
-        }
-        if (!mounted || !identical(session, _activeSession)) return;
-      }
-      final updated = await _runProjectAction((session, _) async {
-        // Capture identity and revision immediately before Rust probes each file.
-        final current = await widget.projectGateway.summary(session);
+    final outcome = await MediaImportFlow(
+      onStatus: _setImportStatus,
+      importOne: (source) async {
         if (!mounted || !identical(session, _activeSession)) {
-          return const ProjectActionResult(
-            succeeded: false,
-            errorCode: 'PROJECT_CLOSING',
-            message: 'The project is closing.',
+          return (imported: false, failure: null, aborted: true);
+        }
+        if (Platform.isAndroid) {
+          final failure = await registerAndroidMediaSource(
+            source,
+            register: OrViewerTexture.registerMediaSourceForImport,
+          );
+          if (failure != null) {
+            return (imported: false, failure: failure, aborted: false);
+          }
+          if (!mounted || !identical(session, _activeSession)) {
+            return (imported: false, failure: null, aborted: true);
+          }
+        }
+        String? failure;
+        final updated = await _runProjectAction((session, _) async {
+          // Capture identity and revision immediately before Rust probes each
+          // file.
+          final current = await widget.projectGateway.summary(session);
+          if (!mounted || !identical(session, _activeSession)) {
+            return const ProjectActionResult(
+              succeeded: false,
+              errorCode: 'PROJECT_CLOSING',
+              message: 'The project is closing.',
+            );
+          }
+          setState(() => _activeProject = current);
+          return widget.projectGateway.importMedia(session, current, source);
+        }, onFailure: (message) => failure = message);
+        if (updated == null) {
+          return (
+            imported: false,
+            failure: failure,
+            aborted: !mounted || !identical(session, _activeSession),
           );
         }
-        setState(() => _activeProject = current);
-        return widget.projectGateway.importMedia(session, current, source);
-      }, onFailure: failures.add);
-      if (updated == null) {
-        if (!mounted || !identical(session, _activeSession)) return;
-        continue;
-      }
-      imported++;
-    }
-    if (failures.isNotEmpty) {
-      final failureSummary = failures.first.length > 180
-          ? '${failures.first.substring(0, 177)}…'
-          : failures.first;
-      _showUnavailable(
-        'Imported $imported of ${sources.length} ${folder ? 'folder files' : 'selected files'}. '
-        '${failures.length} could not be imported. $failureSummary',
-      );
-    }
+        return (imported: true, failure: null, aborted: false);
+      },
+    ).run(sources, folder: folder);
+    if (outcome.aborted || !mounted) return;
+    final message = outcome.summary;
+    if (message != null) _showUnavailable(message);
+  }
+
+  void _setImportStatus(String? value) {
+    if (!mounted || _importStatus == value) return;
+    setState(() => _importStatus = value);
   }
 
   /// Reduces noise in one media item's audio and imports the result as a new item.
@@ -3069,12 +4022,17 @@ class _AppShellState extends State<AppShell> {
     final mediaGeneration = _mediaRefreshGeneration;
     var current = project;
     setState(() {
-      _timelineTracks = null;
-      _timelineClipPages.clear();
-      _timelineMarkerPage = null;
+      // Keep the previous tracks and clips visible while the new revision
+      // loads; the success branch replaces them in one frame. Nulling them
+      // here was the visible part of "every edit looks like a project reopen".
       _timelineLoadingMoreTracks.clear();
       _timelineLoadingMoreMarkers = false;
-      _timelineLoading = true;
+      // A retry after a failed load has no visible progress otherwise: the
+      // error stays on screen and the button stays tappable while the refresh
+      // runs.
+      if (_timelineTracks == null || _timelineLoadError != null) {
+        _timelineLoading = true;
+      }
       _timelineLoadError = null;
     });
 
@@ -3190,14 +4148,8 @@ class _AppShellState extends State<AppShell> {
     }
 
     if (!_timelineRequestIsCurrent(session, generation)) return;
-    setState(() {
-      _activeProject = current;
-      _timelineTracks = null;
-      _timelineClipPages.clear();
-      _timelineMarkerPage = null;
-      _timelineLoading = false;
-      _timelineLoadError = 'The timeline changed while it was refreshing.';
-    });
+    // A newer refresh owns the timeline now. Dropping the tracks or showing an
+    // error here would flash an empty timeline and fight the newer result.
     if (current.revision != project.revision) {
       await _refreshMediaPage(
         session,
@@ -3348,11 +4300,25 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _refreshProjectState(ProjectSessionHandle session) async {
+  /// Refreshes the read model after a revision change.
+  ///
+  /// [known] is the summary the command already returned. Passing it avoids a
+  /// second round trip, and the previous library/timeline stay on screen while
+  /// the new revision loads instead of blanking on every edit.
+  Future<void> _refreshProjectState(
+    ProjectSessionHandle session, {
+    ProjectReadModel? known,
+  }) async {
     if (!mounted || !identical(session, _activeSession)) return;
     final refreshGeneration = ++_mediaRefreshGeneration;
+    // A retry from the error footer arrives with a page and an error; the
+    // panel needs the loading state before the summary is awaited, or the
+    // button stays live and the user can only guess that anything happened.
+    if (_mediaLoadError != null) {
+      setState(() => _mediaLoading = true);
+    }
     try {
-      final view = await widget.projectGateway.summary(session);
+      final view = known ?? await widget.projectGateway.summary(session);
       if (!mounted ||
           !identical(session, _activeSession) ||
           refreshGeneration != _mediaRefreshGeneration) {
@@ -3360,15 +4326,12 @@ class _AppShellState extends State<AppShell> {
       }
       setState(() {
         _activeProject = view;
-        _mediaLoading = true;
         _mediaLoadError = null;
-        _timelineTracks = null;
-        _timelineClipPages.clear();
-        _timelineMarkerPage = null;
         _timelineLoadingMoreTracks.clear();
         _timelineLoadingMoreMarkers = false;
-        _timelineLoading = true;
         _timelineLoadError = null;
+        if (_mediaPage == null) _mediaLoading = true;
+        if (_timelineTracks == null) _timelineLoading = true;
       });
       await Future.wait([
         _refreshMediaPage(
@@ -3422,11 +4385,10 @@ class _AppShellState extends State<AppShell> {
         }
         setState(() => _activeProject = current);
       }
-      setState(() {
-        _mediaPage = null;
-        _mediaLoading = false;
-        _mediaLoadError = 'The media library changed while it was refreshing.';
-      });
+      // A newer refresh took over this session while this one was running. It
+      // publishes the page; clearing the page here emptied the library for a
+      // frame and told the user about a race they cannot act on.
+      if (mounted && identical(session, _activeSession)) return;
     } on ProjectGatewayException catch (error) {
       if (mounted &&
           identical(session, _activeSession) &&
@@ -3448,6 +4410,21 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Re-requests the preview for one item whose artifact failed.
+  ///
+  /// The failed state stays visible until a new request replaces it, so the
+  /// library offers the retry instead of a silent placeholder that never
+  /// resolves.
+  void _retryMediaPreview(ProjectMediaItem item) {
+    final session = _activeSession;
+    if (session == null || !mounted) return;
+    final queued = retryablePreview(item, _mediaPreviews[item.mediaId]);
+    if (queued == null) return;
+    _updateMediaPreview(session, item.mediaId, queued);
+    _mediaPreviewQueue.retry(item);
+    _scheduleMediaPreviewRequests(session);
+  }
+
   void _queueMediaPreviews(
     ProjectSessionHandle session,
     List<ProjectMediaItem> items,
@@ -3455,26 +4432,22 @@ class _AppShellState extends State<AppShell> {
     if (!mounted || !identical(session, _activeSession)) return;
 
     final visibleIds = items.map((item) => item.mediaId).toSet();
-    final nextPreviews = Map<String, ProjectMediaPreview>.of(_mediaPreviews)
-      ..removeWhere((mediaId, _) => !visibleIds.contains(mediaId));
-    _mediaPreviewQueue.removeWhere(
-      (item) => !visibleIds.contains(item.mediaId),
-    );
-    _queuedMediaPreviewIds.removeWhere(
+    final nextPreviews = planMediaPreviews(items, _mediaPreviews);
+    _mediaPreviewQueue.removeInvisible(visibleIds);
+    if (_mediaPreviewUpdates.value.keys.any(
       (mediaId) => !visibleIds.contains(mediaId),
-    );
-
-    for (final item in items) {
-      final kind = _mediaPreviewKind(item);
-      if (kind == null || nextPreviews[item.mediaId]?.kind == kind) continue;
-      nextPreviews[item.mediaId] = ProjectMediaPreview(
-        kind: kind,
-        state: ProjectMediaArtifactRequestState.queued,
-      );
-      if (_queuedMediaPreviewIds.add(item.mediaId)) {
-        _mediaPreviewQueue.addLast(item);
-      }
+    )) {
+      _mediaPreviewUpdates.value =
+          Map<String, ProjectMediaPreview>.unmodifiable(
+            Map.fromEntries(
+              _mediaPreviewUpdates.value.entries.where(
+                (entry) => visibleIds.contains(entry.key),
+              ),
+            ),
+          );
     }
+
+    _mediaPreviewQueue.enqueue(items);
 
     setState(() {
       _mediaPreviews
@@ -3484,30 +4457,15 @@ class _AppShellState extends State<AppShell> {
     _scheduleMediaPreviewRequests(session);
   }
 
-  void _scheduleMediaPreviewRequests(ProjectSessionHandle session) {
-    if (!mounted || !identical(session, _activeSession)) return;
-    while (_activeMediaPreviewRequests < _maxActiveMediaPreviewRequests &&
-        _mediaPreviewQueue.isNotEmpty) {
-      final page = _mediaPage;
-      if (page == null) return;
-      final item = _mediaPreviewQueue.removeFirst();
-      _queuedMediaPreviewIds.remove(item.mediaId);
-      if (!page.items.any((visible) => visible.mediaId == item.mediaId)) {
-        continue;
-      }
-      final kind = _mediaPreviewKind(item);
-      if (kind == null) continue;
-      _activeMediaPreviewRequests++;
-      unawaited(_requestMediaPreview(session, item, kind));
-    }
-  }
+  void _scheduleMediaPreviewRequests(ProjectSessionHandle session) =>
+      _mediaPreviewQueue.drain(session);
 
   Future<void> _requestMediaPreview(
     ProjectSessionHandle session,
     ProjectMediaItem item,
     ProjectMediaArtifactKind kind,
   ) async {
-    _mediaPreviewSubmissionsInFlight++;
+    _mediaArtifactMailbox.beginSubmission();
     try {
       final request = switch (kind) {
         ProjectMediaArtifactKind.thumbnail =>
@@ -3577,19 +4535,16 @@ class _AppShellState extends State<AppShell> {
             );
             _finishMediaPreviewRequest(session);
           } else {
-            final ticket = _MediaPreviewTicket(
+            final ticket = MediaPreviewTicket(
               mediaId: item.mediaId,
               kind: kind,
               cacheKey: cacheKey,
               jobId: jobId,
             );
-            _pendingMediaPreviewTickets.add(ticket);
-            final earlyEvent =
-                _earlyMediaArtifactEvents[_mediaArtifactEventKey(
-                  kind,
-                  cacheKey,
-                  jobId,
-                )];
+            _mediaArtifactMailbox.add(ticket);
+            final earlyEvent = _mediaArtifactMailbox.earlyFor(
+              mediaArtifactEventKey(kind, cacheKey, jobId),
+            );
             if (earlyEvent != null) {
               unawaited(_processMediaArtifactEvent(session, earlyEvent));
             }
@@ -3613,10 +4568,7 @@ class _AppShellState extends State<AppShell> {
       }
     } finally {
       if (identical(session, _activeSession)) {
-        _mediaPreviewSubmissionsInFlight--;
-        if (_mediaPreviewSubmissionsInFlight == 0) {
-          _earlyMediaArtifactEvents.clear();
-        }
+        _mediaArtifactMailbox.endSubmission();
       }
     }
   }
@@ -3627,63 +4579,53 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaArtifactKind kind,
     String cacheKey,
   ) async {
-    try {
-      final artifact = await widget.projectGateway.readMediaArtifact(
-        session,
-        kind: kind,
-        cacheKey: cacheKey,
-      );
-      if (!mounted || !identical(session, _activeSession)) return;
-      final current = _mediaPreviews[mediaId];
-      if (current == null || current.cacheKey != cacheKey) return;
-      _updateMediaPreview(
-        session,
-        mediaId,
-        ProjectMediaPreview(
-          kind: kind,
-          state: artifact?.mimeType == 'image/png'
-              ? ProjectMediaArtifactRequestState.ready
-              : ProjectMediaArtifactRequestState.failed,
-          cacheKey: cacheKey,
-          bytes: artifact?.mimeType == 'image/png' ? artifact?.bytes : null,
-          errorCode: artifact == null ? 'ARTIFACT_NOT_FOUND' : null,
-        ),
-      );
-    } catch (_) {
-      if (!mounted || !identical(session, _activeSession)) return;
-      final current = _mediaPreviews[mediaId];
-      if (current == null || current.cacheKey != cacheKey) return;
-      _updateMediaPreview(
-        session,
-        mediaId,
-        ProjectMediaPreview(
-          kind: kind,
-          state: ProjectMediaArtifactRequestState.failed,
-          cacheKey: cacheKey,
-          errorCode: 'ARTIFACT_READ_FAILED',
-        ),
-      );
-    }
+    final preview = await _mediaPreviewReader.read(
+      session,
+      mediaId: mediaId,
+      kind: kind,
+      cacheKey: cacheKey,
+    );
+    if (preview == null || !mounted) return;
+    _updateMediaPreview(session, mediaId, preview);
   }
+
+  late final MediaPreviewReader _mediaPreviewReader = MediaPreviewReader(
+    isCurrentSession: (session) =>
+        mounted && identical(session, _activeSession),
+    readArtifact: (session, kind, cacheKey) =>
+        widget.projectGateway.readMediaArtifact(
+          session as ProjectSessionHandle,
+          kind: kind,
+          cacheKey: cacheKey,
+        ),
+    current: (mediaId) => _mediaPreviews[mediaId],
+  );
 
   void _updateMediaPreview(
     ProjectSessionHandle session,
     String mediaId,
     ProjectMediaPreview preview,
-  ) {
-    if (!mounted ||
-        !identical(session, _activeSession) ||
-        !_mediaPreviews.containsKey(mediaId)) {
-      return;
-    }
-    setState(() => _mediaPreviews[mediaId] = preview);
-  }
+  ) => _mediaPreviewPublisher.publish(
+    session,
+    mediaId,
+    preview,
+    store: (value) => _mediaPreviews[mediaId] = value,
+  );
 
-  void _finishMediaPreviewRequest(ProjectSessionHandle session) {
-    if (!mounted || !identical(session, _activeSession)) return;
-    if (_activeMediaPreviewRequests > 0) _activeMediaPreviewRequests--;
-    _scheduleMediaPreviewRequests(session);
-  }
+  late final MediaPreviewPublisher _mediaPreviewPublisher =
+      MediaPreviewPublisher(
+        isMounted: () => mounted,
+        isCurrentSession: (session) => identical(session, _activeSession),
+        holds: _mediaPreviews.containsKey,
+        isOnTimeline: (mediaId) => _timelineClipPages.values.any(
+          (page) => page.items.any((clip) => clip.mediaId == mediaId),
+        ),
+        rebuildEditor: () => setState(() {}),
+        updates: _mediaPreviewUpdates,
+      );
+
+  void _finishMediaPreviewRequest(ProjectSessionHandle session) =>
+      _mediaPreviewQueue.finishRequest(session);
 
   void _handleMediaArtifactEvent(
     ProjectSessionHandle session,
@@ -3699,25 +4641,11 @@ class _AppShellState extends State<AppShell> {
     ProjectSessionHandle session,
     ProjectMediaArtifactEvent event,
   ) {
-    if (_mediaPreviewSubmissionsInFlight > 0) {
-      _earlyMediaArtifactEvents[_mediaArtifactEventKey(
-            event.kind,
-            event.cacheKey,
-            event.jobId,
-          )] =
-          event;
-    }
-    final matching = _pendingMediaPreviewTickets
-        .where(
-          (ticket) =>
-              ticket.kind == event.kind &&
-              ticket.cacheKey == event.cacheKey &&
-              ticket.jobId == event.jobId,
-        )
-        .toList(growable: false);
-    if (matching.isEmpty) {
-      return;
-    }
+    _mediaArtifactMailbox.rememberEarly(
+      mediaArtifactEventKey(event.kind, event.cacheKey, event.jobId),
+      event,
+    );
+    if (_mediaArtifactMailbox.matching(event).isEmpty) return;
     unawaited(_processMediaArtifactEvent(session, event));
   }
 
@@ -3726,19 +4654,9 @@ class _AppShellState extends State<AppShell> {
     ProjectMediaArtifactEvent event,
   ) async {
     if (!mounted || !identical(session, _activeSession)) return;
-    final matching = _pendingMediaPreviewTickets
-        .where(
-          (ticket) =>
-              ticket.kind == event.kind &&
-              ticket.cacheKey == event.cacheKey &&
-              ticket.jobId == event.jobId,
-        )
-        .toList(growable: false);
+    final matching = _mediaArtifactMailbox.takeMatching(event);
     if (matching.isEmpty) return;
-    _pendingMediaPreviewTickets.removeWhere(matching.contains);
-    _activeMediaPreviewRequests = _activeMediaPreviewRequests >= matching.length
-        ? _activeMediaPreviewRequests - matching.length
-        : 0;
+    _mediaPreviewQueue.settle(matching.length, session);
 
     final targetIds = matching.map((ticket) => ticket.mediaId).where((mediaId) {
       final preview = _mediaPreviews[mediaId];
@@ -3748,18 +4666,20 @@ class _AppShellState extends State<AppShell> {
           preview.jobId == event.jobId;
     }).toSet();
     if (event.state != ProjectMediaArtifactEventState.succeeded) {
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId]!;
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId]!;
+        _updateMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: ProjectMediaArtifactRequestState.failed,
             cacheKey: current.cacheKey,
             jobId: current.jobId,
             errorCode: event.errorCode ?? 'PREVIEW_UNAVAILABLE',
-          );
-        }
-      });
+          ),
+        );
+      }
       _scheduleMediaPreviewRequests(session);
       return;
     }
@@ -3774,15 +4694,17 @@ class _AppShellState extends State<AppShell> {
       );
       if (!mounted || !identical(session, _activeSession)) return;
       final hasPng = artifact?.mimeType == 'image/png';
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId];
-          if (current == null ||
-              current.cacheKey != event.cacheKey ||
-              current.jobId != event.jobId) {
-            continue;
-          }
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId];
+        if (current == null ||
+            current.cacheKey != event.cacheKey ||
+            current.jobId != event.jobId) {
+          continue;
+        }
+        _updateMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: hasPng
                 ? ProjectMediaArtifactRequestState.ready
@@ -3791,24 +4713,26 @@ class _AppShellState extends State<AppShell> {
             jobId: current.jobId,
             bytes: hasPng ? artifact?.bytes : null,
             errorCode: hasPng ? null : 'ARTIFACT_READ_FAILED',
-          );
-        }
-      });
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted || !identical(session, _activeSession)) return;
-      setState(() {
-        for (final mediaId in targetIds) {
-          final current = _mediaPreviews[mediaId];
-          if (current == null || current.cacheKey != event.cacheKey) continue;
-          _mediaPreviews[mediaId] = ProjectMediaPreview(
+      for (final mediaId in targetIds) {
+        final current = _mediaPreviews[mediaId];
+        if (current == null || current.cacheKey != event.cacheKey) continue;
+        _updateMediaPreview(
+          session,
+          mediaId,
+          ProjectMediaPreview(
             kind: current.kind,
             state: ProjectMediaArtifactRequestState.failed,
             cacheKey: current.cacheKey,
             jobId: current.jobId,
             errorCode: 'ARTIFACT_READ_FAILED',
-          );
-        }
-      });
+          ),
+        );
+      }
     }
   }
 
@@ -3818,7 +4742,7 @@ class _AppShellState extends State<AppShell> {
       page.projectRevision == project.revision;
 
   Future<String?> _askProjectRename(String currentName) async {
-    return showDialog<String>(
+    final request = await showDialog<_NewProjectRequest>(
       context: context,
       builder: (_) => _ProjectNameDialog(
         title: 'Rename Project',
@@ -3828,6 +4752,7 @@ class _AppShellState extends State<AppShell> {
         confirmLabel: 'Rename',
       ),
     );
+    return request?.name;
   }
 
   Future<void> _closeProject() async {
@@ -3861,16 +4786,13 @@ class _AppShellState extends State<AppShell> {
   void _clearActiveProject(ProjectSessionHandle session) {
     if (!identical(session, _activeSession)) return;
     _mediaRefreshGeneration++;
-    _exportPollTimer?.cancel();
+    _export.detach();
     unawaited(_eventSubscription?.cancel());
     unawaited(_mediaArtifactSubscription?.cancel());
-    _mediaPreviewQueue.clear();
-    _queuedMediaPreviewIds.clear();
-    _pendingMediaPreviewTickets.clear();
-    _earlyMediaArtifactEvents.clear();
-    _activeMediaPreviewRequests = 0;
-    _mediaPreviewSubmissionsInFlight = 0;
+    _mediaPreviewQueue.reset();
+    _mediaArtifactMailbox.reset();
     _lastMediaArtifactSequence = BigInt.zero;
+    _motionInsertLog.clear();
     if (!mounted) return;
     setState(() {
       _eventSubscription = null;
@@ -3878,6 +4800,7 @@ class _AppShellState extends State<AppShell> {
       _activeProject = null;
       _mediaPage = null;
       _mediaPreviews.clear();
+      _mediaPreviewUpdates.value = const {};
       _mediaLoading = false;
       _mediaLoadingMore = false;
       _mediaLoadError = null;
@@ -3891,11 +4814,7 @@ class _AppShellState extends State<AppShell> {
       _timelineRefreshGeneration++;
       _activeProjectPath = null;
       _projectNotice = null;
-      _autosaveStatus = null;
-      _autosaveFailed = false;
-      _exportJob = null;
-      _exportStatus = null;
-      _exportFailed = false;
+      _autosave.clear();
     });
   }
 
@@ -3922,16 +4841,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _showProjectError(ProjectGatewayException error) {
-    final message = switch (error.code) {
-      'DESTINATION_EXISTS' => 'A file already exists at that location. Choose another name or use Open Project.',
-      'PROJECT_FILE_CHANGED' =>
-        'The project file changed outside OR. The save was blocked.',
-      'RECOVERY_REQUIRED' => 'This project needs explicit recovery handling before it can be opened.',
-      'LOCAL_IPC_ERROR' => 'The local CLI session could not be started. The project remains on disk.',
-      _ =>
-        error.message.isEmpty ? 'The project operation failed.' : error.message,
-    };
-    _showUnavailable(message);
+    _showUnavailable(projectErrorMessage(error));
   }
 
   void _showUnavailable(String message) {
@@ -3949,16 +4859,23 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-String _captionTimeLabel(BigInt milliseconds) {
-  final safeMilliseconds = milliseconds.isNegative ? BigInt.zero : milliseconds;
-  final hours = safeMilliseconds ~/ BigInt.from(3_600_000);
-  final afterHours = safeMilliseconds % BigInt.from(3_600_000);
-  final minutes = afterHours ~/ BigInt.from(60_000);
-  final afterMinutes = afterHours % BigInt.from(60_000);
-  final seconds = afterMinutes ~/ BigInt.from(1_000);
-  final millis = afterMinutes % BigInt.from(1_000);
-  return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}.${millis.toString().padLeft(3, '0')}';
+/// Result of the create-project dialog. A frame rate is optional so the
+/// rename flow can keep returning just a name.
+class _NewProjectRequest {
+  const _NewProjectRequest({required this.name, this.frameRate});
+
+  final String name;
+  final ProjectRationalRate? frameRate;
 }
+
+const _newProjectRateChoices = <String, ProjectRationalRate>{
+  '23.976': ProjectRationalRate(24000, 1001),
+  '24': ProjectRationalRate(24, 1),
+  '25': ProjectRationalRate(25, 1),
+  '30': ProjectRationalRate(30, 1),
+  '50': ProjectRationalRate(50, 1),
+  '60': ProjectRationalRate(60, 1),
+};
 
 class _ProjectNameDialog extends StatefulWidget {
   const _ProjectNameDialog({
@@ -3967,6 +4884,7 @@ class _ProjectNameDialog extends StatefulWidget {
     required this.fieldKey,
     required this.confirmKey,
     required this.confirmLabel,
+    this.showFrameRate = false,
   });
 
   final String title;
@@ -3974,6 +4892,7 @@ class _ProjectNameDialog extends StatefulWidget {
   final String fieldKey;
   final String confirmKey;
   final String confirmLabel;
+  final bool showFrameRate;
 
   @override
   State<_ProjectNameDialog> createState() => _ProjectNameDialogState();
@@ -3983,6 +4902,7 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.initialName,
   );
+  String _frameRateChoice = '30';
   String? _validationMessage;
 
   @override
@@ -3992,26 +4912,65 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
   }
 
   void _submit() {
-    final value = _controller.text;
+    final value = _controller.text.trim();
     if (value.isEmpty) {
       setState(() => _validationMessage = 'Enter a project name.');
       return;
     }
-    Navigator.of(context).pop(value);
+    Navigator.of(context).pop(
+      _NewProjectRequest(
+        name: value,
+        frameRate: widget.showFrameRate
+            ? _newProjectRateChoices[_frameRateChoice]
+            : null,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: Text(widget.title),
-    content: TextField(
-      key: ValueKey(widget.fieldKey),
-      controller: _controller,
-      autofocus: true,
-      decoration: InputDecoration(
-        labelText: 'Project name',
-        errorText: _validationMessage,
+    content: SizedBox(
+      width: 380,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            key: ValueKey(widget.fieldKey),
+            controller: _controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Project name',
+              errorText: _validationMessage,
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          if (widget.showFrameRate) ...[
+            const SizedBox(height: OrSpacing.x3),
+            DropdownButtonFormField<String>(
+              key: const ValueKey('new-project-frame-rate'),
+              initialValue: _frameRateChoice,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Frame rate',
+                helperText: 'Used for playback timecode and export.',
+                helperMaxLines: 2,
+              ),
+              items: [
+                for (final entry in _newProjectRateChoices.entries)
+                  DropdownMenuItem(
+                    value: entry.key,
+                    child: Text('${entry.key} fps'),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _frameRateChoice = value);
+              },
+            ),
+          ],
+        ],
       ),
-      onSubmitted: (_) => _submit(),
     ),
     actions: [
       TextButton(
@@ -4028,48 +4987,6 @@ class _ProjectNameDialogState extends State<_ProjectNameDialog> {
 }
 
 enum _LeaveChoice { save, discard, cancel }
-
-ProjectMediaArtifactKind? _mediaPreviewKind(ProjectMediaItem item) {
-  if (item.videoDetails != null) return ProjectMediaArtifactKind.thumbnail;
-  if (item.audioDetails != null) return ProjectMediaArtifactKind.waveform;
-  return null;
-}
-
-String _mediaArtifactEventKey(
-  ProjectMediaArtifactKind kind,
-  String cacheKey,
-  String jobId,
-) => '${kind.name}\u0000$cacheKey\u0000$jobId';
-
-class _MediaPreviewTicket {
-  const _MediaPreviewTicket({
-    required this.mediaId,
-    required this.kind,
-    required this.cacheKey,
-    required this.jobId,
-  });
-
-  final String mediaId;
-  final ProjectMediaArtifactKind kind;
-  final String cacheKey;
-  final String jobId;
-}
-
-enum _RecoveryChoice { recover, discard, cancel }
-
-enum _RecoveryMutation { apply, discard }
-
-class _RecoveryPreparation {
-  const _RecoveryPreparation({
-    required this.proceed,
-    this.notice,
-    this.mutation,
-  });
-
-  final bool proceed;
-  final String? notice;
-  final _RecoveryMutation? mutation;
-}
 
 bool _sameProjectIdentity(ProjectReadModel first, ProjectReadModel second) =>
     first.projectId == second.projectId &&

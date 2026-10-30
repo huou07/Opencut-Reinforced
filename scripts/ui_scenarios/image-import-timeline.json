@@ -1,0 +1,25 @@
+{
+  "name": "image-import-timeline",
+  "harness": "or_ui",
+  "description": "Create a project, import a still PNG with no audio or video stream, and prove it reaches the timeline as a clip: the still-image insertion path the owner asked to be covered.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": [
+    "copy:scripts/ui_scenarios/mountain.png"
+  ],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    { "op": "enter_text", "selector": { "key": "new-project-name" }, "value": "Image import journey" },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait_label", "label": "No timeline tracks", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key": "media-import" } },
+    { "op": "picker", "next": "media" },
+    { "op": "wait_label", "label": "mountain.png", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key_regex": "^media-add-timeline-.*$" } },
+    { "op": "wait_label", "label": "Insert Clip" },
+    { "op": "tap", "selector": { "key": "timeline-confirm-insert" } },
+    { "op": "wait_label", "label": "1 track" },
+    { "op": "tree", "name": "image-inserted" },
+    { "op": "shot", "name": "image-inserted" }
+  ]
+}

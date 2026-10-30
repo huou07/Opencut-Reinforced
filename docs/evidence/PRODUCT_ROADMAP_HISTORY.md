@@ -1,6 +1,6 @@
 # Product roadmap investigation receipts
 
-This archive preserves the detailed run-by-run reports moved out of the active `docs/PRODUCT_ROADMAP.md` during the export milestone. Pending/future-tense statements are historical snapshots; use current exact-run evidence and the active roadmap summary to determine present status. Run IDs, SHAs, diagnostics, and investigation detail are retained verbatim below.
+This archive preserves the detailed run-by-run reports moved out of the active `docs/reference/roadmap.md` during the export milestone. Pending/future-tense statements are historical snapshots; use current exact-run evidence and the active roadmap summary to determine present status. Run IDs, SHAs, diagnostics, and investigation detail are retained verbatim below.
 
 ## Packaged journey implementation and verification history
 

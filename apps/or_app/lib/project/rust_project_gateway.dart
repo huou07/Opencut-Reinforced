@@ -341,6 +341,7 @@ class RustProjectGateway implements ProjectGateway {
             .map(
               (clip) => ProjectTimelineClip(
                 clipId: clip.clipId,
+                playbackRate: _projectRationalRate(clip.playbackRate),
                 contentKind: switch (clip.contentKind) {
                   rust.TimelineClipContentKindView.media =>
                     ProjectTimelineClipContentKind.media,
@@ -354,6 +355,8 @@ class RustProjectGateway implements ProjectGateway {
                 formatting: clip.formatting == null
                     ? null
                     : _projectTextFormatting(clip.formatting!),
+                reversed: clip.reversed,
+                frozen: clip.frozen,
                 timelineStart: _projectRationalTime(clip.timelineStart),
                 timelineDuration: _projectRationalTime(clip.timelineDuration),
                 sourceStart: clip.sourceStart == null
@@ -521,6 +524,63 @@ class RustProjectGateway implements ProjectGateway {
         fadeIn: _rustTime(settings.fadeIn),
         fadeOut: _rustTime(settings.fadeOut),
       ),
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) async => _action(
+    await _host(session).updateTimelineClipPlaybackRate(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      rate: rust.RationalRateView(
+        numerator: rate.numerator,
+        denominator: rate.denominator,
+      ),
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) async => _action(
+    await _host(session).setTimelineClipReversed(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      reversed: reversed,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) async => _action(
+    await _host(session).setTimelineClipFrozen(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      frozen: frozen,
     ),
   );
 
@@ -721,10 +781,36 @@ class RustProjectGateway implements ProjectGateway {
   ) async => _transcriptionModel(await _host(session).transcriptionModel());
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) async => [
+    for (final option in await _host(session).transcriptionModels())
+      _transcriptionModelOption(option),
+  ];
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) async => _transcriptionModel(
+    await _host(session).selectTranscriptionModel(modelId: modelId),
+  );
+
+  @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) async => _transcriptionModel(
+    await _host(session).removeTranscriptionModel(modelId: modelId),
+  );
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
-  ) async =>
-      _modelDownload(await _host(session).beginTranscriptionModelDownload());
+    String modelId,
+  ) async => _modelDownload(
+    await _host(session).beginTranscriptionModelDownload(modelId: modelId),
+  );
 
   @override
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
@@ -917,6 +1003,27 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  }) async {
+    return _action(
+      await _host(session).moveTimelineClips(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        expectedRevision: current.revision,
+        trackId: trackId,
+        clipIds: clipIds,
+        deltaNumerator: delta.numerator.toInt(),
+        deltaDenominator: delta.denominator,
+      ),
+    );
+  }
+
+  @override
   Future<ProjectActionResult> deleteTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1093,6 +1200,26 @@ class RustProjectGateway implements ProjectGateway {
       clipId: clipId,
       timelineTimeNumerator: timelineTime.numerator.toInt(),
       timelineTimeDenominator: timelineTime.denominator,
+    ),
+  );
+
+  @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) async => _action(
+    await _host(session).duckTimelineClip(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      voiceTrackId: voiceTrackId,
+      duckMillidecibels: duckDecibels * 1000,
     ),
   );
 
@@ -1306,13 +1433,15 @@ class RustProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  ) async => _exportJob(
+    String destination, {
+    String? quality,
+  }) async => _exportJob(
     await _host(session).startExport(
       projectId: current.projectId,
       projectInstanceId: current.projectInstanceId,
       expectedRevision: current.revision,
       destination: destination,
+      quality: quality,
     ),
   );
 
@@ -1449,6 +1578,7 @@ class RustProjectGateway implements ProjectGateway {
     rust.ProjectTranscriptionModelView value,
   ) => ProjectTranscriptionModel(
     modelId: value.modelId,
+    label: value.label,
     version: value.version,
     license: value.license,
     language: value.language,
@@ -1456,12 +1586,29 @@ class RustProjectGateway implements ProjectGateway {
     source: value.source,
     installed: value.installed,
     providerAvailable: value.providerAvailable,
+    active: value.active,
+  );
+
+  static ProjectTranscriptionModel _transcriptionModelOption(
+    rust.ProjectTranscriptionModelOptionView value,
+  ) => ProjectTranscriptionModel(
+    modelId: value.modelId,
+    label: value.label,
+    version: value.version,
+    license: value.license,
+    language: value.language,
+    sizeBytes: value.sizeBytes,
+    source: value.source,
+    installed: value.installed,
+    providerAvailable: value.providerAvailable,
+    active: value.active,
   );
 
   static ProjectModelDownload _modelDownload(
     rust.ProjectModelDownloadView value,
   ) => ProjectModelDownload(
     downloadId: value.downloadId,
+    modelId: value.modelId,
     destination: value.destination,
     source: value.source,
     sizeBytes: value.sizeBytes,
@@ -1552,11 +1699,16 @@ class RustProjectGateway implements ProjectGateway {
     rust.RationalTimeView value,
   ) => ProjectRationalTime(BigInt.from(value.numerator), value.denominator);
 
+  static ProjectRationalRate _projectRationalRate(
+    rust.RationalRateView value,
+  ) => ProjectRationalRate(value.numerator, value.denominator);
+
   static ProjectTextFormatting _projectTextFormatting(
     rust.ProjectTextFormattingView value,
   ) => ProjectTextFormatting(
     font: switch (value.font) {
       rust.FontIdentityView.bundledInter => ProjectFontIdentity.bundledInter,
+      rust.FontIdentityView.beVietnamPro => ProjectFontIdentity.beVietnamPro,
     },
     sizeMilliPoints: value.sizeMilliPoints,
     weight: switch (value.weight) {
@@ -1576,6 +1728,25 @@ class RustProjectGateway implements ProjectGateway {
       blue: value.color.blue,
       alpha: value.color.alpha,
     ),
+    anchor: switch (value.anchor) {
+      rust.TextVerticalAnchorView.top => ProjectTextVerticalAnchor.top,
+      rust.TextVerticalAnchorView.center => ProjectTextVerticalAnchor.center,
+      rust.TextVerticalAnchorView.bottom => ProjectTextVerticalAnchor.bottom,
+    },
+    offsetXBasisPoints: value.offsetXBasisPoints,
+    offsetYBasisPoints: value.offsetYBasisPoints,
+    background: value.background == null
+        ? null
+        : ProjectTextBackground(
+            color: ProjectTextColor(
+              red: value.background!.color.red,
+              green: value.background!.color.green,
+              blue: value.background!.color.blue,
+              alpha: value.background!.color.alpha,
+            ),
+            paddingMilliPoints: value.background!.paddingMilliPoints,
+          ),
+    opacityBasisPoints: value.opacityBasisPoints,
   );
 
   static rust.ProjectTextFormattingView _rustTextFormatting(
@@ -1583,6 +1754,7 @@ class RustProjectGateway implements ProjectGateway {
   ) => rust.ProjectTextFormattingView(
     font: switch (value.font) {
       ProjectFontIdentity.bundledInter => rust.FontIdentityView.bundledInter,
+      ProjectFontIdentity.beVietnamPro => rust.FontIdentityView.beVietnamPro,
     },
     sizeMilliPoints: value.sizeMilliPoints,
     weight: switch (value.weight) {
@@ -1602,6 +1774,25 @@ class RustProjectGateway implements ProjectGateway {
       blue: value.color.blue,
       alpha: value.color.alpha,
     ),
+    anchor: switch (value.anchor) {
+      ProjectTextVerticalAnchor.top => rust.TextVerticalAnchorView.top,
+      ProjectTextVerticalAnchor.center => rust.TextVerticalAnchorView.center,
+      ProjectTextVerticalAnchor.bottom => rust.TextVerticalAnchorView.bottom,
+    },
+    offsetXBasisPoints: value.offsetXBasisPoints,
+    offsetYBasisPoints: value.offsetYBasisPoints,
+    background: value.background == null
+        ? null
+        : rust.ProjectTextBackgroundView(
+            color: rust.ProjectTextColorView(
+              red: value.background!.color.red,
+              green: value.background!.color.green,
+              blue: value.background!.color.blue,
+              alpha: value.background!.color.alpha,
+            ),
+            paddingMilliPoints: value.background!.paddingMilliPoints,
+          ),
+    opacityBasisPoints: value.opacityBasisPoints,
   );
 
   static rust.TimelineClipContentKindView _rustClipContentKind(

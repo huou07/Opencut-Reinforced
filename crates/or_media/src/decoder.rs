@@ -230,6 +230,15 @@ impl std::ops::DerefMut for MediaInput {
     }
 }
 
+fn is_still_image_format(name: &str) -> bool {
+    name.split(',').map(str::trim).any(|format| {
+        matches!(
+            format,
+            "image2" | "image2pipe" | "jpeg_pipe" | "png_pipe" | "webp_pipe"
+        )
+    })
+}
+
 impl SoftwareMediaDecoder {
     pub fn new(source: &MediaSourceRef, budgets: RuntimeBudgets) -> Result<Self, DecodeError> {
         ffmpeg::init().map_err(DecodeError::Ffmpeg)?;
@@ -297,6 +306,7 @@ impl SoftwareMediaDecoder {
             return Err(DecodeError::Cancelled);
         }
         let input = self.open_input(cancellation)?;
+        let still_image = is_still_image_format(input.format().name());
         let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
@@ -320,6 +330,7 @@ impl SoftwareMediaDecoder {
             stream_index,
             time_base,
             display_rotation,
+            still_image,
             budgets: self.budgets.clone(),
             scaler: None,
             previous_frame: None,
@@ -340,9 +351,16 @@ impl SoftwareMediaDecoder {
         cancellation: &or_runtime::CancellationToken,
     ) -> Result<usize, DecodeError> {
         check_request(snapshot, queue, cancellation)?;
-        let range = snapshot.requested_range();
-        validate_range(range)?;
+        let requested_range = snapshot.requested_range();
+        validate_range(requested_range)?;
         let mut input = self.open_input(cancellation)?;
+        let still_image = is_still_image_format(input.format().name());
+        let range = if still_image {
+            TimeRange::new(RationalTime::ZERO, requested_range.duration())
+                .map_err(DecodeError::Time)?
+        } else {
+            requested_range
+        };
         let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
@@ -360,7 +378,9 @@ impl SoftwareMediaDecoder {
             )
         };
         let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
-        seek_to_range(&mut input, stream_index, range, time_base)?;
+        if !still_image {
+            seek_to_range(&mut input, stream_index, range, time_base)?;
+        }
 
         let job = DecodeJob {
             snapshot,
@@ -416,6 +436,7 @@ impl SoftwareMediaDecoder {
         let range = TimeRange::new(source_time, RationalTime::ZERO).map_err(DecodeError::Time)?;
         validate_range(range)?;
         let mut input = self.open_input(cancellation)?;
+        let still_image = is_still_image_format(input.format().name());
         let (stream_index, time_base, context, display_rotation) = {
             let stream = input
                 .streams()
@@ -437,7 +458,14 @@ impl SoftwareMediaDecoder {
             time_base,
             display_rotation,
         };
-        seek_to_range(&mut input, stream_index, range, time_base)?;
+        let target = if still_image {
+            RationalTime::ZERO
+        } else {
+            source_time
+        };
+        if !still_image {
+            seek_to_range(&mut input, stream_index, range, time_base)?;
+        }
         let mut scaler = None;
         let mut candidate = None;
         for packet in input.packets() {
@@ -453,7 +481,7 @@ impl SoftwareMediaDecoder {
                 &mut decoder,
                 &mut scaler,
                 presentation,
-                source_time,
+                target,
                 &self.budgets,
                 cancellation,
                 &mut candidate,
@@ -467,7 +495,7 @@ impl SoftwareMediaDecoder {
             &mut decoder,
             &mut scaler,
             presentation,
-            source_time,
+            target,
             &self.budgets,
             cancellation,
             &mut candidate,
@@ -1109,6 +1137,7 @@ pub struct VideoDecodeSession {
     stream_index: usize,
     time_base: TimestampBase,
     display_rotation: DisplayRotation,
+    still_image: bool,
     budgets: RuntimeBudgets,
     scaler: Option<(Pixel, u32, u32, scaling::Context)>,
     previous_frame: Option<VideoFrame>,
@@ -1139,7 +1168,7 @@ impl VideoDecodeSession {
             return Err(DecodeError::Cancelled);
         }
         let discontinuity = self.last_request.is_some_and(|previous| target < previous);
-        if self.last_request.is_none() || discontinuity {
+        if !self.still_image && (self.last_request.is_none() || discontinuity) {
             self.seek(target)?;
         }
         self.last_request = Some(target);

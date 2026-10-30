@@ -20,6 +20,7 @@ hooks:
   user_defines:
     or_app_bridge:
       android_ffmpeg_install_root: android/.ffmpeg-install
+      macos_ffmpeg_install_root: .dart_tool/macos-ffmpeg-install
 
 dev_dependencies:
   flutter_test:
@@ -27,6 +28,9 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   integration_test:
     sdk: flutter
+  fake_async: ^1.3.3
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/agent_workspace/bundle.json

@@ -1,4 +1,13 @@
+import 'dart:io';
+
 enum ExportProfile {
+  mp4H264Aac(
+    wireName: 'mp4_h264_aac',
+    extension: 'mp4',
+    mimeType: 'video/mp4',
+    label: 'MP4 video',
+    description: 'H.264 video and AAC audio for broad compatibility.',
+  ),
   webmVp9Opus(
     wireName: 'webm_vp9_opus',
     extension: 'webm',
@@ -30,12 +39,48 @@ enum ExportProfile {
   final String label;
   final String description;
 
-  static List<ExportProfile> get available => values;
+  /// Whether the profile has a rate control the quality preference can trade.
+  bool get hasQualityChoice => this != ExportProfile.matroskaFfv1PcmS16le;
 
-  static const ExportProfile defaultForPlatform = webmVp9Opus;
+  static List<ExportProfile> get available => Platform.isMacOS
+      ? values
+      : values.where((profile) => profile != mp4H264Aac).toList();
+
+  static ExportProfile get defaultForPlatform =>
+      Platform.isMacOS ? mp4H264Aac : webmVp9Opus;
 
   String suggestedName(String projectName) {
     final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
     return '${base.isEmpty ? 'Untitled' : base}.$extension';
   }
+}
+
+/// How much a lossy export may spend on the picture.
+///
+/// The lossless profile has no rate control, so the choice only applies to WebM
+/// and MP4. Quality is the default: an export is usually the last thing a project
+/// does, and the local encoder is faster than the renderer at delivery sizes.
+enum ExportQuality {
+  quality(
+    wireName: 'quality',
+    label: 'Quality',
+    description: 'Slower encode, cleaner picture, larger file.',
+  ),
+  speed(
+    wireName: 'speed',
+    label: 'Faster',
+    description: 'Quickest encode, smallest file, softer picture.',
+  );
+
+  const ExportQuality({
+    required this.wireName,
+    required this.label,
+    required this.description,
+  });
+
+  final String wireName;
+  final String label;
+  final String description;
+
+  static ExportQuality get defaultChoice => ExportQuality.quality;
 }

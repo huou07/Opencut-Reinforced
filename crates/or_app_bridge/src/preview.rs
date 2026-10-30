@@ -61,14 +61,17 @@ mod desktop {
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
-        EffectReference, ExportProfile, ExportRequest, ExportResponse, JobCancelOutcome,
-        JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
-        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata, Opacity,
-        ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
-        RationalRate, RationalTime, TextFormatting, TimeRange, TimelineClipState,
-        TimelineTrackSummaryV2, TrackKind, Transform, TransitionReference,
+        EffectReference, ExportProfile, ExportQuality, ExportRequest, ExportResponse,
+        JobCancelOutcome, JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
+        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
+        MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId, ProjectInstanceId,
+        ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+        TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
+        TransitionReference,
     };
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use or_ipc::{
+        ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
+    };
     use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
@@ -85,7 +88,7 @@ mod desktop {
         pin::Pin,
         sync::{
             Arc, Mutex, MutexGuard, OnceLock,
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
             mpsc,
         },
         task::{Context, Poll, Wake, Waker},
@@ -103,6 +106,14 @@ mod desktop {
     const AUDIO_SAMPLE_RATE: u32 = 48_000;
     const AUDIO_BUFFER_FRAMES: usize = 12_000;
     const AUDIO_DECODE_QUEUE_CAPACITY: usize = 256;
+    /// How many rendered frames may wait for the writer during an export. Two is
+    /// enough to keep the GPU and the encoder busy at once without holding a long
+    /// run of full-size frames in memory.
+    const EXPORT_RENDER_AHEAD: usize = 2;
+    /// Export decodes each audio clip once into memory before rendering. The cap
+    /// keeps a very long timeline from exhausting the process; above it the export
+    /// keeps the streaming path instead of swapping.
+    const MAX_EXPORT_AUDIO_CACHE_BYTES: usize = 1024 * 1024 * 1024;
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
@@ -198,6 +209,7 @@ mod desktop {
                     expected_project_revision,
                     destination,
                     profile,
+                    quality,
                 } => {
                     if project_id != session.project_id()
                         || project_instance_id != session.project_instance_id()
@@ -213,10 +225,12 @@ mod desktop {
                             "the project changed before export started; refresh and retry",
                         );
                     }
+                    self.quiesce_for_export();
                     let destination = std::path::PathBuf::from(destination);
                     let (extension, format_name) = match profile {
                         ExportProfile::MatroskaFfv1PcmS16le => ("mkv", "Matroska"),
                         ExportProfile::WebmVp9Opus => ("webm", "WebM"),
+                        ExportProfile::Mp4H264Aac => ("mp4", "MP4"),
                     };
                     if !destination.is_absolute()
                         || !destination
@@ -300,6 +314,7 @@ mod desktop {
                             program,
                             destination,
                             profile,
+                            quality,
                             output_size,
                             frame_count,
                             frame_rate,
@@ -570,6 +585,24 @@ mod desktop {
             state.error_code = None;
             state.error_message = None;
             Ok(state.snapshot())
+        }
+
+        /// Stops preview playback and releases the audio decoder leases before an
+        /// export prepares its own audio cache. Exporting while the preview plays
+        /// otherwise exhausts the shared playback audio budget.
+        fn quiesce_for_export(&self) {
+            let mut state = lock(&self.state);
+            let audio_clock = state.audio_playback.as_ref().map(AudioPlayback::clock);
+            if let Some(clock) = audio_clock {
+                if let Ok(position) = clock.timeline_time() {
+                    let _ = state.transport.pause_at_master_clock(position);
+                }
+            } else {
+                let _ = state.transport.pause(Instant::now());
+            }
+            let stopped_audio = state.audio_playback.take();
+            drop(state);
+            drop(stopped_audio);
         }
 
         pub fn pause(&self, host: &LiveProjectHost) -> Result<PreviewSnapshot, PreviewError> {
@@ -1036,6 +1069,7 @@ mod desktop {
                 None,
                 Some((generation, &self.generation)),
                 false,
+                RenderOutput::Packed,
                 cancellation,
             )
         }
@@ -1104,6 +1138,7 @@ mod desktop {
             result
         }
 
+        #[allow(clippy::too_many_arguments)]
         fn render_with_size(
             &self,
             program: &PreviewProgram,
@@ -1111,6 +1146,7 @@ mod desktop {
             fixed_size: Option<(u32, u32)>,
             expected_generation: Option<(u64, &AtomicU64)>,
             fail_on_decode_error: bool,
+            output: RenderOutput,
             cancellation: &CancellationToken,
         ) -> Result<Presentation, PreviewError> {
             if cancellation.is_cancelled()
@@ -1147,15 +1183,9 @@ mod desktop {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
                 })?;
                 // Timeline time maps to source time through the clip's rate: a clip at
-                // 2x consumes two units of source per unit of timeline.
-                let scaled = clip
-                    .playback_rate
-                    .apply(offset)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
-                let source_time = clip
-                    .source_start
-                    .checked_add(scaled)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+                // 2x consumes two units of source per unit of timeline, and a reversed
+                // clip walks that same span backwards.
+                let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
                 match self.decode_video_frame(
                     program.key,
@@ -1184,10 +1214,37 @@ mod desktop {
                                 "preview request was superseded",
                             ));
                         }
+                        if matches!(output, RenderOutput::Nv12) {
+                            // The direct path has a full-frame opaque picture and no
+                            // layers to composite. When the caller wants NV12 (the
+                            // hardware H.264 export), convert it on the GPU and read
+                            // back the two planes instead of paying a CPU YUV->NV12
+                            // swscale on the writer thread for every frame.
+                            let gpu_planes = RenderSize::new(width, height).ok().and_then(|size| {
+                                let layer =
+                                    RgbaVideoLayer::new(width, height, frame.pixels()).ok()?;
+                                renderer().ok().and_then(|renderer| {
+                                    renderer
+                                        .render_rgba_layers_nv12(snapshot, size, &[layer])
+                                        .ok()
+                                })
+                            });
+                            if let Some(planes) = gpu_planes {
+                                return Ok(Presentation {
+                                    width,
+                                    height,
+                                    pixels: Vec::new(),
+                                    planes: Some(planes),
+                                    error_code: None,
+                                    error_message: None,
+                                });
+                            }
+                        }
                         return Ok(Presentation {
                             width,
                             height,
                             pixels: frame.pixels().to_vec(),
+                            planes: None,
                             error_code: None,
                             error_message: None,
                         });
@@ -1217,10 +1274,7 @@ mod desktop {
                 let offset = time.checked_sub(clip.timeline_start).map_err(|error| {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
                 })?;
-                let source_time = clip
-                    .source_start
-                    .checked_add(offset)
-                    .map_err(|error| PreviewError::new("INVALID_SOURCE_TIME", error.to_string()))?;
+                let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
                 match self.decode_video_frame(
                     program.key,
@@ -1393,9 +1447,20 @@ mod desktop {
                 );
             }
             let renderer = renderer()?;
-            let rendered = renderer
-                .render_rgba_layers(snapshot, size, &layers)
-                .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+            let (pixels, planes) = match output {
+                RenderOutput::Packed => {
+                    let rendered = renderer
+                        .render_rgba_layers(snapshot, size, &layers)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+                    (rendered.pixels().to_vec(), None)
+                }
+                RenderOutput::Nv12 => {
+                    let planes = renderer
+                        .render_rgba_layers_nv12(snapshot, size, &layers)
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+                    (Vec::new(), Some(planes))
+                }
+            };
             if cancellation.is_cancelled() {
                 return Err(PreviewError::new(
                     "PREVIEW_CANCELLED",
@@ -1405,7 +1470,8 @@ mod desktop {
             Ok(Presentation {
                 width,
                 height,
-                pixels: rendered.pixels().to_vec(),
+                pixels,
+                planes,
                 error_code: decode_error
                     .as_ref()
                     .map(|_| "MEDIA_DECODE_FAILED".to_owned()),
@@ -1455,6 +1521,106 @@ mod desktop {
             request: ExportRequest,
         ) -> ExportResponse {
             PreviewRuntime::handle_export_request(self, session, request)
+        }
+    }
+
+    impl MotionMaterializeHandler for PreviewRuntime {
+        #[allow(clippy::let_and_return)]
+        fn handle_motion_materialize_request(
+            &self,
+            identity: ProjectSessionIdentity,
+            request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            let view = match request {
+                MotionMaterializeRequest::FromCode {
+                    project_id,
+                    project_instance_id,
+                    source_path,
+                    destination,
+                    frame_rate_numerator,
+                    frame_rate_denominator,
+                    width,
+                    height,
+                    title,
+                } => {
+                    if project_id != identity.project_id
+                        || project_instance_id != identity.project_instance_id
+                    {
+                        return MotionMaterializeResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "motion request belongs to a different project session",
+                        );
+                    }
+                    if !std::path::Path::new(&destination).is_absolute() {
+                        return MotionMaterializeResponse::failure(
+                            "INVALID_MOTION_DESTINATION",
+                            "choose an absolute destination path for the rendered video",
+                        );
+                    }
+                    let view = crate::api::motion::materialize_motion_scene_from_code(
+                        source_path,
+                        destination,
+                        frame_rate_numerator,
+                        frame_rate_denominator,
+                        width,
+                        height,
+                        title,
+                    );
+                    view
+                }
+                MotionMaterializeRequest::FromScene {
+                    project_id,
+                    project_instance_id,
+                    scene_path,
+                    destination,
+                    frame_rate_numerator,
+                    frame_rate_denominator,
+                    width,
+                    height,
+                } => {
+                    if project_id != identity.project_id
+                        || project_instance_id != identity.project_instance_id
+                    {
+                        return MotionMaterializeResponse::failure(
+                            "PROJECT_INSTANCE_MISMATCH",
+                            "motion request belongs to a different project session",
+                        );
+                    }
+                    if !std::path::Path::new(&destination).is_absolute() {
+                        return MotionMaterializeResponse::failure(
+                            "INVALID_MOTION_DESTINATION",
+                            "choose an absolute destination path for the rendered video",
+                        );
+                    }
+                    let view = crate::api::motion::materialize_motion_scene(
+                        scene_path,
+                        destination,
+                        frame_rate_numerator,
+                        frame_rate_denominator,
+                        width,
+                        height,
+                    );
+                    view
+                }
+            };
+            let duration =
+                RationalTime::new(view.duration_numerator, view.duration_denominator as u32)
+                    .unwrap_or(RationalTime::ZERO);
+            MotionMaterializeResponse {
+                succeeded: view.succeeded,
+                error_code: view.code,
+                message: view.message,
+                output_path: view.output_path,
+                scene_id: view.scene_id,
+                scene_name: view.scene_name,
+                width: view.width,
+                height: view.height,
+                frame_rate_numerator: view.frame_rate_numerator,
+                frame_rate_denominator: view.frame_rate_denominator,
+                frame_count: view.frame_count,
+                duration,
+                bytes_written: view.bytes_written,
+            }
         }
     }
 
@@ -1527,6 +1693,51 @@ mod desktop {
         audio_clips: Vec<AudioClip>,
     }
 
+    /// Source time for a timeline offset inside one clip.
+    ///
+    /// A forward clip walks its source from `source_start`; a reversed clip walks the
+    /// same span from its end, so the offset mirrors inside the span the clip covers
+    /// rather than inside the source file.
+    fn clip_source_time(
+        clip: &VideoClip,
+        offset: RationalTime,
+    ) -> Result<RationalTime, PreviewError> {
+        mapped_source_time(
+            clip.source_start,
+            clip.duration,
+            clip.playback_rate,
+            offset,
+            clip.reversed,
+            clip.frozen,
+        )
+    }
+
+    /// The mapping itself, separated from `VideoClip` so it can be exercised without a
+    /// whole clip: frozen holds the first frame, reversed mirrors inside the clip span.
+    pub(crate) fn mapped_source_time(
+        source_start: RationalTime,
+        duration: RationalTime,
+        playback_rate: RationalRate,
+        offset: RationalTime,
+        reversed: bool,
+        frozen: bool,
+    ) -> Result<RationalTime, PreviewError> {
+        let invalid =
+            |error: or_core::TimeError| PreviewError::new("INVALID_SOURCE_TIME", error.to_string());
+        if frozen {
+            // A frozen clip shows the frame at its source start for the whole duration.
+            return Ok(source_start);
+        }
+        let scaled = playback_rate.apply(offset).map_err(invalid)?;
+        let span = playback_rate.apply(duration).map_err(invalid)?;
+        let walked = if reversed {
+            span.checked_sub(scaled).map_err(invalid)?
+        } else {
+            scaled
+        };
+        source_start.checked_add(walked).map_err(invalid)
+    }
+
     fn direct_video_clip_at(
         program: &PreviewProgram,
         time: RationalTime,
@@ -1587,6 +1798,8 @@ mod desktop {
                 content_end: Some(RationalTime::new(10, 1).unwrap()),
                 video_clips: vec![VideoClip {
                     playback_rate: RationalRate::ONE,
+                    reversed: false,
+                    frozen: false,
                     source: MediaSourceRef::local_file(local_media_uri("identity.mp4")).unwrap(),
                     source_dimensions: Some((1920, 1080)),
                     timeline_start: RationalTime::ZERO,
@@ -1627,6 +1840,8 @@ mod desktop {
 
             program.video_clips.push(VideoClip {
                 playback_rate: RationalRate::ONE,
+                reversed: false,
+                frozen: false,
                 source: MediaSourceRef::local_file(local_media_uri("second.mp4")).unwrap(),
                 source_dimensions: Some((1920, 1080)),
                 timeline_start: RationalTime::ZERO,
@@ -1726,6 +1941,12 @@ mod desktop {
         source_start: RationalTime,
         duration: RationalTime,
         playback_rate: RationalRate,
+        /// Set when the clip walks its source backwards; the source-time mapping
+        /// mirrors inside the clip's own source range.
+        reversed: bool,
+        /// Set when the clip holds one frame: every offset maps to the source start,
+        /// so the picture stops while the clip keeps its duration.
+        frozen: bool,
         transform: Transform,
         crop: Crop,
         opacity: Opacity,
@@ -1763,8 +1984,20 @@ mod desktop {
         width: u32,
         height: u32,
         pixels: Vec<u8>,
+        /// Set when the caller asked for NV12 output: the same composition in the
+        /// layout the hardware encoder takes, converted on the GPU.
+        planes: Option<or_render::Nv12Planes>,
         error_code: Option<String>,
         error_message: Option<String>,
+    }
+
+    /// Which CPU layout a render request wants back.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum RenderOutput {
+        /// Packed RGBA, for the viewer texture and the lossless encoder.
+        Packed,
+        /// NV12 planes, for the hardware H.264 encoder.
+        Nv12,
     }
 
     fn load_program(
@@ -1952,6 +2185,8 @@ mod desktop {
                     media_id,
                     source_range,
                     playback_rate,
+                    reversed,
+                    frozen,
                 },
                 ClipSettings::Visual(settings),
             ) => {
@@ -1965,6 +2200,8 @@ mod desktop {
                     source_start: source_range.start(),
                     duration: clip.timeline_duration,
                     playback_rate,
+                    reversed,
+                    frozen,
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
@@ -2002,6 +2239,8 @@ mod desktop {
                     media_id,
                     source_range,
                     playback_rate,
+                    reversed: _,
+                    frozen: _,
                 },
                 ClipSettings::Audio(settings),
             ) => {
@@ -2153,6 +2392,7 @@ mod desktop {
         program: Arc<PreviewProgram>,
         destination: std::path::PathBuf,
         profile: ExportProfile,
+        quality: ExportQuality,
         output_size: (u32, u32),
         frame_count: u64,
         frame_rate: RationalRate,
@@ -2166,15 +2406,27 @@ mod desktop {
         let total_audio_frames = audio_frames_ceil(content_end)?;
         i64::try_from(total_audio_frames)
             .map_err(|_| "audio duration exceeds the output sample clock".to_owned())?;
+        let audio_cache = if estimated_export_audio_bytes(&program)? > MAX_EXPORT_AUDIO_CACHE_BYTES
+        {
+            None
+        } else {
+            Some(prepare_export_audio_cache(
+                &program,
+                &render_resources.budgets,
+                cancellation,
+            )?)
+        };
         let media_profile = match profile {
             ExportProfile::MatroskaFfv1PcmS16le => {
-                or_media::SoftwareExportProfile::MatroskaFfv1PcmS16le
+                or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le
             }
-            ExportProfile::WebmVp9Opus => or_media::SoftwareExportProfile::WebmVp9Opus,
+            ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
+            ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
         };
-        let mut writer = or_media::FfmpegSoftwareExportWriter::create_with_profile(
+        let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
             destination,
             media_profile,
+            quality,
             output_size.0,
             output_size.1,
             frame_rate.numerator(),
@@ -2183,59 +2435,371 @@ mod desktop {
         .map_err(|error| error.to_string())?;
         let mut audio_cursor = 0_u64;
         job.report_progress(0, frame_count);
-        for frame_index in 0..frame_count {
-            if job.is_cancelled() || cancellation.is_cancelled() {
-                return Err("export was cancelled".to_owned());
+
+        // Rendering a frame — decode, GPU composite, readback — and writing one —
+        // colour conversion, encode, mux — share no state, so the renderer runs a
+        // bounded number of frames ahead of the writer. The GPU and the decoder work
+        // while the CPU converts and encodes, instead of each waiting out the other.
+        // Frames still reach the writer in order, and audio blocks are still written
+        // by this thread between them, so the file is the one a frame-at-a-time loop
+        // produces.
+        let channel = std::sync::mpsc::sync_channel(EXPORT_RENDER_AHEAD);
+        let written = std::thread::scope(|scope| -> Result<(), String> {
+            let (sender, receiver) = channel;
+            let render_program = Arc::clone(&program);
+            let render_resources_for_render = Arc::clone(&render_resources);
+            let render_rate = frame_rate;
+            let render_sender = sender.clone();
+            let render_output = if media_profile == or_media::FfmpegExportProfile::Mp4H264Aac {
+                RenderOutput::Nv12
+            } else {
+                RenderOutput::Packed
+            };
+            scope.spawn(move || {
+                for frame_index in 0..frame_count {
+                    if job.is_cancelled() || cancellation.is_cancelled() {
+                        return;
+                    }
+                    let produced = render_rate
+                        .frame_time(frame_index)
+                        .map_err(|error| error.to_string())
+                        .and_then(|time| {
+                            render_resources_for_render
+                                .render_with_size(
+                                    &render_program,
+                                    time,
+                                    Some(output_size),
+                                    None,
+                                    true,
+                                    render_output,
+                                    cancellation,
+                                )
+                                .map(ExportFrame::from)
+                                .map_err(|error| error.to_string())
+                        });
+                    // A closed channel means the writer stopped; there is no one left
+                    // to hand this frame to.
+                    if render_sender.send(produced).is_err() {
+                        return;
+                    }
+                }
+            });
+            drop(sender);
+
+            for frame_index in 0..frame_count {
+                if job.is_cancelled() || cancellation.is_cancelled() {
+                    return Err("export was cancelled".to_owned());
+                }
+                let frame = match receiver.recv() {
+                    Ok(produced) => produced?,
+                    Err(_) => {
+                        return Err("the renderer stopped before the last frame".to_owned());
+                    }
+                };
+                match &frame.planes {
+                    Some(planes) => writer.write_video_frame_nv12(
+                        planes.luma(),
+                        planes.chroma(),
+                        frame.width,
+                        frame.height,
+                        frame_index,
+                    ),
+                    None => writer.write_video_frame(
+                        &frame.pixels,
+                        frame.width,
+                        frame.height,
+                        frame_index,
+                    ),
+                }
+                .map_err(|error| error.to_string())?;
+                let next_time = frame_rate
+                    .frame_time(frame_index.saturating_add(1))
+                    .map_err(|error| error.to_string())?;
+                let audio_until = audio_frames_floor(next_time)
+                    .map_err(|_| "audio output time exceeds the sample clock".to_owned())?
+                    .max(0) as u64;
+                write_export_audio_until(
+                    &mut writer,
+                    &program,
+                    audio_cache.as_deref(),
+                    &render_resources.budgets,
+                    &mut audio_cursor,
+                    audio_until.min(total_audio_frames),
+                    job,
+                    cancellation,
+                )?;
+                job.report_progress(frame_index + 1, frame_count);
             }
-            let time = frame_rate
-                .frame_time(frame_index)
-                .map_err(|error| error.to_string())?;
-            let presentation = render_resources
-                .render_with_size(&program, time, Some(output_size), None, true, cancellation)
-                .map_err(|error| error.to_string())?;
-            writer
-                .write_video_frame(
-                    &presentation.pixels,
-                    presentation.width,
-                    presentation.height,
-                    frame_index,
-                )
-                .map_err(|error| error.to_string())?;
-            let next_time = frame_rate
-                .frame_time(frame_index.saturating_add(1))
-                .map_err(|error| error.to_string())?;
-            let audio_until = audio_frames_floor(next_time)
-                .map_err(|_| "audio output time exceeds the sample clock".to_owned())?
-                .max(0) as u64;
             write_export_audio_until(
                 &mut writer,
                 &program,
+                audio_cache.as_deref(),
                 &render_resources.budgets,
                 &mut audio_cursor,
-                audio_until.min(total_audio_frames),
+                total_audio_frames,
                 job,
                 cancellation,
             )?;
-            job.report_progress(frame_index + 1, frame_count);
-        }
-        write_export_audio_until(
-            &mut writer,
-            &program,
-            &render_resources.budgets,
-            &mut audio_cursor,
-            total_audio_frames,
-            job,
-            cancellation,
-        )?;
+            Ok(())
+        });
+        written?;
         if job.is_cancelled() || cancellation.is_cancelled() {
             return Err("export was cancelled".to_owned());
         }
         writer.finish().map_err(|error| error.to_string())
     }
 
+    /// One finished export frame: what the writer encodes, without a render
+    /// handle, so it can cross the render thread's boundary.
+    struct ExportFrame {
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+        planes: Option<or_render::Nv12Planes>,
+    }
+
+    impl From<Presentation> for ExportFrame {
+        fn from(presentation: Presentation) -> Self {
+            Self {
+                width: presentation.width,
+                height: presentation.height,
+                pixels: presentation.pixels,
+                planes: presentation.planes,
+            }
+        }
+    }
+
+    /// One decoded audio chunk and the source time of its first sample.
+    struct CachedAudioChunk {
+        timestamp: RationalTime,
+        samples: Vec<f32>,
+    }
+
+    /// Decoded PCM for one audio clip. Chunks keep their own timestamps so a
+    /// decoder gap or a non-contiguous source stays aligned exactly as the
+    /// streaming path mixed it, instead of assuming the samples are contiguous.
+    #[derive(Default)]
+    struct CachedAudioClip {
+        chunks: Vec<CachedAudioChunk>,
+    }
+
+    impl CachedAudioClip {
+        fn bytes(&self) -> usize {
+            self.chunks.iter().fold(0_usize, |total, chunk| {
+                total.saturating_add(
+                    chunk
+                        .samples
+                        .len()
+                        .saturating_mul(std::mem::size_of::<f32>()),
+                )
+            })
+        }
+    }
+
+    /// Estimates the decoded size of every audio clip. Timelines larger than the
+    /// cache budget keep the streaming path instead of failing the export.
+    fn estimated_export_audio_bytes(program: &PreviewProgram) -> Result<usize, String> {
+        let mut bytes = 0_usize;
+        for clip in &program.audio_clips {
+            let source_duration = clip
+                .playback_rate
+                .apply(clip.duration)
+                .map_err(|_| "audio source duration overflowed".to_owned())?;
+            let frames = audio_frames_ceil(source_duration)?;
+            let samples = frames
+                .checked_mul(2)
+                .ok_or_else(|| "audio sample count overflowed".to_owned())?;
+            bytes = bytes.saturating_add(
+                usize::try_from(samples)
+                    .unwrap_or(usize::MAX)
+                    .saturating_mul(std::mem::size_of::<f32>()),
+            );
+        }
+        Ok(bytes)
+    }
+
+    /// Decodes every audio clip once, before the frame loop. The old path opened a
+    /// decoder for each clip on every video frame; on a timeline with many short
+    /// clips that turns a hardware encode into a file-open benchmark. The clips are
+    /// independent, so they decode in parallel, and the writer later only mixes
+    /// samples that are already in memory.
+    fn prepare_export_audio_cache(
+        program: &PreviewProgram,
+        _budgets: &RuntimeBudgets,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<CachedAudioClip>, String> {
+        // The cache runs while the viewer and its audio clock may still hold
+        // leases on the shared playback budget. Give the export cache its own
+        // small budget so a playing preview cannot starve export preparation.
+        let cache_budgets = RuntimeBudgets::new(
+            BudgetLimits::new(4, 256 * 1024 * 1024).expect("nonzero render budget"),
+            BudgetLimits::new(64, 64 * 1024 * 1024).expect("nonzero export audio cache budget"),
+            BudgetLimits::new(16, 256 * 1024 * 1024).expect("nonzero decode budget"),
+        );
+        let clips = &program.audio_clips;
+        if clips.is_empty() {
+            return Ok(Vec::new());
+        }
+        let key = program.key;
+        let worker_count = std::thread::available_parallelism()
+            .map(|count| count.get())
+            .unwrap_or(1)
+            .clamp(1, 4)
+            .min(clips.len());
+        let next = AtomicUsize::new(0);
+        let slots: Mutex<Vec<Option<CachedAudioClip>>> =
+            Mutex::new((0..clips.len()).map(|_| None).collect());
+        let failure: Mutex<Option<String>> = Mutex::new(None);
+        let bytes = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..worker_count {
+                scope.spawn(|| {
+                    loop {
+                        if cancellation.is_cancelled() || lock(&failure).is_some() {
+                            return;
+                        }
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(clip) = clips.get(index) else {
+                            return;
+                        };
+                        match decode_audio_clip(clip, key, cache_budgets.clone(), cancellation) {
+                            Ok(decoded) => {
+                                let before = bytes.fetch_add(decoded.bytes(), Ordering::Relaxed);
+                                if before.saturating_add(decoded.bytes())
+                                    > MAX_EXPORT_AUDIO_CACHE_BYTES
+                                {
+                                    let mut failure = lock(&failure);
+                                    if failure.is_none() {
+                                        *failure = Some(
+                                            "the export audio cache exceeded its memory budget"
+                                                .to_owned(),
+                                        );
+                                    }
+                                    return;
+                                }
+                                if let Some(slot) = lock(&slots).get_mut(index) {
+                                    *slot = Some(decoded);
+                                }
+                            }
+                            Err(error) => {
+                                let mut failure = lock(&failure);
+                                if failure.is_none() {
+                                    *failure = Some(error);
+                                }
+                                return;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        if cancellation.is_cancelled() {
+            return Err("export was cancelled".to_owned());
+        }
+        if let Some(error) = lock(&failure).take() {
+            return Err(error);
+        }
+        Ok(lock(&slots)
+            .drain(..)
+            .map(|slot| slot.unwrap_or_default())
+            .collect())
+    }
+
+    fn decode_audio_clip(
+        clip: &AudioClip,
+        key: ProgramKey,
+        budgets: RuntimeBudgets,
+        cancellation: &CancellationToken,
+    ) -> Result<CachedAudioClip, String> {
+        if clip.duration.numerator() == 0 {
+            return Ok(CachedAudioClip::default());
+        }
+        let source_duration = clip
+            .playback_rate
+            .apply(clip.duration)
+            .map_err(|_| "audio source duration overflowed".to_owned())?;
+        let range = TimeRange::new(clip.source_start, source_duration)
+            .map_err(|_| "audio source range is invalid".to_owned())?;
+        let snapshot = RenderSnapshot::new(key.project_id, key.revision, range);
+        // The cache decodes several clips at once, so each queue holds fewer
+        // frames: the runtime's in-flight budget is shared with playback.
+        let queue = SnapshotQueue::new(snapshot, AUDIO_DECODE_QUEUE_CAPACITY.min(8))
+            .map_err(|error| error.to_string())?;
+        let decoder = media_decoder(&clip.source, budgets).map_err(|error| error.to_string())?;
+        let decoder_queue = queue.clone();
+        let mut cached = CachedAudioClip::default();
+        std::thread::scope(|scope| -> Result<(), String> {
+            let decode =
+                scope.spawn(move || decoder.decode_audio(snapshot, &decoder_queue, cancellation));
+            loop {
+                if cancellation.is_cancelled() {
+                    break;
+                }
+                if let Some(item) = queue.try_pop_current().map_err(|error| error.to_string())? {
+                    let chunk = item.into_value();
+                    cached.chunks.push(CachedAudioChunk {
+                        timestamp: chunk.timestamp(),
+                        samples: chunk.samples().to_vec(),
+                    });
+                } else if decode.is_finished() {
+                    break;
+                } else {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            }
+            if cancellation.is_cancelled() {
+                return Ok(());
+            }
+            match decode.join() {
+                Ok(Ok(_)) => Ok(()),
+                Ok(Err(error)) => Err(error.to_string()),
+                Err(_) => Err("audio decoder worker panicked".to_owned()),
+            }
+        })?;
+        Ok(cached)
+    }
+
+    /// Mixes one block from decoded clips. No decoder, thread or sleep is created
+    /// here; the only work left is sample-rate mapping and the clip's audio
+    /// settings.
+    fn mix_audio_window_cached(
+        output: &mut [f32],
+        clips: &[AudioClip],
+        cache: &[CachedAudioClip],
+        block_start: RationalTime,
+    ) -> Result<(), String> {
+        if output.is_empty() {
+            return Ok(());
+        }
+        let block_end = block_start
+            .checked_add(
+                audio_time_for_frames(u64::try_from(output.len() / 2).unwrap_or(0))
+                    .map_err(|_| "audio block duration exceeds the sample clock".to_owned())?,
+            )
+            .map_err(|_| "audio block end overflowed".to_owned())?;
+        for (clip, cached) in clips.iter().zip(cache.iter()) {
+            if cached.chunks.is_empty() {
+                continue;
+            }
+            let clip_end = clip
+                .timeline_start
+                .checked_add(clip.duration)
+                .map_err(|_| "audio clip end overflowed".to_owned())?;
+            if block_end <= clip.timeline_start || block_start >= clip_end {
+                continue;
+            }
+            for chunk in &cached.chunks {
+                mix_audio_samples(output, clip, block_start, chunk.timestamp, &chunk.samples)?;
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn write_export_audio_until(
         writer: &mut or_media::MatroskaFfv1PcmS16leWriter,
         program: &PreviewProgram,
+        cache: Option<&[CachedAudioClip]>,
         budgets: &RuntimeBudgets,
         audio_cursor: &mut u64,
         audio_until: u64,
@@ -2254,17 +2818,27 @@ mod desktop {
             let mut mixed = vec![0.0_f32; sample_count];
             let block_start = audio_time_for_frames(*audio_cursor)
                 .map_err(|_| "audio block time exceeds the sample clock".to_owned())?;
-            let error = Mutex::new(None);
-            mix_audio_window(
-                &mut mixed,
-                &program.audio_clips,
-                program.key,
-                block_start,
-                budgets.clone(),
-                cancellation,
-                &error,
-                true,
-            )?;
+            match cache {
+                Some(cache) => {
+                    mix_audio_window_cached(&mut mixed, &program.audio_clips, cache, block_start)?
+                }
+                None => {
+                    let error = Mutex::new(None);
+                    mix_audio_window(
+                        &mut mixed,
+                        &program.audio_clips,
+                        program.key,
+                        block_start,
+                        budgets.clone(),
+                        cancellation,
+                        &error,
+                        true,
+                    )?;
+                    if let Some(message) = error.into_inner().unwrap_or_default() {
+                        return Err(message);
+                    }
+                }
+            }
             if job.is_cancelled() || cancellation.is_cancelled() {
                 return Err("export was cancelled".to_owned());
             }
@@ -2536,21 +3110,27 @@ mod desktop {
             if overlap_start >= overlap_end {
                 continue;
             }
+            let timeline_offset = overlap_start
+                .checked_sub(clip.timeline_start)
+                .map_err(|_| "audio source offset overflowed".to_owned())?;
             let source_start = clip
                 .source_start
                 .checked_add(
-                    overlap_start
-                        .checked_sub(clip.timeline_start)
+                    clip.playback_rate
+                        .apply(timeline_offset)
                         .map_err(|_| "audio source offset overflowed".to_owned())?,
                 )
                 .map_err(|_| "audio source time overflowed".to_owned())?;
-            let range = TimeRange::new(
-                source_start,
-                overlap_end
-                    .checked_sub(overlap_start)
-                    .map_err(|_| "audio overlap duration overflowed".to_owned())?,
-            )
-            .map_err(|_| "audio source range is invalid".to_owned())?;
+            let source_duration = clip
+                .playback_rate
+                .apply(
+                    overlap_end
+                        .checked_sub(overlap_start)
+                        .map_err(|_| "audio overlap duration overflowed".to_owned())?,
+                )
+                .map_err(|_| "audio source duration overflowed".to_owned())?;
+            let range = TimeRange::new(source_start, source_duration)
+                .map_err(|_| "audio source range is invalid".to_owned())?;
             let snapshot = RenderSnapshot::new(key.project_id, key.revision, range);
             let queue = SnapshotQueue::new(snapshot, AUDIO_DECODE_QUEUE_CAPACITY)
                 .map_err(|error| error.to_string())?;
@@ -2614,37 +3194,157 @@ mod desktop {
         block_start: RationalTime,
         chunk: or_media::AudioChunk,
     ) -> Result<(), String> {
-        let clip_offset = chunk
-            .timestamp()
-            .checked_sub(clip.source_start)
-            .map_err(|_| "audio chunk starts before its clip source range".to_owned())?;
-        let chunk_timeline = clip
-            .timeline_start
-            .checked_add(clip_offset)
-            .map_err(|_| "audio chunk timeline time overflowed".to_owned())?;
-        let output_offset = audio_frame_difference_floor(chunk_timeline, block_start)
-            .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
-        let mut samples = chunk.samples().to_vec();
-        process_audio_clip(&mut samples, clip_offset, clip.duration, clip.settings)
-            .map_err(|error| error.to_string())?;
-        let source_frame = if output_offset < 0 {
-            usize::try_from(output_offset.unsigned_abs()).unwrap_or(usize::MAX)
-        } else {
-            0
-        };
-        let destination_frame = usize::try_from(output_offset.max(0)).unwrap_or(usize::MAX);
-        let available_source_frames = samples.len() / 2;
+        mix_audio_samples(
+            output,
+            clip,
+            block_start,
+            chunk.timestamp(),
+            chunk.samples(),
+        )
+    }
+
+    fn mix_audio_samples(
+        output: &mut [f32],
+        clip: &AudioClip,
+        block_start: RationalTime,
+        source_timestamp: RationalTime,
+        source_samples: &[f32],
+    ) -> Result<(), String> {
+        if !output.len().is_multiple_of(2) || !source_samples.len().is_multiple_of(2) {
+            return Err("audio mixer received an incomplete stereo frame".to_owned());
+        }
         let output_frames = output.len() / 2;
-        if source_frame >= available_source_frames || destination_frame >= output_frames {
+        let source_frames = source_samples.len() / 2;
+        if output_frames == 0 || source_frames == 0 {
             return Ok(());
         }
-        let mix_frames =
-            (available_source_frames - source_frame).min(output_frames - destination_frame);
-        for frame in 0..mix_frames {
-            let destination = (destination_frame + frame) * 2;
-            let source = (source_frame + frame) * 2;
-            output[destination] += samples[source];
-            output[destination + 1] += samples[source + 1];
+
+        let inverse_rate = RationalRate::new(
+            clip.playback_rate.denominator(),
+            clip.playback_rate.numerator(),
+        )
+        .map_err(|_| "audio playback rate could not be inverted".to_owned())?;
+        let source_offset = source_timestamp
+            .checked_sub(clip.source_start)
+            .map_err(|_| "audio source offset overflowed".to_owned())?;
+        let chunk_timeline_start = clip
+            .timeline_start
+            .checked_add(
+                inverse_rate
+                    .apply(source_offset)
+                    .map_err(|_| "audio chunk timeline offset overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio chunk timeline time overflowed".to_owned())?;
+        let source_chunk_duration = audio_time_for_frames(
+            u64::try_from(source_frames)
+                .map_err(|_| "audio chunk exceeds the sample clock".to_owned())?,
+        )
+        .map_err(|_| "audio chunk duration exceeds the sample clock".to_owned())?;
+        let chunk_timeline_end = clip
+            .timeline_start
+            .checked_add(
+                inverse_rate
+                    .apply(
+                        source_offset
+                            .checked_add(source_chunk_duration)
+                            .map_err(|_| "audio chunk source end overflowed".to_owned())?,
+                    )
+                    .map_err(|_| "audio chunk timeline duration overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio chunk timeline end overflowed".to_owned())?;
+        let block_end = block_start
+            .checked_add(
+                audio_time_for_frames(
+                    u64::try_from(output_frames)
+                        .map_err(|_| "audio block exceeds the sample clock".to_owned())?,
+                )
+                .map_err(|_| "audio block duration exceeds the sample clock".to_owned())?,
+            )
+            .map_err(|_| "audio block end overflowed".to_owned())?;
+        let clip_end = clip
+            .timeline_start
+            .checked_add(clip.duration)
+            .map_err(|_| "audio clip end overflowed".to_owned())?;
+        let overlap_start = chunk_timeline_start
+            .max(block_start)
+            .max(clip.timeline_start);
+        let overlap_end = chunk_timeline_end.min(block_end).min(clip_end);
+        if overlap_start >= overlap_end {
+            return Ok(());
+        }
+
+        let first_frame = usize::try_from(
+            audio_frame_difference_ceil(overlap_start, block_start)
+                .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?
+                .max(0),
+        )
+        .map_err(|_| "audio chunk offset exceeds the device clock".to_owned())?;
+        let end_frame = usize::try_from(
+            audio_frame_difference_ceil(overlap_end, block_start)
+                .map_err(|_| "audio chunk end exceeds the device clock".to_owned())?
+                .max(0),
+        )
+        .map_err(|_| "audio chunk end exceeds the device clock".to_owned())?
+        .min(output_frames);
+        if first_frame >= end_frame {
+            return Ok(());
+        }
+
+        let first_time = block_start
+            .checked_add(
+                audio_time_for_frames(
+                    u64::try_from(first_frame)
+                        .map_err(|_| "audio chunk offset exceeds the sample clock".to_owned())?,
+                )
+                .map_err(|_| "audio chunk offset exceeds the sample clock".to_owned())?,
+            )
+            .map_err(|_| "audio output time overflowed".to_owned())?;
+        let clip_offset = first_time
+            .checked_sub(clip.timeline_start)
+            .map_err(|_| "audio clip offset overflowed".to_owned())?;
+        let first_source_time = clip
+            .source_start
+            .checked_add(
+                clip.playback_rate
+                    .apply(clip_offset)
+                    .map_err(|_| "audio source time overflowed".to_owned())?,
+            )
+            .map_err(|_| "audio source time overflowed".to_owned())?;
+        let source_delta = first_source_time
+            .checked_sub(source_timestamp)
+            .map_err(|_| "audio sample offset overflowed".to_owned())?;
+        let position_denominator =
+            i128::from(source_delta.denominator()) * i128::from(clip.playback_rate.denominator());
+        let mut position_numerator = i128::from(source_delta.numerator())
+            * i128::from(AUDIO_SAMPLE_RATE)
+            * i128::from(clip.playback_rate.denominator());
+        let position_step =
+            i128::from(clip.playback_rate.numerator()) * i128::from(source_delta.denominator());
+        let mut resampled = vec![0.0_f32; (end_frame - first_frame) * 2];
+        for frame in 0..resampled.len() / 2 {
+            let source_frame = usize::try_from(position_numerator.div_euclid(position_denominator))
+                .map_err(|_| "audio sample position is invalid".to_owned())?;
+            if source_frame >= source_frames {
+                break;
+            }
+            let next_source_frame = (source_frame + 1).min(source_frames - 1);
+            let fraction = position_numerator.rem_euclid(position_denominator) as f64
+                / position_denominator as f64;
+            let source_index = source_frame * 2;
+            let next_source_index = next_source_frame * 2;
+            for channel in 0..2 {
+                let first = f64::from(source_samples[source_index + channel]);
+                let second = f64::from(source_samples[next_source_index + channel]);
+                resampled[frame * 2 + channel] = (first + (second - first) * fraction) as f32;
+            }
+            position_numerator += position_step;
+        }
+        process_audio_clip(&mut resampled, clip_offset, clip.duration, clip.settings)
+            .map_err(|error| error.to_string())?;
+        for (frame, stereo) in resampled.as_chunks::<2>().0.iter().enumerate() {
+            let destination = (first_frame + frame) * 2;
+            output[destination] += stereo[0];
+            output[destination + 1] += stereo[1];
         }
         Ok(())
     }
@@ -2660,12 +3360,14 @@ mod desktop {
         i64::try_from(frames).map_err(|_| ())
     }
 
-    fn audio_frame_difference_floor(time: RationalTime, origin: RationalTime) -> Result<i64, ()> {
+    fn audio_frame_difference_ceil(time: RationalTime, origin: RationalTime) -> Result<i64, ()> {
         let numerator = (i128::from(time.numerator()) * i128::from(origin.denominator())
             - i128::from(origin.numerator()) * i128::from(time.denominator()))
             * i128::from(AUDIO_SAMPLE_RATE);
         let denominator = i128::from(time.denominator()) * i128::from(origin.denominator());
-        i64::try_from(numerator.div_euclid(denominator)).map_err(|_| ())
+        let quotient = numerator.div_euclid(denominator);
+        let rounded = quotient + i128::from(numerator.rem_euclid(denominator) != 0);
+        i64::try_from(rounded).map_err(|_| ())
     }
 
     fn set_audio_error(error: &Mutex<Option<String>>, message: &str) {
@@ -2718,15 +3420,104 @@ mod desktop {
         static TEST_LOCK: Mutex<()> = Mutex::new(());
 
         #[test]
-        fn audio_chunk_offset_uses_sample_clock_when_exact_rational_difference_overflows() {
+        fn audio_chunk_bounds_use_sample_clock_when_exact_rational_difference_overflows() {
             let chunk_timeline = RationalTime::new(741, 500_000_000).unwrap();
             let block_start = RationalTime::new(-221, 8_820).unwrap();
 
             assert!(chunk_timeline.checked_sub(block_start).is_err());
             assert_eq!(
-                audio_frame_difference_floor(chunk_timeline, block_start),
-                Ok(1_202)
+                audio_frame_difference_ceil(chunk_timeline, block_start),
+                Ok(1_203)
             );
+        }
+
+        #[test]
+        fn audio_mixer_resamples_at_the_clip_playback_rate() {
+            let source =
+                MediaSourceRef::local_file("file:///tmp/or-preview-audio-speed.wav").unwrap();
+            let fast_clip = AudioClip {
+                source: source.clone(),
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(4, AUDIO_SAMPLE_RATE).unwrap(),
+                playback_rate: RationalRate::new(2, 1).unwrap(),
+                settings: AudioSettings::DEFAULT,
+            };
+            let source_samples = (0..8)
+                .flat_map(|sample| [sample as f32, sample as f32])
+                .collect::<Vec<_>>();
+            let mut fast_output = vec![0.0; 8];
+            mix_audio_samples(
+                &mut fast_output,
+                &fast_clip,
+                RationalTime::ZERO,
+                RationalTime::ZERO,
+                &source_samples,
+            )
+            .unwrap();
+            assert_eq!(fast_output, [0.0, 0.0, 2.0, 2.0, 4.0, 4.0, 6.0, 6.0]);
+
+            let slow_clip = AudioClip {
+                source,
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(8, AUDIO_SAMPLE_RATE).unwrap(),
+                playback_rate: RationalRate::new(1, 2).unwrap(),
+                settings: AudioSettings::DEFAULT,
+            };
+            let slow_source_samples = (0..4)
+                .flat_map(|sample| [sample as f32, sample as f32])
+                .collect::<Vec<_>>();
+            let mut slow_output = vec![0.0; 16];
+            mix_audio_samples(
+                &mut slow_output,
+                &slow_clip,
+                RationalTime::ZERO,
+                RationalTime::ZERO,
+                &slow_source_samples,
+            )
+            .unwrap();
+            assert_eq!(
+                slow_output,
+                [
+                    0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5, 2.0, 2.0, 2.5, 2.5, 3.0, 3.0, 3.0, 3.0,
+                ]
+            );
+        }
+
+        #[test]
+        fn cached_export_mixer_matches_the_direct_mixer() {
+            let source =
+                MediaSourceRef::local_file("file:///tmp/or-preview-audio-cache.wav").unwrap();
+            let clip = AudioClip {
+                source,
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(8, AUDIO_SAMPLE_RATE).unwrap(),
+                playback_rate: RationalRate::new(1, 1).unwrap(),
+                settings: AudioSettings::DEFAULT,
+            };
+            let source_samples = (0..8)
+                .flat_map(|sample| [sample as f32, sample as f32])
+                .collect::<Vec<_>>();
+            let mut direct = vec![0.0; 8];
+            mix_audio_samples(
+                &mut direct,
+                &clip,
+                RationalTime::ZERO,
+                RationalTime::ZERO,
+                &source_samples,
+            )
+            .unwrap();
+            let cache = vec![CachedAudioClip {
+                chunks: vec![CachedAudioChunk {
+                    timestamp: RationalTime::ZERO,
+                    samples: source_samples,
+                }],
+            }];
+            let mut cached = vec![0.0; 8];
+            mix_audio_window_cached(&mut cached, &[clip], &cache, RationalTime::ZERO).unwrap();
+            assert_eq!(cached, direct);
         }
 
         fn late_source_project() -> or_core::ProjectDocument {
@@ -3094,6 +3885,273 @@ mod desktop {
             host.shutdown(false).unwrap();
         }
     }
+    #[cfg(test)]
+    mod export_pipeline_tests {
+        use super::*;
+
+        /// Exports a blank 1080p30 three-second timeline through the render-ahead
+        /// loop, probes nothing itself, and prints the throughput so the lane records
+        /// the pipeline cost of one real export. It leaves the file behind so an
+        /// independent probe can read the container, codec, frame count and duration.
+        /// Exports a blank timeline to the hardware H.264 profile, which is the
+        /// path that takes NV12 planes from the GPU, and leaves the file behind for
+        /// an independent probe. The picture should decode as limited-range black:
+        /// luma 16, chroma 128.
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_hardware_export_writes_from_gpu_nv12_planes() {
+            let directory =
+                std::env::temp_dir().join(format!("or-export-nv12-{}", std::process::id()));
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            let destination = directory.join("hardware.mp4");
+            let _ = std::fs::remove_file(&destination);
+
+            let project = or_core::ProjectDocument::new("nv12 export");
+            let rate = RationalRate::new(30, 1).expect("rate");
+            let program = Arc::new(PreviewProgram {
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(rate),
+                content_end: Some(RationalTime::new(4, 1).expect("duration")),
+                video_clips: Vec::new(),
+                text_clips: Vec::new(),
+                audio_clips: Vec::new(),
+            });
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    ExportProfile::Mp4H264Aac,
+                    ExportQuality::Quality,
+                    (1920, 1080),
+                    120,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+
+            let deadline = Instant::now() + Duration::from_secs(120);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(10));
+            }
+            lock(&outcome)
+                .take()
+                .expect("the export ran")
+                .expect("the export succeeded");
+            jobs.shutdown();
+
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            assert!(bytes > 0, "the export produced no bytes");
+            println!(
+                "OR_EXPORT_NV12 path={} bytes={bytes} frames=120 size=1920x1080 seconds={:.3}",
+                destination.display(),
+                started.elapsed().as_secs_f64()
+            );
+        }
+
+        /// Exports the same blank timeline at both delivery qualities and prints the
+        /// sizes, so the preference is proven by two files rather than by the option
+        /// mapping alone. A blank frame is the hardest case for a size difference; the
+        /// assertion is that both exports succeed and that the quality pass is not
+        /// smaller, which is what a rate-control setting that never reached the encoder
+        /// would produce.
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_delivery_export_honours_the_quality_preference() {
+            let mut sizes = Vec::new();
+            for quality in [ExportQuality::Speed, ExportQuality::Quality] {
+                let directory = std::env::temp_dir().join(format!(
+                    "or-export-quality-{}-{quality:?}",
+                    std::process::id()
+                ));
+                std::fs::create_dir_all(&directory).expect("scratch directory");
+                let destination = directory.join("quality.webm");
+                let _ = std::fs::remove_file(&destination);
+
+                let project = or_core::ProjectDocument::new("export quality");
+                let rate = RationalRate::new(30, 1).expect("rate");
+                let program = Arc::new(PreviewProgram {
+                    key: ProgramKey {
+                        project_id: project.id(),
+                        project_instance_id: ProjectInstanceId::generate(),
+                        revision: project.revision(),
+                    },
+                    frame_rate: Some(rate),
+                    content_end: Some(RationalTime::new(2, 1).expect("duration")),
+                    video_clips: Vec::new(),
+                    text_clips: Vec::new(),
+                    audio_clips: Vec::new(),
+                });
+                let render_resources = Arc::new(RenderResources {
+                    budgets: RuntimeBudgets::new(
+                        BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                        BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                            .expect("audio budget"),
+                        BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                    ),
+                    text_rasterizer: Mutex::new(TextRasterizer::new()),
+                    video_sessions: Mutex::new(VecDeque::new()),
+                });
+
+                let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+                let cancellation = CancellationToken::new();
+                let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+                let slot = Arc::clone(&outcome);
+                let target = destination.clone();
+                jobs.submit(JobKind::Export, move |job| {
+                    let result = export_program(
+                        program,
+                        target,
+                        ExportProfile::WebmVp9Opus,
+                        quality,
+                        (640, 360),
+                        60,
+                        rate,
+                        render_resources,
+                        job,
+                        &cancellation,
+                    );
+                    *lock(&slot) = Some(result);
+                    Ok(())
+                })
+                .expect("export job submits");
+
+                let deadline = Instant::now() + Duration::from_secs(120);
+                while lock(&outcome).is_none() {
+                    assert!(Instant::now() < deadline, "the export did not finish");
+                    thread::sleep(Duration::from_millis(10));
+                }
+                lock(&outcome)
+                    .take()
+                    .expect("the export ran")
+                    .expect("the export succeeded");
+                jobs.shutdown();
+
+                let bytes = std::fs::metadata(&destination)
+                    .expect("output exists")
+                    .len();
+                println!(
+                    "OR_EXPORT_QUALITY quality={quality:?} bytes={bytes} path={}",
+                    destination.display()
+                );
+                sizes.push((quality, bytes));
+            }
+            assert!(
+                sizes[1].1 >= sizes[0].1,
+                "the quality export produced fewer bytes than the speed export"
+            );
+        }
+
+        #[test]
+        #[ignore = "encodes with the codec-enabled FFmpeg profile; run with the lane's helper"]
+        fn a_render_ahead_export_writes_a_probeable_file() {
+            const FRAMES: u64 = 90;
+            let directory =
+                std::env::temp_dir().join(format!("or-export-pipeline-{}", std::process::id()));
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            let destination = directory.join("pipeline.mkv");
+            let _ = std::fs::remove_file(&destination);
+
+            let project = or_core::ProjectDocument::new("export pipeline");
+            let rate = RationalRate::new(30, 1).expect("rate");
+            let program = Arc::new(PreviewProgram {
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(rate),
+                content_end: Some(RationalTime::new(3, 1).expect("duration")),
+                video_clips: Vec::new(),
+                text_clips: Vec::new(),
+                audio_clips: Vec::new(),
+            });
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 8).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    ExportProfile::MatroskaFfv1PcmS16le,
+                    ExportQuality::Quality,
+                    (1920, 1080),
+                    FRAMES,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+
+            // The manager owns the worker thread; wait for the body to publish its
+            // result instead of keeping a handle to it.
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(10));
+            }
+            let result = lock(&outcome).take().expect("the export ran");
+            result.expect("the export succeeded");
+            jobs.shutdown();
+
+            let elapsed = started.elapsed().as_secs_f64();
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            assert!(bytes > 0, "the export produced no bytes");
+            println!(
+                "OR_EXPORT_PIPELINE path={} bytes={bytes} frames={FRAMES} size=1920x1080 rate=30/1 seconds={elapsed:.3} fps={:.1}",
+                destination.display(),
+                FRAMES as f64 / elapsed.max(f64::EPSILON)
+            );
+        }
+    }
 }
 
 #[cfg(not(any(
@@ -3104,8 +4162,13 @@ mod desktop {
 )))]
 mod desktop {
     use super::{PreviewError, PreviewPreparation, PreviewPreparationAction, PreviewSnapshot};
-    use or_core::{ExportRequest, ExportResponse, ProjectSession, RationalTime};
-    use or_ipc::{ExportRequestHandler, LiveProjectHost};
+    use or_core::{
+        ExportRequest, ExportResponse, MotionMaterializeRequest, MotionMaterializeResponse,
+        ProjectSession, RationalTime,
+    };
+    use or_ipc::{
+        ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
+    };
     use or_runtime::PreviewFrameStep;
 
     pub struct PreviewRuntime;
@@ -3182,6 +4245,71 @@ mod desktop {
             )
         }
     }
+
+    impl MotionMaterializeHandler for PreviewRuntime {
+        fn handle_motion_materialize_request(
+            &self,
+            _identity: ProjectSessionIdentity,
+            _request: MotionMaterializeRequest,
+        ) -> MotionMaterializeResponse {
+            MotionMaterializeResponse::failure(
+                "MOTION_UNAVAILABLE",
+                "motion materialisation is currently supported on desktop only",
+            )
+        }
+    }
 }
 
 pub(crate) use desktop::PreviewRuntime;
+
+#[cfg(test)]
+mod source_time_tests {
+    use super::desktop::mapped_source_time;
+    use or_core::{RationalRate, RationalTime};
+
+    fn seconds(value: i64) -> RationalTime {
+        RationalTime::new(value, 1).expect("valid time")
+    }
+
+    #[test]
+    fn a_frozen_clip_holds_its_first_frame() {
+        let start = seconds(3);
+        for offset in [seconds(0), seconds(1), seconds(5)] {
+            let mapped =
+                mapped_source_time(start, seconds(4), RationalRate::ONE, offset, false, true)
+                    .expect("frozen mapping");
+            assert_eq!(
+                mapped, start,
+                "a frozen clip must not advance at {offset:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_forward_clip_walks_past_its_source_start() {
+        let mapped = mapped_source_time(
+            seconds(1),
+            seconds(2),
+            RationalRate::ONE,
+            seconds(2),
+            false,
+            false,
+        )
+        .expect("forward mapping");
+        assert_eq!(mapped, seconds(3));
+    }
+
+    #[test]
+    fn a_reversed_clip_mirrors_inside_its_own_span() {
+        let mapped = mapped_source_time(
+            seconds(1),
+            seconds(2),
+            RationalRate::ONE,
+            seconds(2),
+            true,
+            false,
+        )
+        .expect("reversed mapping");
+        assert_eq!(mapped, seconds(1), "the last offset maps back to the start");
+    }
+}

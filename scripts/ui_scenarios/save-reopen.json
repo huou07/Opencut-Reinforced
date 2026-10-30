@@ -1,0 +1,32 @@
+{
+ "name": "save-reopen",
+ "viewport": {"width": 1280, "height": 800},
+ "fixtures": ["copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"],
+ "steps": [
+  {"op": "shot", "name": "home"},
+  {"op": "tap", "selector": {"key": "nav-projects"}},
+  {"op": "tap", "selector": {"key": "projects-new-project"}},
+  {"op": "enter_text", "selector": {"key": "new-project-name"}, "value": "Reopen proof"},
+  {"op": "tap", "selector": {"key": "confirm-new-project"}},
+  {"op": "wait_label", "label_regex": "No timeline tracks", "budget_ms": 15000},
+  {"op": "tap", "selector": {"key": "timeline-empty-add-video"}},
+  {"op": "picker", "next": "media"},
+  {"op": "tap", "selector": {"key": "media-import"}},
+  {"op": "wait_label", "label_regex": "tiny_h264_aac\\.mp4", "budget_ms": 20000},
+  {"op": "tap", "selector": {"key_regex": "^media-add-timeline-.*$"}},
+  {"op": "tap", "selector": {"key": "timeline-confirm-insert"}},
+  {"op": "wait_label", "label_regex": "spans 0/1", "budget_ms": 20000},
+  {"op": "tree", "name": "before-save"},
+  {"op": "key", "chord": "cmd+s"},
+  {"op": "wait_absent", "text": "Unsaved", "budget_ms": 15000},
+  {"op": "shot", "name": "saved"},
+  {"op": "tap", "selector": {"key": "workspace-close"}},
+  {"op": "tap", "selector": {"key": "nav-projects"}},
+  {"op": "wait_label", "label_regex": "Reopen proof", "budget_ms": 15000},
+  {"op": "shot", "name": "recent"},
+  {"op": "tap", "selector": {"key_regex": "^recent-project-"}, "allow_multiple": true},
+  {"op": "wait_label", "label_regex": "spans 0/1", "budget_ms": 25000},
+  {"op": "tree", "name": "reopened"},
+  {"op": "shot", "name": "reopened"}
+ ]
+}

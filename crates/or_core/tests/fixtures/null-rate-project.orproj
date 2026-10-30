@@ -1,0 +1,15 @@
+{
+  "format": "opencut-reinforced-project",
+  "schema_version": 8,
+  "project": {
+    "id": "0b5d2e9c-3d8b-4f0a-9a51-2b8f4c0e6d11",
+    "revision": 0,
+    "name": "Existing project import",
+    "media": [],
+    "timeline": {
+      "tracks": [],
+      "markers": [],
+      "sequence_frame_rate": null
+    }
+  }
+}

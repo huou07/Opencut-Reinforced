@@ -66,10 +66,18 @@ class SeekPreviewIntent extends Intent {
 
 /// True when a text field holds focus, so command keys must go to the field
 /// rather than to an editor command.
-bool orTextFieldHasFocus(BuildContext context) {
-  final focus = Focus.of(context);
-  final widget = focus.context?.widget;
-  return widget is EditableText || widget is SelectableText;
+///
+/// EditableText's focus node is attached to a descendant Focus widget, so the
+/// primary focus context is not itself an EditableText.
+bool orTextFieldHasFocus() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  if (context == null) return false;
+
+  final widget = context.widget;
+  return widget is EditableText ||
+      widget is SelectableText ||
+      context.findAncestorWidgetOfExactType<EditableText>() != null ||
+      context.findAncestorWidgetOfExactType<SelectableText>() != null;
 }
 
 /// Timeline view and edit commands. Like the transport these are
@@ -94,4 +102,71 @@ class DeleteTimelineClipIntent extends Intent {
 
 class ClearTimelineSelectionIntent extends Intent {
   const ClearTimelineSelectionIntent();
+}
+
+class SplitClipIntent extends Intent {
+  const SplitClipIntent();
+}
+
+class RippleDeleteClipIntent extends Intent {
+  const RippleDeleteClipIntent();
+}
+
+class AddMarkerIntent extends Intent {
+  const AddMarkerIntent();
+}
+
+class ExportProjectIntent extends Intent {
+  const ExportProjectIntent();
+}
+
+/// Opens the assistant rail without a pointer.
+class ShowAssistantIntent extends Intent {
+  const ShowAssistantIntent();
+}
+
+/// Selects one of the editor's tool categories. The number keys and the tab
+/// strip therefore drive the same state.
+class SelectToolIntent extends Intent {
+  const SelectToolIntent(this.tool);
+
+  final String tool;
+}
+
+/// Moves the selected clip inside the frame by a fixed step. The pointer
+/// produces the same value through the viewer handles, so a keyboard user and
+/// a pointer user change the same field.
+class NudgeSelectedClipIntent extends Intent {
+  const NudgeSelectedClipIntent(this.dxMilliCanvas, this.dyMilliCanvas);
+
+  final double dxMilliCanvas;
+  final double dyMilliCanvas;
+}
+
+/// Blade mode is a mode, not a command: `C` keeps the pointer cutting until
+/// `V` returns it to selection.
+class SetBladeModeIntent extends Intent {
+  const SetBladeModeIntent(this.enabled);
+
+  final bool enabled;
+}
+
+/// Copy the selected clip into the editor's clipboard.
+class CopyClipIntent extends Intent {
+  const CopyClipIntent();
+}
+
+/// Paste the clipboard at the playhead on the selected track.
+class PasteClipIntent extends Intent {
+  const PasteClipIntent();
+}
+
+/// Import one media file into the open project (⌘I).
+class ImportMediaIntent extends Intent {
+  const ImportMediaIntent();
+}
+
+/// Import every media file in a chosen folder (⌘⇧I).
+class ImportFolderIntent extends Intent {
+  const ImportFolderIntent();
 }

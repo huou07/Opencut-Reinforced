@@ -1,0 +1,10 @@
+# dsh-or-skills bundle: registers one SkillProvider over ./skills.
+# Applied after @deepseek-ai/dsh-base, which mounts the skill registry.
+- insert:
+    - id: or-skills
+      name: dsh-or-skills
+      config:
+        providerName: dsh-or-skills
+        # Above filesystem roots (100-500) and official bundled (600) so the
+        # repo contracts win while a migration copy still exists.
+        rank: 20

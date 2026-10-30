@@ -19,17 +19,21 @@
 // `files/or-ui-artifacts` (Android), plus an `index.json` the host uses to pull
 // them off a guest.
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/project/rust_project_gateway.dart';
@@ -164,6 +168,11 @@ class _Artifacts {
     });
   }
 
+  void appendText(String name, String text) {
+    File('${directory.path}/$name')
+        .writeAsStringSync(text, mode: FileMode.append);
+  }
+
   void writeText(String name, String text) {
     File('${directory.path}/$name').writeAsStringSync(text);
     index.add({
@@ -274,9 +283,25 @@ class _Runner {
     if (spec.raw['screens'] == true) {
       await _captureScreenInventory();
     }
-    for (final step in spec.steps) {
+    for (var index = 0; index < spec.steps.length; index += 1) {
       if (!ok && spec.raw['continue_on_failure'] != true) break;
-      await _executeStep(step);
+      final step = spec.steps[index];
+      // A hung step otherwise looks identical to a run that never started:
+      // the report is written once, at the end. Record progress per step.
+      artifacts.appendText(
+        'progress.log',
+        '${DateTime.now().toIso8601String()} step ${index + 1}/${spec.steps.length} ${step['op']}\n',
+      );
+      try {
+        await _executeStep(step).timeout(const Duration(seconds: 90));
+      } on TimeoutException {
+        artifacts.appendText(
+          'progress.log',
+          '${DateTime.now().toIso8601String()} step ${index + 1} timed out\n',
+        );
+        ok = false;
+        break;
+      }
     }
   }
 
@@ -357,6 +382,20 @@ class _Runner {
     _StepResult result,
   ) async {
     switch (op) {
+      case 'resize':
+        // Breakpoint review needs a real layout change at a stated size. The
+        // view size is the same thing the window would do, without depending
+        // on the window manager.
+        final width = (step['width'] as num?)?.toDouble();
+        final height = (step['height'] as num?)?.toDouble();
+        if (width == null || height == null) {
+          throw FormatException('resize needs numeric width and height');
+        }
+        tester.view.devicePixelRatio = 1.0;
+        tester.view.physicalSize = Size(width, height);
+        await tester.pumpAndSettle();
+        result.detail = 'resized to ${width.toInt()}x${height.toInt()}';
+        return;
       case 'pump':
         await _pumpFor(_milliseconds(step['ms'] ?? 100));
         return;
@@ -392,6 +431,9 @@ class _Runner {
         );
         return;
       case 'tree':
+        // A tree captured mid-build reports half a screen; settle first so the
+        // artifact matches what the user sees.
+        await _settle();
         result.semantics = await _tree(
           '${step['name'] ?? 'tree'}-${result.index}',
         );
@@ -412,12 +454,70 @@ class _Runner {
         // interval).
         if (step['settle'] != false) await _settle();
         return;
+      case 'secondary_tap':
+        // A right click. Clip dialogs (trim, slip, roll, move) live behind the clip
+        // context menu, and a pointer owner reaches them that way; without this op
+        // the harness can only assert those dialogs through the widget suite.
+        await _act(step, (finder) async {
+          await _scrollIntoView(finder, settle: step['settle'] != false);
+          await tester.tap(finder, buttons: kSecondaryMouseButton);
+        });
+        if (step['settle'] != false) await _settle();
+        return;
+      case 'shift_tap':
+        // Shift-click extends a selection. The app reads the hardware keyboard
+        // state during the tap, so the modifier is held across the gesture.
+        await _act(step, (finder) async {
+          await _scrollIntoView(finder, settle: step['settle'] != false);
+          await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+          try {
+            await tester.tap(finder);
+          } finally {
+            await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+          }
+        });
+        if (step['settle'] != false) await _settle();
+        return;
       case 'long_press':
         await _act(step, (finder) async {
           await _scrollIntoView(finder, settle: step['settle'] != false);
           await tester.longPress(finder);
         });
         if (step['settle'] != false) await _settle();
+        return;
+      case 'drag':
+        // A pointer drag over a widget: `dx`/`dy` are logical pixels from the
+        // widget centre, and `steps` splits the move into samples so a widget
+        // that follows the pointer is exercised the way a hand moves it.
+        final dx = _num(step['dx']);
+        final dy = _num(step['dy']);
+        // Where inside the widget the pointer lands. A rubber band has to start
+        // where the clips are not, so the default centre is not always right.
+        final fromDx = _num(step['from_dx']);
+        final fromDy = _num(step['from_dy']);
+        final steps = (step['steps'] as num?)?.toInt() ?? 8;
+        await _act(step, (finder) async {
+          final origin = step['from'] == 'topLeft'
+              ? tester.getTopLeft(finder)
+              : tester.getCenter(finder);
+          final centre = origin + Offset(fromDx, fromDy);
+          final gesture = await tester.startGesture(centre);
+          // Samples without an intervening frame: a pump between moves lets a
+          // host rebuild replace the recognizer mid-gesture, which is a harness
+          // artifact rather than something the app does to a real pointer.
+          for (var i = 0; i < steps; i++) {
+            await gesture.moveBy(Offset(dx / steps, dy / steps));
+          }
+          await gesture.up();
+        });
+        if (step['settle'] != false) await _settle();
+        return;
+      case 'focus':
+        // Focus an editable without tapping it: a tap also moves the caret to
+        // the touched offset, which would make a Backspace assertion depend on
+        // geometry instead of the shortcut layer.
+        await tester.showKeyboard(_requireFinder(step));
+        await _settle();
         return;
       case 'enter_text':
         final finder = _requireFinder(step);
@@ -454,6 +554,34 @@ class _Runner {
         if (find.text('${step['text']}').evaluate().isEmpty) {
           throw _StepFailure('not_found', 'no visible text "${step['text']}"');
         }
+        return;
+      case 'expect_value':
+        // Read the live controller of a text field. Typing behaviour (IME,
+        // Backspace, copy/paste) cannot be asserted through a rendered label,
+        // because a text field's value lives in its editor state.
+        final finder = _requireFinder(step);
+        final editable = find.descendant(
+          of: finder.first,
+          matching: find.byType(EditableText),
+        );
+        if (editable.evaluate().isEmpty) {
+          throw _StepFailure(
+            'not_found',
+            'no text field matched ${_selector(step)}',
+          );
+        }
+        final actual = tester
+            .widget<EditableText>(editable.first)
+            .controller
+            .text;
+        final expected = '${step['value']}';
+        if (actual != expected) {
+          throw _StepFailure(
+            'wrong_value',
+            'expected "$expected" but the field holds "$actual"',
+          );
+        }
+        result.detail = 'value="$actual"';
         return;
       case 'expect_absent':
         if (_anyFinder(step).evaluate().isNotEmpty) {
@@ -501,6 +629,9 @@ class _Runner {
         return;
       case 'measure':
         result.measurement = await _measure(step);
+        return;
+      case 'frames':
+        result.measurement = await _measureFrames(step);
         return;
       default:
         throw _StepFailure('bad_scenario', 'unknown op "$op"');
@@ -561,6 +692,12 @@ class _Runner {
     }
   }
 
+  /// Step numbers arrive as JSON numbers and must stay finite.
+  double _num(Object? value, {double fallback = 0}) {
+    if (value is num && value.isFinite) return value.toDouble();
+    return double.tryParse('${value ?? ''}') ?? fallback;
+  }
+
   LogicalKeyboardKey _logicalKey(String name) {
     const named = {
       'escape': LogicalKeyboardKey.escape,
@@ -602,6 +739,111 @@ class _Runner {
   /// A measured interaction: run the sub-steps [repeat] times and report the
   /// distribution. Wall-clock on this host only; software-rendered Linux and a
   /// SwiftShader guest never become device performance claims.
+  /// Frame pacing while the preview plays: every presented frame's build and
+  /// raster cost, and the interval between presentations.
+  ///
+  /// This reads the engine's own timings rather than a widget's clock, so a
+  /// stutter shows up as a long interval instead of being averaged away.
+  Future<Map<String, Object?>> _measureFrames(Map<String, Object?> step) async {
+    final durationMs = (step['duration_ms'] as num?)?.toInt() ?? 3000;
+    final submitted = <FrameTiming>[];
+    void collect(List<FrameTiming> timings) => submitted.addAll(timings);
+    SchedulerBinding.instance.addTimingsCallback(collect);
+    try {
+      // The harness drives frames itself: nothing pumps unless the test does,
+      // so a bare delay would record the one frame this loop started on.
+      final deadline = DateTime.now().add(Duration(milliseconds: durationMs));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 6)),
+        );
+      }
+    } finally {
+      SchedulerBinding.instance.removeTimingsCallback(collect);
+    }
+
+    final frames = submitted
+        .where((t) => t.totalSpan.inMicroseconds > 0)
+        .toList();
+    if (frames.isEmpty) {
+      return {
+        'name': '${step['name'] ?? 'frames'}',
+        'frames': 0,
+        'limits': 'no frame timings were reported for this window',
+      };
+    }
+    final builds =
+        frames.map((t) => t.buildDuration.inMicroseconds / 1000.0).toList()
+          ..sort();
+    final rasters =
+        frames.map((t) => t.rasterDuration.inMicroseconds / 1000.0).toList()
+          ..sort();
+    final spans =
+        frames.map((t) => t.totalSpan.inMicroseconds / 1000.0).toList()..sort();
+    final intervals = <double>[];
+    for (var index = 1; index < frames.length; index += 1) {
+      final gap =
+          frames[index].timestampInMicroseconds(ui.FramePhase.vsyncStart) -
+          frames[index - 1].timestampInMicroseconds(ui.FramePhase.vsyncStart);
+      if (gap > 0) intervals.add(gap / 1000.0);
+    }
+    intervals.sort();
+    double percentile(List<double> sorted, double fraction) =>
+        sorted[((sorted.length - 1) * fraction).round()];
+    final firstStamp = frames.first.timestampInMicroseconds(
+      ui.FramePhase.vsyncStart,
+    );
+    final lastStamp = frames.last.timestampInMicroseconds(
+      ui.FramePhase.vsyncStart,
+    );
+    final elapsedSeconds = lastStamp > firstStamp
+        ? (lastStamp - firstStamp) / 1000000.0
+        : 0.0;
+    // A scenario can turn the numbers into a gate: crossing the budget fails
+    // the step instead of leaving pacing as something a human compares by eye.
+    void requireBudget(String key, double actual, String label) {
+      final budget = (step[key] as num?)?.toDouble();
+      if (budget != null && actual > budget) {
+        throw _StepFailure(
+          'frame_budget',
+          '$label ${actual.toStringAsFixed(2)} ms exceeded the '
+              '${budget.toStringAsFixed(2)} ms budget',
+        );
+      }
+    }
+
+    final buildP95 = percentile(builds, 0.95);
+    final spanP95 = percentile(spans, 0.95);
+    requireBudget('max_build_p95_ms', buildP95, 'build p95');
+    requireBudget('max_span_p95_ms', spanP95, 'span p95');
+
+    return {
+      'name': '${step['name'] ?? 'frames'}',
+      'frames': frames.length,
+      'fps': elapsedSeconds > 0
+          ? double.parse(
+              ((frames.length - 1) / elapsedSeconds).toStringAsFixed(2),
+            )
+          : 0,
+      'build_p50_ms': double.parse(percentile(builds, 0.50).toStringAsFixed(2)),
+      'build_p95_ms': double.parse(percentile(builds, 0.95).toStringAsFixed(2)),
+      'raster_p95_ms': double.parse(
+        percentile(rasters, 0.95).toStringAsFixed(2),
+      ),
+      'span_p95_ms': double.parse(percentile(spans, 0.95).toStringAsFixed(2)),
+      'gap_p95_ms': intervals.isEmpty
+          ? 0
+          : double.parse(percentile(intervals, 0.95).toStringAsFixed(2)),
+      'gap_max_ms': intervals.isEmpty
+          ? 0
+          : double.parse(intervals.last.toStringAsFixed(2)),
+      'limits':
+          'engine FrameTiming on ${Platform.operatingSystem} in ${const bool.fromEnvironment('dart.vm.product') ? 'release' : 'a non-release build'}; '
+          'timings describe this run only',
+    };
+  }
+
   Future<Map<String, Object?>> _measure(Map<String, Object?> step) async {
     final repeat = (step['repeat'] as num?)?.toInt() ?? 10;
     final samples = <double>[];
@@ -743,7 +985,7 @@ class _Runner {
   Finder _requireFinder(Map<String, Object?> step) {
     final finder = _anyFinder(step);
     final index = step['index'];
-    if (index is int && index > 0) return finder.at(index);
+    if (index is int) return finder.at(index);
     return finder;
   }
 
@@ -959,8 +1201,14 @@ class _Runner {
     final root = _semanticsRoot();
     if (root == null) throw _StepFailure('no_semantics', 'no semantics root');
     final nodes = <Map<String, Object?>>[];
-    void visit(SemanticsNode node) {
+    // `node.rect` is local to the node; a layout review needs the global rect the
+    // user actually sees, so accumulate the transform chain from the root.
+    void visit(SemanticsNode node, Matrix4 parentTransform) {
       final data = node.getSemanticsData();
+      final transform = parentTransform.multiplied(
+        node.transform ?? Matrix4.identity(),
+      );
+      final rect = MatrixUtils.transformRect(transform, node.rect);
       nodes.add({
         'id': node.id,
         'role': _roleOf(node),
@@ -972,20 +1220,20 @@ class _Runner {
             if (data.hasAction(action)) action.name,
         ]..sort(),
         'rect': {
-          'left': node.rect.left,
-          'top': node.rect.top,
-          'width': node.rect.width,
-          'height': node.rect.height,
+          'left': rect.left,
+          'top': rect.top,
+          'width': rect.width,
+          'height': rect.height,
         },
         'children': node.childrenCount,
       });
       node.visitChildren((child) {
-        visit(child);
+        visit(child, transform);
         return true;
       });
     }
 
-    visit(root);
+    visit(root, Matrix4.identity());
     artifacts.writeText('tree-$name.txt', root.toStringDeep());
     artifacts.writeJson('tree-$name.json', {'nodes': nodes});
     return 'tree-$name.json';
@@ -1073,11 +1321,35 @@ class _StepFailure implements Exception {
 /// real import of a real file through the real Rust command path.
 class _FixturePicker extends FileSelectorProjectPicker {
   _FixturePicker(this.directory, List<String> fixtures) {
+    // `copy:<path>` fixtures come from the host so a journey can import real
+    // video without the runner generating a container it cannot encode. The
+    // file is copied into the scenario directory and treated as the picked
+    // media, which keeps the import path (picker -> Rust probe) real.
+    String? copied;
+    String? projectFixture;
+    for (final fixture in fixtures) {
+      if (!fixture.startsWith('copy:')) continue;
+      final source = File(fixture.substring('copy:'.length));
+      if (!source.existsSync()) continue;
+      // A copied `.orproj` fixture is the project the scenario opens; it lives
+      // in the scenario directory so a save writes there, not into the
+      // repository fixture.
+      if (source.path.toLowerCase().endsWith('.orproj')) {
+        projectFixture ??= source.path;
+        continue;
+      }
+      if (copied != null) continue;
+      final target = '${directory.path}/${source.uri.pathSegments.last}';
+      source.copySync(target);
+      copied = target;
+    }
     // A `noisy` fixture carries signal: the silent one cannot exercise anything
     // that measures or filters audio, because digital silence has no noise floor.
-    media = fixtures.contains('noisy')
-        ? _noisyWav('fixture.wav')
-        : _wav('fixture.wav');
+    media =
+        copied ??
+        (fixtures.contains('noisy')
+            ? _noisyWav('fixture.wav')
+            : _wav('fixture.wav'));
     if (fixtures.contains('invalid')) {
       badMedia = '${directory.path}/invalid.wav';
       File(badMedia).writeAsStringSync('synthetic invalid media');
@@ -1085,9 +1357,26 @@ class _FixturePicker extends FileSelectorProjectPicker {
       badMedia = media;
     }
     project = '${directory.path}/scenario.orproj';
+    if (projectFixture != null) {
+      File(projectFixture).copySync(project);
+    }
   }
 
   final Directory directory;
+
+  /// The caption import journey needs a real SubRip file the review dialog
+  /// can read. The fixture picker writes one into the scenario directory so
+  /// the import runs through the real preview and import commands.
+  @override
+  Future<String?> openCaptionFile() async {
+    final path = '${directory.path}/scenario-captions.srt';
+    File(path).writeAsStringSync(
+      '1\n00:00:00,000 --> 00:00:02,000\nHarness caption one\n\n'
+      '2\n00:00:02,000 --> 00:00:04,000\nHarness caption two\n\n',
+    );
+    return path;
+  }
+
   late final String media;
   late final String badMedia;
   late final String project;
@@ -1172,6 +1461,17 @@ class _FixturePicker extends FileSelectorProjectPicker {
 
   @override
   Future<String?> openProjectPath() async => project;
+
+  // A deterministic export destination keeps the packaged export lane real
+  // (Rust render + FFmpeg writer) without a native save panel in the runner.
+  @override
+  bool get supportsExport => true;
+
+  @override
+  Future<String?> saveExportPath({
+    required String suggestedName,
+    required ExportProfile profile,
+  }) async => '${directory.path}/export.${profile.extension}';
 
   @override
   Future<List<String>> openMediaSources() async => [_resolved];

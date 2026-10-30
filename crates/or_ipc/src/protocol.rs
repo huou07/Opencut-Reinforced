@@ -1,6 +1,6 @@
 use or_core::{
-    ApplicationRequest, CommandResult, ExportResponse, OperationError, ProjectId,
-    ProjectInstanceId, ProjectRevision, QueryResult, TransactionResult,
+    ApplicationRequest, CommandResult, ExportResponse, MotionMaterializeResponse, OperationError,
+    ProjectId, ProjectInstanceId, ProjectRevision, QueryResult, TransactionResult,
 };
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt, io};
@@ -156,6 +156,8 @@ pub enum ApplicationSuccess {
     Query(QueryResult),
     Transaction(TransactionResult),
     Export(ExportResponse),
+    MotionMaterialize(MotionMaterializeResponse),
+    Transcription(or_core::TranscriptionResponse),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

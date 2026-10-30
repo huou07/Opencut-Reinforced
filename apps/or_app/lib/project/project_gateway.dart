@@ -201,6 +201,7 @@ class ProjectExportJob {
 class ProjectTranscriptionModel {
   const ProjectTranscriptionModel({
     required this.modelId,
+    this.label = '',
     required this.version,
     required this.license,
     required this.language,
@@ -208,9 +209,11 @@ class ProjectTranscriptionModel {
     required this.source,
     required this.installed,
     required this.providerAvailable,
+    this.active = false,
   });
 
   final String modelId;
+  final String label;
   final String version;
   final String license;
   final String language;
@@ -218,11 +221,13 @@ class ProjectTranscriptionModel {
   final String source;
   final bool installed;
   final bool providerAvailable;
+  final bool active;
 }
 
 class ProjectModelDownload {
   const ProjectModelDownload({
     required this.downloadId,
+    this.modelId = '',
     required this.destination,
     required this.source,
     required this.sizeBytes,
@@ -230,6 +235,7 @@ class ProjectModelDownload {
   });
 
   final String downloadId;
+  final String modelId;
   final String destination;
   final String source;
   final BigInt sizeBytes;
@@ -348,7 +354,7 @@ enum ProjectTimelineTrackKind { video, audio, text, caption }
 
 enum ProjectTimelineClipContentKind { media, text, caption }
 
-enum ProjectFontIdentity { bundledInter }
+enum ProjectFontIdentity { bundledInter, beVietnamPro }
 
 enum ProjectTextWeight { regular, medium, semibold, bold }
 
@@ -375,6 +381,18 @@ class ProjectTextColor {
   final int alpha;
 }
 
+enum ProjectTextVerticalAnchor { top, center, bottom }
+
+class ProjectTextBackground {
+  const ProjectTextBackground({
+    required this.color,
+    this.paddingMilliPoints = 8000,
+  });
+
+  final ProjectTextColor color;
+  final int paddingMilliPoints;
+}
+
 class ProjectTextFormatting {
   const ProjectTextFormatting({
     required this.font,
@@ -382,6 +400,11 @@ class ProjectTextFormatting {
     required this.weight,
     required this.alignment,
     required this.color,
+    this.anchor = ProjectTextVerticalAnchor.center,
+    this.offsetXBasisPoints = 0,
+    this.offsetYBasisPoints = 0,
+    this.background,
+    this.opacityBasisPoints = 10000,
   });
 
   static const defaults = ProjectTextFormatting(
@@ -392,11 +415,60 @@ class ProjectTextFormatting {
     color: ProjectTextColor.white,
   );
 
+  /// Captions start low on the frame where a viewer expects them.
+  static const captionDefaults = ProjectTextFormatting(
+    font: ProjectFontIdentity.bundledInter,
+    sizeMilliPoints: 48000,
+    weight: ProjectTextWeight.regular,
+    alignment: ProjectTextAlignment.center,
+    color: ProjectTextColor.white,
+    anchor: ProjectTextVerticalAnchor.bottom,
+  );
+
+  ProjectTextFormatting copyWith({
+    ProjectFontIdentity? font,
+    int? sizeMilliPoints,
+    ProjectTextWeight? weight,
+    ProjectTextAlignment? alignment,
+    ProjectTextColor? color,
+    ProjectTextVerticalAnchor? anchor,
+    int? offsetXBasisPoints,
+    int? offsetYBasisPoints,
+    ProjectTextBackground? background,
+    bool clearBackground = false,
+    int? opacityBasisPoints,
+  }) => ProjectTextFormatting(
+    font: font ?? this.font,
+    sizeMilliPoints: sizeMilliPoints ?? this.sizeMilliPoints,
+    weight: weight ?? this.weight,
+    alignment: alignment ?? this.alignment,
+    color: color ?? this.color,
+    anchor: anchor ?? this.anchor,
+    offsetXBasisPoints: offsetXBasisPoints ?? this.offsetXBasisPoints,
+    offsetYBasisPoints: offsetYBasisPoints ?? this.offsetYBasisPoints,
+    background: clearBackground ? null : (background ?? this.background),
+    opacityBasisPoints: opacityBasisPoints ?? this.opacityBasisPoints,
+  );
+
   final ProjectFontIdentity font;
   final int sizeMilliPoints;
   final ProjectTextWeight weight;
   final ProjectTextAlignment alignment;
   final ProjectTextColor color;
+
+  /// Vertical placement of the block on the canvas.
+  final ProjectTextVerticalAnchor anchor;
+
+  /// Horizontal and vertical nudge from the anchored position, in basis points
+  /// of the canvas, so a caller can place a caption anywhere.
+  final int offsetXBasisPoints;
+  final int offsetYBasisPoints;
+
+  /// Optional filled box behind the text.
+  final ProjectTextBackground? background;
+
+  /// Whole-block opacity; 10000 is fully opaque.
+  final int opacityBasisPoints;
 }
 
 class ProjectTimelineTextContent {
@@ -490,6 +562,9 @@ class ProjectTimelineClip {
   const ProjectTimelineClip({
     required this.clipId,
     this.contentKind = ProjectTimelineClipContentKind.media,
+    this.playbackRate = const ProjectRationalRate(1, 1),
+    this.reversed = false,
+    this.frozen = false,
     this.mediaId,
     this.text,
     this.formatting,
@@ -500,6 +575,13 @@ class ProjectTimelineClip {
 
   final String clipId;
   final ProjectTimelineClipContentKind contentKind;
+  final ProjectRationalRate playbackRate;
+
+  /// Whether the clip walks its source backwards.
+  final bool reversed;
+
+  /// Whether the clip holds one frame for its whole duration.
+  final bool frozen;
   final String? mediaId;
   final String? text;
   final ProjectTextFormatting? formatting;
@@ -948,6 +1030,33 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectTimelineAudioSettings settings,
   });
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  });
+
+  /// Flip the direction a media clip plays. The clip keeps its span, so this is not
+  /// a speed change and every other clip property survives.
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  });
+
+  /// Hold one frame for the clip's whole duration, or release it. The source range
+  /// is untouched, so releasing restores the original footage.
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  });
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle session, {
     required int offset,
@@ -983,8 +1092,20 @@ abstract interface class ProjectGateway {
   Future<ProjectTranscriptionModel> transcriptionModel(
     ProjectSessionHandle session,
   );
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  );
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  );
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
+    String modelId,
   );
   Future<ProjectTranscriptionModel> finishTranscriptionModelDownload(
     ProjectSessionHandle session,
@@ -1067,6 +1188,18 @@ abstract interface class ProjectGateway {
     required String clipId,
     required String trackId,
     required ProjectRationalTime timelineStart,
+  });
+
+  /// Moves every listed clip on [trackId] by [delta] as one undo step.
+  ///
+  /// A group drag is one gesture; five separate moves would cost five undos and
+  /// could stop half-applied, so the whole selection travels in one command.
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
   });
   Future<ProjectActionResult> deleteTimelineClip(
     ProjectSessionHandle session,
@@ -1152,6 +1285,17 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalTime timelineTime,
   });
+
+  /// Lowers one music clip under every clip on [voiceTrackId] as one command
+  /// and one undo entry. The clip is split at voice boundaries in Rust.
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  });
   Future<ProjectActionResult> rippleDeleteTimelineClip(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1217,8 +1361,9 @@ abstract interface class ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
-    String destination,
-  );
+    String destination, {
+    String? quality,
+  });
   Future<ProjectExportJob> exportStatus(
     ProjectSessionHandle session,
     ProjectReadModel current,

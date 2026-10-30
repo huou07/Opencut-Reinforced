@@ -152,6 +152,31 @@ fn ffprobe_imports_generated_h264_aac_mp4() {
 }
 
 #[test]
+#[ignore = "requires system ffprobe; hosted CI runs this explicitly"]
+fn a_truncated_mov_reports_ffprobes_own_diagnostic() {
+    // The reported failure mode: an ISO BMFF file whose `moov` atom never
+    // arrived (a recording still being written, or an interrupted copy). ffprobe
+    // exits non-zero and the user-facing sentence must say why instead of the
+    // generic "ffprobe failed to inspect the media file".
+    let directory = TestDirectory::new();
+    let path = directory.0.join("unfinished-recording.mov");
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&0x18_u32.to_be_bytes());
+    bytes.extend_from_slice(b"ftypisom\0\0\0\0isomiso2");
+    bytes.extend_from_slice(&0x10_u32.to_be_bytes());
+    bytes.extend_from_slice(b"mdat");
+    bytes.extend_from_slice(&[0_u8; 8]);
+    fs::write(&path, bytes).unwrap();
+
+    let error = probe_media_file(&path).unwrap_err();
+    assert_eq!(error.code_str(), "PROBE_FAILED");
+    assert!(
+        error.to_string().contains("moov"),
+        "the user-facing message must keep ffprobe's reason: {error}"
+    );
+}
+
+#[test]
 #[ignore = "requires system ffmpeg and ffprobe; hosted Linux CI runs this explicitly"]
 fn prepared_import_persists_and_reopens_after_source_goes_offline() {
     let directory = TestDirectory::new();

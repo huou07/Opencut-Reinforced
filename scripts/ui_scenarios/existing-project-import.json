@@ -1,0 +1,24 @@
+{
+  "name": "existing-project-import",
+  "harness": "or_ui",
+  "description": "Opens a project that was saved without a sequence frame rate (the shape a new project can be saved in), imports a real clip, and proves inserting it creates the missing track. This is the journey the owner reported as blocked: new projects could not import or hold a track while older projects could.",
+  "viewport": { "width": 1440, "height": 900 },
+  "fixtures": [
+    "copy:crates/or_core/tests/fixtures/null-rate-project.orproj",
+    "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-open-project" } },
+    { "op": "wait_label", "label": "No timeline tracks", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key": "media-import" } },
+    { "op": "picker", "next": "media" },
+    { "op": "wait_label", "label": "tiny_h264_aac.mp4" },
+    { "op": "tap", "selector": { "key_regex": "^media-add-timeline-.*$" } },
+    { "op": "wait_label", "label": "Insert Clip" },
+    { "op": "tap", "selector": { "key": "timeline-confirm-insert" } },
+    { "op": "wait_label", "label": "1 track" },
+    { "op": "tree", "name": "existing-project-inserted" },
+    { "op": "shot", "name": "existing-project-inserted" }
+  ]
+}

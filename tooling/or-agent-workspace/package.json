@@ -1,0 +1,10 @@
+{
+  "name": "or-agent-workspace",
+  "private": true,
+  "type": "module",
+  "description": "The operating workspace the Opencut Reinforced assistant installs by default.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/bundle.test.mjs test/tools.test.mjs"
+  }
+}

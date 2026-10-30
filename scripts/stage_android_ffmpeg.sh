@@ -82,8 +82,9 @@ common_configure_args=(
   --disable-static --enable-shared --disable-programs --disable-doc
   --disable-autodetect --disable-everything --disable-asm --disable-avdevice
   --disable-avfilter --enable-protocol=file
-  --enable-demuxer=matroska,mov,wav,mp3 --enable-muxer=matroska
-  --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus
+  --enable-demuxer=matroska,mov,wav,mp3,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe
+  --enable-muxer=matroska
+  --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus,png,mjpeg,webp
   --enable-parser=h264,aac,mp3 --enable-encoder=ffv1,pcm_s16le
 )
 # The shared WebM/VP9/Opus delivery profile, copied from

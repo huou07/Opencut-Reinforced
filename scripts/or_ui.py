@@ -2,8 +2,9 @@
 """The OR agent-facing UI harness: observe and drive the real app by semantics.
 
 One instrument for the interface dimension of OR's acceptance bar. It runs the
-real application -- the real Rust host, the real command path -- on Linux (under
-Xvfb) or on the Android emulator, and answers five questions:
+real application -- the real Rust host, the real command path -- on this macOS
+host, on Linux (under Xvfb) or on the Android emulator, and answers five
+questions:
 
   screens   which screens does the running app expose, and what does each one say?
   tree      what is the semantics tree right now (JSON plus the framework dump)?
@@ -58,6 +59,9 @@ GUEST_SCENARIO = "files/or-ui-scenario.json"
 GUEST_ARTIFACTS = "files/or-ui-artifacts"
 DEFAULT_VIEWPORT = (1280, 800)
 LINUX_BUDGET_SECONDS = 900
+# A macOS desktop test builds the app bundle through Xcode on first use, so the
+# budget covers a cold build plus the journey itself.
+MACOS_BUDGET_SECONDS = 1800
 ANDROID_BUDGET_SECONDS = 1800
 
 
@@ -134,6 +138,31 @@ def require_guest() -> None:
         )
 
 
+def require_macos_tools() -> None:
+    """The macOS lane drives the real desktop app through `flutter test -d macos`.
+
+    It needs the same toolchain the app itself is built with; a missing tool is
+    BLOCKED with the command that would settle it, never a scenario failure.
+    """
+    if sys.platform != "darwin":
+        raise Blocked(
+            "the macos target only runs on a macOS host",
+            "run this harness on the owner-authorized Mac, or use --target linux",
+        )
+    missing = [tool for tool in ("flutter", "xcodebuild") if not shutil.which(tool)]
+    if missing:
+        raise Blocked(
+            "missing required tool(s) on PATH: " + ", ".join(missing),
+            "install Xcode command line tools and Flutter; this harness does not "
+            "change host privileges",
+        )
+    if not (APP / ".dart_tool/package_config.json").is_file():
+        raise Blocked(
+            "apps/or_app has no resolved package config",
+            "cd apps/or_app && flutter pub get  # then rerun this harness",
+        )
+
+
 def adb(*args: str, capture: bool = True) -> subprocess.CompletedProcess[str]:
     command = ["adb", "-s", ANDROID_SERIAL, *args]
     return subprocess.run(command, capture_output=capture, text=True, timeout=300)
@@ -151,10 +180,41 @@ def ensure_ui_apk() -> Path:
     )
 
 
+def stage_fixtures(payload: dict, report_dir: Path) -> None:
+    """Copy host fixtures into the report directory before the app reads them.
+
+    The scenario runs inside the app's own process, which macOS may refuse to
+    let read the repository (TCC protects Documents for unsigned processes).
+    Staging the bytes first keeps the import path real — the picker still hands
+    the app a file on disk — without depending on the app's file grants.
+    """
+    fixtures = payload.get("fixtures") or []
+    if not fixtures:
+        return
+    staged_dir = report_dir / "fixtures"
+    staged_dir.mkdir(parents=True, exist_ok=True)
+    staged: list[str] = []
+    for fixture in fixtures:
+        text = str(fixture)
+        if text.startswith("copy:"):
+            source = Path(text[len("copy:") :])
+            if not source.is_absolute():
+                source = ROOT / source
+            if source.is_file():
+                target = staged_dir / source.name
+                shutil.copyfile(source, target)
+                staged.append(f"copy:{target}")
+                continue
+            print(f"or_ui: fixture not found, passing through: {source}", file=sys.stderr)
+        staged.append(text)
+    payload["fixtures"] = staged
+
+
 # -- execution -------------------------------------------------------------
 def run_linux(payload: dict, report_dir: Path) -> int:
     require_linux_tools()
     report_dir.mkdir(parents=True, exist_ok=True)
+    stage_fixtures(payload, report_dir)
     scenario_path = report_dir / "scenario.json"
     scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     artifacts = report_dir / "artifacts"
@@ -213,6 +273,93 @@ def run_linux(payload: dict, report_dir: Path) -> int:
         print(payload_out["reason"])
         return 1
     return finish(report_dir, artifacts, payload, "linux")
+
+
+def run_macos(payload: dict, report_dir: Path) -> int:
+    """Drive the real macOS app: one integration_test run builds and launches it."""
+    require_macos_tools()
+    report_dir.mkdir(parents=True, exist_ok=True)
+    stage_fixtures(payload, report_dir)
+    scenario_path = report_dir / "scenario.json"
+    scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    artifacts = report_dir / "artifacts"
+    if artifacts.exists():
+        shutil.rmtree(artifacts)
+    artifacts.mkdir(parents=True)
+
+    environment = dict(
+        os.environ,
+        OR_UI_SCENARIO_FILE=str(scenario_path),
+        OR_UI_ARTIFACT_DIR=str(artifacts),
+        GITHUB_WORKSPACE=str(ROOT),
+    )
+    command = ["flutter", "--no-version-check", "test", "--no-pub", "-d", "macos",
+               SCENARIO_RUNNER]
+    completed = subprocess.run(command, cwd=str(APP), env=environment,
+                               capture_output=True, text=True,
+                               timeout=MACOS_BUDGET_SECONDS)
+    log = f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n"
+    # The host tooling intermittently refuses to foreground the freshly built
+    # app ("open returned 1") and the run dies before the first step, which says
+    # nothing about the app or the scenario. Retry that launch failure once with a
+    # clean artifact directory instead of reporting it as the scenario's verdict.
+    if (
+        completed.returncode != 0
+        and "Failed to foreground app" in (completed.stderr + completed.stdout)
+        and not read_transcript(artifacts, payload["name"]).get("steps")
+    ):
+        shutil.rmtree(artifacts)
+        artifacts.mkdir(parents=True)
+        completed = subprocess.run(command, cwd=str(APP), env=environment,
+                                   capture_output=True, text=True,
+                                   timeout=MACOS_BUDGET_SECONDS)
+        log = (log + "\n--- retried after a launch failure ---\n"
+               f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n")
+    (report_dir / "run.log").write_text(log, encoding="utf-8")
+    if completed.returncode != 0:
+        # `flutter test` on macOS fails its teardown when the tool cannot bring the
+        # host window forward ("Failed to foreground app; open returned 1"), which
+        # says nothing about the scenario. The transcript is the observation, so a
+        # complete run with no failing step is a pass even when the runner exits
+        # non-zero for that reason; anything else keeps the failure.
+        transcript = read_transcript(artifacts, payload["name"])
+        steps = transcript.get("steps", [])
+        teardown_only = (
+            completed.returncode == 1
+            and steps
+            and all(step.get("status") == "ok" for step in steps)
+            and "Failed to foreground app" in (completed.stderr + completed.stdout)
+        )
+        if teardown_only:
+            passed = finish(report_dir, artifacts, payload, "macos")
+            return passed
+        steps = read_transcript(artifacts, payload["name"]).get("steps", [])
+        failing = [
+            (index, step) for index, step in enumerate(steps)
+            if step.get("status") != "ok"
+        ]
+        if failing:
+            index, step = failing[0]
+            detail = step.get("detail") or step.get("error") or step.get("reason") or ""
+            reason_text = (
+                f"step {index} ({step.get('op')}) {step.get('status')}: "
+                f"{step.get('selector')} - {detail}".strip()
+            )
+        else:
+            reason = [line for line in (completed.stdout + completed.stderr).splitlines()
+                      if line.strip()][-8:]
+            reason_text = "the scenario runner exited " + f"{completed.returncode}: " + " | ".join(reason)
+        payload_out = {
+            "harness": "or_ui", "target": "macos", "result": "FAIL",
+            "reason": reason_text,
+            "log": str(report_dir / "run.log"),
+            "steps": steps,
+        }
+        (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
+        print(f"RESULT: OR_UI=FAIL ({payload['name']})")
+        print(payload_out["reason"])
+        return 1
+    return finish(report_dir, artifacts, payload, "macos")
 
 
 def read_transcript(artifacts: Path, name: str) -> dict:
@@ -321,10 +468,17 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
             "semantics": "VERIFIED_SEMANTIC",
             "behaviour": "VERIFIED_BEHAVIORAL",
             "visual": "VERIFIED_VISUAL",
-            "native": "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
+            "native": "NOT ESTABLISHED — a debug app built for this run is not "
+                      "an installed or packaged build"
+                      if target == "macos" else
+                      "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
                       "is not an installed package or a physical device",
         },
         "limits": [
+            "The macOS lane runs the real desktop app through the Flutter test "
+            "binding on this Mac; a screenshot here is not a claim about an "
+            "installed or release build. Timing is debug-mode evidence."
+            if target == "macos" else
             "Linux runs under Xvfb with LIBGL_ALWAYS_SOFTWARE; Android runs on a "
             "SwiftShader x86_64 emulator. Timing here is software-path evidence "
             "on this host, never a GPU or physical-device performance claim.",
@@ -348,10 +502,15 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
         if step.get("status") != "ok" and step.get("detail"):
             print(f"      {step['detail']}")
         if step.get("measurement"):
+            # Latency runs and frame-pacing runs report different fields; print what
+            # the step measured instead of assuming one shape.
             measurement = step["measurement"]
-            print(f"      measured {measurement['name']}: p50 "
-                  f"{measurement['p50_ms']} ms / p95 {measurement['p95_ms']} ms "
-                  f"over {measurement['repeat']} runs")
+            fields = " ".join(
+                f"{key}={value}"
+                for key, value in measurement.items()
+                if key not in {"name", "limits"}
+            )
+            print(f"      measured {measurement.get('name', step['op'])}: {fields}")
     if report["screens"]:
         print(f"  screens: {report['screens'].get('count')} "
               f"({', '.join(s['destination'] for s in report['screens']['screens'])})")
@@ -373,8 +532,10 @@ def load_json(path: Path) -> dict | None:
 def command_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--target", choices=("linux", "android"), default="linux",
-                        help="which target to drive (default: linux)")
+    parser.add_argument("--target", choices=("macos", "linux", "android"),
+                        default=None,
+                        help="which target to drive (default: the host's own "
+                             "desktop target — macos on a Mac, else linux)")
     parser.add_argument("--report-dir", default=str(DEFAULT_REPORT_DIR),
                         help="where the transcript, artifacts and report go")
     parser.add_argument("--viewport", default=f"{DEFAULT_VIEWPORT[0]}x{DEFAULT_VIEWPORT[1]}",
@@ -437,6 +598,11 @@ def build_command_scenario(args: argparse.Namespace) -> dict:
     raise ScenarioError("no scenario was named")
 
 
+def default_target() -> str:
+    """Drive the host's own desktop app unless the caller names another target."""
+    return "macos" if sys.platform == "darwin" else "linux"
+
+
 def parse_viewport(value: str) -> tuple[int, int]:
     try:
         width, height = (int(part) for part in value.lower().split("x", 1))
@@ -450,6 +616,8 @@ def parse_viewport(value: str) -> tuple[int, int]:
 def main(argv: list[str] | None = None) -> int:
     parser = command_parser()
     args = parser.parse_args(argv)
+    if args.target is None:
+        args.target = default_target()
     report_dir = Path(args.report_dir)
     if not report_dir.is_absolute():
         report_dir = ROOT / report_dir
@@ -466,6 +634,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
+        if args.target == "macos":
+            return run_macos(payload, report_dir)
         if args.target == "linux":
             return run_linux(payload, report_dir)
         return run_android(payload, report_dir)

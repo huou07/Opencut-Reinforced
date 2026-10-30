@@ -11,8 +11,19 @@
 //! are recorded in the ADR: one flat node shape per kind with `deny_unknown_fields`
 //! everywhere, exact rational times from `or_core`'s time model, and diagnostics
 //! with stable codes and JSON paths.
+//!
+//! The module set also carries the reusable motion asset format and its local
+//! library (ADR 0010). The library module owns a bounded directory store; it never
+//! touches a project, renders, or contacts a provider.
 
+mod asset;
 mod code;
+mod edit;
+mod library;
+
+pub use asset::*;
+pub use edit::*;
+pub use library::*;
 
 pub use code::{
     CodeLanguage, CodeSceneError, CodeSceneOptions, CodeTheme, CodeToken, CodeTokenKind,
@@ -59,6 +70,40 @@ pub struct MotionScene {
     pub nodes: Vec<MotionNode>,
     #[serde(default)]
     pub animations: Vec<MotionAnimation>,
+    /// Optional continuous camera move. Absent means the identity camera, so
+    /// every project written before camera keys renders exactly as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera: Option<MotionCamera>,
+}
+
+/// A whole-scene camera move: pan, zoom and rotation applied to every resolved
+/// instruction. Keys are interpolated with the same locked easing set as node
+/// animations, so preview and materialisation see the same frame.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionCamera {
+    #[serde(default)]
+    pub keyframes: Vec<MotionCameraKeyframe>,
+    #[serde(default)]
+    pub easing: MotionEasing,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionCameraKeyframe {
+    pub at: RationalTime,
+    #[serde(default)]
+    pub pan_x: f64,
+    #[serde(default)]
+    pub pan_y: f64,
+    #[serde(default = "default_camera_zoom")]
+    pub zoom: f64,
+    #[serde(default)]
+    pub rotation_degrees: f64,
+}
+
+const fn default_camera_zoom() -> f64 {
+    1.0
 }
 
 /// The fixed drawing surface. Pixels, so a scene renders identically everywhere.
@@ -279,7 +324,7 @@ pub struct MotionDiagnostic {
 }
 
 impl MotionDiagnostic {
-    fn new(code: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
+    pub(crate) fn new(code: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.to_owned(),
             path: path.into(),
@@ -377,6 +422,8 @@ pub fn validate_scene(scene: &MotionScene) -> MotionValidation {
             "canvas width and height must be greater than zero",
         ));
     }
+
+    validate_camera(scene, &mut errors);
 
     let mut asset_ids = Vec::with_capacity(scene.assets.len());
     for (index, asset) in scene.assets.iter().enumerate() {
@@ -756,7 +803,7 @@ fn walk_nodes(
     }
 }
 
-fn is_uuid_v4(value: &str) -> bool {
+pub(crate) fn is_uuid_v4(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.len() != 36 {
         return false;
@@ -906,7 +953,86 @@ mod tests {
                 ],
                 easing: MotionEasing::EaseOut,
             }],
+            camera: None,
         }
+    }
+
+    #[test]
+    fn a_camera_scales_and_pans_every_resolved_instruction() {
+        let mut scene = scene();
+        scene.camera = Some(MotionCamera {
+            keyframes: vec![
+                MotionCameraKeyframe {
+                    at: RationalTime::new(0, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 1.0,
+                    rotation_degrees: 0.0,
+                },
+                MotionCameraKeyframe {
+                    at: RationalTime::new(4, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 2.0,
+                    rotation_degrees: 0.0,
+                },
+            ],
+            easing: MotionEasing::Linear,
+        });
+        let frame = evaluate_scene(&scene, RationalTime::new(2, 1).unwrap()).unwrap();
+        let instruction = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.kind == MotionNodeKind::Text)
+            .expect("the scene has text");
+        // At t=2 the camera is halfway between zoom 1 and 2, around the canvas
+        // centre: every point moves away from (960, 540) by 1.5×.
+        let raw = scene
+            .nodes
+            .iter()
+            .find(|node| node.node_id == instruction.node_id)
+            .and_then(|node| node.position)
+            .unwrap();
+        let expected_x = 960.0 + (raw.x - 960.0) * 1.5;
+        let expected_y = 540.0 + (raw.y - 540.0) * 1.5;
+        assert!((instruction.position.x - expected_x).abs() < 0.001);
+        assert!((instruction.position.y - expected_y).abs() < 0.001);
+        if let Some(size) = instruction.size {
+            assert!((size.width - 0.0).abs() < 0.001 || size.width > 0.0);
+        }
+    }
+
+    #[test]
+    fn camera_keys_are_bounded_and_sorted() {
+        let mut scene = scene();
+        scene.camera = Some(MotionCamera {
+            keyframes: vec![
+                MotionCameraKeyframe {
+                    at: RationalTime::new(3, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 5.0,
+                    rotation_degrees: 0.0,
+                },
+                MotionCameraKeyframe {
+                    at: RationalTime::new(1, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 1.0,
+                    rotation_degrees: 0.0,
+                },
+            ],
+            easing: MotionEasing::Linear,
+        });
+        let validation = validate_scene(&scene);
+        assert!(!validation.ok);
+        let codes: Vec<&str> = validation
+            .errors
+            .iter()
+            .map(|error| error.code.as_str())
+            .collect();
+        assert!(codes.contains(&"MOTION_CAMERA_KEYS_UNSORTED"), "{codes:?}");
+        assert!(codes.contains(&"MOTION_CAMERA_ZOOM_INVALID"), "{codes:?}");
     }
 
     #[test]
@@ -1410,11 +1536,164 @@ pub fn evaluate_scene(
         }
     }
 
+    if let Some(camera) = &scene.camera {
+        apply_camera(&mut instructions, camera, time, scene.canvas);
+    }
+
     Ok(MotionFrame {
         time,
         canvas: scene.canvas,
         instructions,
     })
+}
+
+fn validate_camera(scene: &MotionScene, errors: &mut Vec<MotionDiagnostic>) {
+    let Some(camera) = &scene.camera else {
+        return;
+    };
+    if camera.keyframes.len() > MAX_MOTION_KEYFRAMES {
+        errors.push(MotionDiagnostic::new(
+            "MOTION_TOO_MANY_CAMERA_KEYS",
+            "/camera/keyframes",
+            format!("a camera may hold at most {MAX_MOTION_KEYFRAMES} keys"),
+        ));
+    }
+    let mut previous: Option<RationalTime> = None;
+    for (index, key) in camera.keyframes.iter().enumerate() {
+        let path = format!("/camera/keyframes/{index}");
+        if key.at.is_negative() || key.at > scene.duration {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_CAMERA_KEY_OUT_OF_RANGE",
+                &path,
+                "camera key times must be inside the scene duration",
+            ));
+        }
+        if let Some(previous) = previous
+            && key.at < previous
+        {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_CAMERA_KEYS_UNSORTED",
+                &path,
+                "camera keys must be in ascending time order",
+            ));
+        }
+        previous = Some(key.at);
+        if !key.pan_x.is_finite()
+            || !key.pan_y.is_finite()
+            || key.pan_x.abs() > 100_000.0
+            || key.pan_y.abs() > 100_000.0
+        {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_CAMERA_PAN_INVALID",
+                format!("{path}/pan_x"),
+                "camera pan must be finite and within bounds",
+            ));
+        }
+        if !key.zoom.is_finite() || !(0.25..=4.0).contains(&key.zoom) {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_CAMERA_ZOOM_INVALID",
+                format!("{path}/zoom"),
+                "camera zoom must be between 0.25 and 4",
+            ));
+        }
+        if !key.rotation_degrees.is_finite() || key.rotation_degrees.abs() > 360.0 {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_CAMERA_ROTATION_INVALID",
+                format!("{path}/rotation_degrees"),
+                "camera rotation must be within ±360 degrees",
+            ));
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct CameraState {
+    pan_x: f64,
+    pan_y: f64,
+    zoom: f64,
+    rotation_degrees: f64,
+}
+
+fn sample_camera(camera: &MotionCamera, time: RationalTime) -> CameraState {
+    let identity = CameraState {
+        pan_x: 0.0,
+        pan_y: 0.0,
+        zoom: 1.0,
+        rotation_degrees: 0.0,
+    };
+    let Some(first) = camera.keyframes.first() else {
+        return identity;
+    };
+    let sample = |property: fn(&MotionCameraKeyframe) -> f64| -> f64 {
+        if time <= first.at {
+            return property(first);
+        }
+        let Some(last) = camera.keyframes.last() else {
+            return property(first);
+        };
+        if time >= last.at {
+            return property(last);
+        }
+        for pair in camera.keyframes.windows(2) {
+            let [start, end] = pair else {
+                continue;
+            };
+            if time >= start.at && time <= end.at {
+                let span = end.at.checked_sub(start.at).unwrap_or(RationalTime::ZERO);
+                let offset = time.checked_sub(start.at).unwrap_or(RationalTime::ZERO);
+                let eased = ease(camera.easing, ratio(offset, span));
+                return property(start) + (property(end) - property(start)) * eased;
+            }
+        }
+        property(last)
+    };
+    CameraState {
+        pan_x: sample(|key| key.pan_x),
+        pan_y: sample(|key| key.pan_y),
+        zoom: sample(|key| key.zoom),
+        rotation_degrees: sample(|key| key.rotation_degrees),
+    }
+}
+
+fn apply_camera(
+    instructions: &mut [MotionInstruction],
+    camera: &MotionCamera,
+    time: RationalTime,
+    canvas: MotionCanvas,
+) {
+    let state = sample_camera(camera, time);
+    if state.pan_x.abs() < f64::EPSILON
+        && state.pan_y.abs() < f64::EPSILON
+        && (state.zoom - 1.0).abs() < f64::EPSILON
+        && state.rotation_degrees.abs() < f64::EPSILON
+    {
+        return;
+    }
+    let center_x = canvas.width as f64 / 2.0;
+    let center_y = canvas.height as f64 / 2.0;
+    let radians = state.rotation_degrees.to_radians();
+    let (sin, cos) = radians.sin_cos();
+    let map = |point: MotionPoint| -> MotionPoint {
+        let dx = (point.x - center_x) * state.zoom + state.pan_x;
+        let dy = (point.y - center_y) * state.zoom + state.pan_y;
+        MotionPoint {
+            x: center_x + dx * cos - dy * sin,
+            y: center_y + dx * sin + dy * cos,
+        }
+    };
+    for instruction in instructions {
+        instruction.position = map(instruction.position);
+        instruction.end = instruction.end.map(map);
+        if let Some(size) = &mut instruction.size {
+            size.width *= state.zoom;
+            size.height *= state.zoom;
+        }
+        if let Some(font_size) = &mut instruction.font_size {
+            *font_size *= state.zoom;
+        }
+        instruction.stroke_width *= state.zoom;
+        instruction.rotation_degrees += state.rotation_degrees;
+    }
 }
 
 fn resolve_node(

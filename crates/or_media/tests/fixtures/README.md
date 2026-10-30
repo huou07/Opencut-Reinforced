@@ -44,6 +44,13 @@ to verify that desktop and SAF probing keep it out of the editable timeline.
 The fixture retains 44.1 kHz stereo MP3 audio and is used for import, decode,
 and packaged Android SAF/audio-playback acceptance.
 
+`tiny_still.png`, `tiny_still.jpg`, and `tiny_still.webp` are 16×16 lossless or
+high-quality encodings of the generated FFmpeg `testsrc2` pattern. They contain
+no third-party media and exercise PNG, JPEG, and WebP import, probing, decoding,
+and the packaged helper profile. SHA-256 values are `9aa69e7a7d64614c336f1c8d3f5fbd6b0f92987a780e8ad29e87ce2b8b27cb43`,
+`62e0075e9962ffd61ae10fa5c28467aaae8d290e4f2681a8ba53cb8134b8ecee`, and
+`9b596d8df41b18cd21c5e39ead637e75382810583f44a59ad4233a6ec741c6af`, respectively.
+
 The remaining tiny fixtures are generated specifically for deterministic
 correctness tests and contain no third-party media.
 `tiny_offset.mkv` combines `tiny.wav` with a one-second generated test-pattern

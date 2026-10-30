@@ -1,5 +1,6 @@
 mod decoder;
 mod encoder;
+mod probe;
 #[cfg(unix)]
 mod seekable_io;
 mod snapshot_queue;
@@ -11,12 +12,13 @@ pub use decoder::{
     VideoFrame,
 };
 pub use encoder::{
-    ExportEncodeError, FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter,
-    SoftwareExportProfile,
+    ExportEncodeError, FfmpegExportProfile, FfmpegExportWriter, FfmpegSoftwareExportWriter,
+    MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
 };
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
-#[cfg(unix)]
+pub use probe::probe_media_path;
+
 pub fn probe_seekable_media(
     capability: &SeekableMediaIoCapability,
 ) -> Result<Vec<u8>, ffmpeg_the_third::Error> {

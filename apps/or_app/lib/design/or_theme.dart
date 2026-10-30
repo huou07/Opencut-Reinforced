@@ -42,6 +42,38 @@ abstract final class OrTheme {
         thickness: 1,
         space: 1,
       ),
+      // Material resolves snackbar content from the inverse-surface role and
+      // tooltips from the light baseline. OR overrides the snackbar fill with
+      // OrColors.surface, so leaving the content role at its default painted
+      // surface-on-surface (contrast 1:1, measured on the real app
+      // 2026-10-25): every confirmation, error and undo message was invisible.
+      // Both surfaces are declared here so their foreground roles travel with
+      // their fill.
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: OrColors.surface,
+        contentTextStyle: OrType.body.copyWith(color: OrColors.text),
+        actionTextColor: OrColors.selection,
+        closeIconColor: OrColors.textSecondary,
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(OrRadii.control),
+        ),
+      ),
+      tooltipTheme: TooltipThemeData(
+        // The stock tooltip is the only white surface in the workspace, and it
+        // carries the only explanation for several disabled controls.
+        textStyle: OrType.tiny.copyWith(color: OrColors.text),
+        decoration: BoxDecoration(
+          color: OrColors.surface,
+          border: Border.all(color: OrColors.borderStrong),
+          borderRadius: BorderRadius.circular(OrRadii.small),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: OrSpacing.x2,
+          vertical: OrSpacing.x1,
+        ),
+        waitDuration: const Duration(milliseconds: 400),
+      ),
       dialogTheme: DialogThemeData(
         backgroundColor: OrColors.backgroundRaised,
         surfaceTintColor: Colors.transparent,

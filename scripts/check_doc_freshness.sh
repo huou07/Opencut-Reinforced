@@ -24,28 +24,61 @@ failed=0
 in_scope=(
   README.md
   AGENTS.md
-  DESIGN.md
-  docs/AGENT-AUTHORITY.md
-  docs/AGENT_POLICY.md
-  docs/ARCHITECTURE.md
-  docs/DEVELOPMENT_WORKFLOW.md
-  docs/INDEX.md
-  docs/OPEN_SOURCE_CONVERGENCE.md
-  docs/PRODUCT.md
-  docs/PRODUCT_ROADMAP.md
-  docs/PROJECT_FORMAT.md
-  docs/QUALITY.md
-  docs/RELEASE.md
-  docs/SECURITY_LICENSING.md
-  docs/TECHNICAL_PLAN.md
-  docs/TESTING.md
-  docs/TOOLING.md
-  docs/skills.md
-  docs/UX_ACCEPTANCE.md
+  docs/design/design-language.md
+  docs/design/ux-invariants.md
+  docs/architecture/system-overview.md
+  docs/architecture/control-plane.md
+  docs/architecture/realtime-plane.md
+  docs/architecture/media-pipeline.md
+  docs/architecture/project-format.md
+  docs/architecture/platforms.md
+  docs/architecture/security-boundaries.md
+  docs/features/project-lifecycle.md
+  docs/features/editing.md
+  docs/features/media-library.md
+  docs/features/preview-playback.md
+  docs/features/text-captions.md
+  docs/features/effects-audio.md
+  docs/features/export.md
+  docs/features/motionscene.md
+  docs/features/motion-assets.md
+  docs/features/workspace-ui.md
+  docs/features/assistant.md
+  docs/features/agent-workspace.md
+  docs/operations/workflow.md
+  docs/operations/verification.md
+  docs/operations/local-macos.md
+  docs/operations/ui-harness.md
+  docs/operations/git.md
+  docs/operations/permissions.md
+  docs/operations/docs-maintenance.md
+  docs/operations/skills.md
+  docs/reference/product.md
+  docs/reference/roadmap.md
+  docs/reference/quality.md
+  docs/reference/testing.md
+  docs/reference/tooling.md
+  docs/reference/security-licensing.md
+  docs/reference/release.md
+  docs/reference/developer-preview-install.md
   docs/evidence/claims/README.md
-  docs/prompts/README.md
-  docs/prompts/OR-BUILD.md
 )
+
+date_to_epoch() {
+  local reviewed="$1"
+  local epoch
+
+  # macOS/BSD date uses -j -f; GNU date uses -d.
+  if epoch="$(date -u -j -f "%Y-%m-%d" "$reviewed" +%s 2>/dev/null)"; then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  if epoch="$(date -u -d "$reviewed" +%s 2>/dev/null)"; then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  return 1
+}
 
 today_epoch="$(date -u +%s)"
 
@@ -63,7 +96,7 @@ for path in "${in_scope[@]}"; do
     failed=1
     continue
   fi
-  reviewed_epoch="$(date -u -d "$reviewed" +%s 2>/dev/null)" || reviewed_epoch=""
+  reviewed_epoch="$(date_to_epoch "$reviewed" 2>/dev/null)" || reviewed_epoch=""
   if [[ -z "$reviewed_epoch" ]]; then
     printf 'FAIL: %s has an unparseable review date: %s\n' "$path" "$reviewed" >&2
     failed=1

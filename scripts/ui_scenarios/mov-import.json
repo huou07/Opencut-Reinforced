@@ -1,0 +1,66 @@
+{
+  "name": "mov-import",
+  "harness": "or_ui",
+  "description": "Imports a real QuickTime .mov through the media picker and the Rust probe, with the packaged ffprobe helper deliberately unavailable so the in-process libavformat fallback has to do the work.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "copy:/tmp/or-fallback-tiny.mov"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "MOV import"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "or-fallback-tiny.mov",
+      "budget_ms": 30000
+    },
+    {
+      "op": "shot",
+      "name": "mov-imported"
+    },
+    {
+      "op": "tree",
+      "name": "mov-imported"
+    }
+  ]
+}

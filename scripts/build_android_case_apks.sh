@@ -10,7 +10,7 @@
 # `.github/workflows/platform-verification.yml`, which builds all four case APKs
 # before it boots any guest so that Gradle and the Kotlin daemons never compete
 # with the software-rendered emulator (see the measured reasons in
-# docs/TESTING.md).
+# docs/reference/testing.md).
 #
 # It also creates `apps/or_app/android/.ffmpeg-install`, the staged FFmpeg
 # install that `packages/or_app_bridge/hook/build.dart` requires before it will

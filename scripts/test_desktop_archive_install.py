@@ -15,7 +15,7 @@ from pathlib import Path
 def create_package(source: Path, work: Path, *, macos: bool) -> Path:
     package_dir = work / "opencut-reinforced-desktop"
     package_dir.mkdir()
-    readme = Path(__file__).resolve().parents[1] / "docs/DEVELOPER_PREVIEW_INSTALL.md"
+    readme = Path(__file__).resolve().parents[1] / "docs/reference/developer-preview-install.md"
     shutil.copyfile(readme, package_dir / "README-FIRST.md")
 
     if macos:

@@ -284,9 +284,70 @@ pub struct RenderDevice {
     video_bind_group_layout: wgpu::BindGroupLayout,
     video_pipeline: wgpu::RenderPipeline,
     video_sampler: wgpu::Sampler,
+    nv12_bind_group_layout: wgpu::BindGroupLayout,
+    nv12_luma_pipeline: wgpu::RenderPipeline,
+    nv12_chroma_pipeline: wgpu::RenderPipeline,
     adapter_info: RenderAdapterInfo,
     limits: wgpu::Limits,
 }
+
+/// The shader that turns a composited RGBA target into NV12.
+///
+/// BT.709 primaries, limited (MPEG) range, which is what the hardware encoder
+/// and the previous swscale path both expect. Luma is written per pixel; chroma
+/// is written once per 2x2 block by averaging the four source texels, because
+/// NV12 interleaves one chroma pair per block.
+const NV12_SHADER: &str = r#"
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+}
+
+@group(0) @binding(0) var source: texture_2d<f32>;
+@group(0) @binding(1) var source_sampler: sampler;
+
+@vertex
+fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
+    let positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0),
+    );
+    let point = positions[index];
+    var output: VertexOutput;
+    output.position = vec4<f32>(point, 0.0, 1.0);
+    output.uv = vec2<f32>((point.x + 1.0) * 0.5, (1.0 - point.y) * 0.5);
+    return output;
+}
+
+fn bt709_luma(rgb: vec3<f32>) -> f32 {
+    return dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+}
+
+@fragment
+fn fs_luma(input: VertexOutput) -> @location(0) vec4<f32> {
+    let rgb = textureSample(source, source_sampler, input.uv).rgb;
+    let luma = (16.0 + 219.0 * bt709_luma(rgb)) / 255.0;
+    return vec4<f32>(luma, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_chroma(input: VertexOutput) -> @location(0) vec4<f32> {
+    let dimensions = vec2<f32>(textureDimensions(source, 0));
+    let texel = vec2<f32>(1.0) / dimensions;
+    let corner = input.uv - texel * 0.5;
+    let rgb = (
+        textureSample(source, source_sampler, corner).rgb
+        + textureSample(source, source_sampler, corner + vec2<f32>(texel.x, 0.0)).rgb
+        + textureSample(source, source_sampler, corner + vec2<f32>(0.0, texel.y)).rgb
+        + textureSample(source, source_sampler, corner + texel).rgb
+    ) * 0.25;
+    let luma = bt709_luma(rgb);
+    let u = (128.0 + 224.0 * (rgb.b - luma) / 1.8556) / 255.0;
+    let v = (128.0 + 224.0 * (rgb.r - luma) / 1.5748) / 255.0;
+    return vec4<f32>(u, v, 0.0, 1.0);
+}
+"#;
 
 impl RenderDevice {
     /// Returns the backends compiled into this crate for the current target.
@@ -327,7 +388,8 @@ impl RenderDevice {
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("or_render"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
+                required_limits: wgpu::Limits::downlevel_defaults()
+                    .using_resolution(limits.clone()),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })
@@ -474,6 +536,76 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             ..Default::default()
         });
 
+        let nv12_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("or_render.nv12_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+        let nv12_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("or_render.nv12_shader"),
+            source: wgpu::ShaderSource::Wgsl(NV12_SHADER.into()),
+        });
+        let nv12_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("or_render.nv12_pipeline_layout"),
+            bind_group_layouts: &[&nv12_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+        let nv12_pipeline =
+            |label: &str, entry_point: &str, format: wgpu::TextureFormat| -> wgpu::RenderPipeline {
+                device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some(label),
+                    layout: Some(&nv12_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &nv12_shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &nv12_shader,
+                        entry_point: Some(entry_point),
+                        compilation_options: Default::default(),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: wgpu::PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview: None,
+                    cache: None,
+                })
+            };
+        let nv12_luma_pipeline = nv12_pipeline(
+            "or_render.nv12_luma_pipeline",
+            "fs_luma",
+            wgpu::TextureFormat::R8Unorm,
+        );
+        let nv12_chroma_pipeline = nv12_pipeline(
+            "or_render.nv12_chroma_pipeline",
+            "fs_chroma",
+            wgpu::TextureFormat::Rg8Unorm,
+        );
+
         Ok(Self {
             _instance: instance,
             _adapter: adapter,
@@ -482,6 +614,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             video_bind_group_layout,
             video_pipeline,
             video_sampler,
+            nv12_bind_group_layout,
+            nv12_luma_pipeline,
+            nv12_chroma_pipeline,
             adapter_info: RenderAdapterInfo {
                 name: adapter_info.name,
                 driver: adapter_info.driver,
@@ -608,6 +743,256 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         let frame = RenderGraph.render_rgba_layers(self, snapshot, size, layers)?;
         self.readback(&frame)
     }
+
+    /// Composites the same layers and returns an NV12 picture instead of RGBA.
+    ///
+    /// The conversion happens on the GPU, so an export reads back 3.1 MB of
+    /// planes at 1080p instead of 8.3 MB of RGBA and then converts on the CPU.
+    /// The pixels are the same composition: one renderer, one graph, two output
+    /// layouts.
+    pub fn render_rgba_layers_nv12(
+        &self,
+        snapshot: RenderSnapshot,
+        size: RenderSize,
+        layers: &[RgbaVideoLayer<'_>],
+    ) -> Result<Nv12Planes, RenderError> {
+        let frame = RenderGraph.render_rgba_layers(self, snapshot, size, layers)?;
+        self.readback_nv12(&frame)
+    }
+
+    /// Converts an offscreen target into NV12 and reads back both planes.
+    pub fn readback_nv12(&self, frame: &RenderedFrame) -> Result<Nv12Planes, RenderError> {
+        if frame.surface.target() != PreviewSurfaceTarget::Offscreen {
+            return Err(RenderError::ViewerSurfaceNotImplemented);
+        }
+        let size = frame.surface.size();
+        let width = size.width();
+        let height = size.height();
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return Err(RenderError::OddSizeForNv12 { size });
+        }
+        let (chroma_width, chroma_height) = (width / 2, height / 2);
+
+        let luma_target = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.nv12_luma"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let chroma_target = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.nv12_chroma"),
+            size: wgpu::Extent3d {
+                width: chroma_width,
+                height: chroma_height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+
+        let source_view = frame
+            .target
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("or_render.nv12_sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            // Linear is required by the filtering slot this layout declares. Every
+            // sample below lands on a texel centre, so the weights collapse and the
+            // reading stays exact: one texel per output pixel, four per chroma pair.
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("or_render.nv12_bind_group"),
+            layout: &self.nv12_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&source_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
+        for (pipeline, view) in [
+            (
+                &self.nv12_luma_pipeline,
+                &luma_target.create_view(&wgpu::TextureViewDescriptor::default()),
+            ),
+            (
+                &self.nv12_chroma_pipeline,
+                &chroma_target.create_view(&wgpu::TextureViewDescriptor::default()),
+            ),
+        ] {
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("or_render.nv12_encoder"),
+                });
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("or_render.nv12_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, &bind_group, &[]);
+                pass.draw(0..3, 0..1);
+            }
+            self.queue.submit(Some(encoder.finish()));
+        }
+
+        let luma = self.read_plane(&luma_target, width, height, 1)?;
+        let chroma = self.read_plane(&chroma_target, chroma_width, chroma_height, 2)?;
+        Ok(Nv12Planes {
+            width,
+            height,
+            luma,
+            chroma,
+        })
+    }
+
+    /// Copies one plane texture into a tightly-packed CPU buffer.
+    fn read_plane(
+        &self,
+        texture: &wgpu::Texture,
+        width: u32,
+        height: u32,
+        bytes_per_pixel: u32,
+    ) -> Result<Vec<u8>, RenderError> {
+        let unpadded_bytes_per_row = width
+            .checked_mul(bytes_per_pixel)
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+        let padded_bytes_per_row = align_to_copy_row(unpadded_bytes_per_row)?;
+        let buffer_size = u64::from(padded_bytes_per_row)
+            .checked_mul(u64::from(height))
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("or_render.nv12_readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("or_render.nv12_readback_encoder"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &staging_buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = staging_buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result.map_err(|error| error.to_string()));
+        });
+        self.device
+            .poll(wgpu::PollType::Wait)
+            .map_err(|error| RenderError::DevicePoll {
+                message: error.to_string(),
+            })?;
+        receiver
+            .recv()
+            .map_err(|error| RenderError::ReadbackMap {
+                message: error.to_string(),
+            })?
+            .map_err(|message| RenderError::ReadbackMap { message })?;
+
+        let mapped = slice.get_mapped_range();
+        let row_bytes = usize::try_from(unpadded_bytes_per_row)
+            .map_err(|_| RenderError::ReadbackSizeOverflow)?;
+        let padded_row_bytes =
+            usize::try_from(padded_bytes_per_row).map_err(|_| RenderError::ReadbackSizeOverflow)?;
+        let mut pixels = Vec::with_capacity(row_bytes * height as usize);
+        for row in mapped.chunks_exact(padded_row_bytes) {
+            pixels.extend_from_slice(&row[..row_bytes]);
+        }
+        drop(mapped);
+        staging_buffer.unmap();
+        Ok(pixels)
+    }
+}
+
+/// One NV12 picture: tightly packed luma at full resolution and interleaved
+/// chroma at half resolution.
+///
+/// This is the layout the hardware H.264 encoder takes, so an export can hand the
+/// media engine planes it already has instead of a CPU colour conversion.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Nv12Planes {
+    width: u32,
+    height: u32,
+    luma: Vec<u8>,
+    chroma: Vec<u8>,
+}
+
+impl Nv12Planes {
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// Full-resolution luma, `width * height` bytes.
+    pub fn luma(&self) -> &[u8] {
+        &self.luma
+    }
+
+    /// Half-resolution interleaved chroma, `(width / 2) * (height / 2) * 2` bytes.
+    pub fn chroma(&self) -> &[u8] {
+        &self.chroma
+    }
 }
 
 impl fmt::Debug for RenderDevice {
@@ -656,7 +1041,11 @@ impl RenderGraph {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: surface.format().wgpu(),
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            // TEXTURE_BINDING lets a later NV12 conversion sample this target
+            // instead of reading it back to the CPU first.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -744,7 +1133,11 @@ impl RenderGraph {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            // TEXTURE_BINDING so an NV12 export can sample the composited target
+            // for its colour conversion instead of reading it back to the CPU.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
         let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
@@ -1229,6 +1622,7 @@ pub enum RenderError {
     SourceSizeExceedsDeviceLimit { width: u32, height: u32, limit: u32 },
     SizeExceedsDeviceLimit { size: RenderSize, limit: u32 },
     ReadbackSizeOverflow,
+    OddSizeForNv12 { size: RenderSize },
     DevicePoll { message: String },
     ReadbackMap { message: String },
     FrameDescriptor { message: String },
@@ -1272,6 +1666,12 @@ impl fmt::Display for RenderError {
                 size.height()
             ),
             Self::ReadbackSizeOverflow => formatter.write_str("render readback size overflowed"),
+            Self::OddSizeForNv12 { size } => write!(
+                formatter,
+                "NV12 needs even dimensions, got {}x{}",
+                size.width(),
+                size.height()
+            ),
             Self::DevicePoll { message } => write!(formatter, "wgpu device poll failed: {message}"),
             Self::ReadbackMap { message } => {
                 write!(formatter, "wgpu readback mapping failed: {message}")
@@ -1360,6 +1760,29 @@ mod tests {
             .unwrap();
 
         assert_eq!(rendered.pixels(), &layer_pixels);
+    }
+
+    #[test]
+    fn viewer_render_accepts_2560x1440_sources_when_adapter_allows_them() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu large-source test: {error}");
+                return;
+            }
+        };
+        if renderer.limits().max_texture_dimension_2d < 2560 {
+            eprintln!("skipping wgpu large-source test: adapter limit is below 2560");
+            return;
+        }
+
+        let source_pixels = vec![0_u8; 2560 * 1440 * 4];
+        let layer = RgbaVideoLayer::new(2560, 1440, &source_pixels).unwrap();
+        let rendered = renderer
+            .render_rgba_layers(snapshot(), render_size(16, 9), &[layer])
+            .unwrap();
+
+        assert_eq!(rendered.pixels().len(), 16 * 9 * 4);
     }
 
     #[test]
@@ -1611,6 +2034,81 @@ mod tests {
     }
 
     #[test]
+    fn nv12_readback_converts_bt709_limited_range_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu nv12 test: {error}");
+                return;
+            }
+        };
+        // White is the fixed point of the limited-range mapping: luma 235,
+        // chroma 128. A red field then exercises the BT.709 coefficients.
+        for (color, luma, u, v) in [
+            (
+                SyntheticColor::rgba(255, 255, 255, 255),
+                235_i32,
+                128_i32,
+                128_i32,
+            ),
+            (SyntheticColor::rgba(255, 0, 0, 255), 63, 102, 240),
+        ] {
+            let size = render_size(4, 4);
+            let input = RenderGraphInput::new(
+                snapshot(),
+                PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
+                SyntheticScene::solid(color),
+            );
+            let frame = renderer.render(input).unwrap();
+            let planes = renderer.readback_nv12(&frame).unwrap();
+            assert_eq!(planes.width(), 4);
+            assert_eq!(planes.height(), 4);
+            assert_eq!(planes.luma().len(), 16);
+            assert_eq!(planes.chroma().len(), 8);
+            for sample in planes.luma() {
+                assert!(
+                    (*sample as i32 - luma).abs() <= 2,
+                    "luma {sample} for {color:?}, expected {luma}"
+                );
+            }
+            for pair in planes.chroma().as_chunks::<2>().0 {
+                assert!(
+                    (pair[0] as i32 - u).abs() <= 3,
+                    "u {} for {color:?}, expected {u}",
+                    pair[0]
+                );
+                assert!(
+                    (pair[1] as i32 - v).abs() <= 3,
+                    "v {} for {color:?}, expected {v}",
+                    pair[1]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nv12_readback_refuses_an_odd_size_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu nv12 test: {error}");
+                return;
+            }
+        };
+        let size = render_size(3, 2);
+        let input = RenderGraphInput::new(
+            snapshot(),
+            PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
+            SyntheticScene::solid(SyntheticColor::GREEN),
+        );
+        let frame = renderer.render(input).unwrap();
+        assert!(matches!(
+            renderer.readback_nv12(&frame),
+            Err(RenderError::OddSizeForNv12 { .. })
+        ));
+    }
+
+    #[test]
     fn offscreen_render_readback_is_deterministic_when_adapter_is_available() {
         let renderer = match block_on(RenderDevice::new()) {
             Ok(renderer) => renderer,
@@ -1669,9 +2167,15 @@ mod tests {
     }
 }
 pub mod motion;
+mod motion_image;
 mod text;
 pub use motion::{
     MAX_MOTION_CANVAS_PIXELS, MAX_MOTION_FRAMES, MotionRasterError, MotionSequenceError,
-    RasterizedMotionFrame, encode_png, for_each_motion_frame, rasterize_motion_frame,
+    RasterizedMotionFrame, encode_png, for_each_motion_frame, for_each_motion_frame_with_images,
+    rasterize_motion_frame, rasterize_motion_frame_with_images,
+};
+pub use motion_image::{
+    MAX_MOTION_IMAGE_BYTES, MAX_MOTION_IMAGE_PIXELS, MotionImage, MotionImageError,
+    decode_motion_image, load_motion_scene_images,
 };
 pub use text::{TextRasterError, TextRasterizer};

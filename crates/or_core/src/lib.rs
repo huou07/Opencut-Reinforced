@@ -20,19 +20,22 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportRequest,
-    ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE, MAX_TIMELINE_CLIP_PAGE_SIZE,
-    MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage, OperationError, OperationErrorCode,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportQuality,
+    ExportRequest, ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage,
+    MotionMaterializeRequest, MotionMaterializeResponse, OperationError, OperationErrorCode,
     ProjectChange, ProjectSession, ProjectSummary, QueryDescriptor, QueryEnvelope, QueryResult,
     TimelineClipPage, TimelineClipPageV2, TimelineClipState, TimelineEditMode, TimelineMarkerPage,
     TimelineMarkerState, TimelineSequenceSettings, TimelineSnapMovingAnchor, TimelineSnapOperation,
     TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummary, TimelineTrackSummaryV2,
-    TimelineTrimEdge, TransactionEnvelope, TransactionResult, command_catalog, query_catalog,
+    TimelineTrimEdge, TransactionEnvelope, TransactionResult, TranscriptionFailure,
+    TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView, command_catalog, query_catalog,
 };
 pub use audio_cleanup::{
     AudioCleanupError, AudioCleanupErrorCode, AudioCleanupRequest, AudioCleanupResult,
     audio_cleanup_arguments, clean_audio, clean_audio_file, measure_noise_floor,
-    measure_noise_floor_db, parse_window_rms_db, percentile,
+    measure_noise_floor_db, percentile, window_rms_dbfs,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
@@ -63,7 +66,10 @@ pub use media_helpers::{
     FFMPEG_PATH_ENVIRONMENT_VARIABLE, FFPROBE_PATH_ENVIRONMENT_VARIABLE, ffmpeg_executable,
     ffprobe_executable, packaged_helper_directory, resolve_helper_executable,
 };
-pub use media_import::{MediaImportError, prepare_media_import, prepare_media_import_from_probe};
+pub use media_import::{
+    MediaImportError, prepare_media_import, prepare_media_import_from_probe,
+    prepare_media_import_with_probe,
+};
 pub use media_probe::{
     MediaProbeError, MediaProbeErrorCode, parse_media_probe_output, probe_media_file,
 };
@@ -101,9 +107,10 @@ pub use timeline::{
     MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TEXT_BYTES,
     MAX_TIMELINE_TRACKS, MAX_TRANSFORM_POSITION_MILLI_CANVAS, MAX_TRANSFORM_SCALE_MILLI,
     MIN_AUDIO_GAIN_MILLIDECIBELS, MIN_TEXT_SIZE_MILLI_POINTS, MarkerId, Opacity, ProjectTimeline,
-    SequenceTimingError, TextAlignment, TextColor, TextFormatting, TextWeight, TimelineClip,
-    TimelineIdParseError, TimelineMarker, TimelineTrack, TrackId, TrackKind, TrackState, Transform,
-    TransitionKind, TransitionReference, VisualSettings,
+    SequenceTimingError, TextAlignment, TextBackground, TextColor, TextFormatting,
+    TextVerticalAnchor, TextWeight, TimelineClip, TimelineIdParseError, TimelineMarker,
+    TimelineTrack, TrackId, TrackKind, TrackState, Transform, TransitionKind, TransitionReference,
+    VisualSettings,
 };
 
 const APP_NAME: &str = "Opencut Reinforced";

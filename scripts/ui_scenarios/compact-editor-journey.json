@@ -97,7 +97,7 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-add-audio-track"
+        "key": "timeline-empty-add-audio"
       }
     },
     {
@@ -170,7 +170,13 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-undo"
+        "key": "workspace-actions"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Undo"
       }
     },
     {

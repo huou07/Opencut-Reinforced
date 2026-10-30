@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+// Materialise every beat scene through the running app, in parallel. Renders are
+// project-neutral: they write files only, so they never race the project
+// revision. Import/insert happens later, sequentially, in assemble.mjs.
+//
+//   node scripts/render.mjs --video videos/<slug> [--workers 3] [--attach project.json]
+
+import { spawn } from 'node:child_process';
+import { readFile, mkdir, stat } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+
+const args = { video: null, workers: 3, attach: 'project.json' };
+for (let i = 2; i < process.argv.length; i += 1) {
+  const a = process.argv[i];
+  if (a === '--video') args.video = process.argv[++i];
+  else if (a === '--workers') args.workers = Number(process.argv[++i]);
+  else if (a === '--attach') args.attach = process.argv[++i];
+  else { console.error(`unknown ${a}`); process.exit(2); }
+}
+if (!args.video) { console.error('--video videos/<slug> is required'); process.exit(2); }
+
+const dir = path.resolve(args.video);
+const plan = JSON.parse(await readFile(path.join(dir, 'build', 'scenes', 'publish-plan.json'), 'utf8'));
+const outDir = path.join(dir, 'build', 'renders');
+await mkdir(outDir, { recursive: true });
+
+function run(cmd, argv) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, argv, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (code) => resolve({ code, out }));
+  });
+}
+
+const queue = [...plan];
+const results = [];
+let done = 0;
+const started = Date.now();
+
+async function worker() {
+  while (queue.length) {
+    const beat = queue.shift();
+    const out = path.join(outDir, `${String(beat.index).padStart(2, '0')}.mkv`);
+    try {
+      const info = await stat(out);
+      if (info.size > 10000) { results.push({ ...beat, out, skipped: true }); done += 1; continue; }
+    } catch {}
+    const r = await run(path.resolve('tools/or'), ['motion', 'materialize', '--attach', args.attach, '--scene', beat.file, '--output', out, '--json']);
+    if (r.code !== 0) {
+      console.error(`beat ${beat.index} (${beat.beat}) failed: ${r.out.slice(0, 300)}`);
+      results.push({ ...beat, out, failed: true });
+    } else {
+      results.push({ ...beat, out });
+    }
+    done += 1;
+    console.log(`${done}/${plan.length} ${beat.beat}`);
+  }
+}
+
+await Promise.all(Array.from({ length: Math.max(1, Math.min(6, args.workers)) }, worker));
+const failed = results.filter((r) => r.failed);
+console.log(JSON.stringify({ rendered: results.length - failed.length, failed: failed.length, seconds: Math.round((Date.now() - started) / 1000), out_dir: outDir }, null, 2));
+if (failed.length) process.exit(1);

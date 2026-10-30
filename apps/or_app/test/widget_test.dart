@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
@@ -17,15 +18,56 @@ import 'package:or_app/main.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/screens/editor_media_library.dart';
+import 'package:or_app/screens/editor_timeline_panel.dart';
 import 'package:or_app/shell/app_shell.dart';
 import 'package:or_app/shell/motion_materialize_dialog.dart';
 import 'package:or_app/project/recent_projects.dart';
 import 'package:or_app/screens/settings_screen.dart';
 import 'package:or_app/shell/app_navigation.dart';
 import 'package:or_app/shell/app_top_bar.dart';
+import 'package:or_app/shell/or_shortcuts.dart';
 import 'package:or_app/widgets/or_widgets.dart';
 
 void main() {
+  testWidgets(
+    'a bridge that cannot start explains itself instead of going blank',
+    (tester) async {
+      await tester.pumpWidget(
+        const OrStartupFailure(message: 'Bad state: hash'),
+      );
+      expect(
+        find.byKey(const ValueKey('startup-failure-title')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('startup-failure-message')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Bad state: hash'), findsOneWidget);
+    },
+  );
+
+  testWidgets('text fields are recognized as focused for shell shortcuts', (
+    tester,
+  ) async {
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: TextField(focusNode: focusNode)),
+      ),
+    );
+
+    focusNode.requestFocus();
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isTrue);
+
+    focusNode.unfocus();
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isFalse);
+  });
+
   testWidgets('wide shell shows OR navigation and project destinations', (
     tester,
   ) async {
@@ -53,20 +95,15 @@ void main() {
     expect(find.text('Archived'), findsNothing);
   });
 
-  testWidgets('compact shell reaches all five primary destinations', (
+  testWidgets('compact shell reaches every primary destination', (
     tester,
   ) async {
     _setViewport(tester, const Size(390, 844));
     await _mount(tester);
     expect(find.byKey(const ValueKey('compact-navigation')), findsOneWidget);
-    // 320 px cannot hold "Asset Library"; the compact bar names it "Assets".
-    expect(find.text('Assets'), findsOneWidget);
-    expect(find.text('Asset Library'), findsNothing);
 
     final destinations = [
       (AppDestination.projects, 'No active project'),
-      (AppDestination.templates, 'No templates available'),
-      (AppDestination.assets, 'No assets available'),
       (AppDestination.settings, 'Focused Monochrome'),
       (AppDestination.home, 'No recent projects yet'),
     ];
@@ -224,6 +261,33 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Backspace edits a dialog text field instead of being taken by the shell',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()..savePath = '/tmp/or-input-check';
+      await _mount(tester, gateway: gateway, picker: picker);
+
+      await tester.tap(find.byKey(const ValueKey('home-new-project')));
+      await tester.pumpAndSettle();
+      final nameField = find.byKey(const ValueKey('new-project-name'));
+      await tester.enterText(nameField, 'abc');
+      await tester.showKeyboard(nameField);
+      await tester.pump();
+      expect(orTextFieldHasFocus(), isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+
+      final editable = tester.widget<EditableText>(
+        find.descendant(of: nameField, matching: find.byType(EditableText)),
+      );
+      expect(editable.controller.text, 'ab');
+      expect(gateway.createCalls, 0);
+    },
+  );
+
   testWidgets('new project asks for a name and opens the created workspace', (
     tester,
   ) async {
@@ -246,17 +310,30 @@ void main() {
     expect(picker.saveCalls, 1);
     expect(picker.lastSuggestedProjectName, 'Demo_ Project.orproj');
     expect(gateway.lastCreatePath, '/tmp/or-widget-demo.orproj');
-    expect(gateway.lastCreateName, 'Demo: Project ');
+    expect(gateway.lastCreateName, 'Demo: Project');
     expect(gateway.inspectCalls, 1);
     expect(gateway.createCalls, 1);
     expect(
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Revision 0'), findsOneWidget);
-    expect(find.text('Saved'), findsOneWidget);
+    // Revision counters are developer detail. The workspace states the one
+    // thing an editor needs: whether the project on disk matches the edits.
+    expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
+    // The bar states 'Saved'; the inspector states 'Saved to disk'. One
+    // statement per surface, so each assertion names its surface by key.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-top-bar')),
+        matching: find.text('Saved'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('No timeline tracks'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -328,10 +405,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(
-      find.byKey(const ValueKey('workspace-project-revision')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -597,7 +671,7 @@ void main() {
   });
 
   testWidgets(
-    'the illustration surface refuses an empty source and reports a render',
+    'the illustration surface picks files, renders, then adds to the timeline',
     (tester) async {
       // The surface is the user-visible half of code-to-illustration video. It is driven
       // through an injected renderer so the guard needs no Rust library, and it asserts
@@ -610,12 +684,18 @@ void main() {
         const MaterialApp(home: Scaffold(body: SizedBox.shrink())),
       );
       var rendered = 0;
+      String? addedPath;
       MotionMaterializeRequest? seen;
       // The dialog's future completes when it closes, so the test drives it first and
       // awaits it last; awaiting here would deadlock the test against itself.
       final dialog = showMotionMaterializeDialog(
         context: tester.element(find.byType(Scaffold)),
-        initialDestinationPath: '/tmp/illustration.mkv',
+        chooseSource: () async => '/tmp/count_words.rs',
+        chooseDestination: (suggestedName) async {
+          expect(suggestedName, startsWith('Illustration-'));
+          expect(suggestedName, endsWith('.mkv'));
+          return '/tmp/illustration.mkv';
+        },
         render: (request) async {
           rendered++;
           seen = request;
@@ -632,26 +712,28 @@ void main() {
             message: 'Materialised 24 frames.',
           );
         },
+        addToTimeline: (outcome) async {
+          addedPath = outcome.destinationPath;
+          return true;
+        },
       );
       await tester.pumpAndSettle();
 
-      // A render with no source is refused, with a reason, and does not call the renderer.
-      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
-      await tester.pumpAndSettle();
-      expect(rendered, 0);
+      // Rendering is unavailable until both files have been selected.
       expect(
         tester
-            .widget<Text>(
-              find.byKey(const ValueKey('motion-materialize-status')),
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('motion-materialize-render')),
             )
-            .data,
-        contains('Choose a code file'),
+            .onPressed,
+        isNull,
       );
+      expect(rendered, 0);
 
-      await tester.enterText(
-        find.byKey(const ValueKey('motion-materialize-source')),
-        '/tmp/count_words.rs',
-      );
+      await tester.tap(find.text('Choose file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose location'));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey('motion-materialize-width')),
         '800',
@@ -681,13 +763,201 @@ void main() {
             .data,
         contains('24 frames'),
       );
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.byKey(const ValueKey('motion-materialize-cancel')));
+      await tester.tap(
+        find.byKey(const ValueKey('motion-materialize-add-to-timeline')),
+      );
       await tester.pumpAndSettle();
+      expect(addedPath, '/tmp/illustration.mkv');
+      expect(tester.takeException(), isNull);
       // The dialog's future completes when it closes, so it is awaited last.
       await dialog;
     },
   );
+
+  testWidgets(
+    'adding an illustration imports it and appends at the project content end',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final audio = _audioMediaFixture('existing-audio', '/tmp/music.wav');
+      final contentEnd = ProjectRationalTime(BigInt.from(7), 1);
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [audio]
+        ..initialTimelineTracks = [
+          const ProjectTimelineTrack(
+            trackId: 'audio-1',
+            kind: ProjectTimelineTrackKind.audio,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'audio-1': [
+            ProjectTimelineClip(
+              clipId: 'audio-clip',
+              mediaId: audio.mediaId,
+              timelineStart: ProjectRationalTime(BigInt.from(3), 1),
+              sourceStart: ProjectRationalTime(BigInt.zero, 1),
+              timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+            ),
+          ],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/motion-insert.orproj'
+        ..mediaPaths = ['/tmp/count_words.rs']
+        ..exportPath = '/tmp/illustration.mkv';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Motion insertion');
+
+      final previewSeeksBefore = gateway.previewSeekCalls;
+      await tester.tap(find.byKey(const ValueKey('open-command-palette')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('command-palette-query')),
+        'Illustration Video',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('command-illustration-video')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose file'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Choose location'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('motion-materialize-render')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('motion-materialize-add-to-timeline')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.illustrationRequests, hasLength(1));
+      expect(gateway.importMediaSources, ['/tmp/illustration.mkv']);
+      expect(gateway.addTimelineTrackCalls, 1);
+      expect(gateway.lastInsertTrackId, 'track-1');
+      expect(gateway.lastInsertTimelineStart?.canonical, contentEnd.canonical);
+      expect(gateway.lastSession!.clips['track-1'], hasLength(1));
+      expect(gateway.previewSeekCalls, previewSeeksBefore + 1);
+      expect(gateway.lastPreviewSeek?.canonical, contentEnd.canonical);
+
+      // The Motion tab is now the asset library; the code-to-video dialog stays
+      // reachable from it.
+      await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('motion-library-panel')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('motion-open-code')), findsOneWidget);
+    },
+  );
+
+  testWidgets('a non-Rust file for the illustration explains the requirement', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/illustration-source-check.orproj'
+      ..mediaPaths = ['/tmp/notes.orproj']
+      ..exportPath = '/tmp/illustration.mkv';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Illustration source check');
+
+    await tester.tap(find.byKey(const ValueKey('editor-tool-motion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('motion-open-code')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Choose file'));
+    await tester.pumpAndSettle();
+
+    // Solving source code is the whole feature, so the dialog says what it needs
+    // instead of carrying a project file into the renderer.
+    expect(
+      find.text('Choose a Rust source file (.rs) to illustrate.'),
+      findsOneWidget,
+    );
+    expect(find.text('No code file selected'), findsOneWidget);
+    expect(gateway.illustrationRequests, isEmpty);
+  });
+
+  testWidgets('a first page failure still offers a retry', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-first-page.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    gateway.mediaPageError = 'The media page could not be read.';
+    await _createProject(tester, 'First page failure');
+
+    expect(find.text('The media page could not be read.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('media-library-retry')), findsOneWidget);
+  });
+
+  testWidgets('the media error retry shows a reload state', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-held-retry.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    gateway.mediaPageError = 'The media page could not be read.';
+    await _createProject(tester, 'Held retry');
+
+    gateway.mediaPageError = null;
+    final gate = Completer<void>();
+    gateway.summaryGate = gate;
+    final retry = find.byKey(const ValueKey('media-library-retry'));
+    await tester.ensureVisible(retry);
+    await tester.pumpAndSettle();
+    await tester.tap(retry);
+    await tester.pump();
+
+    expect(retry, findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('media-library-error')), findsNothing);
+  });
+
+  testWidgets('a failed media page offers a retry that reloads it', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        for (var index = 0; index < 60; index += 1)
+          _mediaFixture('media-$index', '/tmp/clip $index.mp4'),
+      ];
+    final picker = _FakeProjectPicker()..savePath = '/tmp/paged.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Paged library');
+
+    for (var attempt = 0; attempt < 14; attempt += 1) {
+      if (find.byKey(const ValueKey('media-load-more')).evaluate().isNotEmpty) {
+        break;
+      }
+      await tester.drag(
+        find.byKey(const ValueKey('media-list')),
+        const Offset(0, -600),
+      );
+      await tester.pump();
+    }
+    expect(find.byKey(const ValueKey('media-load-more')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    gateway.mediaPageError = 'The library is offline right now.';
+    await tester.tap(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListOffsets.last, 50);
+    expect(find.byKey(const ValueKey('media-library-error')), findsOneWidget);
+
+    gateway.mediaPageError = null;
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('media-library-retry')),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('media-library-retry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('media-library-error')), findsNothing);
+  });
 
   testWidgets('active project requests previews for supported media only', (
     tester,
@@ -793,6 +1063,13 @@ void main() {
       find.byKey(const ValueKey('media-preview-image-media-audio')),
       findsOneWidget,
     );
+    // A 52x36 tile must not decode the thumbnail at full resolution.
+    final image = tester.widget<Image>(
+      find.byKey(const ValueKey('media-preview-image-media-video')),
+    );
+    final provider = image.image;
+    expect(provider, isA<ResizeImage>());
+    expect((provider as ResizeImage).width, isNotNull);
     expect(gateway.thumbnailRequests, 2);
     expect(gateway.waveformRequests, 1);
     expect(gateway.lastSession!.view.revision, BigInt.zero);
@@ -808,11 +1085,232 @@ void main() {
       find.byKey(const ValueKey('media-preview-image-media-video')),
       findsNothing,
     );
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(find.text('No timeline tracks'), findsOneWidget);
     expect(find.byKey(const ValueKey('media-load-more')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a failed preview offers a retry that asks again', (
+    tester,
+  ) async {
+    // A thumbnail that cannot be produced left the library with a plain muted
+    // glyph and no way forward. The failed state now names the retry.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-broken', '/tmp/broken.mp4')]
+      ..artifactRequestResponses['media-broken:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-broken',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'PREVIEW_UNAVAILABLE',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/broken-preview.orproj',
+    );
+    await _createProject(tester, 'Broken Preview');
+
+    final retry = find.byKey(
+      const ValueKey('media-preview-retry-media-broken'),
+    );
+    expect(retry, findsOneWidget);
+    final before = gateway.thumbnailRequests;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(gateway.thumbnailRequests, before + 1);
+    expect(find.byKey(retry.evaluate().single.widget.key!), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a media page failure is announced and retryable', (
+    tester,
+  ) async {
+    // The footer used to be a bare sentence: no live-region announcement and no
+    // stable target, so a screen reader never learned the page failed.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..mediaPageError = 'The library could not be read.';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/media-error.orproj',
+    );
+    await _createProject(tester, 'Media Error');
+    final error = find.byKey(const ValueKey('media-library-error'));
+    expect(error, findsOneWidget);
+    expect(tester.getSemantics(error), isSemantics(isLiveRegion: true));
+    final callsBefore = gateway.mediaListCalls;
+    await tester.tap(find.byKey(const ValueKey('media-library-retry')));
+    await tester.pumpAndSettle();
+    expect(gateway.mediaListCalls, greaterThan(callsBefore));
+  });
+
+  testWidgets('a running preview shows progress instead of a blank glyph', (
+    tester,
+  ) async {
+    // A queued/running artifact used to look identical to "no preview at all",
+    // so a slow first thumbnail read as a broken item.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-slow', '/tmp/slow.mp4')]
+      ..artifactRequestResponses['media-slow:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-slow',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.running,
+            cacheKey: 'slow-cache',
+            jobId: 'slow-job',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/slow-preview.orproj',
+    );
+    await _createProject(tester, 'Slow Preview');
+
+    expect(
+      find.byKey(const ValueKey('media-preview-progress-media-slow')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a queued preview also shows the generating state', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-queued', '/tmp/queued.mp4')]
+      ..artifactRequestResponses['media-queued:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-queued',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.queued,
+            cacheKey: 'queued-cache',
+            jobId: 'queued-job',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/queued-preview.orproj',
+    );
+    await _createProject(tester, 'Queued Preview');
+    expect(
+      find.byKey(const ValueKey('media-preview-progress-media-queued')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the whole failed preview tile is the retry target', (
+    tester,
+  ) async {
+    // A 16px icon inside a 52x36 tile is a hard target; the retry now covers
+    // the tile and is announced as a button.
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [_mediaFixture('media-broken', '/tmp/broken.mp4')]
+      ..artifactRequestResponses['media-broken:thumbnail'] =
+          const ProjectMediaArtifactRequest(
+            mediaId: 'media-broken',
+            kind: ProjectMediaArtifactKind.thumbnail,
+            state: ProjectMediaArtifactRequestState.failed,
+            errorCode: 'PREVIEW_UNAVAILABLE',
+          );
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: _FakeProjectPicker()..savePath = '/tmp/broken-tile.orproj',
+    );
+    await _createProject(tester, 'Broken Tile');
+
+    final tile = find.byKey(const ValueKey('media-preview-media-broken'));
+    expect(tile, findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Preview unavailable. Retry.'),
+      findsOneWidget,
+    );
+    final before = gateway.thumbnailRequests;
+    await tester.tapAt(tester.getTopLeft(tile) + const Offset(3, 3));
+    await tester.pumpAndSettle();
+    expect(gateway.thumbnailRequests, before + 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'an artifact event that arrives during another preview request still lands',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final png = await _tinyPngBytes();
+      final gateway = _FakeProjectGateway()
+        ..initialMedia = [
+          _mediaFixture('gate-first', '/tmp/first.mp4'),
+          _mediaFixture('gate-second', '/tmp/second.mp4'),
+        ]
+        ..artifactRequestResponses['gate-first:thumbnail'] =
+            const ProjectMediaArtifactRequest(
+              mediaId: 'gate-first',
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'first-cache',
+              jobId: 'first-job',
+            )
+        ..artifactRequestResponses['gate-second:thumbnail'] =
+            const ProjectMediaArtifactRequest(
+              mediaId: 'gate-second',
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'second-cache',
+              jobId: 'second-job',
+            )
+        ..artifactResponses['first-cache'] = ProjectMediaArtifact(
+          bytes: png,
+          mimeType: 'image/png',
+        );
+      final holdSecond = Completer<void>();
+      gateway.thumbnailGates['gate-second'] = holdSecond;
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/gated-preview.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Gated Preview');
+
+      expect(gateway.thumbnailRequests, 2);
+      // The second request still holds the early cache open. The first ticket
+      // is already waiting for its finish event, which arrives now.
+      gateway.emitMediaArtifact(
+        gateway.lastSession!,
+        ProjectMediaArtifactEvent(
+          sequence: BigInt.one,
+          mediaId: 'gate-first',
+          kind: ProjectMediaArtifactKind.thumbnail,
+          cacheKey: 'first-cache',
+          jobId: 'first-job',
+          state: ProjectMediaArtifactEventState.succeeded,
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey('media-preview-image-gate-first')),
+        findsNothing,
+      );
+
+      holdSecond.complete();
+      await tester.pumpAndSettle();
+
+      // The first ticket was already waiting when its event arrived, so the
+      // event is dispatched even though another submission was still open.
+      expect(gateway.mediaPreviewReads, 1);
+      expect(
+        find.byKey(const ValueKey('media-preview-image-gate-first')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('cached media preview is read without waiting for an event', (
     tester,
@@ -847,6 +1345,73 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'a preview for media that is not on the timeline repaints only the media pane',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final png = await _tinyPngBytes();
+      final gateway = _FakeProjectGateway();
+      const count = 6;
+      for (var index = 0; index < count; index += 1) {
+        final id = 'quiet-$index';
+        gateway.initialMedia.add(_mediaFixture(id, '/tmp/$id.mp4'));
+        gateway.artifactRequestResponses['$id:thumbnail'] =
+            ProjectMediaArtifactRequest(
+              mediaId: id,
+              kind: ProjectMediaArtifactKind.thumbnail,
+              state: ProjectMediaArtifactRequestState.queued,
+              cacheKey: 'quiet-cache-$id',
+              jobId: 'quiet-job-$id',
+            );
+        gateway.artifactResponses['quiet-cache-$id'] = ProjectMediaArtifact(
+          bytes: png,
+          mimeType: 'image/png',
+        );
+      }
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/quiet-preview.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Quiet Preview');
+      var sequence = BigInt.zero;
+      Future<void> finishPreview(String id) async {
+        gateway.emitMediaArtifact(
+          gateway.lastSession!,
+          ProjectMediaArtifactEvent(
+            sequence: sequence += BigInt.one,
+            mediaId: id,
+            kind: ProjectMediaArtifactKind.thumbnail,
+            cacheKey: 'quiet-cache-$id',
+            jobId: 'quiet-job-$id',
+            state: ProjectMediaArtifactEventState.succeeded,
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      for (var index = 0; index < 3; index += 1) {
+        await finishPreview('quiet-$index');
+      }
+      await tester.pumpAndSettle();
+      final timelineBuilds = timelinePanelBuilds;
+      final paneBuilds = mediaLibraryPanelBuilds;
+      for (var index = 3; index < count; index += 1) {
+        await finishPreview('quiet-$index');
+      }
+      await tester.pumpAndSettle();
+
+      // Every thumbnail painted into the media pane without a timeline
+      // rebuild: the shell setStates only for previews a clip can show.
+      expect(mediaLibraryPanelBuilds, greaterThan(paneBuilds));
+      expect(timelinePanelBuilds, timelineBuilds);
+      expect(
+        find.byKey(const ValueKey('media-preview-image-quiet-3')),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Import Media calls the gateway and refreshes the page', (
     tester,
   ) async {
@@ -871,8 +1436,11 @@ void main() {
     expect(gateway.lastImportSource, '/tmp/imported.mov');
     expect(gateway.mediaListCalls, greaterThan(queriesBeforeImport));
     expect(find.text('imported.mov'), findsOneWidget);
-    expect(find.text('Unsaved changes'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('compact empty timeline imports through the project picker', (
@@ -920,6 +1488,80 @@ void main() {
     expect(find.text('second.mkv'), findsOneWidget);
   });
 
+  testWidgets('Import reports batch progress in the top bar', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway()
+      ..importGates.addAll([Completer<void>(), Completer<void>()]);
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-progress.orproj'
+      ..mediaPaths = ['/tmp/first.mkv', '/tmp/second.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Import progress');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Importing 1 of 2 · first.mkv'), findsOneWidget);
+
+    gateway.importGates[0].complete();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Importing 2 of 2 · second.mkv'), findsOneWidget);
+
+    gateway.importGates[1].complete();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Importing'), findsNothing);
+    expect(find.text('Imported 2 selected files.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('media search filters the library without touching the project', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/media-search.orproj'
+      ..mediaPaths = ['/tmp/interview.mp4', '/tmp/broll.mkv'];
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Media search');
+
+    await tester.tap(find.byKey(const ValueKey('media-import')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 items'), findsOneWidget);
+
+    await tester.enterText(find.byKey(const ValueKey('media-search')), 'broll');
+    await tester.pumpAndSettle();
+    expect(find.text('broll.mkv'), findsOneWidget);
+    expect(find.text('interview.mp4'), findsNothing);
+    expect(find.text('1 of 2 items'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('media-search')),
+      'nothing here',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No media matches "nothing here".'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('media-search-clear')),
+      findsOneWidget,
+      reason: 'an empty result explains itself and offers a way back',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('media-search-clear')));
+    await tester.pumpAndSettle();
+    expect(find.text('2 items'), findsOneWidget);
+    expect(
+      find.text('No media matches "nothing here".'),
+      findsNothing,
+      reason: 'clearing the field restores the library',
+    );
+
+    // Filtering is a view concern: it must never reach the command log.
+    expect(gateway.importMediaCalls, 2);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Import Folder adds its discovered media through the gateway', (
     tester,
   ) async {
@@ -956,8 +1598,10 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Paginated Media');
 
+    // The library owns the list scrollable; the search field above it has its
+    // own, so the finder must name the list instead of taking the first one.
     final panelScroll = find.descendant(
-      of: find.byKey(const ValueKey('project-media-panel')),
+      of: find.byKey(const ValueKey('media-list')),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
@@ -965,6 +1609,8 @@ void main() {
       160,
       scrollable: panelScroll.first,
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-load-more')));
     await tester.pumpAndSettle();
 
@@ -1010,8 +1656,10 @@ void main() {
       findsOneWidget,
     );
 
+    // The library owns the list scrollable; the search field above it has its
+    // own, so the finder must name the list instead of taking the first one.
     final panelScroll = find.descendant(
-      of: find.byKey(const ValueKey('project-media-panel')),
+      of: find.byKey(const ValueKey('media-list')),
       matching: find.byType(Scrollable),
     );
     await tester.scrollUntilVisible(
@@ -1019,11 +1667,17 @@ void main() {
       160,
       scrollable: panelScroll.first,
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('media-load-more')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('media-load-more')));
     await tester.pumpAndSettle();
     expect(gateway.mediaListOffsets, [0, 50]);
 
-    await tester.drag(panelScroll.first, const Offset(0, 5000));
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('media-preview-image-media-0')),
+      panelScroll.first,
+      const Offset(0, 160),
+    );
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('media-preview-image-media-0')),
@@ -1194,8 +1848,14 @@ void main() {
     expect(gateway.removeMediaCalls, 1);
     expect(gateway.lastRemovedMediaId, 'media-remove');
     expect(find.text('remove me.wav'), findsNothing);
-    expect(find.text('No media imported'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Import a video, image or audio file to start.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -1319,7 +1979,7 @@ void main() {
     );
     await _createProject(tester, 'Marker actions');
 
-    await tester.tap(find.byKey(const ValueKey('timeline-add-marker')));
+    await _tapTimelineCreate(tester, 'Add marker at playhead');
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('timeline-marker-label')), findsOneWidget);
     await tester.enterText(
@@ -1484,15 +2144,9 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Text and captions');
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-text-track')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-text-track')));
+    await _tapTimelineCreate(tester, 'Add text track');
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-title')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-title')));
+    await _tapTimelineCreate(tester, 'Add title');
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const ValueKey('timeline-text-content')),
@@ -1518,10 +2172,15 @@ void main() {
     expect(title.formatting?.color.green, 255);
     expect(title.formatting?.color.blue, 255);
     expect(title.formatting?.color.alpha, 255);
+    expect(title.formatting?.anchor, ProjectTextVerticalAnchor.center);
+    expect(title.formatting?.opacityBasisPoints, 10000);
+    expect(title.formatting?.background, isNull);
     expect(gateway.insertTimelineTextClipCalls, 1);
 
-    await tester.tap(find.byKey(ValueKey('timeline-clip-${title.clipId}')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(ValueKey('timeline-clip-${title.clipId}')),
+    );
     await tester.tap(
       find.byKey(ValueKey('timeline-edit-text-${title.clipId}')),
     );
@@ -1543,25 +2202,28 @@ void main() {
     expect(updatedTitle.text, 'Updated title');
     expect(updatedTitle.timelineDuration.canonical, '9/2');
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-caption-track')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-caption-track')));
+    await _tapTimelineCreate(tester, 'Add caption track');
     await tester.pumpAndSettle();
     expect(gateway.lastSession!.tracks.map((track) => track.kind), [
       ProjectTimelineTrackKind.text,
       ProjectTimelineTrackKind.caption,
     ]);
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('timeline-add-manual-caption')),
-    );
-    await tester.tap(find.byKey(const ValueKey('timeline-add-manual-caption')));
+    await _tapTimelineCreate(tester, 'Add caption');
     await tester.pumpAndSettle();
     expect(find.text('Add Manual Caption'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('timeline-text-content')),
       'A manual caption',
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-text-font')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Be Vietnam Pro').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('timeline-text-background')),
+    );
+    await tester.tap(find.byKey(const ValueKey('timeline-text-background')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('timeline-save-text')),
@@ -1582,6 +2244,12 @@ void main() {
         gateway.lastSession!.clips[gateway.lastTextTrackId!]!.single;
     expect(caption.contentKind, ProjectTimelineClipContentKind.caption);
     expect(caption.text, 'A manual caption');
+    // Captions start low on the frame and the dialog can add a background box
+    // and change opacity without a second command.
+    expect(caption.formatting?.anchor, ProjectTextVerticalAnchor.bottom);
+    expect(caption.formatting?.font, ProjectFontIdentity.beVietnamPro);
+    expect(caption.formatting?.background, isNotNull);
+    expect(caption.formatting?.background?.color.alpha, greaterThan(0));
     expect(tester.takeException(), isNull);
   });
 
@@ -1615,10 +2283,7 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Caption import');
 
-    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
 
     expect(find.text('Review WebVTT captions'), findsOneWidget);
     expect(
@@ -1628,15 +2293,21 @@ void main() {
     expect(find.textContaining('empty cues were skipped'), findsOneWidget);
     expect(find.text('00:00:01.250 – 00:00:03.000'), findsOneWidget);
     expect(find.byKey(const ValueKey('caption-import-text-0')), findsOneWidget);
+    // The floated field label must not sit on top of the cue's timing line.
+    final timestamp = tester.getRect(find.text('00:00:01.250 – 00:00:03.000'));
+    final floatedLabel = tester.getRect(find.text('Caption 1 text'));
+    expect(
+      floatedLabel.top,
+      greaterThanOrEqualTo(timestamp.bottom),
+      reason: 'the caption label overlaps its timing line',
+    );
     expect(gateway.captionImportCalls, 0);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(gateway.captionImportCalls, 0);
     expect(picker.captionCleanupCalls, 1);
 
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
     final captionField = find.byKey(const ValueKey('caption-import-text-0'));
     await tester.enterText(captionField, '🌻' * 1025);
     await tester.pump();
@@ -1681,10 +2352,7 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact caption review');
 
-    final importButton = find.byKey(const ValueKey('timeline-import-captions'));
-    await tester.ensureVisible(importButton);
-    await tester.tap(importButton);
-    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Import captions (SRT)…');
 
     expect(find.text('Review SubRip captions'), findsOneWidget);
     expect(
@@ -1755,8 +2423,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // Activation selects the clip; the selection strip is the executable
+    // surface that carries duplicate/delete/split and the actions menu.
     expect(
-      find.byKey(const ValueKey('timeline-duplicate-semantic-clip')),
+      find.byKey(const ValueKey('timeline-selection-duplicate')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline-selection-actions')),
       findsOneWidget,
     );
     handle.dispose();
@@ -1789,10 +2463,10 @@ void main() {
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Duplicate clip');
 
-    await tester.tap(
+    await _openAdvancedClipActions(
+      tester,
       find.byKey(const ValueKey('timeline-clip-duplicate-clip')),
     );
-    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('timeline-duplicate-duplicate-clip')),
     );
@@ -1816,6 +2490,89 @@ void main() {
       isTrue,
     );
     expect(gateway.lastSession!.clips['duplicate-track'], hasLength(2));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the project inspector changes the sequence frame rate', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/sequence-rate.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Sequence rate');
+
+    expect(find.byKey(const ValueKey('inspector-project')), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('inspector-sequence-frame-rate')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('60 fps').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastPreviewRate, isNotNull);
+    expect(gateway.lastPreviewRate!.canonical, '60/1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('copy and paste recreate the clip at the playhead', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'copy-clip',
+      mediaId: 'copy-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'copy-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'copy-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/timeline-copy.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Timeline copy');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-copy-clip')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Clip copied.'), findsOneWidget);
+    expect(gateway.insertTimelineClipCalls, 0);
+
+    // The eye moved, so the paste lands where the playhead is.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(gateway.insertTimelineClipCalls, 1);
+    expect(gateway.lastInsertTrackId, 'copy-track');
+    // The playhead never moved, so the paste anchors after the copied clip.
+    expect(
+      _sameRational(
+        gateway.lastInsertTimelineStart!,
+        ProjectRationalTime(BigInt.from(2), 1),
+      ),
+      isTrue,
+    );
+    expect(
+      _sameRational(gateway.lastInsertDuration!, clip.timelineDuration),
+      isTrue,
+    );
+    expect(gateway.lastSession!.clips['copy-track'], hasLength(2));
     expect(tester.takeException(), isNull);
   });
 
@@ -1865,8 +2622,6 @@ void main() {
         find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Close').last);
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('timeline-selection-duplicate')),
         findsOneWidget,
@@ -1884,25 +2639,20 @@ void main() {
         tester.getSize(find.byKey(const ValueKey('inspector-visual-x'))).height,
         greaterThanOrEqualTo(40),
       );
-      // At 1280 px the full toolbar names overflowed the window. The short
-      // names keep every action on screen; the full name is not rendered.
-      final toolbar = find.byKey(const ValueKey('timeline-toolbar'));
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Add Video')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Export SRT')),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: toolbar, matching: find.text('Export Captions')),
-        findsNothing,
-      );
+      // The zone has one control row. Creation, caption import and caption
+      // export live in its `+` menu, so the row never grows past the window.
+      final createMenu = find.byKey(const ValueKey('timeline-create-menu'));
+      expect(createMenu, findsOneWidget);
+      await tester.tap(createMenu);
+      await tester.pumpAndSettle();
+      expect(find.text('Add video track'), findsOneWidget);
+      expect(find.text('Export captions (SRT)…'), findsOneWidget);
+      await tester.tap(find.text('Add video track'));
+      await tester.pumpAndSettle();
       expect(find.text('Ctrl+K'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-x')),
-        '250',
+        '25',
       );
       // Full-height fields push the effects section below the fold; a lazy
       // ListView does not build a field that was never scrolled into view.
@@ -1913,7 +2663,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-brightness')),
-        '250',
+        '25',
       );
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-contrast')),
@@ -1922,7 +2672,7 @@ void main() {
       );
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-contrast')),
-        '1250',
+        '125',
       );
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('inspector-visual-transition_in_kind')),
@@ -1938,11 +2688,6 @@ void main() {
       await tester.enterText(
         find.byKey(const ValueKey('inspector-visual-transition_in_duration')),
         '1/2',
-      );
-      await tester.scrollUntilVisible(
-        find.byKey(const ValueKey('inspector-visual-apply')),
-        200,
-        scrollable: inspectorScrollable,
       );
       await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
       await tester.pumpAndSettle();
@@ -1993,8 +2738,6 @@ void main() {
         find.byKey(const ValueKey('timeline-clip-keyboard-clip')),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Close').last);
-      await tester.pumpAndSettle();
       await tester.sendKeyEvent(LogicalKeyboardKey.delete);
       await tester.pumpAndSettle();
       expect(find.text('Delete clip?'), findsOneWidget);
@@ -2004,6 +2747,100 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'dragging one of several selected clips moves the whole selection once',
+    (tester) async {
+      _setViewport(tester, const Size(1280, 800));
+      const trackId = 'group-track';
+      ProjectTimelineClip clip(String id, int start) => ProjectTimelineClip(
+        clipId: id,
+        mediaId: 'group-media',
+        timelineStart: ProjectRationalTime(BigInt.from(start), 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.one, 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = [
+          const ProjectTimelineTrack(
+            trackId: trackId,
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 2,
+          ),
+        ]
+        ..initialTimelineClips = {
+          trackId: [clip('group-a', 0), clip('group-b', 2)],
+        };
+      final picker = _FakeProjectPicker()..savePath = '/tmp/group-move.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Group move');
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-group-a')));
+      await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-group-b')));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('2 clips'), findsOneWidget);
+
+      await tester.drag(
+        find.byKey(const ValueKey('timeline-clip-group-b')),
+        const Offset(64, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(gateway.moveClipsCalls, 1);
+      expect(gateway.lastMovedClipIds, containsAll(['group-a', 'group-b']));
+      expect(
+        gateway.moveTimelineClipCalls,
+        0,
+        reason: 'a group drag is one command, not one per clip',
+      );
+      expect(gateway.lastMoveDelta!.numerator, isNot(BigInt.zero));
+    },
+  );
+
+  testWidgets('a narrow clip still moves instead of only trimming', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    const trackId = 'narrow-track';
+    // A quarter second at 100 % zoom is 16 px wide: narrower than the trim
+    // hit targets, which used to cover the whole clip so every drag trimmed.
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = [
+        const ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'narrow-clip',
+            mediaId: 'narrow-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.one, 4),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/narrow.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Narrow clip');
+
+    final clip = find.byKey(const ValueKey('timeline-clip-narrow-clip'));
+    expect(clip, findsOneWidget);
+    await tester.drag(clip, const Offset(32, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      gateway.moveTimelineClipCalls,
+      1,
+      reason: 'the centre of a narrow clip must drag it, not start a trim',
+    );
+  });
 
   testWidgets('media drag inserts on a compatible timeline track', (
     tester,
@@ -2122,7 +2959,7 @@ void main() {
       gateway.externalAddTimelineTrack(ProjectTimelineTrackKind.video);
       await tester.pumpAndSettle();
       expect(find.text('V1'), findsOneWidget);
-      expect(find.text('Revision 1'), findsOneWidget);
+      expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-event-media')),
@@ -2139,7 +2976,7 @@ void main() {
         find.textContaining('this action was not retried'),
         findsOneWidget,
       );
-      expect(find.text('Revision 2'), findsOneWidget);
+      expect(find.byKey(const ValueKey('project-save-dot')), findsOneWidget);
     },
   );
 
@@ -2163,7 +3000,7 @@ void main() {
         ..savePath = '/tmp/failure-timeline.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Failed timeline insert');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
       gateway.nextTimelineFailure = 'TIMELINE_OVERLAP';
 
@@ -2201,8 +3038,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Unsaved changes'), findsOneWidget);
-    expect(find.text('Revision 1'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
     final revisionBeforeSave = gateway.lastSession!.view.revision;
 
     await tester.tap(find.byKey(const ValueKey('workspace-save')));
@@ -2210,8 +3046,58 @@ void main() {
     expect(gateway.saveCalls, 1);
     expect(gateway.lastSession!.view.dirty, isFalse);
     expect(gateway.lastSession!.view.revision, revisionBeforeSave);
-    expect(find.text('Saved'), findsOneWidget);
+    // The bar states 'Saved'; the inspector states 'Saved to disk'. One
+    // statement per surface, so each assertion names its surface by key.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('app-top-bar')),
+        matching: find.text('Saved'),
+      ),
+      findsOneWidget,
+    );
   });
+
+  testWidgets(
+    'an edit refreshes the viewer frame without rebuilding the viewer',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway()
+        ..preview = ProjectPreviewState(
+          position: ProjectRationalTime(BigInt.from(2), 1),
+          contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+          playing: false,
+          generation: BigInt.zero,
+          frameSequence: BigInt.from(3),
+          width: 1280,
+          height: 720,
+        );
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/preview-fast.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Fast preview');
+      await tester.pumpAndSettle();
+
+      final stateCallsBefore = gateway.previewStateCalls;
+      final seekCallsBefore = gateway.previewSeekCalls;
+      await tester.tap(find.byKey(const ValueKey('workspace-rename')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('rename-project-name')),
+        'Fast preview renamed',
+      );
+      await tester.tap(find.byKey(const ValueKey('confirm-rename-project')));
+      await tester.pumpAndSettle();
+
+      // One seek against the same playhead replaces the frame. The viewer no
+      // longer re-reads preview state, blanks the stage or re-binds the
+      // texture for every project revision.
+      expect(gateway.previewSeekCalls, seekCallsBefore + 1);
+      expect(gateway.previewStateCalls, stateCallsBefore);
+      expect(gateway.lastPreviewSeek?.canonical, '2/1');
+      expect(find.byKey(const ValueKey('preview-error')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('dirty projects periodically autosave to recovery', (
     tester,
@@ -2270,7 +3156,8 @@ void main() {
     expect(gateway.closeCalls, 0);
     expect(
       find.text(
-        'Wait for the export to finish or cancel it before closing the project.',
+        'Wait for the export to finish, or cancel it from the top bar, before '
+        'closing the project.',
       ),
       findsOneWidget,
     );
@@ -2283,33 +3170,79 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('export offers WebM as the ordinary desktop default', (
+  testWidgets('export offers the platform default output profile', (
     tester,
   ) async {
     _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final destination = '/tmp/export-project.${defaultProfile.extension}';
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
-      ..exportPath = '/tmp/export-project.webm';
+      ..exportPath = destination;
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Export project');
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
     await tester.pump();
     expect(find.text('Export video'), findsOneWidget);
-    expect(find.text('WebM video'), findsOneWidget);
-    expect(
-      find.text(
-        'Smaller file for sharing, with lossy VP9 video and Opus audio.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text(defaultProfile.label), findsOneWidget);
+    expect(find.text(defaultProfile.description), findsOneWidget);
     await tester.tap(find.text('Continue'));
     await tester.pump();
     await tester.pump();
 
-    expect(picker.lastExportProfile, ExportProfile.webmVp9Opus);
-    expect(gateway.lastExportDestination, '/tmp/export-project.webm');
+    expect(picker.lastExportProfile, defaultProfile);
+    expect(gateway.lastExportDestination, destination);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('export starts on the quality preference', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    // The default profile is lossy on this host, so the surface offers the choice
+    // and starts on quality.
+    expect(defaultProfile.hasQualityChoice, isTrue);
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    expect(find.text('Quality'), findsOneWidget);
+    expect(find.text('Faster'), findsOneWidget);
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.exportCalls, 1);
+    expect(gateway.lastExportQuality, ExportQuality.quality.wireName);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('choosing faster reaches the gateway as its wire name', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-project.orproj'
+      ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Export project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    await tester.tap(find.text('Faster'));
+    await tester.pump();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(gateway.exportCalls, 1);
+    expect(gateway.lastExportQuality, ExportQuality.speed.wireName);
     expect(tester.takeException(), isNull);
   });
 
@@ -2360,7 +3293,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(gateway.lastSession!.view.dirty, isTrue);
     expect(gateway.closeCalls, 0);
-    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
     expect(find.textContaining('save was blocked'), findsOneWidget);
   });
 
@@ -2432,7 +3365,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('workspace-close')));
     await tester.pumpAndSettle();
-    expect(find.text('Save your changes before continuing?'), findsOneWidget);
+    expect(find.textContaining('Discard closes the project'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(gateway.closeCalls, 0);
@@ -2541,7 +3474,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('home-open-project')));
       await tester.pumpAndSettle();
-      expect(find.text('Save your changes before continuing?'), findsOneWidget);
+      expect(find.textContaining('Discard closes the project'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(gateway.openCalls, 0);
@@ -2582,8 +3515,7 @@ void main() {
       find.byKey(const ValueKey('workspace-project-name')),
       findsOneWidget,
     );
-    expect(find.text('Revision 1'), findsOneWidget);
-    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.text('Unsaved'), findsOneWidget);
   });
 
   test('timeline rational input remains exact and rejects inexact forms', () {
@@ -2607,6 +3539,412 @@ void main() {
     ]) {
       expect(ProjectRationalTime.tryParse(invalid), isNull, reason: invalid);
     }
+  });
+
+  testWidgets('the macOS menu bar routes to the same verbs as the UI', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-bar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    if (!Platform.isMacOS) return;
+    // The menu bar is the third route to the same callbacks: the top bar, the
+    // keyboard and the menu must not drift apart.
+    expect(find.byType(PlatformMenuBar), findsOneWidget);
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final labels = <String>[for (final menu in bar.menus) menu.label];
+    expect(labels, containsAll(<String>['File', 'Edit', 'View', 'OR']));
+    await _createProject(tester, 'Menu bar');
+    expect(find.byType(PlatformMenuBar), findsOneWidget);
+  });
+
+  testWidgets('the clip menu reverses a media clip without the inspector', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'menu-reverse-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'menu-reverse-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'menu-reverse-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-reverse.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Menu reverse');
+
+    final clipFinder = find.byKey(
+      const ValueKey('timeline-clip-menu-reverse-clip'),
+    );
+    await tester.ensureVisible(clipFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(clipFinder, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    // The inspector switch carries the same words; the menu entry is the last one.
+    await tester.tap(find.text('Play backwards').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reversedCalls, 1);
+    expect(gateway.lastReversed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shift-click selects a second clip and one Delete removes both', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    ProjectTimelineClip clip(String id, int start) => ProjectTimelineClip(
+      clipId: id,
+      timelineStart: ProjectRationalTime(BigInt.from(start), 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(1), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'multi-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 2,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'multi-track': [clip('multi-a', 0), clip('multi-b', 1)],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/multi.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Multi select');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-multi-a')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-multi-b')));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('timeline-selection-count')),
+      findsOneWidget,
+    );
+    expect(find.text('2 clips'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pumpAndSettle();
+
+    // A set of two deletes without a per-clip dialog.
+    expect(gateway.deleteTimelineClipCalls, 2);
+    expect(find.text('Delete clip?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('command I imports media without the mouse', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..mediaPath = '/tmp/keyboard-import.mov'
+      ..savePath = '/tmp/keyboard-import.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Keyboard import');
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyI);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyI);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(picker.mediaOpenCalls, 1);
+    expect(gateway.importMediaCalls, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the clip menu holds one frame without the inspector', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'menu-freeze-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'menu-freeze-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'menu-freeze-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/menu-freeze.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Menu freeze');
+
+    final clipFinder = find.byKey(
+      const ValueKey('timeline-clip-menu-freeze-clip'),
+    );
+    await tester.ensureVisible(clipFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(clipFinder, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    // The inspector switch carries the same words; the menu entry is the last one.
+    await tester.tap(find.text('Hold this frame').last);
+    await tester.pumpAndSettle();
+
+    expect(gateway.frozenCalls, 1);
+    expect(gateway.lastFrozen, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the inspector holds a single frame', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'freeze-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'freeze-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'freeze-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/freeze.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Freeze review');
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-freeze-clip')));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const ValueKey('inspector-clip-frozen'));
+    expect(toggle, findsOneWidget);
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(gateway.frozenCalls, 1);
+    expect(gateway.lastFrozen, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the inspector offers reversing a media clip', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
+    final clip = ProjectTimelineClip(
+      clipId: 'reverse-clip',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'reverse-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'reverse-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/reverse.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Reverse review');
+    await tester.tap(find.byKey(const ValueKey('timeline-clip-reverse-clip')));
+    await tester.pumpAndSettle();
+
+    final toggle = find.byKey(const ValueKey('inspector-clip-reversed'));
+    expect(toggle, findsOneWidget);
+    expect(tester.widget<Switch>(toggle).value, isFalse);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+
+    expect(gateway.reversedCalls, 1);
+    expect(gateway.lastReversed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'effect and transition presets fill the inspector before applying',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final clip = ProjectTimelineClip(
+        clipId: 'preset-clip',
+        playbackRate: const ProjectRationalRate(1, 1),
+        timelineStart: ProjectRationalTime(BigInt.zero, 1),
+        sourceStart: ProjectRationalTime(BigInt.zero, 1),
+        timelineDuration: ProjectRationalTime(BigInt.from(2), 1),
+      );
+      final gateway = _FakeProjectGateway()
+        ..initialTimelineTracks = const [
+          ProjectTimelineTrack(
+            trackId: 'preset-track',
+            kind: ProjectTimelineTrackKind.video,
+            clipCount: 1,
+          ),
+        ]
+        ..initialTimelineClips = {
+          'preset-track': [clip],
+        };
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/inspector-presets.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Inspector presets');
+
+      await tester.tap(find.byKey(const ValueKey('timeline-clip-preset-clip')));
+      await tester.pumpAndSettle();
+
+      final inspectorScrollable = find
+          .descendant(
+            of: find.byKey(const ValueKey('inspector-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+
+      // A preset is a starting point, not a silent command: it fills the field
+      // and the owner still presses Apply.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('effect-preset-bright')),
+        200,
+        scrollable: inspectorScrollable,
+      );
+      await tester.tap(find.byKey(const ValueKey('effect-preset-bright')));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<EditableText>(
+              find.descendant(
+                of: find.byKey(const ValueKey('inspector-visual-brightness')),
+                matching: find.byType(EditableText),
+              ),
+            )
+            .controller
+            .text,
+        '10',
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('transition-preset-wipe')),
+        200,
+        scrollable: inspectorScrollable,
+      );
+      await tester.tap(find.byKey(const ValueKey('transition-preset-wipe')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('inspector-visual-apply')));
+      await tester.pumpAndSettle();
+      final written = gateway.lastVisualSettings;
+      // 10 % is 100 milli-percent; the inspector labels percent, the model stores milli.
+      expect(written?.brightnessAmountMilli, 100);
+      expect(written?.transitionIn, ProjectTimelineTransition.wipe);
+      expect(written?.transitionInDuration?.canonical, '1/2');
+    },
+  );
+
+  testWidgets('selected clip speed is adjustable from the timeline toolbar', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'speed-toolbar-clip',
+      mediaId: 'speed-toolbar-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'speed-toolbar-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'speed-toolbar-track': [clip],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/speed-toolbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Speed toolbar');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-speed-toolbar-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-selection-speed')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clip speed'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('timeline-speed-preset-2-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-speed-save')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updatePlaybackRateCalls, 1);
+    expect(gateway.lastPlaybackRate?.canonical, '2/1');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('selected audio clip volume is adjustable from the timeline', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final clip = ProjectTimelineClip(
+      clipId: 'volume-toolbar-clip',
+      mediaId: 'volume-toolbar-media',
+      timelineStart: ProjectRationalTime(BigInt.zero, 1),
+      sourceStart: ProjectRationalTime(BigInt.zero, 1),
+      timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+    );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'volume-toolbar-track',
+          kind: ProjectTimelineTrackKind.audio,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'volume-toolbar-track': [clip],
+      };
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/volume-toolbar.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Volume toolbar');
+
+    await tester.tap(
+      find.byKey(const ValueKey('timeline-clip-volume-toolbar-clip')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-selection-volume')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clip volume'), findsOneWidget);
+    await tester.drag(
+      find.byKey(const ValueKey('timeline-volume-slider')),
+      const Offset(-120, 0),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-volume-save')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAudioSettingsCalls, 1);
+    expect(gateway.lastAudioSettings, isNotNull);
+    expect(gateway.lastAudioSettings!.gainMilliDecibels, lessThan(0));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('audio inspector writes gain, pan, and exact fades', (
@@ -2640,10 +3978,29 @@ void main() {
       find.byKey(const ValueKey('timeline-clip-audio-inspector-clip')),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Close').last);
-    await tester.pumpAndSettle();
     expect(find.text('AUDIO'), findsOneWidget);
     expect(gateway.getAudioSettingsCalls, 1);
+    final playbackRate = find.byKey(const ValueKey('inspector-playback-rate'));
+    expect(playbackRate, findsOneWidget);
+    await tester.tap(playbackRate);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2×').last);
+    await tester.pumpAndSettle();
+    expect(gateway.updatePlaybackRateCalls, 1);
+    expect(gateway.lastPlaybackRate?.canonical, '2/1');
+    // The clip now carries its own speed badge, so the inspector dropdown is
+    // no longer the only place that says 2×.
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('inspector-playback-rate')),
+        matching: find.text('2×'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline-clip-speed-audio-inspector-clip')),
+      findsOneWidget,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-gain_db')),
       '-6.25',
@@ -2652,6 +4009,17 @@ void main() {
       find.byKey(const ValueKey('inspector-audio-pan_percent')),
       '-37.5',
     );
+    final audioScroll = find
+        .descendant(
+          of: find.byKey(const ValueKey('inspector-scroll')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('inspector-audio-fade_in')),
+      80,
+      scrollable: audioScroll,
+    );
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-fade_in')),
       '1/2',
@@ -2659,9 +4027,6 @@ void main() {
     await tester.enterText(
       find.byKey(const ValueKey('inspector-audio-fade_out')),
       '1/3',
-    );
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('inspector-audio-apply')),
     );
     await tester.tap(find.byKey(const ValueKey('inspector-audio-apply')));
     await tester.pumpAndSettle();
@@ -2684,11 +4049,11 @@ void main() {
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Timeline tracks');
 
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
 
       expect(find.text('V1'), findsOneWidget);
@@ -2721,7 +4086,7 @@ void main() {
       ..savePath = '/tmp/timeline-first-project.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'First timeline project');
-    await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+    await _tapTimelineCreate(tester, 'Add video track');
     await tester.pumpAndSettle();
     expect(find.text('V1'), findsOneWidget);
 
@@ -3093,7 +4458,7 @@ void main() {
         ..savePath = '/tmp/timeline-clip.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Timeline clip');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -3131,7 +4496,7 @@ void main() {
   );
 
   testWidgets(
-    'insert dialog explains missing compatible tracks and unknown duration stays blank',
+    'insert dialog creates the track and leaves an unknown duration blank',
     (tester) async {
       _setViewport(tester, const Size(1280, 800));
       final gateway = _FakeProjectGateway()
@@ -3144,19 +4509,14 @@ void main() {
         find.byKey(const ValueKey('media-add-timeline-media-unknown')),
       );
       await tester.pumpAndSettle();
+      // Media with unknown streams still gets a track created for it; what the
+      // dialog cannot guess is the duration, which stays blank until the owner
+      // states it.
+      expect(gateway.addTimelineTrackCalls, 1);
       expect(
         find.text('Add a compatible Video or Audio track first.'),
-        findsOneWidget,
+        findsNothing,
       );
-      await tester.tap(find.text('Close').last);
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('timeline-empty-add-video')));
-      await tester.pumpAndSettle();
-      await tester.tap(
-        find.byKey(const ValueKey('media-add-timeline-media-unknown')),
-      );
-      await tester.pumpAndSettle();
       expect(
         find.byKey(const ValueKey('timeline-insert-duration')),
         findsOneWidget,
@@ -3278,6 +4638,52 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('adding media to an empty timeline creates the track it needs', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway()
+      ..initialMedia = [
+        ProjectMediaItem(
+          mediaId: 'media-first',
+          sourceUri: Uri.file('/tmp/first.mp4').toString(),
+          formatNames: const ['mp4'],
+          duration: '2 s',
+          videoDetails: '1920×1080 h264',
+          audioDetails: 'AAC',
+          containerDuration: ProjectRationalTime(BigInt.from(2), 1),
+        ),
+      ]
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.zero, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      );
+    final picker = _FakeProjectPicker()..savePath = '/tmp/auto-track.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Auto track');
+
+    await tester.tap(
+      find.byKey(const ValueKey('media-add-timeline-media-first')),
+    );
+    await tester.pumpAndSettle();
+
+    // The track is created as part of the insert, so the dialog can ask where the
+    // clip goes instead of answering "Add a compatible Video or Audio track first."
+    expect(gateway.addTimelineTrackCalls, 1);
+    expect(find.text('Insert Clip'), findsOneWidget);
+    expect(
+      find.text('Add a compatible Video or Audio track first.'),
+      findsNothing,
+    );
+    expect(find.textContaining('video'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'timeline insert chooses exact duration for the selected stream',
     (tester) async {
@@ -3300,9 +4706,9 @@ void main() {
         ..savePath = '/tmp/multistream-timeline.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Multistream timeline');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-media-multistream')),
@@ -3356,11 +4762,11 @@ void main() {
         ..savePath = '/tmp/timeline-move.orproj';
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Move timeline');
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+      await _tapTimelineCreate(tester, 'Add video track');
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('timeline-add-audio-track')));
+      await _tapTimelineCreate(tester, 'Add audio track');
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey('media-add-timeline-media-move')),
@@ -3383,8 +4789,10 @@ void main() {
         isNull,
       );
 
-      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(ValueKey('timeline-clip-${clip.clipId}')),
+      );
       expect(find.textContaining('Timeline start: 0/1'), findsOneWidget);
       await tester.tap(find.byKey(ValueKey('timeline-move-${clip.clipId}')));
       await tester.pumpAndSettle();
@@ -3404,8 +4812,10 @@ void main() {
         '3/1',
       );
 
-      await tester.tap(find.byKey(ValueKey('timeline-clip-${clip.clipId}')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(ValueKey('timeline-clip-${clip.clipId}')),
+      );
       await tester.tap(find.byKey(ValueKey('timeline-delete-${clip.clipId}')));
       await tester.pumpAndSettle();
       expect(find.text('Delete clip?'), findsOneWidget);
@@ -3469,8 +4879,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(clipFinder);
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(tester, clipFinder);
     final splitAtPlayhead = find.byKey(
       const ValueKey('timeline-split-at-playhead-$clipId'),
     );
@@ -3485,8 +4894,10 @@ void main() {
     expect(splitClips.last.timelineStart.canonical, '5/1');
     expect(splitClips.last.sourceStart!.canonical, '3/1');
 
-    await tester.tap(find.byKey(const ValueKey('timeline-clip-$clipId')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(ValueKey('timeline-clip-$clipId')),
+    );
     expect(
       tester.widget<TextButton>(splitAtPlayhead).onPressed,
       isNull,
@@ -3542,8 +4953,10 @@ void main() {
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Advanced timeline dialogs');
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       expect(find.text('Move'), findsOneWidget);
       expect(find.text('Trim'), findsOneWidget);
       expect(find.text('Split'), findsOneWidget);
@@ -3618,8 +5031,10 @@ void main() {
         '5/1',
       );
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       await tester.tap(find.byKey(const ValueKey('timeline-split-edit-clip')));
       await tester.pumpAndSettle();
       expect(find.text('Split at:'), findsOneWidget);
@@ -3665,8 +5080,10 @@ void main() {
         '5/1',
       );
 
-      await tester.tap(find.byKey(const ValueKey('timeline-clip-edit-clip')));
-      await tester.pumpAndSettle();
+      await _openAdvancedClipActions(
+        tester,
+        find.byKey(const ValueKey('timeline-clip-edit-clip')),
+      );
       await tester.tap(
         find.byKey(const ValueKey('timeline-ripple-delete-edit-clip')),
       );
@@ -3747,8 +5164,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byTooltip('Close tool panel'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('timeline-clip-compact-clip')));
-    await tester.pumpAndSettle();
+    await _openAdvancedClipActions(
+      tester,
+      find.byKey(const ValueKey('timeline-clip-compact-clip')),
+    );
     expect(find.text('Clip'), findsOneWidget);
     _setViewport(tester, const Size(320, 440));
     await tester.pumpAndSettle();
@@ -3781,7 +5200,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('inspector-visual-x')), findsOneWidget);
-    expect(gateway.getVisualSettingsCalls, 1);
+    // Two readers of the same clip settings: the inspector fields and the
+    // viewer's transform handles. Both are real consumers, so the count is two
+    // reads rather than one.
+    expect(gateway.getVisualSettingsCalls, 2);
     await tester.tap(find.byKey(const ValueKey('mobile-tool-sheet-close')));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -3900,16 +5322,11 @@ void main() {
       ..savePath = '/tmp/compact-tracks.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Compact tracks');
-    Future<void> tapTimelineControl(String key) async {
-      final finder = find.byKey(ValueKey(key));
-      await tester.ensureVisible(finder);
-      await tester.pumpAndSettle();
-      await tester.tap(finder);
-      await tester.pumpAndSettle();
-    }
+    Future<void> tapTimelineControl(String label) =>
+        _tapTimelineCreate(tester, label);
 
-    await tapTimelineControl('timeline-add-video-track');
-    await tapTimelineControl('timeline-add-audio-track');
+    await tapTimelineControl('Add video track');
+    await tapTimelineControl('Add audio track');
     expect(gateway.lastSession!.tracks.map((track) => track.kind).toList(), [
       ProjectTimelineTrackKind.video,
       ProjectTimelineTrackKind.audio,
@@ -4279,7 +5696,10 @@ void main() {
     expect(find.text('Viewer'), findsOneWidget);
     expect(find.text('Timeline'), findsOneWidget);
     expect(find.text('Inspector'), findsOneWidget);
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(find.text('No selection'), findsOneWidget);
     expect(find.text('Timeline engine not implemented'), findsOneWidget);
     expect(find.textContaining('.mp4'), findsNothing);
@@ -4318,6 +5738,13 @@ void main() {
     expect(gateway.previewStateCalls, greaterThan(0));
     expect(gateway.preview.contentEnd?.secondsForDisplay, 4);
     expect(find.byKey(const ValueKey('preview-scrub-ruler')), findsOneWidget);
+    // The create dialog applies the chosen rate, so a new project is
+    // immediately playable. Remove the rate to reach the "no sequence rate"
+    // guard state, then set 24 to prove both directions.
+    await tester.tap(find.byKey(const ValueKey('preview-frame-rate')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove frame rate'));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
@@ -4366,6 +5793,163 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // CapCut-style scrubbing: pressing or dragging the timeline ruler moves the
+  // playhead. The gesture is presentation only, so it must reach the preview
+  // transport and leave the project revision and history untouched.
+  testWidgets('timeline ruler press and drag scrub the playhead', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1600, 900));
+    const trackId = 'scrub-video';
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      )
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'scrub-clip',
+            mediaId: 'scrub-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/ruler-scrub.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Ruler scrub');
+    await tester.pumpAndSettle();
+
+    final ruler = find.byKey(const ValueKey('timeline-ruler-scrub'));
+    expect(ruler, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('timeline-playhead-handle')),
+      findsOneWidget,
+    );
+    final revisionBefore = gateway.lastSession!.view.revision;
+    final seekCallsBefore = gateway.previewSeekCalls;
+    final rulerRect = tester.getRect(ruler);
+
+    // The ruler maps pointer pixels through the same 64 px/s scale the grid is
+    // drawn with, so pressing 64 px in lands exactly one second in.
+    await tester.tapAt(rulerRect.topLeft + const Offset(64, 10));
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(seekCallsBefore));
+    expect(gateway.lastPreviewSeek!.canonical, '1/1');
+    expect(
+      tester
+              .getTopLeft(find.byKey(const ValueKey('timeline-playhead-ruler')))
+              .dx -
+          rulerRect.left,
+      closeTo(64, 0.6),
+    );
+
+    // A drag keeps seeking while the pointer moves, past the clip's end.
+    final dragCalls = gateway.previewSeekCalls;
+    await tester.dragFrom(
+      rulerRect.topLeft + const Offset(64, 10),
+      const Offset(128, 0),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(dragCalls));
+    expect(gateway.lastPreviewSeek!.secondsForDisplay, greaterThan(1));
+
+    // Pressing past the sequence end clamps instead of seeking off the end.
+    // The point stays clear of the scrollbar thumb the drag just revealed.
+    await tester.tapAt(rulerRect.topLeft + const Offset(900, 10));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSeek!.canonical, '10/1');
+
+    // Scrubbing is presentation only: no revision, no undo entry, no clip
+    // command.
+    expect(gateway.lastSession!.view.revision, revisionBefore);
+    expect(gateway.lastSession!.undo, isEmpty);
+    expect(gateway.moveTimelineClipCalls, 0);
+    expect(gateway.trimTimelineClipCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('timeline lane press seeks and the playhead line drags', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1600, 900));
+    const trackId = 'lane-scrub-video';
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.zero, 1),
+        contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 0,
+        height: 0,
+      )
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: trackId,
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 1,
+        ),
+      ]
+      ..initialTimelineClips = {
+        trackId: [
+          ProjectTimelineClip(
+            clipId: 'lane-clip',
+            mediaId: 'lane-media',
+            timelineStart: ProjectRationalTime(BigInt.zero, 1),
+            sourceStart: ProjectRationalTime(BigInt.zero, 1),
+            timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/lane-scrub.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Lane scrub');
+    await tester.pumpAndSettle();
+
+    // Empty lane space past the clip end, at the 64 px/s the lane draws with.
+    final marquee = find.byKey(const ValueKey('timeline-marquee-$trackId'));
+    expect(marquee, findsOneWidget);
+    final laneRect = tester.getRect(marquee);
+    await tester.tapAt(laneRect.topLeft + const Offset(384, 30));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSeek!.canonical, '6/1');
+
+    // The playhead line itself is a drag surface in the lane, the CapCut
+    // gesture. Dragging it one second right lands a second later.
+    final grab = find.byKey(const ValueKey('timeline-playhead-grab-$trackId'));
+    expect(grab, findsOneWidget);
+    final dragCalls = gateway.previewSeekCalls;
+    await tester.dragFrom(tester.getRect(grab).center, const Offset(64, 0));
+    await tester.pumpAndSettle();
+    expect(gateway.previewSeekCalls, greaterThan(dragCalls));
+    final after = gateway.lastPreviewSeek!.secondsForDisplay;
+    expect(after, greaterThan(6));
+    expect(after, lessThanOrEqualTo(7.5));
+
+    // A lane seek is presentation only, and it never reaches a clip command.
+    expect(gateway.moveTimelineClipCalls, 0);
+    expect(gateway.trimTimelineClipCalls, 0);
+    expect(gateway.lastSession!.undo, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('empty preview keeps play and frame step unavailable', (
     tester,
   ) async {
@@ -4393,12 +5977,15 @@ void main() {
     ]) {
       expect(tester.widget<IconButton>(find.byKey(key)).onPressed, isNull);
     }
-    expect(find.text('No media loaded'), findsOneWidget);
+    expect(
+      find.text('Drag a clip to the timeline to preview it'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
   // -- Phase 0 design, accessibility and keyboard guards ---------------------
-  // These assert the DESIGN.md / docs/UX_ACCEPTANCE.md presentation contract.
+  // These assert the docs/design/design-language.md / docs/design/ux-invariants.md presentation contract.
   // They are deliberately written against the intended behavior so that they
   // fail on the defect and pass on the repair.
 
@@ -4444,61 +6031,64 @@ void main() {
         failures,
         isEmpty,
         reason:
-            'DESIGN.md:454 requires sufficient contrast and a visible keyboard '
+            'docs/design/design-language.md:454 requires sufficient contrast and a visible keyboard '
             'focus indicator:\n${failures.join('\n')}',
       );
     },
   );
 
-  test('ThemeData exposes the DESIGN.md typography scale', () {
-    final textTheme = OrTheme.dark.textTheme;
-    final scale = <String, TextStyle?>{
-      'displayLarge': textTheme.displayLarge,
-      'headlineSmall': textTheme.headlineSmall,
-      'titleMedium': textTheme.titleMedium,
-      'labelLarge': textTheme.labelLarge,
-      'bodyMedium': textTheme.bodyMedium,
-      'bodySmall': textTheme.bodySmall,
-      'labelSmall': textTheme.labelSmall,
-    };
-    // DESIGN.md:154-162 suggested hierarchy.
-    const bounds = <String, (double, double)>{
-      'displayLarge': (36, 48),
-      'headlineSmall': (28, 32),
-      'titleMedium': (18, 20),
-      'labelLarge': (14, 15),
-      'bodyMedium': (14, 15),
-      'bodySmall': (12, 13),
-      'labelSmall': (11, 12),
-    };
+  test(
+    'ThemeData exposes the docs/design/design-language.md typography scale',
+    () {
+      final textTheme = OrTheme.dark.textTheme;
+      final scale = <String, TextStyle?>{
+        'displayLarge': textTheme.displayLarge,
+        'headlineSmall': textTheme.headlineSmall,
+        'titleMedium': textTheme.titleMedium,
+        'labelLarge': textTheme.labelLarge,
+        'bodyMedium': textTheme.bodyMedium,
+        'bodySmall': textTheme.bodySmall,
+        'labelSmall': textTheme.labelSmall,
+      };
+      // docs/design/design-language.md:154-162 suggested hierarchy.
+      const bounds = <String, (double, double)>{
+        'displayLarge': (36, 48),
+        'headlineSmall': (28, 32),
+        'titleMedium': (18, 20),
+        'labelLarge': (14, 15),
+        'bodyMedium': (14, 15),
+        'bodySmall': (12, 13),
+        'labelSmall': (11, 12),
+      };
 
-    final failures = <String>[];
-    for (final entry in scale.entries) {
-      final style = entry.value;
-      final range = bounds[entry.key]!;
-      if (style == null || style.fontSize == null) {
-        failures.add('${entry.key} has no font size');
-        continue;
+      final failures = <String>[];
+      for (final entry in scale.entries) {
+        final style = entry.value;
+        final range = bounds[entry.key]!;
+        if (style == null || style.fontSize == null) {
+          failures.add('${entry.key} has no font size');
+          continue;
+        }
+        final size = style.fontSize!;
+        if (size < range.$1 || size > range.$2) {
+          failures.add(
+            '${entry.key} is $size px (docs/design/design-language.md wants '
+            '${range.$1.toInt()}-${range.$2.toInt()} px)',
+          );
+        }
       }
-      final size = style.fontSize!;
-      if (size < range.$1 || size > range.$2) {
-        failures.add(
-          '${entry.key} is $size px (DESIGN.md wants '
-          '${range.$1.toInt()}-${range.$2.toInt()} px)',
-        );
-      }
-    }
 
-    expect(
-      failures,
-      isEmpty,
-      reason:
-          'the theme must carry the DESIGN.md scale:\n'
-          '${failures.join('\n')}',
-    );
-  });
+      expect(
+        failures,
+        isEmpty,
+        reason:
+            'the theme must carry the docs/design/design-language.md scale:\n'
+            '${failures.join('\n')}',
+      );
+    },
+  );
 
-  test('no UI TextStyle uses a font size below the DESIGN.md 11 px floor', () {
+  test('no UI TextStyle uses a font size below the docs/design/design-language.md 11 px floor', () {
     final offenders = <String>[];
     for (final file in _dartFilesUnder('lib')) {
       final lines = file.readAsLinesSync();
@@ -4526,7 +6116,7 @@ void main() {
       offenders,
       isEmpty,
       reason:
-          'DESIGN.md:162 sets a 11-12 px tiny/status floor; smaller text is '
+          'docs/design/design-language.md:162 sets a 11-12 px tiny/status floor; smaller text is '
           'not readable:\n${offenders.join('\n')}',
     );
   });
@@ -4566,7 +6156,7 @@ void main() {
     return gateway;
   }
 
-  // DESIGN.md:456 requires usable touch targets; the visible bar stays
+  // docs/design/design-language.md:456 requires usable touch targets; the visible bar stays
   // restrained while the pointer target grows.
   void expectRestrainedTrimHandle(
     WidgetTester tester, {
@@ -4700,8 +6290,8 @@ void main() {
       'preview-play',
       'preview-next-frame',
       'preview-frame-rate',
-      'timeline-add-video-track',
-      'timeline-undo',
+      'timeline-create-menu',
+      'timeline-blade-toggle',
       'timeline-snap-toggle',
       'timeline-zoom-in',
       'timeline-fit-zoom',
@@ -4738,7 +6328,7 @@ void main() {
       'editor-timeline-header',
       'timeline-toolbar',
       'preview-play',
-      'timeline-add-video-track',
+      'timeline-create-menu',
       'timeline-zoom-in',
     ];
     const platforms = [
@@ -4984,7 +6574,7 @@ void main() {
         paintedContainers,
         1,
         reason:
-            'docs/UX_ACCEPTANCE.md:23-24 keeps panel resizing at prototype '
+            'docs/design/ux-invariants.md:23-24 keeps panel resizing at prototype '
             'reference tier, so a divider with no resize handler must render '
             'only the structural divider and no drag-looking grip',
       );
@@ -5041,8 +6631,76 @@ void main() {
     expect(find.text('Saved project'), findsOneWidget);
   });
 
+  testWidgets('the shared snackbar message is legible on its surface', (
+    tester,
+  ) async {
+    // Regression guard for the 2026-10-25 finding: Material 3 resolves snackbar
+    // content from onInverseSurface while OR overrides the fill with
+    // OrColors.surface, which painted text at 1:1 contrast and hid every
+    // confirmation and failure.
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () => OrSnackBar.show(context, 'Saved project'),
+              child: const Text('save'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(ElevatedButton));
+    await tester.pump();
+
+    final style = DefaultTextStyle.of(
+      tester.element(find.text('Saved project')),
+    ).style;
+    final background = tester
+        .widget<SnackBar>(find.byType(SnackBar))
+        .backgroundColor;
+    expect(background, isNotNull);
+    expect(style.color, isNotNull);
+    expect(
+      _contrastRatio(style.color!, background!),
+      greaterThanOrEqualTo(4.5),
+    );
+
+    final closeIcon = OrTheme.dark.snackBarTheme.closeIconColor;
+    expect(closeIcon, isNotNull);
+    expect(_contrastRatio(closeIcon!, background), greaterThanOrEqualTo(3));
+  });
+
+  testWidgets('workspace actions stay inside an 800 px editor window', (
+    tester,
+  ) async {
+    // The action cluster was the second of two equal Expanded halves, so at
+    // 800 px Redo and Close were painted off-screen with no way to reach them.
+    _setViewport(tester, const Size(800, 600));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/narrow-header.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Narrow header');
+    await tester.pumpAndSettle();
+
+    for (final key in const [
+      'workspace-rename',
+      'workspace-save',
+      'workspace-undo',
+      'workspace-redo',
+      'workspace-close',
+    ]) {
+      final finder = find.byKey(ValueKey(key));
+      expect(finder, findsOneWidget, reason: '$key must stay present');
+      final rect = tester.getRect(finder);
+      expect(rect.left, greaterThanOrEqualTo(0), reason: '$key clipped left');
+      expect(rect.right, lessThanOrEqualTo(800), reason: '$key clipped right');
+    }
+  });
+
   testWidgets('a focused control paints a visible focus ring', (tester) async {
-    // DESIGN.md:455 requires a visible keyboard focus. ThemeData.focusColor
+    // docs/design/design-language.md:455 requires a visible keyboard focus. ThemeData.focusColor
     // alone is not enough for controls that own their own decoration, so the
     // ring has to be real and reserved in layout even before focus.
     final focusNode = FocusNode(debugLabel: 'probe control');
@@ -5309,6 +6967,20 @@ Future<void> _createProject(WidgetTester tester, String name) async {
   await tester.pumpAndSettle();
 }
 
+/// Adds a track (or a marker) through the timeline zone's single create menu.
+///
+/// The workspace has one timeline control row; creation lives behind `+`, so a
+/// test opens that menu instead of assuming a row of dedicated buttons.
+Future<void> _tapTimelineCreate(WidgetTester tester, String label) async {
+  final menu = find.byKey(const ValueKey('timeline-create-menu'));
+  await tester.ensureVisible(menu);
+  await tester.pumpAndSettle();
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _renameActiveProject(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
   await tester.pumpAndSettle();
@@ -5482,7 +7154,23 @@ class _FakeProjectPicker implements ProjectFilePicker {
   }
 }
 
+/// Opens the clip context menu with a secondary click and then the advanced
+/// dialog that owns the exact-value operations. A plain click now only selects
+/// (the old modal-on-tap blocked the inspector and the timeline).
+Future<void> _openAdvancedClipActions(WidgetTester tester, Finder clip) async {
+  await tester.tap(clip, buttons: kSecondaryMouseButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Advanced clip actions…'));
+  await tester.pumpAndSettle();
+}
+
 class _FakeProjectGateway implements ProjectGateway {
+  /// Reverse flips the surface asked for, in order.
+  int reversedCalls = 0;
+  bool? lastReversed;
+  int frozenCalls = 0;
+  bool? lastFrozen;
+
   /// The illustration requests the surface sent, in order.
   final List<MotionMaterializeRequest> illustrationRequests = [];
   MotionMaterializationOutcome? illustrationOutcome;
@@ -5569,6 +7257,9 @@ class _FakeProjectGateway implements ProjectGateway {
   List<ProjectTimelineMarker> initialTimelineMarkers = [];
   final Map<String, ProjectMediaArtifactRequest> artifactRequestResponses = {};
   final Map<String, ProjectMediaArtifact> artifactResponses = {};
+
+  /// Holds one thumbnail request open so a test can control event timing.
+  final Map<String, Completer<void>> thumbnailGates = {};
   String? nextSaveFailure;
   bool nextRenameConflict = false;
   bool nextImportBackendUnavailable = false;
@@ -5582,6 +7273,9 @@ class _FakeProjectGateway implements ProjectGateway {
   int summaryCalls = 0;
   int renameCalls = 0;
   int mediaListCalls = 0;
+  String? mediaPageError;
+  Completer<void>? mediaPageGate;
+  Completer<void>? summaryGate;
   int timelineTracksCalls = 0;
   int timelineClipsCalls = 0;
   int getVisualSettingsCalls = 0;
@@ -5590,6 +7284,8 @@ class _FakeProjectGateway implements ProjectGateway {
   int getAudioSettingsCalls = 0;
   int updateAudioSettingsCalls = 0;
   ProjectTimelineAudioSettings? lastAudioSettings;
+  int updatePlaybackRateCalls = 0;
+  ProjectRationalRate? lastPlaybackRate;
   int timelineMarkersCalls = 0;
   bool revisionChangeOnNextTimelinePage = false;
   int resolveTimelineSnapCalls = 0;
@@ -5670,6 +7366,7 @@ class _FakeProjectGateway implements ProjectGateway {
   int exportStatusCalls = 0;
   int exportCancelCalls = 0;
   String? lastExportDestination;
+  String? lastExportQuality;
   ProjectExportJob? _exportJob;
 
   void completeExport() {
@@ -5759,6 +7456,11 @@ class _FakeProjectGateway implements ProjectGateway {
 
   @override
   Future<ProjectReadModel> summary(ProjectSessionHandle handle) async {
+    final gate = summaryGate;
+    if (gate != null) {
+      summaryGate = null;
+      await gate.future;
+    }
     summaryCalls++;
     return _session(handle).view;
   }
@@ -5966,7 +7668,13 @@ class _FakeProjectGateway implements ProjectGateway {
     required int limit,
   }) async {
     mediaListCalls++;
+    final gate = mediaPageGate;
+    if (gate != null) await gate.future;
     mediaListOffsets.add(offset);
+    final failure = mediaPageError;
+    if (failure != null) {
+      throw ProjectGatewayException('MEDIA_PAGE_FAILED', failure);
+    }
     final session = _session(handle);
     final start = offset.clamp(0, session.media.length).toInt();
     final end = (start + limit).clamp(start, session.media.length).toInt();
@@ -6107,6 +7815,105 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectActionResult> updateTimelineClipPlaybackRate(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectRationalRate rate,
+  }) async {
+    updatePlaybackRateCalls++;
+    lastPlaybackRate = rate;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) return _revisionConflict();
+    final track = session.tracks.where((item) => item.trackId == trackId);
+    final clips = session.clips[trackId];
+    final clipIndex = clips?.indexWhere((item) => item.clipId == clipId) ?? -1;
+    if (track.isEmpty ||
+        !{
+          ProjectTimelineTrackKind.video,
+          ProjectTimelineTrackKind.audio,
+        }.contains(track.first.kind) ||
+        clips == null ||
+        clipIndex < 0 ||
+        clips[clipIndex].contentKind != ProjectTimelineClipContentKind.media) {
+      return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
+    }
+    final clip = clips[clipIndex];
+    final durationNumerator =
+        clip.timelineDuration.numerator *
+        BigInt.from(clip.playbackRate.numerator) *
+        BigInt.from(rate.denominator);
+    final durationDenominator =
+        BigInt.from(clip.timelineDuration.denominator) *
+        BigInt.from(clip.playbackRate.denominator) *
+        BigInt.from(rate.numerator);
+    final duration = ProjectRationalTime.tryParse(
+      '$durationNumerator/$durationDenominator',
+    );
+    if (duration == null) {
+      return _timelineOperationFailure('INVALID_PLAYBACK_RATE');
+    }
+    clips[clipIndex] = ProjectTimelineClip(
+      clipId: clip.clipId,
+      contentKind: clip.contentKind,
+      playbackRate: rate,
+      mediaId: clip.mediaId,
+      text: clip.text,
+      formatting: clip.formatting,
+      timelineStart: clip.timelineStart,
+      timelineDuration: duration,
+      sourceStart: clip.sourceStart,
+    );
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  int moveClipsCalls = 0;
+  List<String>? lastMovedClipIds;
+  ProjectRationalTime? lastMoveDelta;
+
+  @override
+  Future<ProjectActionResult> moveTimelineClips(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required List<String> clipIds,
+    required ProjectRationalTime delta,
+  }) async {
+    moveClipsCalls += 1;
+    lastMovedClipIds = List<String>.of(clipIds);
+    lastMoveDelta = delta;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipReversed(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool reversed,
+  }) async {
+    reversedCalls += 1;
+    lastReversed = reversed;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineClipFrozen(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required bool frozen,
+  }) async {
+    frozenCalls += 1;
+    lastFrozen = frozen;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
   Future<ProjectTimelineMarkerPage> listTimelineMarkers(
     ProjectSessionHandle handle, {
     required int offset,
@@ -6231,19 +8038,37 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectTranscriptionModel> transcriptionModel(
     ProjectSessionHandle session,
   ) async => ProjectTranscriptionModel(
-    modelId: 'whisper-tiny-en',
+    modelId: 'whisper-small-multilingual',
     version: '1.0',
     license: 'MIT',
-    language: 'English',
-    sizeBytes: BigInt.from(77704715),
+    language: 'Vietnamese and English',
+    sizeBytes: BigInt.from(487601967),
     source: 'https://example.invalid/model',
     installed: false,
     providerAvailable: false,
   );
 
   @override
+  Future<List<ProjectTranscriptionModel>> transcriptionModels(
+    ProjectSessionHandle session,
+  ) async => [await transcriptionModel(session)];
+
+  @override
+  Future<ProjectTranscriptionModel> selectTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => transcriptionModel(session);
+
+  @override
+  Future<ProjectTranscriptionModel> removeTranscriptionModel(
+    ProjectSessionHandle session,
+    String modelId,
+  ) => transcriptionModel(session);
+
+  @override
   Future<ProjectModelDownload> beginTranscriptionModelDownload(
     ProjectSessionHandle session,
+    String modelId,
   ) => Future.error(UnimplementedError());
 
   @override
@@ -6813,6 +8638,16 @@ class _FakeProjectGateway implements ProjectGateway {
   }
 
   @override
+  Future<ProjectActionResult> duckTimelineClip(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required String voiceTrackId,
+    required int duckDecibels,
+  }) async => const ProjectActionResult(succeeded: true);
+
+  @override
   Future<ProjectActionResult> rippleDeleteTimelineClip(
     ProjectSessionHandle handle,
     ProjectReadModel current,
@@ -6997,6 +8832,10 @@ class _FakeProjectGateway implements ProjectGateway {
     String mediaId,
   ) async {
     thumbnailRequests++;
+    final gate = thumbnailGates[mediaId];
+    if (gate != null) {
+      await gate.future;
+    }
     return artifactRequestResponses['$mediaId:thumbnail'] ??
         ProjectMediaArtifactRequest(
           mediaId: mediaId,
@@ -7038,6 +8877,10 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectSessionHandle handle,
   ) => _session(handle).mediaArtifactEvents.stream;
 
+  /// Gates that hold one import call each, so a test can observe the batch
+  /// progress line between files instead of only its final state.
+  final List<Completer<void>> importGates = [];
+
   @override
   Future<ProjectActionResult> importMedia(
     ProjectSessionHandle handle,
@@ -7048,6 +8891,10 @@ class _FakeProjectGateway implements ProjectGateway {
     lastImportSource = source;
     lastImportedPath = source;
     importMediaSources.add(source);
+    final gateIndex = importMediaCalls - 1;
+    if (gateIndex < importGates.length) {
+      await importGates[gateIndex].future;
+    }
     if (nextImportBackendUnavailable ||
         failedImportCalls.contains(importMediaCalls)) {
       nextImportBackendUnavailable = false;
@@ -7074,7 +8921,17 @@ class _FakeProjectGateway implements ProjectGateway {
       );
     }
     final item = _mediaFixture('media-imported-$importMediaCalls', source);
-    session.media.add(item);
+    session.media.add(
+      ProjectMediaItem(
+        mediaId: item.mediaId,
+        sourceUri: item.sourceUri,
+        formatNames: item.formatNames,
+        duration: item.duration,
+        videoDetails: item.videoDetails,
+        audioDetails: item.audioDetails,
+        firstVideoDuration: ProjectRationalTime(BigInt.from(10), 1),
+      ),
+    );
     session.view = _copyView(
       session.view,
       revision: session.view.revision + BigInt.one,
@@ -7191,10 +9048,12 @@ class _FakeProjectGateway implements ProjectGateway {
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle handle,
     ProjectReadModel current,
-    String destination,
-  ) async {
+    String destination, {
+    String? quality,
+  }) async {
     exportCalls++;
     lastExportDestination = destination;
+    lastExportQuality = quality;
     _exportJob = ProjectExportJob(
       succeeded: true,
       errorCode: '',

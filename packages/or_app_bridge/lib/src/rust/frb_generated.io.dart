@@ -5,6 +5,7 @@
 
 import 'api.dart';
 import 'api/motion.dart';
+import 'api/motion_library.dart';
 import 'api/project.dart';
 
 import 'dart:async';
@@ -75,10 +76,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_box_autoadd_bool(dynamic raw);
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
+
+  @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
 
   @protected
   MediaArtifactBytesView dco_decode_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectTextBackgroundView dco_decode_box_autoadd_project_text_background_view(
     dynamic raw,
   );
 
@@ -125,6 +134,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_32(dynamic raw);
 
   @protected
+  double dco_decode_f_64(dynamic raw);
+
+  @protected
   FontIdentityView dco_decode_font_identity_view(dynamic raw);
 
   @protected
@@ -144,6 +156,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Capability> dco_decode_list_capability(dynamic raw);
+
+  @protected
+  List<MotionAssetEntryView> dco_decode_list_motion_asset_entry_view(
+    dynamic raw,
+  );
+
+  @protected
+  List<MotionAssetParameterView> dco_decode_list_motion_asset_parameter_view(
+    dynamic raw,
+  );
+
+  @protected
+  List<MotionSceneNodeView> dco_decode_list_motion_scene_node_view(dynamic raw);
+
+  @protected
+  List<double> dco_decode_list_prim_f_64_loose(dynamic raw);
+
+  @protected
+  Float64List dco_decode_list_prim_f_64_strict(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -178,6 +209,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_list_project_transcript_segment_view(dynamic raw);
 
   @protected
+  List<ProjectTranscriptionModelOptionView>
+  dco_decode_list_project_transcription_model_option_view(dynamic raw);
+
+  @protected
   MediaArtifactBytesView dco_decode_media_artifact_bytes_view(dynamic raw);
 
   @protected
@@ -203,7 +238,31 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   MediaCleanupResultView dco_decode_media_cleanup_result_view(dynamic raw);
 
   @protected
+  MotionAssetEntryView dco_decode_motion_asset_entry_view(dynamic raw);
+
+  @protected
+  MotionAssetLibraryView dco_decode_motion_asset_library_view(dynamic raw);
+
+  @protected
+  MotionAssetMutationView dco_decode_motion_asset_mutation_view(dynamic raw);
+
+  @protected
+  MotionAssetParameterView dco_decode_motion_asset_parameter_view(dynamic raw);
+
+  @protected
+  MotionAssetView dco_decode_motion_asset_view(dynamic raw);
+
+  @protected
   MotionMaterializationView dco_decode_motion_materialization_view(dynamic raw);
+
+  @protected
+  MotionSceneNodeView dco_decode_motion_scene_node_view(dynamic raw);
+
+  @protected
+  MotionScenePreviewView dco_decode_motion_scene_preview_view(dynamic raw);
+
+  @protected
+  MotionSceneView dco_decode_motion_scene_view(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -212,12 +271,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool? dco_decode_opt_box_autoadd_bool(dynamic raw);
 
   @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+
+  @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
 
   @protected
   MediaArtifactBytesView? dco_decode_opt_box_autoadd_media_artifact_bytes_view(
     dynamic raw,
   );
+
+  @protected
+  ProjectTextBackgroundView?
+  dco_decode_opt_box_autoadd_project_text_background_view(dynamic raw);
 
   @protected
   ProjectTextFormattingView?
@@ -282,6 +348,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProjectPreviewStateView dco_decode_project_preview_state_view(dynamic raw);
+
+  @protected
+  ProjectTextBackgroundView dco_decode_project_text_background_view(
+    dynamic raw,
+  );
 
   @protected
   ProjectTextColorView dco_decode_project_text_color_view(dynamic raw);
@@ -353,6 +424,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTranscriptionModelOptionView
+  dco_decode_project_transcription_model_option_view(dynamic raw);
+
+  @protected
   ProjectTranscriptionModelView dco_decode_project_transcription_model_view(
     dynamic raw,
   );
@@ -374,6 +449,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextAlignmentView dco_decode_text_alignment_view(dynamic raw);
+
+  @protected
+  TextVerticalAnchorView dco_decode_text_vertical_anchor_view(dynamic raw);
 
   @protected
   TextWeightView dco_decode_text_weight_view(dynamic raw);
@@ -474,10 +552,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   MediaArtifactBytesView sse_decode_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextBackgroundView sse_decode_box_autoadd_project_text_background_view(
     SseDeserializer deserializer,
   );
 
@@ -538,6 +624,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
   FontIdentityView sse_decode_font_identity_view(SseDeserializer deserializer);
 
   @protected
@@ -557,6 +646,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Capability> sse_decode_list_capability(SseDeserializer deserializer);
+
+  @protected
+  List<MotionAssetEntryView> sse_decode_list_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MotionAssetParameterView> sse_decode_list_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<MotionSceneNodeView> sse_decode_list_motion_scene_node_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<double> sse_decode_list_prim_f_64_loose(SseDeserializer deserializer);
+
+  @protected
+  Float64List sse_decode_list_prim_f_64_strict(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -589,6 +699,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ProjectTranscriptSegmentView>
   sse_decode_list_project_transcript_segment_view(SseDeserializer deserializer);
+
+  @protected
+  List<ProjectTranscriptionModelOptionView>
+  sse_decode_list_project_transcription_model_option_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   MediaArtifactBytesView sse_decode_media_artifact_bytes_view(
@@ -626,9 +742,45 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  MotionAssetEntryView sse_decode_motion_asset_entry_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionAssetLibraryView sse_decode_motion_asset_library_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionAssetMutationView sse_decode_motion_asset_mutation_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionAssetParameterView sse_decode_motion_asset_parameter_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionAssetView sse_decode_motion_asset_view(SseDeserializer deserializer);
+
+  @protected
   MotionMaterializationView sse_decode_motion_materialization_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  MotionSceneNodeView sse_decode_motion_scene_node_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionScenePreviewView sse_decode_motion_scene_preview_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  MotionSceneView sse_decode_motion_scene_view(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -637,10 +789,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool? sse_decode_opt_box_autoadd_bool(SseDeserializer deserializer);
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
 
   @protected
   MediaArtifactBytesView? sse_decode_opt_box_autoadd_media_artifact_bytes_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTextBackgroundView?
+  sse_decode_opt_box_autoadd_project_text_background_view(
     SseDeserializer deserializer,
   );
 
@@ -739,6 +900,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTextBackgroundView sse_decode_project_text_background_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTextColorView sse_decode_project_text_color_view(
     SseDeserializer deserializer,
   );
@@ -820,6 +986,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectTranscriptionModelOptionView
+  sse_decode_project_transcription_model_option_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTranscriptionModelView sse_decode_project_transcription_model_view(
     SseDeserializer deserializer,
   );
@@ -845,6 +1017,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TextAlignmentView sse_decode_text_alignment_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TextVerticalAnchorView sse_decode_text_vertical_anchor_view(
     SseDeserializer deserializer,
   );
 
@@ -958,11 +1135,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_media_artifact_bytes_view(
     MediaArtifactBytesView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView self,
     SseSerializer serializer,
   );
 
@@ -1030,6 +1216,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_font_identity_view(
     FontIdentityView self,
     SseSerializer serializer,
@@ -1053,6 +1242,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_capability(
     List<Capability> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_motion_asset_entry_view(
+    List<MotionAssetEntryView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_motion_asset_parameter_view(
+    List<MotionAssetParameterView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_motion_scene_node_view(
+    List<MotionSceneNodeView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_loose(
+    List<double> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_f_64_strict(
+    Float64List self,
     SseSerializer serializer,
   );
 
@@ -1099,6 +1318,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_project_transcription_model_option_view(
+    List<ProjectTranscriptionModelOptionView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_media_artifact_bytes_view(
     MediaArtifactBytesView self,
     SseSerializer serializer,
@@ -1141,8 +1366,56 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_motion_asset_entry_view(
+    MotionAssetEntryView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_asset_library_view(
+    MotionAssetLibraryView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_asset_mutation_view(
+    MotionAssetMutationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_asset_parameter_view(
+    MotionAssetParameterView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_asset_view(
+    MotionAssetView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_motion_materialization_view(
     MotionMaterializationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_scene_node_view(
+    MotionSceneNodeView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_scene_preview_view(
+    MotionScenePreviewView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_motion_scene_view(
+    MotionSceneView self,
     SseSerializer serializer,
   );
 
@@ -1153,11 +1426,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_bool(bool? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_media_artifact_bytes_view(
     MediaArtifactBytesView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_project_text_background_view(
+    ProjectTextBackgroundView? self,
     SseSerializer serializer,
   );
 
@@ -1273,6 +1555,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_text_background_view(
+    ProjectTextBackgroundView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_text_color_view(
     ProjectTextColorView self,
     SseSerializer serializer,
@@ -1369,6 +1657,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_transcription_model_option_view(
+    ProjectTranscriptionModelOptionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_transcription_model_view(
     ProjectTranscriptionModelView self,
     SseSerializer serializer,
@@ -1404,6 +1698,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_text_alignment_view(
     TextAlignmentView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_vertical_anchor_view(
+    TextVerticalAnchorView self,
     SseSerializer serializer,
   );
 

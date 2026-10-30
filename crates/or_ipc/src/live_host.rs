@@ -1,8 +1,27 @@
 use crate::{IpcProtocolError, LocalIpcServer};
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ExportRequest, ExportResponse, ProjectFileSession,
-    ProjectFileSessionError, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
+    ApplicationRequest, ApplicationResponse, ExportRequest, ExportResponse,
+    MotionMaterializeRequest, MotionMaterializeResponse, ProjectFileSession,
+    ProjectFileSessionError, ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession,
+    QueryEnvelope, QueryResult, TranscriptionRequest, TranscriptionResponse,
 };
+
+/// The stable identity of one live project session, cheap to copy so a long
+/// operation can run without holding the host lock.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProjectSessionIdentity {
+    pub project_id: ProjectId,
+    pub project_instance_id: ProjectInstanceId,
+}
+
+impl ProjectSessionIdentity {
+    pub fn from_session(session: &ProjectSession) -> Self {
+        Self {
+            project_id: session.project_id(),
+            project_instance_id: session.project_instance_id(),
+        }
+    }
+}
 
 /// Runtime extension for application operations that need desktop media services.
 pub trait ExportRequestHandler: Send + Sync {
@@ -11,6 +30,32 @@ pub trait ExportRequestHandler: Send + Sync {
         session: &ProjectSession,
         request: ExportRequest,
     ) -> ExportResponse;
+}
+
+/// Runtime extension for turning a MotionScene into a video file.
+///
+/// Only the application runtime links the FFmpeg encoder, so the CLI and agents
+/// ask the host to materialise instead of linking a second encoder.
+pub trait MotionMaterializeHandler: Send + Sync {
+    fn handle_motion_materialize_request(
+        &self,
+        identity: ProjectSessionIdentity,
+        request: MotionMaterializeRequest,
+    ) -> MotionMaterializeResponse;
+}
+
+/// Runtime extension for local transcription jobs.
+///
+/// The handler starts, polls and cancels a background job owned by the
+/// application runtime. It returns immediately; the caller polls `Status` until
+/// the job is terminal and then asks for the proposal. The host holds the
+/// project lock only for the duration of one request, never for the model run.
+pub trait TranscriptionRequestHandler: Send + Sync {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse;
 }
 use std::{
     error::Error,
@@ -91,7 +136,7 @@ impl LiveProjectHost {
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
     ) -> Result<Self, LiveProjectHostError> {
-        Self::start_with_handler(session, descriptor_path, None)
+        Self::start_with_runtimes(session, descriptor_path, None, None, None)
     }
 
     /// Starts IPC with one shared export handler for direct and remote requests.
@@ -100,23 +145,39 @@ impl LiveProjectHost {
         descriptor_path: Option<&Path>,
         handler: Arc<dyn ExportRequestHandler>,
     ) -> Result<Self, LiveProjectHostError> {
-        Self::start_with_handler(session, descriptor_path, Some(handler))
+        Self::start_with_runtimes(session, descriptor_path, Some(handler), None, None)
     }
 
-    /// Creates the same Rust-owned host without starting a local IPC server.
-    pub fn in_process_with_export_handler(
-        session: ProjectFileSession,
-        handler: Arc<dyn ExportRequestHandler>,
-    ) -> Self {
-        Self::in_process_with_handler(session, Some(handler))
-    }
-
-    fn start_with_handler(
+    /// Starts IPC with the export and motion-materialisation runtimes attached.
+    pub fn start_with_handlers(
         session: ProjectFileSession,
         descriptor_path: Option<&Path>,
-        handler: Option<Arc<dyn ExportRequestHandler>>,
+        export_handler: Option<Arc<dyn ExportRequestHandler>>,
+        motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
     ) -> Result<Self, LiveProjectHostError> {
-        let mut host = Self::in_process_with_handler(session, handler);
+        Self::start_with_runtimes(
+            session,
+            descriptor_path,
+            export_handler,
+            motion_handler,
+            None,
+        )
+    }
+
+    /// Starts IPC with every runtime the application process owns attached.
+    pub fn start_with_runtimes(
+        session: ProjectFileSession,
+        descriptor_path: Option<&Path>,
+        export_handler: Option<Arc<dyn ExportRequestHandler>>,
+        motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+        transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
+    ) -> Result<Self, LiveProjectHostError> {
+        let mut host = Self::in_process_with_runtimes(
+            session,
+            export_handler,
+            motion_handler,
+            transcription_handler,
+        );
         host.server = Some(LocalIpcServer::start_shared(
             Arc::clone(&host.shared),
             descriptor_path,
@@ -124,12 +185,28 @@ impl LiveProjectHost {
         Ok(host)
     }
 
-    fn in_process_with_handler(
+    /// Creates the same Rust-owned host without starting a local IPC server.
+    pub fn in_process_with_export_handler(
         session: ProjectFileSession,
-        handler: Option<Arc<dyn ExportRequestHandler>>,
+        handler: Arc<dyn ExportRequestHandler>,
+    ) -> Self {
+        Self::in_process_with_runtimes(session, Some(handler), None, None)
+    }
+
+    /// Creates the same host without IPC, with every runtime attached.
+    pub fn in_process_with_runtimes(
+        session: ProjectFileSession,
+        export_handler: Option<Arc<dyn ExportRequestHandler>>,
+        motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+        transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
     ) -> Self {
         Self {
-            shared: shared_host_state(session, handler),
+            shared: shared_host_state(
+                session,
+                export_handler,
+                motion_handler,
+                transcription_handler,
+            ),
             server: None,
         }
     }
@@ -155,6 +232,26 @@ impl LiveProjectHost {
         &self,
         request: ApplicationRequest,
     ) -> Result<ApplicationResponse, LiveProjectHostError> {
+        // Motion materialisation renders a complete scene. It needs only the
+        // session identity, so release the host lock before the render starts;
+        // otherwise preview, queries and clicks wait for the whole scene.
+        let request = match request {
+            ApplicationRequest::MotionMaterialize(request) => {
+                let (handler, identity) = {
+                    let state = self.lock_open()?;
+                    (state.motion_handler(), state.project_identity())
+                };
+                let response = match handler {
+                    Some(handler) => handler.handle_motion_materialize_request(identity, request),
+                    None => MotionMaterializeResponse::failure(
+                        "MOTION_RUNTIME_UNAVAILABLE",
+                        "the project host has no motion materialisation runtime",
+                    ),
+                };
+                return Ok(ApplicationResponse::MotionMaterialize(response));
+            }
+            request => request,
+        };
         let mut state = self.lock_open()?;
         let before = state.session.session().project_revision();
         let response = state.handle_application_request(request);
@@ -246,12 +343,22 @@ impl LiveProjectHost {
 pub(crate) struct LiveProjectHostState {
     pub(crate) session: ProjectFileSession,
     export_handler: Option<Arc<dyn ExportRequestHandler>>,
+    motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+    transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
     pub(crate) closing: bool,
     sequence: u64,
     subscribers: Vec<mpsc::Sender<ProjectHostEvent>>,
 }
 
 impl LiveProjectHostState {
+    pub(crate) fn motion_handler(&self) -> Option<Arc<dyn MotionMaterializeHandler>> {
+        self.motion_handler.clone()
+    }
+
+    pub(crate) fn project_identity(&self) -> ProjectSessionIdentity {
+        ProjectSessionIdentity::from_session(self.session.session())
+    }
+
     pub(crate) fn handle_application_request(
         &mut self,
         request: ApplicationRequest,
@@ -266,6 +373,36 @@ impl LiveProjectHostState {
                     ApplicationResponse::Export(ExportResponse::failure(
                         "EXPORT_RUNTIME_UNAVAILABLE",
                         "the project host has no export runtime",
+                    ))
+                }
+            }
+            ApplicationRequest::Transcription(transcription_request) => {
+                if let Some(handler) = &self.transcription_handler {
+                    ApplicationResponse::Transcription(handler.handle_transcription_request(
+                        self.session.session(),
+                        transcription_request,
+                    ))
+                } else {
+                    ApplicationResponse::Transcription(TranscriptionResponse::Failure(
+                        or_core::TranscriptionFailure::new(
+                            "TRANSCRIPTION_RUNTIME_UNAVAILABLE",
+                            "the project host has no transcription runtime",
+                        ),
+                    ))
+                }
+            }
+            ApplicationRequest::MotionMaterialize(motion_request) => {
+                if let Some(handler) = &self.motion_handler {
+                    ApplicationResponse::MotionMaterialize(
+                        handler.handle_motion_materialize_request(
+                            self.project_identity(),
+                            motion_request,
+                        ),
+                    )
+                } else {
+                    ApplicationResponse::MotionMaterialize(MotionMaterializeResponse::failure(
+                        "MOTION_RUNTIME_UNAVAILABLE",
+                        "the project host has no motion materialisation runtime",
                     ))
                 }
             }
@@ -296,10 +433,14 @@ impl LiveProjectHostState {
 pub(crate) fn shared_host_state(
     session: ProjectFileSession,
     export_handler: Option<Arc<dyn ExportRequestHandler>>,
+    motion_handler: Option<Arc<dyn MotionMaterializeHandler>>,
+    transcription_handler: Option<Arc<dyn TranscriptionRequestHandler>>,
 ) -> Arc<Mutex<LiveProjectHostState>> {
     Arc::new(Mutex::new(LiveProjectHostState {
         session,
         export_handler,
+        motion_handler,
+        transcription_handler,
         closing: false,
         sequence: 0,
         subscribers: Vec::new(),

@@ -58,7 +58,7 @@
     {
       "op": "tap",
       "selector": {
-        "key": "timeline-add-audio-track"
+        "key": "timeline-empty-add-audio"
       }
     },
     {
@@ -155,8 +155,21 @@
     },
     {
       "op": "wait",
-      "text": "Clip",
+      "text": "CLIP",
       "budget_ms": 20000
+    },
+    {
+      "op": "secondary_tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Advanced clip actions\u2026"
+      }
     },
     {
       "op": "tap",
@@ -230,8 +243,21 @@
     },
     {
       "op": "wait",
-      "text": "Clip",
+      "text": "CLIP",
       "budget_ms": 20000
+    },
+    {
+      "op": "secondary_tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      },
+      "allow_multiple": true
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Advanced clip actions\u2026"
+      }
     },
     {
       "op": "tap",

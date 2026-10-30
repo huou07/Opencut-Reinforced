@@ -1,9 +1,15 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MarkerId, ProjectDocument,
-    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, TrackId, TrackKind,
-    load_project_file, save_project_file_atomic, write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, JobId, JobState, MarkerId,
+    MediaId, MotionMaterializeRequest, MotionMaterializeResponse, ProjectDocument,
+    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, RationalTime, TrackId,
+    TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
+    TranscriptionResponse, TranscriptionSegmentView, load_project_file, save_project_file_atomic,
+    write_recovery_checkpoint,
 };
-use or_ipc::{LiveProjectHost, ProjectHostEventKind};
+use or_ipc::{
+    LiveProjectHost, MotionMaterializeHandler, ProjectHostEventKind, ProjectSessionIdentity,
+    TranscriptionRequestHandler,
+};
 use serde_json::Value;
 use std::{
     ffi::OsString,
@@ -11,7 +17,10 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+    },
     thread,
     time::{Duration, Instant},
 };
@@ -189,7 +198,8 @@ fn json_success(args: impl IntoIterator<Item = OsString>) -> (Value, Output) {
     let output = cli(args);
     assert!(
         output.status.success(),
-        "expected success, stderr: {}",
+        "expected success, stdout: {}, stderr: {}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(output.stderr.is_empty());
@@ -580,7 +590,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 7);
+    assert_eq!(saved_bytes["schema_version"], 8);
 
     let mut first_page_args = path_args(
         &["media", "list"],
@@ -1141,6 +1151,61 @@ fn attached_cli_uses_live_session_and_saves_only_on_request() {
     assert!(!descriptor.exists());
 }
 
+/// The agent workspace keeps a `project.json` pointer rather than a descriptor
+/// path, so `--attach` must follow it on every call.
+#[test]
+fn attach_follows_a_session_pointer_and_picks_up_a_new_descriptor() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let descriptor = directory.0.join("session.json");
+    create_project(&path, "Pointer project");
+    let (mut server, token) = start_server(&path, &descriptor);
+
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::json!({
+            "version": 1,
+            "project_name": "Pointer project",
+            "project_path": path.display().to_string(),
+            "descriptor_path": descriptor.display().to_string(),
+        })
+        .to_string(),
+    )
+    .unwrap();
+
+    let (summary, output) =
+        json_success(attach_args(&["project", "summary"], &pointer, &["--json"]));
+    assert_no_token(&output, &token);
+    assert_eq!(summary["name"], "Pointer project");
+
+    // A relative `descriptor_path` resolves beside the pointer, so a workspace
+    // keeps working when the app records the descriptor relatively.
+    let relative = directory.0.join("workspace");
+    fs::create_dir(&relative).unwrap();
+    let relative_pointer = relative.join("project.json");
+    fs::write(
+        &relative_pointer,
+        serde_json::json!({
+            "version": 1,
+            "descriptor_path": "../session.json",
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let (relative_summary, output) = json_success(attach_args(
+        &["project", "summary"],
+        &relative_pointer,
+        &["--json"],
+    ));
+    assert_no_token(&output, &token);
+    assert_eq!(relative_summary["name"], "Pointer project");
+
+    let (shutdown, _) = json_success(attach_args(&["session", "shutdown"], &pointer, &["--json"]));
+    assert_eq!(shutdown["status"], "shutdown");
+    server.wait();
+}
+
 #[test]
 fn attached_cli_and_direct_live_host_access_share_one_session() {
     let directory = TestDirectory::new();
@@ -1575,7 +1640,7 @@ fn headless_timeline_cli_uses_commands_saves_v7_and_keeps_exact_times() {
     assert_eq!(page["timeline_clip_page_v2"]["next_offset"], 1);
 
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 7);
+    assert_eq!(saved_bytes["schema_version"], 8);
     let saved = load_project_file(&project_path).unwrap();
     assert_eq!(saved.revision(), ProjectRevision::new(6));
     assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
@@ -1887,7 +1952,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v7_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v8_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -2028,7 +2093,7 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v7_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        7
+        8
     );
 }
 
@@ -2209,11 +2274,16 @@ fn attached_advanced_timeline_cli_dispatches_shared_commands_until_explicit_save
         host.describe().unwrap().summary.project_revision,
         ProjectRevision::new(3)
     );
-    json_success(attach_args(
+    // `--ripple` is a boolean flag: it must parse without a value.
+    let trimmed = json_success(attach_args(
         &["timeline", "trim-clip"],
         &descriptor,
-        &["--clip", clip_id, "--edge", "end", "--to", "3/4", "--json"],
-    ));
+        &[
+            "--clip", clip_id, "--edge", "end", "--to", "3/4", "--ripple", "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(trimmed["command"]["after_revision"], 4);
     json_success(attach_args(
         &["timeline", "split-clip"],
         &descriptor,
@@ -2591,8 +2661,8 @@ fn motion_from_code_builds_a_highlighted_scene_from_a_sample() {
     let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(summary["language"], "rust");
     assert_eq!(summary["validation_ok"], true);
-    // Background, title and five source lines.
-    assert_eq!(summary["node_count"], 7);
+    // Background, title and the progressive reveal steps for five source lines.
+    assert_eq!(summary["node_count"], 35);
 
     // The scene it wrote validates through the ordinary validator, and it is the same
     // file a hand-authored scene would be.
@@ -2644,4 +2714,838 @@ fn motion_from_code_refuses_a_sample_larger_than_it_draws() {
     assert_eq!(error["error"]["code"], "CODE_TOO_MANY_LINES");
     // Nothing was written: a refusal does not leave a partial scene behind.
     assert!(!directory.0.join("huge.ormotion.json").exists());
+}
+
+fn motion_asset_args(before: &[&str], paths: &[(&str, &Path)], after: &[&str]) -> Vec<OsString> {
+    let mut args = words(before);
+    for (flag, path) in paths {
+        args.push((*flag).into());
+        args.push(path.as_os_str().to_owned());
+    }
+    args.extend(words(after));
+    args
+}
+
+/// A scene asset with a text and a colour parameter, matching the P1 format.
+fn write_motion_asset(
+    directory: &TestDirectory,
+    file_name: &str,
+    asset_id: &str,
+    name: &str,
+    category: &str,
+    source: &str,
+) -> PathBuf {
+    let asset = serde_json::json!({
+        "format": "opencut-reinforced-motion-asset",
+        "schema_version": 1,
+        "asset_id": asset_id,
+        "name": name,
+        "category": category,
+        "category_source": source,
+        "tags": [],
+        "kind": "scene",
+        "canvas": {"width": 1920, "height": 1080},
+        "duration": {"numerator": 4, "denominator": 1},
+        "parameters": [
+            {
+                "id": "title",
+                "label": "Title",
+                "type": "text",
+                "target": {"node_id": "title", "field": "text"},
+                "default": "Hello"
+            },
+            {
+                "id": "accent",
+                "label": "Accent",
+                "type": "color",
+                "target": {"node_id": "title", "field": "fill"},
+                "default": {"red": 220, "green": 220, "blue": 220, "alpha": 255}
+            }
+        ],
+        "scene": {
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "background",
+                    "kind": "rectangle",
+                    "position": {"x": 0, "y": 0},
+                    "size": {"width": 1920, "height": 1080},
+                    "fill": {"red": 20, "green": 20, "blue": 24, "alpha": 255}
+                },
+                {
+                    "node_id": "title",
+                    "kind": "text",
+                    "text": "Hello",
+                    "position": {"x": 80, "y": 120},
+                    "font_size": 64,
+                    "fill": {"red": 220, "green": 220, "blue": 220, "alpha": 255}
+                }
+            ],
+            "animations": []
+        }
+    });
+    let path = directory.0.join(file_name);
+    fs::write(&path, serde_json::to_vec_pretty(&asset).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn motion_asset_library_saves_lists_instantiates_and_removes() {
+    let directory = TestDirectory::new();
+    let asset_id = "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f";
+    let asset = write_motion_asset(
+        &directory,
+        "title.ormotionasset.json",
+        asset_id,
+        "Explainer title",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+
+    let validated = cli(motion_asset_args(
+        &["motion", "asset", "validate"],
+        &[("--file", &asset)],
+        &[],
+    ));
+    assert!(validated.status.success(), "{validated:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&validated.stdout).trim(),
+        "Explainer title is a valid MotionAsset"
+    );
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["asset_id"], asset_id);
+    assert_eq!(saved["motion_asset"]["category"], "text");
+    assert_eq!(saved["motion_asset"]["duration_milliseconds"], 4000);
+
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--library", &library)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 1);
+    assert_eq!(listed["entries"][0]["name"], "Explainer title");
+
+    let output = directory.0.join("instantiated.ormotion.json");
+    let values = r#"{"title":"Changed","accent":{"red":10,"green":20,"blue":30,"alpha":255}}"#;
+    let (instantiated, _) = json_success(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(asset_id)),
+            ("--output", &output),
+        ],
+        &[
+            "--values",
+            values,
+            "--scene-id",
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "--name",
+            "Changed scene",
+            "--json",
+        ],
+    ));
+    assert_eq!(
+        instantiated["scene_id"],
+        "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d"
+    );
+    assert_eq!(instantiated["validation_ok"], true);
+    let scene: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    assert_eq!(scene["name"], "Changed scene");
+    let title = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["node_id"] == "title")
+        .unwrap();
+    assert_eq!(title["text"], "Changed");
+    assert_eq!(title["fill"]["red"], 10);
+
+    let (removed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "remove"],
+        &[("--library", &library), ("--id", Path::new(asset_id))],
+        &["--json"],
+    ));
+    assert_eq!(removed["removed"], true);
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--library", &library)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 0);
+}
+
+#[test]
+fn motion_asset_library_resolves_from_the_attached_pointer() {
+    let directory = TestDirectory::new();
+    let asset_id = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
+    let asset = write_motion_asset(
+        &directory,
+        "pointer.ormotionasset.json",
+        asset_id,
+        "Pointer asset",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["asset_id"], asset_id);
+
+    // The workspace project.json records the library, so every asset verb can
+    // resolve it from the pointer instead of repeating --library.
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1,
+            "motion_library_path": library.display().to_string(),
+            "app_support_path": directory.0.display().to_string(),
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let (listed, _) = json_success(motion_asset_args(
+        &["motion", "asset", "list"],
+        &[("--attach", &pointer)],
+        &["--json"],
+    ));
+    assert_eq!(listed["count"], 1);
+    assert_eq!(listed["entries"][0]["asset_id"], asset_id);
+    assert_eq!(listed["library"], library.display().to_string());
+
+    // Without either flag the verb refuses instead of guessing a folder.
+    let output = cli(words(&["motion", "asset", "list", "--json"]));
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        error["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("--library"),
+        "{error}"
+    );
+}
+
+#[test]
+fn motion_asset_save_refuses_an_invalid_document_and_writes_nothing() {
+    let directory = TestDirectory::new();
+    let asset = write_motion_asset(
+        &directory,
+        "broken.ormotionasset.json",
+        "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+        "Broken",
+        "object",
+        "explicit",
+    );
+    let mut value: Value = serde_json::from_slice(&fs::read(&asset).unwrap()).unwrap();
+    value["parameters"][0]["target"]["node_id"] = serde_json::json!("missing");
+    fs::write(&asset, serde_json::to_vec(&value).unwrap()).unwrap();
+
+    let library = directory.0.join("motion-library");
+    let output = cli(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["category"], "motion_library");
+    assert_eq!(error["error"]["code"], "MOTION_LIBRARY_INVALID_ASSET");
+    assert_eq!(
+        fs::read_dir(library.join("assets")).unwrap().count(),
+        0,
+        "a refused save leaves no asset file"
+    );
+}
+
+#[test]
+fn motion_asset_classification_and_manual_override_show_in_the_catalog() {
+    let directory = TestDirectory::new();
+    let asset = write_motion_asset(
+        &directory,
+        "mountain.ormotionasset.json",
+        "0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f",
+        "Mountain background",
+        "object",
+        "default",
+    );
+    let library = directory.0.join("motion-library");
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["category"], "background");
+    assert_eq!(saved["motion_asset"]["category_source"], "filename");
+
+    let (saved, _) = json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--category", "nature", "--json"],
+    ));
+    assert_eq!(saved["motion_asset"]["category"], "nature");
+    assert_eq!(saved["motion_asset"]["category_source"], "explicit");
+}
+
+#[test]
+fn motion_asset_instantiate_refuses_an_unknown_parameter() {
+    let directory = TestDirectory::new();
+    let asset_id = "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f";
+    let asset = write_motion_asset(
+        &directory,
+        "title.ormotionasset.json",
+        asset_id,
+        "Explainer title",
+        "text",
+        "explicit",
+    );
+    let library = directory.0.join("motion-library");
+    json_success(motion_asset_args(
+        &["motion", "asset", "save"],
+        &[("--library", &library), ("--file", &asset)],
+        &["--json"],
+    ));
+
+    let output = cli(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(asset_id)),
+            ("--output", &directory.0.join("scene.ormotion.json")),
+        ],
+        &["--values", r#"{"missing":1}"#, "--json"],
+    ));
+    assert_eq!(output.status.code(), Some(4), "{output:?}");
+    let error: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(error["error"]["category"], "motion_asset");
+    assert_eq!(error["error"]["code"], "MOTION_ASSET_UNKNOWN_PARAMETER");
+}
+
+#[test]
+fn motion_asset_imports_an_image_and_instantiates_it_with_parameters() {
+    let directory = TestDirectory::new();
+    let source = directory.0.join("background.png");
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(b"a bounded test payload");
+    fs::write(&source, bytes).unwrap();
+    let library = directory.0.join("motion-library");
+
+    let (imported, _) = json_success(motion_asset_args(
+        &["motion", "asset", "import"],
+        &[("--library", &library), ("--source", &source)],
+        &["--name", "Mountain background", "--json"],
+    ));
+    let asset_id = imported["motion_asset"]["asset_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(imported["motion_asset"]["kind"], "image");
+    assert_eq!(imported["motion_asset"]["category"], "background");
+    assert_eq!(imported["motion_asset"]["category_source"], "filename");
+
+    let output = directory.0.join("image.ormotion.json");
+    let (instantiated, _) = json_success(motion_asset_args(
+        &["motion", "asset", "instantiate"],
+        &[
+            ("--library", &library),
+            ("--id", Path::new(&asset_id)),
+            ("--output", &output),
+        ],
+        &[
+            "--values",
+            r#"{"opacity":0.5,"width":960}"#,
+            "--scene-id",
+            "7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d",
+            "--json",
+        ],
+    ));
+    assert_eq!(instantiated["validation_ok"], true);
+    let scene: Value = serde_json::from_slice(&fs::read(&output).unwrap()).unwrap();
+    let image = scene["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["kind"] == "image")
+        .unwrap();
+    assert_eq!(image["opacity"], 0.5);
+    assert_eq!(image["size"]["width"], 960.0);
+    assert_eq!(
+        image["asset_id"], scene["assets"][0]["asset_id"],
+        "the node and the scene asset agree on identity"
+    );
+
+    let validated = cli(motion_asset_args(
+        &["motion", "validate"],
+        &[("--file", &output)],
+        &["--json"],
+    ));
+    assert!(validated.status.success(), "{validated:?}");
+}
+
+struct FakeTranscriptionHandler {
+    job_id: JobId,
+    media_id: Mutex<Option<MediaId>>,
+}
+
+impl TranscriptionRequestHandler for FakeTranscriptionHandler {
+    fn handle_transcription_request(
+        &self,
+        session: &ProjectSession,
+        request: TranscriptionRequest,
+    ) -> TranscriptionResponse {
+        match request {
+            TranscriptionRequest::Start {
+                project_id,
+                project_instance_id,
+                expected_project_revision,
+                media_id,
+            } => {
+                assert_eq!(project_id, session.project_id());
+                assert_eq!(project_instance_id, session.project_instance_id());
+                assert_eq!(expected_project_revision, session.project_revision());
+                *self.media_id.lock().unwrap() = Some(media_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Status { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Succeeded,
+                    failure_message: None,
+                })
+            }
+            TranscriptionRequest::Proposal { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                let media_id = self
+                    .media_id
+                    .lock()
+                    .unwrap()
+                    .expect("started transcription");
+                TranscriptionResponse::Proposal(TranscriptionProposalView {
+                    project_id: session.project_id(),
+                    project_revision: session.project_revision(),
+                    media_id,
+                    provider_id: "whisper.cpp".to_owned(),
+                    model_id: "whisper-small-multilingual".to_owned(),
+                    model_version: "1.0".to_owned(),
+                    model_license: "MIT".to_owned(),
+                    language: "vi".to_owned(),
+                    segments: vec![TranscriptionSegmentView {
+                        start_ms: 0,
+                        end_ms: 1_500,
+                        text: "Xin chào".to_owned(),
+                    }],
+                })
+            }
+            TranscriptionRequest::Cancel { job_id, .. } => {
+                assert_eq!(job_id, self.job_id);
+                TranscriptionResponse::Job(TranscriptionJobView {
+                    job_id: self.job_id,
+                    state: JobState::Cancelled,
+                    failure_message: None,
+                })
+            }
+        }
+    }
+}
+
+#[test]
+fn attached_captions_cli_transcribes_reviews_and_imports_a_subtitle_file() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Captions CLI");
+    let handler = Arc::new(FakeTranscriptionHandler {
+        job_id: JobId::generate(),
+        media_id: Mutex::new(None),
+    });
+    let mut host = LiveProjectHost::start_with_runtimes(
+        ProjectFileSession::open(&project_path).unwrap(),
+        None,
+        None,
+        None,
+        Some(handler),
+    )
+    .unwrap();
+    let descriptor = host.descriptor_path().unwrap();
+    let media_id = "22222222-2222-4222-8222-222222222222";
+
+    let (transcript, _) = json_success(attach_args(
+        &["captions", "transcribe"],
+        &descriptor,
+        &["--media", media_id, "--json"],
+    ));
+    assert_eq!(transcript["transcription"]["language"], "vi");
+    assert_eq!(
+        transcript["transcription"]["segments"][0]["text"],
+        "Xin chào"
+    );
+    assert_eq!(transcript["job"]["state"], "succeeded");
+
+    let srt_path = directory.0.join("reviewed.srt");
+    fs::write(
+        &srt_path,
+        "1\n00:00:00,000 --> 00:00:01,000\nXin chào\n\n2\n00:00:01,000 --> 00:00:02,000\nTạm biệt\n",
+    )
+    .unwrap();
+    let (imported, _) = json_success(attach_args(
+        &["timeline", "import-captions"],
+        &descriptor,
+        &["--file", srt_path.to_str().unwrap(), "--json"],
+    ));
+    assert_eq!(imported["imported"], 2);
+    assert_eq!(imported["command"]["changed"], true);
+
+    let (tracks, _) = json_success(attach_args(
+        &["timeline", "tracks"],
+        &descriptor,
+        &["--json"],
+    ));
+    let tracks = tracks["timeline_tracks_v2"].as_array().unwrap();
+    assert!(
+        tracks.iter().any(|track| track["kind"] == "caption"),
+        "captions import created a caption track"
+    );
+    host.shutdown(true).unwrap();
+}
+
+#[test]
+fn headless_timeline_duck_cli_lowers_music_in_one_command() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Duck CLI");
+    let probe_stub = directory.probe_stub();
+    let music = directory.media_path("cli sample café.mkv");
+    let voice = directory.media_path("path with spaces-媒体.mkv");
+
+    let mut music_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    music_args.extend(words(&["--source"]));
+    music_args.push(music.as_os_str().to_owned());
+    music_args.push("--json".into());
+    let (music_media, _) = json_success_with_probe(music_args, &probe_stub);
+    let music_media_id = music_media["media"]["id"].as_str().unwrap().to_owned();
+
+    let mut voice_args = path_args(&["media", "add"], "--project", &project_path, &[]);
+    voice_args.extend(words(&["--source"]));
+    voice_args.push(voice.as_os_str().to_owned());
+    voice_args.push("--json".into());
+    let (voice_media, _) = json_success_with_probe(voice_args, &probe_stub);
+    let voice_media_id = voice_media["media"]["id"].as_str().unwrap().to_owned();
+
+    let music_track = "22222222-2222-4222-8222-222222222222";
+    let voice_track = "33333333-3333-4333-8333-333333333333";
+    let music_clip = "44444444-4444-4444-8444-444444444444";
+    let voice_clip_a = "55555555-5555-4555-8555-555555555555";
+    let voice_clip_b = "66666666-6666-4666-8666-666666666666";
+    for (track, kind) in [(music_track, "audio"), (voice_track, "audio")] {
+        json_success(path_args(
+            &["timeline", "add-track"],
+            "--project",
+            &project_path,
+            &["--kind", kind, "--id", track, "--json"],
+        ));
+    }
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            music_track,
+            "--media",
+            &music_media_id,
+            "--at",
+            "0/1",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "3/2",
+            "--id",
+            music_clip,
+            "--json",
+        ],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            voice_track,
+            "--media",
+            &voice_media_id,
+            "--at",
+            "1/4",
+            "--source-start",
+            "0/1",
+            "--duration",
+            "1/4",
+            "--id",
+            voice_clip_a,
+            "--json",
+        ],
+    ));
+    json_success(path_args(
+        &["timeline", "insert-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            voice_track,
+            "--media",
+            &voice_media_id,
+            "--at",
+            "3/4",
+            "--source-start",
+            "1/4",
+            "--duration",
+            "1/4",
+            "--id",
+            voice_clip_b,
+            "--json",
+        ],
+    ));
+
+    let ducked = json_success(path_args(
+        &["timeline", "duck-clip"],
+        "--project",
+        &project_path,
+        &[
+            "--track",
+            music_track,
+            "--clip",
+            music_clip,
+            "--voice-track",
+            voice_track,
+            "--duck-db",
+            "-12",
+            "--json",
+        ],
+    ))
+    .0;
+    assert_eq!(ducked["command"]["changed"], true);
+    assert_eq!(
+        ducked["command"]["change_set"]["changes"][0]["kind"],
+        "timeline_clips_overwritten"
+    );
+
+    let clips = json_success(path_args(
+        &["timeline", "clips"],
+        "--project",
+        &project_path,
+        &["--track", music_track, "--json"],
+    ))
+    .0;
+    let items = clips["timeline_clip_page_v2"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 5);
+    let gains: Vec<i64> = items
+        .iter()
+        .map(|clip| {
+            clip["settings"]["value"]["gain_millidecibels"]
+                .as_i64()
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(gains, [0, -12_000, 0, -12_000, 0]);
+}
+
+/// Stands in for the app's FFmpeg encoder: it writes a real, probeable source
+/// file to the destination the runtime requested.
+struct FixtureMaterializer;
+
+impl MotionMaterializeHandler for FixtureMaterializer {
+    fn handle_motion_materialize_request(
+        &self,
+        _identity: ProjectSessionIdentity,
+        request: MotionMaterializeRequest,
+    ) -> MotionMaterializeResponse {
+        let destination = match request {
+            MotionMaterializeRequest::FromCode { destination, .. }
+            | MotionMaterializeRequest::FromScene { destination, .. } => destination,
+        };
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../or_media/tests/fixtures/tiny_h264_aac.mp4");
+        let bytes = fs::read(&fixture).expect("read the MP4 fixture");
+        fs::write(&destination, &bytes).expect("write the materialised fixture");
+        MotionMaterializeResponse {
+            succeeded: true,
+            error_code: String::new(),
+            message: String::new(),
+            output_path: destination,
+            scene_id: "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f".to_owned(),
+            scene_name: "Publish fixture".to_owned(),
+            width: 32,
+            height: 24,
+            frame_rate_numerator: 30,
+            frame_rate_denominator: 1,
+            frame_count: 30,
+            duration: RationalTime::new(1, 2).unwrap(),
+            bytes_written: bytes.len() as u64,
+        }
+    }
+}
+
+#[test]
+fn motion_publish_saves_an_asset_materialises_imports_and_inserts_in_one_call() {
+    let directory = TestDirectory::new();
+    let project_path = directory.project_path();
+    create_project(&project_path, "Publish");
+    let descriptor = directory.0.join("endpoint.json");
+    let session = ProjectFileSession::open(&project_path).unwrap();
+    let _host = LiveProjectHost::start_with_handlers(
+        session,
+        Some(&descriptor),
+        None,
+        Some(Arc::new(FixtureMaterializer)),
+    )
+    .unwrap();
+
+    let library = directory.0.join("motion-library");
+    let scene = directory.motion_scene_path("publish.ormotion.json", None);
+    let output = directory.0.join("published.mkv");
+    let pointer = directory.0.join("project.json");
+    fs::write(
+        &pointer,
+        serde_json::to_vec(&serde_json::json!({
+            "version": 1,
+            "descriptor_path": descriptor.display().to_string(),
+            "project_path": project_path.display().to_string(),
+            "motion_library_path": library.display().to_string(),
+            "app_support_path": directory.0.display().to_string(),
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let mut args = words(&["motion", "publish"]);
+    args.push("--attach".into());
+    args.push(pointer.as_os_str().to_owned());
+    args.push("--scene".into());
+    args.push(scene.as_os_str().to_owned());
+    args.push("--name".into());
+    args.push("Explainer asset".into());
+    args.push("--output".into());
+    args.push(output.as_os_str().to_owned());
+    args.push("--json".into());
+    let (published, _) = json_success(args);
+
+    // One command saved the asset, materialised it through the host, imported
+    // the video and inserted a normal clip.
+    let asset_id = published["motion_asset"]["asset_id"]
+        .as_str()
+        .expect("publish reports the saved asset id");
+    assert_eq!(published["motion_asset"]["kind"], "scene");
+    assert!(published["media_id"].is_string());
+    assert!(published["track_id"].is_string());
+    assert!(output.is_file());
+    let catalog: Value =
+        serde_json::from_slice(&fs::read(library.join("catalog.json")).unwrap()).unwrap();
+    assert_eq!(catalog["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(catalog["entries"][0]["asset_id"], asset_id);
+
+    let (tracks, _) = json_success(attach_args(&["timeline", "tracks"], &pointer, &["--json"]));
+    let track_id = tracks["timeline_tracks_v2"][0]["track_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (clips, _) = json_success(path_args(
+        &["timeline", "clips"],
+        "--attach",
+        &pointer,
+        &["--track", &track_id, "--json"],
+    ));
+    assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 1);
+
+    // The stored asset inserts again with one command, without a scene file.
+    let second_output = directory.0.join("inserted-again.mkv");
+    let mut insert_args = words(&["motion", "asset", "insert"]);
+    insert_args.push("--attach".into());
+    insert_args.push(pointer.as_os_str().to_owned());
+    insert_args.push("--asset-id".into());
+    insert_args.push(asset_id.into());
+    insert_args.push("--output".into());
+    insert_args.push(second_output.as_os_str().to_owned());
+    insert_args.push("--json".into());
+    let (inserted, _) = json_success(insert_args);
+    assert_eq!(inserted["track_id"].as_str(), Some(track_id.as_str()));
+    assert!(second_output.is_file());
+    let (clips, _) = json_success(path_args(
+        &["timeline", "clips"],
+        "--attach",
+        &pointer,
+        &["--track", &track_id, "--json"],
+    ));
+    assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 2);
+}
+
+#[test]
+fn motion_layout_reads_the_evaluated_boxes_at_an_exact_time() {
+    let directory = TestDirectory::new();
+    let path = directory.0.join("layout.ormotion.json");
+    let scene = serde_json::json!({
+        "format": "opencut-reinforced-motion-scene",
+        "schema_version": 1,
+        "scene_id": "7f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+        "name": "Layout probe",
+        "duration": {"numerator": 4, "denominator": 1},
+        "canvas": {"width": 1920, "height": 1080},
+        "assets": [],
+        "nodes": [{
+            "node_id": "title",
+            "kind": "text",
+            "text": "Xin chào",
+            "position": {"x": 100, "y": 80},
+            "font_size": 40,
+        }],
+        "animations": [{
+            "node_id": "title",
+            "property": "translation_x",
+            "keyframes": [
+                {"at": {"numerator": 0, "denominator": 1}, "value": 0.0},
+                {"at": {"numerator": 4, "denominator": 1}, "value": 400.0},
+            ],
+            "easing": "linear",
+        }],
+    });
+    fs::write(&path, serde_json::to_vec_pretty(&scene).unwrap()).unwrap();
+
+    let (start, _) = json_success(words(&[
+        "motion",
+        "layout",
+        "--file",
+        path.to_str().unwrap(),
+        "--at",
+        "0/1",
+        "--json",
+    ]));
+    let (middle, _) = json_success(words(&[
+        "motion",
+        "layout",
+        "--file",
+        path.to_str().unwrap(),
+        "--at",
+        "2/1",
+        "--json",
+    ]));
+    assert_eq!(start["node_count"], 1);
+    assert_eq!(start["nodes"][0]["text"], "Xin chào");
+    assert_eq!(start["nodes"][0]["position"]["x"], 100.0);
+    // The animation moves the anchor 0 → 400 px over four seconds, so the
+    // mid-point box is where the picture puts it, not the raw anchor.
+    assert_eq!(middle["nodes"][0]["position"]["x"], 300.0);
+    assert_eq!(middle["nodes"][0]["animated"], true);
 }

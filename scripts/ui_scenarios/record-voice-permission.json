@@ -1,0 +1,71 @@
+{
+  "name": "record-voice-permission",
+  "harness": "or_ui",
+  "description": "Open the Audio tool's record dialog in a real project and read the microphone permission state the native bridge answers, without starting a take.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fixtures": [],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Record voice permission"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "tool-record-voice"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Record voice",
+      "budget_ms": 10000
+    },
+    {
+      "op": "pump",
+      "ms": 600
+    },
+    {
+      "op": "tree",
+      "name": "record-voice-dialog"
+    },
+    {
+      "op": "shot",
+      "name": "record-voice-dialog"
+    }
+  ]
+}

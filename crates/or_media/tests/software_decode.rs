@@ -55,6 +55,13 @@ fn phone_portrait_fixture_source() -> MediaSourceRef {
     MediaSourceRef::local_file(file_uri(&path)).unwrap()
 }
 
+fn still_image_source(file_name: &str) -> MediaSourceRef {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(file_name);
+    MediaSourceRef::local_file(file_uri(&path)).unwrap()
+}
+
 fn file_uri(path: &Path) -> String {
     #[cfg(windows)]
     let (prefix, path) = ("file:///", path.to_string_lossy().replace('\\', "/"));
@@ -324,6 +331,61 @@ fn software_video_session_reuses_sequential_decode_and_seeks_on_discontinuity() 
     assert_eq!(session.metrics().decoded_frames, 6);
     drop((forward_jump, discontinuous, session));
     assert_eq!(runtime_budgets.decode().bytes_in_use(), 0);
+}
+
+#[test]
+fn still_images_hold_the_first_frame_for_any_source_time() {
+    let cancellation = CancellationToken::new();
+    let mut decoded = 0;
+    for fixture in ["tiny_still.png", "tiny_still.jpg"] {
+        // Release builds are deliberately minimal; a format whose decoder was
+        // compiled out must not turn this into a false failure.
+        let Ok(decoder) = SoftwareMediaDecoder::new(&still_image_source(fixture), budgets()) else {
+            continue;
+        };
+        let Ok(Some(first)) = decoder.decode_video_frame_at(RationalTime::ZERO, &cancellation)
+        else {
+            continue;
+        };
+        let later = decoder
+            .decode_video_frame_at(time(9, 1), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.descriptor().width(), 16, "{fixture}");
+        assert_eq!(first.descriptor().height(), 16, "{fixture}");
+        assert_eq!(first.pixels(), later.pixels(), "{fixture}");
+        assert_eq!(first.pixels()[3], 255, "{fixture}");
+
+        let mut session = decoder.open_video_session(&cancellation).unwrap();
+        let at_start = session
+            .frame_at(RationalTime::ZERO, &cancellation)
+            .unwrap()
+            .unwrap();
+        let later = session
+            .frame_at(time(9, 1), &cancellation)
+            .unwrap()
+            .unwrap();
+        let earlier = session
+            .frame_at(time(1, 2), &cancellation)
+            .unwrap()
+            .unwrap();
+        assert_eq!(at_start.pixels(), later.pixels(), "{fixture}");
+        assert_eq!(at_start.pixels(), earlier.pixels(), "{fixture}");
+        assert_eq!(session.metrics().seeks, 0, "{fixture}");
+        assert_eq!(session.metrics().decoded_frames, 1, "{fixture}");
+
+        let snapshot = snapshot(time(9, 1), time(1, 1));
+        let queue = SnapshotQueue::new(snapshot, 2).unwrap();
+        assert_eq!(
+            decoder
+                .decode_video(snapshot, &queue, &cancellation)
+                .unwrap(),
+            1,
+            "{fixture}"
+        );
+        decoded += 1;
+    }
+    assert!(decoded > 0, "at least one still-image format must decode");
 }
 
 #[test]
