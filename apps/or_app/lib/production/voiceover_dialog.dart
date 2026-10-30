@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../project/project_gateway.dart';
 import 'cloud_voice_service.dart';
+import 'local_tts_server_manager.dart';
 import 'local_tts_service.dart';
 import 'narration_settings.dart';
 import 'narration_settings_dialog.dart';
@@ -42,6 +43,11 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   final NarrationSettingsStore _settings = NarrationSettingsStore();
   final TextEditingController _localUrl = TextEditingController();
   final TextEditingController _localVoiceName = TextEditingController();
+  final TextEditingController _localCommand = TextEditingController();
+  final LocalTtsServerManager _ttsServer = LocalTtsServerManager.instance;
+  String _ttsEngineId = 'vieneu';
+  bool _ttsInstalled = false;
+  bool _ttsChecking = false;
   late final VoiceoverApplier _applier = VoiceoverApplier(widget.gateway);
 
   List<VoiceOption> _voices = const [];
@@ -84,6 +90,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
   @override
   void initState() {
     super.initState();
+    _ttsServer.addListener(_onTtsServer);
     _loadVoices();
   }
 
@@ -92,6 +99,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     _script.dispose();
     _localUrl.dispose();
     _localVoiceName.dispose();
+    _localCommand.dispose();
+    _ttsServer.removeListener(_onTtsServer);
     super.dispose();
   }
 
@@ -131,6 +140,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         _localReferencePath = saved.localReferencePath;
         _localCloneAcknowledged = saved.localCloneAcknowledged;
       });
+      _checkTtsEngine();
       if (_provider == 'local' && mounted) {
         await _loadLocalVoices();
       } else if (_provider != 'system' && mounted) {
@@ -242,6 +252,50 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
         });
       }
     }
+  }
+
+  LocalTtsEngine get _ttsEngine => localTtsEngines.firstWhere(
+    (engine) => engine.id == _ttsEngineId,
+    orElse: () => localTtsEngines.first,
+  );
+
+  void _onTtsServer() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _checkTtsEngine() async {
+    final engine = _ttsEngine;
+    setState(() => _ttsChecking = true);
+    final installed = await _ttsServer.isInstalled(engine);
+    if (!mounted) return;
+    setState(() {
+      _ttsInstalled = installed;
+      _ttsChecking = false;
+    });
+  }
+
+  Future<void> _installTtsServer() async {
+    await _ttsServer.install(_ttsEngine);
+    if (!mounted) return;
+    await _checkTtsEngine();
+  }
+
+  Future<void> _startTtsServer() async {
+    final engine = _ttsEngine;
+    await _ttsServer.start(
+      engine,
+      command: engine.id == 'custom' ? _localCommand.text : '',
+    );
+    if (!mounted || !_ttsServer.running) return;
+    // Give the engine a moment to bind its port before probing it; the user
+    // can still press Connect if a slow first start needs longer.
+    await Future<void>.delayed(const Duration(seconds: 3));
+    if (mounted) await _loadLocalVoices();
+  }
+
+  Future<void> _stopTtsServer() async {
+    await _ttsServer.stop();
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadLocalVoices() async {
@@ -741,6 +795,130 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     }
   }
 
+  Widget _localServerPanel() {
+    final engine = _ttsEngine;
+    final busy = _ttsServer.busy || _busy;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          key: const ValueKey('voiceover-tts-engine'),
+          initialValue: engine.id,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Local engine',
+            isDense: true,
+          ),
+          items: [
+            for (final choice in localTtsEngines)
+              DropdownMenuItem(value: choice.id, child: Text(choice.label)),
+          ],
+          onChanged: busy
+              ? null
+              : (value) {
+                  if (value == null || value == _ttsEngineId) return;
+                  final next = localTtsEngines.firstWhere(
+                    (candidate) => candidate.id == value,
+                  );
+                  setState(() {
+                    _ttsEngineId = value;
+                    _localBaseUrl = next.baseUrl;
+                    _localUrl.text = next.baseUrl;
+                    _localVoices = const [];
+                    _localHealth = null;
+                    _connectError = null;
+                  });
+                  _checkTtsEngine();
+                },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          engine.description,
+          style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+        ),
+        if (_ttsChecking) const LinearProgressIndicator(minHeight: 2),
+        if (engine.id == 'custom') ...[
+          const SizedBox(height: 8),
+          TextField(
+            key: const ValueKey('voiceover-tts-command'),
+            controller: _localCommand,
+            enabled: !busy,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Start command',
+              hintText: 'my-tts-server --port 8000',
+              isDense: true,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (engine.installable && !_ttsInstalled)
+              OutlinedButton.icon(
+                key: const ValueKey('voiceover-tts-install'),
+                onPressed: busy ? null : _installTtsServer,
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Download & install'),
+              ),
+            if (_ttsServer.running)
+              OutlinedButton.icon(
+                key: const ValueKey('voiceover-tts-stop'),
+                onPressed: _ttsServer.busy ? null : _stopTtsServer,
+                icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                label: const Text('Stop server'),
+              )
+            else
+              FilledButton.icon(
+                key: const ValueKey('voiceover-tts-start'),
+                onPressed: busy || (engine.installable && !_ttsInstalled)
+                    ? null
+                    : _startTtsServer,
+                icon: const Icon(Icons.play_arrow, size: 16),
+                label: Text(
+                  engine.installable && !_ttsInstalled
+                      ? 'Start engine'
+                      : 'Start server',
+                ),
+              ),
+            if (_ttsServer.running)
+              Text(
+                'Running',
+                style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+              ),
+          ],
+        ),
+        if (_ttsServer.error != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _ttsServer.error!,
+            key: const ValueKey('voiceover-tts-error'),
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+        if (_ttsServer.logTail.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            _ttsServer.logTail,
+            key: const ValueKey('voiceover-tts-log'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontFamily: 'monospace',
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -862,6 +1040,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                       ],
                     ),
                 ] else if (_provider == 'local') ...[
+                  _localServerPanel(),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(

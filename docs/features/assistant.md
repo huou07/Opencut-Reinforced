@@ -187,7 +187,14 @@ them. Android has no assistant: the desktop process boundary is explicit.
   can be enrolled as a cloned voice the app then narrates with. The server field
   is authoritative: an edited URL is probed before generating, and a server that
   does not answer fails with its own message instead of falling back silently.
-  Enrolment lives in the server process, so a restart forgets the cloned voice;
+  The Generate voiceover dialog also owns the server lifecycle: it lists the
+  local engine catalog, downloads and installs an engine on first use, starts and
+  stops it in-app, and streams the engine log beside the health state. The
+  catalog ships VieNeu-TTS as the Vietnamese default and a custom
+  OpenAI-compatible entry whose start command is user-supplied, so Kokoro,
+  Chatterbox, Piper wrappers or another language are not blocked by a hardcoded
+  engine. The engine stays a separate loopback process; only the terminal step is
+  removed. Enrolment lives in the server process, so a restart forgets the cloned voice;
   the dialog keeps the clip path, recognises a missing-voice answer (404/400 or
   voice-worded text), re-enrols once and retries that clip. The clip is uploaded
   unchanged, so its multipart part declares its real format (WAV, MP3, FLAC, OGG
