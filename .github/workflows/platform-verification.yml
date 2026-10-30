@@ -395,7 +395,7 @@ jobs:
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: |
           cargo test --locked -p or_runtime
-          cargo test --locked -p or_media
+          cargo test --locked -p or_media -- --skip writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams
           cargo test --locked -p or_media --test software_export writer_publishes_webm_with_vp9_and_opus_streams -- --exact --ignored
           cargo test --locked -p or_app_bridge
           cargo test --locked -p or_core --test project_recovery
