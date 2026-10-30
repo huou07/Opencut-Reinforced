@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-10-30
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -11,10 +11,12 @@ semantics, and how an export is validated.
 |---|---|---|---|---|
 | Lossless | Matroska | FFV1 | PCM S16LE, 48 kHz stereo | desktop, Android |
 | Delivery | WebM | VP9 | Opus, 48 kHz stereo | desktop, Android (verified on emulator) |
+| Hardware H.264 | MP4 | H.264 (VideoToolbox) | AAC, 48 kHz stereo | macOS desktop |
 
-MP4/MOV, H.264/H.265/AV1 delivery and hardware encoders are future work gated on
-licence, platform and build-configuration review. The package build enables only
-the selected profile's muxer and encoders.
+MP4 with hardware H.264/AAC is enabled on macOS. MOV, H.265/AV1 delivery and
+other hardware encoders remain future work gated on licence, platform and
+build-configuration review. The package build enables only the selected
+profile's muxer and encoders.
 
 ## Behaviour
 
@@ -32,6 +34,13 @@ the selected profile's muxer and encoders.
   the writer in index order and audio blocks are still written between them, so
   the file is the one a frame-at-a-time loop produces — same bytes, less wall
   time.
+- Before the first frame, export decodes each timeline audio clip once into a
+  timestamped in-memory cache. The writer then mixes from memory instead of
+  reopening a decoder and polling for every video frame, which was the dominant
+  cost on timelines with many short clips. The cache uses its own media budget,
+  so a playing preview cannot starve it; the export pauses preview playback and
+  releases its audio leases first. Timelines whose decoded audio exceeds the
+  1 GB cache cap keep the streaming path rather than failing.
 - Output is staged beside the destination and published only after streams and
   trailer complete. Cancellation, offline media or encode failure cleans staging,
   preserves an existing destination, and leaves a new destination absent.
@@ -50,6 +59,13 @@ the selected profile's muxer and encoders.
 An export is proven by an independent probe/playback of the actual file
 (container, streams, duration, dimensions, expected frames), not by the export
 job reporting success. See [operations/verification.md](../operations/verification.md).
+
+On 2026-10-30 the reference 4:46 project (1920×1080, 30 fps, 8593 frames)
+exported in 71 s with the audio cache and GPU NV12 path, versus 713 s (12.04
+fps) before the cache; the MP4 probe read h264+aac, 286.433 s, and audio and
+decoded video were bit-identical to the pre-NV12 export. Exporting with the
+preview playing completed in 129 s; the pre-fix build failed immediately with
+`runtime media budget exceeded`.
 
 `scripts/ui_scenarios/export-encode.json` drives the dialog + a real encode and
 waits for `Export complete`; the produced file lands in
