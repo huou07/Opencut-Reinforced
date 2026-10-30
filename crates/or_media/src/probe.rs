@@ -113,11 +113,15 @@ mod tests {
         let format = value["format"]["format_name"].as_str().unwrap();
         assert!(format.contains("mov") || format.contains("mp4"), "{format}");
         let streams = value["streams"].as_array().unwrap();
-        assert!(streams.iter().any(|stream| {
-            stream["codec_type"] == "video" && stream["codec_name"] == "h264"
-        }));
-        assert!(streams.iter().any(|stream| {
-            stream["codec_type"] == "audio" && stream["codec_name"] == "aac"
-        }));
+        assert!(
+            streams.iter().any(|stream| {
+                stream["codec_type"] == "video" && stream["codec_name"] == "h264"
+            })
+        );
+        assert!(
+            streams
+                .iter()
+                .any(|stream| { stream["codec_type"] == "audio" && stream["codec_name"] == "aac" })
+        );
     }
 }

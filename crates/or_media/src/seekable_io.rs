@@ -207,7 +207,6 @@ pub(crate) fn probe(
     crate::probe::from_input(&mut input)
 }
 
-
 impl Drop for CapabilityIo {
     fn drop(&mut self) {
         unsafe {

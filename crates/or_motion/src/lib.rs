@@ -955,7 +955,7 @@ mod tests {
             }],
             camera: None,
         }
-        }
+    }
 
     #[test]
     fn a_camera_scales_and_pans_every_resolved_instruction() {

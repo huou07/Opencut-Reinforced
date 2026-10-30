@@ -6,19 +6,18 @@ use crate::preview::PreviewRuntime;
 use crate::transcription::TranscriptionService;
 use flutter_rust_bridge::frb;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind,
-    CaptionFileFormat, ClipContent, ClipId, ClipSettings, CommandEnvelope, EffectReference,
-    ExportRequest, ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
-    MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest,
-    MediaArtifactRequestState, MediaArtifactService, MediaId, MediaItem, MediaStreamMetadata,
-    OperationError, OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId,
-    ProjectRecoveryError, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
-    RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection,
-    TextAlignment, TextColor, TextFormatting, TextWeight, TimelineClipPageV2,
-    TimelineClipState, TimelineMarkerPage, TimelineMarkerState, TimelineSnapMovingAnchor,
-    TimelineSnapOperation, TimelineSnapResult, TimelineSnapTargetKind, TimelineTrackSummaryV2,
-    TrackId, TrackKind, TranscriptionFailure, TranscriptionJobView,
-    TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    ApplicationRequest, ApplicationResponse, AudioSettings, CacheArtifactKind, CaptionFileFormat,
+    ClipContent, ClipId, ClipSettings, CommandEnvelope, EffectReference, ExportRequest,
+    ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
+    MediaArtifactEvent, MediaArtifactEventState, MediaArtifactRequest, MediaArtifactRequestState,
+    MediaArtifactService, MediaId, MediaItem, MediaStreamMetadata, OperationError,
+    OperationErrorCode, ProjectFileSession, ProjectId, ProjectInstanceId, ProjectRecoveryError,
+    ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextAlignment, TextColor,
+    TextFormatting, TextWeight, TimelineClipPageV2, TimelineClipState, TimelineMarkerPage,
+    TimelineMarkerState, TimelineSnapMovingAnchor, TimelineSnapOperation, TimelineSnapResult,
+    TimelineSnapTargetKind, TimelineTrackSummaryV2, TrackId, TrackKind, TranscriptionFailure,
+    TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
     TranscriptionSegmentView, TransitionKind, TransitionReference, VisualSettings,
     apply_project_recovery, discard_project_recovery, encode_caption_file,
     inspect_project_recovery, parse_caption_file, prepare_media_import,
@@ -42,7 +41,6 @@ use std::{
     },
     thread,
 };
-
 
 pub use super::views::*;
 
@@ -419,7 +417,6 @@ pub fn discard_recovery(path: String) -> RecoveryActionResult {
 }
 
 impl ProjectHostHandle {
-
     pub fn export_timeline_captions(
         &self,
         project_id: String,

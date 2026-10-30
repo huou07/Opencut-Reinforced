@@ -4,19 +4,17 @@
 use crate::transcription::{TranscriptionModelInfo, TranscriptionService};
 use std::str::FromStr;
 
-use or_core::{
-    ApplicationRequest, ApplicationResponse, JobId, MediaId, QueryEnvelope,
-};
+use or_core::{ApplicationRequest, ApplicationResponse, JobId, MediaId, QueryEnvelope};
 
 use super::project::{
-    host_error, job_state_name, operation_bridge_error, parse_session_identity,
-    revision_conflict_error, unexpected_response_error, ProjectBridgeError, ProjectHostHandle,
+    ProjectBridgeError, ProjectHostHandle, host_error, job_state_name, operation_bridge_error,
+    parse_session_identity, revision_conflict_error, unexpected_response_error,
 };
 use super::views::{
-    model_download_view, transcription_error, transcription_job_view, transcription_model_option_view,
-    transcription_model_view, transcription_proposal_view, ProjectModelDownloadView, ProjectTranscriptionJobView,
-    ProjectTranscriptionModelOptionView, ProjectTranscriptionModelView,
-    ProjectTranscriptProposalView,
+    ProjectModelDownloadView, ProjectTranscriptProposalView, ProjectTranscriptionJobView,
+    ProjectTranscriptionModelOptionView, ProjectTranscriptionModelView, model_download_view,
+    transcription_error, transcription_job_view, transcription_model_option_view,
+    transcription_model_view, transcription_proposal_view,
 };
 
 impl ProjectHostHandle {

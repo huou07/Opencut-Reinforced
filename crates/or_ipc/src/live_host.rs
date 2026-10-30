@@ -242,9 +242,7 @@ impl LiveProjectHost {
                     (state.motion_handler(), state.project_identity())
                 };
                 let response = match handler {
-                    Some(handler) => {
-                        handler.handle_motion_materialize_request(identity, request)
-                    }
+                    Some(handler) => handler.handle_motion_materialize_request(identity, request),
                     None => MotionMaterializeResponse::failure(
                         "MOTION_RUNTIME_UNAVAILABLE",
                         "the project host has no motion materialisation runtime",

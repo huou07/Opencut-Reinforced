@@ -435,11 +435,13 @@ fn timeline_marker_query_is_bounded_canonical_read_only_and_wire_compatible() {
     let summary = session
         .execute_query(summary_query())
         .expect("summary query should still use its original wire shape");
-    assert!(!serde_json::to_value(summary)
-        .unwrap()
-        .as_object()
-        .unwrap()
-        .contains_key("timeline_marker_page"));
+    assert!(
+        !serde_json::to_value(summary)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("timeline_marker_page")
+    );
 
     let mut bounded = fixed_session();
     let label = "x".repeat(MAX_TIMELINE_MARKER_LABEL_BYTES);
@@ -517,10 +519,12 @@ fn timeline_snap_v1_ignores_markers_and_v2_reports_marker_winners_and_ties() {
         .unwrap();
     assert_eq!(v1.schema_version, 1);
     let v1_json = serde_json::to_value(&v1).unwrap();
-    assert!(!v1_json["timeline_snap"]
-        .as_object()
-        .unwrap()
-        .contains_key("target_marker_id"));
+    assert!(
+        !v1_json["timeline_snap"]
+            .as_object()
+            .unwrap()
+            .contains_key("target_marker_id")
+    );
     assert_eq!(
         v1.timeline_snap.unwrap().target_kind,
         TimelineSnapTargetKind::None

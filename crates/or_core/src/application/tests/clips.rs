@@ -421,10 +421,12 @@ fn timeline_clip_insert_sorts_exact_clips_and_undo_redo_restore_them() {
     session
         .execute_command(undo(session.project_revision().value()))
         .unwrap();
-    assert!(!session.project().timeline().tracks()[0]
-        .clips()
-        .iter()
-        .any(|clip| clip.id().to_string() == CLIP_C));
+    assert!(
+        !session.project().timeline().tracks()[0]
+            .clips()
+            .iter()
+            .any(|clip| clip.id().to_string() == CLIP_C)
+    );
     session
         .execute_command(redo(session.project_revision().value()))
         .unwrap();
@@ -1545,10 +1547,12 @@ fn timeline_clip_move_reorders_and_preserves_semantics_across_same_kind_tracks()
         destination.timeline_start(),
         RationalTime::new(10, 1).unwrap()
     );
-    assert!(session.project().timeline().tracks()[0]
-        .clips()
-        .iter()
-        .all(|clip| clip.id().to_string() != CLIP_B));
+    assert!(
+        session.project().timeline().tracks()[0]
+            .clips()
+            .iter()
+            .all(|clip| clip.id().to_string() != CLIP_B)
+    );
     session
         .execute_command(undo(session.project_revision().value()))
         .unwrap();

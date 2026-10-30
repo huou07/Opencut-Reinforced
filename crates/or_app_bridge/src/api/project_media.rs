@@ -6,8 +6,8 @@ use std::str::FromStr;
 use or_core::{CommandEnvelope, MediaId, MediaItem};
 
 use super::project::{
-    action_error, parse_session_identity, prepare_import_source, ProjectBridgeError,
-    ProjectHostHandle,
+    ProjectBridgeError, ProjectHostHandle, action_error, parse_session_identity,
+    prepare_import_source,
 };
 use super::views::{MediaCleanupResultView, ProjectActionResult};
 

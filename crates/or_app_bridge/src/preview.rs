@@ -2404,8 +2404,7 @@ mod desktop {
         let total_audio_frames = audio_frames_ceil(content_end)?;
         i64::try_from(total_audio_frames)
             .map_err(|_| "audio duration exceeds the output sample clock".to_owned())?;
-        let audio_cache = if estimated_export_audio_bytes(&program)?
-            > MAX_EXPORT_AUDIO_CACHE_BYTES
+        let audio_cache = if estimated_export_audio_bytes(&program)? > MAX_EXPORT_AUDIO_CACHE_BYTES
         {
             None
         } else {
@@ -2652,39 +2651,41 @@ mod desktop {
         let bytes = AtomicUsize::new(0);
         std::thread::scope(|scope| {
             for _ in 0..worker_count {
-                scope.spawn(|| loop {
-                    if cancellation.is_cancelled() || lock(&failure).is_some() {
-                        return;
-                    }
-                    let index = next.fetch_add(1, Ordering::Relaxed);
-                    let Some(clip) = clips.get(index) else {
-                        return;
-                    };
-                    match decode_audio_clip(clip, key, cache_budgets.clone(), cancellation) {
-                        Ok(decoded) => {
-                            let before = bytes.fetch_add(decoded.bytes(), Ordering::Relaxed);
-                            if before.saturating_add(decoded.bytes())
-                                > MAX_EXPORT_AUDIO_CACHE_BYTES
-                            {
+                scope.spawn(|| {
+                    loop {
+                        if cancellation.is_cancelled() || lock(&failure).is_some() {
+                            return;
+                        }
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(clip) = clips.get(index) else {
+                            return;
+                        };
+                        match decode_audio_clip(clip, key, cache_budgets.clone(), cancellation) {
+                            Ok(decoded) => {
+                                let before = bytes.fetch_add(decoded.bytes(), Ordering::Relaxed);
+                                if before.saturating_add(decoded.bytes())
+                                    > MAX_EXPORT_AUDIO_CACHE_BYTES
+                                {
+                                    let mut failure = lock(&failure);
+                                    if failure.is_none() {
+                                        *failure = Some(
+                                            "the export audio cache exceeded its memory budget"
+                                                .to_owned(),
+                                        );
+                                    }
+                                    return;
+                                }
+                                if let Some(slot) = lock(&slots).get_mut(index) {
+                                    *slot = Some(decoded);
+                                }
+                            }
+                            Err(error) => {
                                 let mut failure = lock(&failure);
                                 if failure.is_none() {
-                                    *failure = Some(
-                                        "the export audio cache exceeded its memory budget"
-                                            .to_owned(),
-                                    );
+                                    *failure = Some(error);
                                 }
                                 return;
                             }
-                            if let Some(slot) = lock(&slots).get_mut(index) {
-                                *slot = Some(decoded);
-                            }
-                        }
-                        Err(error) => {
-                            let mut failure = lock(&failure);
-                            if failure.is_none() {
-                                *failure = Some(error);
-                            }
-                            return;
                         }
                     }
                 });
@@ -2726,9 +2727,8 @@ mod desktop {
         let decoder_queue = queue.clone();
         let mut cached = CachedAudioClip::default();
         std::thread::scope(|scope| -> Result<(), String> {
-            let decode = scope.spawn(move || {
-                decoder.decode_audio(snapshot, &decoder_queue, cancellation)
-            });
+            let decode =
+                scope.spawn(move || decoder.decode_audio(snapshot, &decoder_queue, cancellation));
             loop {
                 if cancellation.is_cancelled() {
                     break;

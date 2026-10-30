@@ -1,9 +1,9 @@
 mod decoder;
 mod encoder;
 mod probe;
-mod snapshot_queue;
 #[cfg(unix)]
 mod seekable_io;
+mod snapshot_queue;
 
 #[cfg(unix)]
 pub use decoder::SeekableMediaIoCapability;

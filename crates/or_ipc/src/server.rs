@@ -351,7 +351,9 @@ fn serve(
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(IpcProtocolError::Io(error)),
         };
-        stream.set_nonblocking(false).map_err(IpcProtocolError::Io)?;
+        stream
+            .set_nonblocking(false)
+            .map_err(IpcProtocolError::Io)?;
         // A motion render can take seconds. Serve each connection on its own
         // thread so a render never queues the preview, queries or edits behind
         // it; the project host state is still serialised by its own mutex.

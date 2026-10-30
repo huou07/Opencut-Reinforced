@@ -395,7 +395,10 @@ pub struct TextFormatting {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub background: Option<TextBackground>,
     /// Whole-block opacity, independent of the clip's visual opacity.
-    #[serde(default = "default_text_opacity", skip_serializing_if = "is_full_text_opacity")]
+    #[serde(
+        default = "default_text_opacity",
+        skip_serializing_if = "is_full_text_opacity"
+    )]
     pub opacity_basis_points: u16,
 }
 
@@ -1464,8 +1467,8 @@ mod tests {
         ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
         MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,
         ProjectTimeline, SequenceTimingError, TextBackground, TextColor, TextFormatting,
-        TextVerticalAnchor, TimelineClip, TimelineMarker,
-        TimelineTrack, TrackId, TrackKind, TrackState, VisualSettings,
+        TextVerticalAnchor, TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
+        TrackState, VisualSettings,
     };
     use crate::{
         AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,

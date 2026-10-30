@@ -598,7 +598,7 @@ pub fn scene_from_source(
         nodes,
         animations,
         camera: None,
-        })
+    })
 }
 
 fn line_reveal_time_ms(
@@ -717,7 +717,7 @@ mod tests {
             &CodeSceneOptions::default(),
         )
         .unwrap()
-        }
+    }
 
     fn full_line_node(scene: &MotionScene, line_index: usize) -> &MotionNode {
         let id_prefix = format!("line-{line_index}-step-");

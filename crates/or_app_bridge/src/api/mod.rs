@@ -65,16 +65,16 @@ mod tests {
     }
 }
 mod media_artifact_config;
-mod project_artifacts;
-mod project_media;
-mod project_transcription;
-mod views;
 pub mod motion;
 pub mod motion_library;
 pub mod project;
+mod project_artifacts;
 pub mod project_clip_settings;
+mod project_media;
 pub mod project_preview;
+mod project_transcription;
 pub mod timeline;
+mod views;
 pub use motion::*;
 pub use motion_library::*;
 pub use project::*;

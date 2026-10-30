@@ -1,8 +1,8 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, JobId, JobState, MarkerId,
     MediaId, MotionMaterializeRequest, MotionMaterializeResponse, ProjectDocument,
-    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, RationalTime,
-    TrackId, TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
+    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, RationalTime, TrackId,
+    TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
     TranscriptionResponse, TranscriptionSegmentView, load_project_file, save_project_file_atomic,
     write_recovery_checkpoint,
 };
@@ -3361,9 +3361,7 @@ fn headless_timeline_duck_cli_lowers_music_in_one_command() {
         })
         .collect();
     assert_eq!(gains, [0, -12_000, 0, -12_000, 0]);
-
 }
-
 
 /// Stands in for the app's FFmpeg encoder: it writes a real, probeable source
 /// file to the destination the runtime requested.
@@ -3459,11 +3457,7 @@ fn motion_publish_saves_an_asset_materialises_imports_and_inserts_in_one_call() 
     assert_eq!(catalog["entries"].as_array().unwrap().len(), 1);
     assert_eq!(catalog["entries"][0]["asset_id"], asset_id);
 
-    let (tracks, _) = json_success(attach_args(
-        &["timeline", "tracks"],
-        &pointer,
-        &["--json"],
-    ));
+    let (tracks, _) = json_success(attach_args(&["timeline", "tracks"], &pointer, &["--json"]));
     let track_id = tracks["timeline_tracks_v2"][0]["track_id"]
         .as_str()
         .unwrap()
@@ -3497,7 +3491,6 @@ fn motion_publish_saves_an_asset_materialises_imports_and_inserts_in_one_call() 
     ));
     assert_eq!(clips["timeline_clip_page_v2"]["total_count"], 2);
 }
-
 
 #[test]
 fn motion_layout_reads_the_evaluated_boxes_at_an_exact_time() {

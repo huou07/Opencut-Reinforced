@@ -414,9 +414,7 @@ fn draw_instruction(
             // the extra line height, so the box is measured, not guessed.
             let mut measured = text.measure(content, formatting, max_width);
             let minimum_size = (requested_size * 0.6).max(10.0);
-            while (measured.width > max_width || measured.lines > 1)
-                && size > minimum_size
-            {
+            while (measured.width > max_width || measured.lines > 1) && size > minimum_size {
                 size = (size - 1.0).max(minimum_size);
                 milli_points = (size * 750.0).round();
                 formatting.size_milli_points = milli_points as u32;
@@ -944,7 +942,7 @@ mod tests {
             "animations": []
         });
         parse_motion_scene(&serde_json::to_vec(&scene).unwrap()).unwrap()
-        }
+    }
 
     fn raster() -> RasterizedMotionFrame {
         let frame =

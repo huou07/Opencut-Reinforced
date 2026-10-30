@@ -109,8 +109,8 @@ pub fn prepare_media_import_with_probe(
     let file_size_bytes = fs::metadata(&canonical_path)
         .map_err(|_| MediaImportError::SourceUnavailable)?
         .len();
-    let metadata = parse_media_probe_output(probe_output, file_size_bytes)
-        .map_err(MediaImportError::Probe)?;
+    let metadata =
+        parse_media_probe_output(probe_output, file_size_bytes).map_err(MediaImportError::Probe)?;
     let source_uri = MediaSourceUri::from_file_path(&canonical_path)
         .map_err(MediaImportError::InvalidSourceUri)?;
     MediaItem::new(

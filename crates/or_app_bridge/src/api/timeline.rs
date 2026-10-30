@@ -6,8 +6,8 @@
 
 use super::project::*;
 use or_core::{
-    ClipContent, ClipId, ClipSettings, CommandEnvelope, MarkerId, MediaId, RationalTime,
-    TimeRange, TimelineTrimEdge, TrackId, TrackKind, TrackState, VisualSettings,
+    ClipContent, ClipId, ClipSettings, CommandEnvelope, MarkerId, MediaId, RationalTime, TimeRange,
+    TimelineTrimEdge, TrackId, TrackKind, TrackState, VisualSettings,
 };
 use std::str::FromStr;
 
@@ -831,5 +831,4 @@ impl ProjectHostHandle {
             },
         )
     }
-
 }

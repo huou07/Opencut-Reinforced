@@ -13,9 +13,9 @@
 use crate::{
     MAX_MOTION_ANIMATIONS, MAX_MOTION_KEYFRAMES, MAX_MOTION_NODE_DEPTH, MAX_MOTION_NODES,
     MAX_MOTION_TEXT_BYTES, MOTION_SCENE_FORMAT, MOTION_SCENE_SCHEMA_VERSION, MotionAnimation,
-    MotionAsset, MotionCamera, MotionCanvas, MotionColor, MotionDiagnostic, MotionEasing, MotionKeyframe,
-    MotionNode, MotionNodeKind, MotionProperty, MotionScene, MotionValidation, is_uuid_v4,
-    validate_scene,
+    MotionAsset, MotionCamera, MotionCanvas, MotionColor, MotionDiagnostic, MotionEasing,
+    MotionKeyframe, MotionNode, MotionNodeKind, MotionProperty, MotionScene, MotionValidation,
+    is_uuid_v4, validate_scene,
 };
 use or_core::RationalTime;
 use serde::{Deserialize, Serialize};
@@ -878,7 +878,7 @@ fn validate_payload(
         nodes: payload.nodes.clone(),
         animations: payload.animations.clone(),
         camera: payload.camera.clone(),
-        };
+    };
     for mut error in validate_scene(&scene).errors {
         if error.path.starts_with("/nodes")
             || error.path.starts_with("/animations")
@@ -1400,7 +1400,7 @@ pub fn instantiate_motion_asset(
         nodes,
         animations,
         camera: payload.camera,
-        };
+    };
     if !validate_scene(&scene).ok {
         return Err(MotionAssetError::Invalid);
     }
@@ -1544,7 +1544,7 @@ pub fn compose_motion_scene(
         nodes: Vec::new(),
         animations: Vec::new(),
         camera: None,
-        };
+    };
     for (index, placement) in placements.iter().enumerate() {
         scene = append_asset_to_scene(
             &scene,

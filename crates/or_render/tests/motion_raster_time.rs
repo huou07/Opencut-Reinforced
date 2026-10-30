@@ -55,7 +55,7 @@ fn scene() -> MotionScene {
         }],
     });
     parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap()
-        }
+}
 
 fn distribution(mut samples: Vec<f64>) -> (f64, f64) {
     samples.sort_by(|left, right| left.total_cmp(right));

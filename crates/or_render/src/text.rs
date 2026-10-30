@@ -261,7 +261,8 @@ impl TextRasterizer {
                 let top = (min_y - padding).floor().clamp(0.0, height_f) as usize;
                 let right = (max_x + padding).ceil().clamp(0.0, width_f) as usize;
                 let bottom = (max_y + padding).ceil().clamp(0.0, height_f) as usize;
-                let background_alpha = (u32::from(background.color.alpha) * u32::from(formatting.opacity_basis_points)
+                let background_alpha = (u32::from(background.color.alpha)
+                    * u32::from(formatting.opacity_basis_points)
                     / 10_000) as u8;
                 if background_alpha > 0 {
                     for y in top..bottom {
@@ -284,10 +285,8 @@ impl TextRasterizer {
         );
         for run in buffer.layout_runs() {
             for glyph in run.glyphs {
-                let physical = glyph.physical(
-                    (margin_x + shift_x, run.line_y + vertical_offset),
-                    1.0,
-                );
+                let physical =
+                    glyph.physical((margin_x + shift_x, run.line_y + vertical_offset), 1.0);
                 let origin_x = physical.x;
                 let origin_y = physical.y;
                 let pixels = &mut pixels;
@@ -372,9 +371,7 @@ impl Error for TextRasterError {}
 #[cfg(test)]
 mod tests {
     use super::{TextRasterError, TextRasterizer};
-    use or_core::{
-        TextAlignment, TextColor, TextFormatting, TextVerticalAnchor, TextWeight,
-    };
+    use or_core::{TextAlignment, TextColor, TextFormatting, TextVerticalAnchor, TextWeight};
 
     #[test]
     fn bundled_inter_rasterizes_deterministic_text_with_project_color() {

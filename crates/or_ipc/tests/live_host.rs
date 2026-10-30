@@ -656,7 +656,6 @@ fn motion_materialisation_is_a_runtime_request_that_never_moves_the_revision() {
     host.shutdown(false).unwrap();
 }
 
-
 #[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn a_motion_render_does_not_block_queries() {
@@ -721,9 +720,8 @@ fn a_motion_render_does_not_block_queries() {
         height: 360,
         title: "Fixture".to_owned(),
     };
-    let worker = thread::spawn(move || {
-        client.application(ApplicationRequest::MotionMaterialize(request))
-    });
+    let worker =
+        thread::spawn(move || client.application(ApplicationRequest::MotionMaterialize(request)));
     entered_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("the motion handler should start");

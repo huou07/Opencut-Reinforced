@@ -1073,13 +1073,8 @@ mod tests {
         file.set_len(manifest.size_bytes).unwrap();
         drop(file);
         assert!(or_ai::model_artifact_present(&root, &manifest));
-        service
-            .select_model("whisper-medium-multilingual")
-            .unwrap();
-        assert_eq!(
-            service.model_info().model_id,
-            "whisper-medium-multilingual"
-        );
+        service.select_model("whisper-medium-multilingual").unwrap();
+        assert_eq!(service.model_info().model_id, "whisper-medium-multilingual");
 
         let info = service.remove_model("whisper-medium-multilingual").unwrap();
         assert_eq!(info.model_id, "whisper-small-multilingual");

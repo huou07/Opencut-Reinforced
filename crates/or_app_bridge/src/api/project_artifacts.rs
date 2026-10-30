@@ -7,17 +7,16 @@ use std::thread;
 
 use crate::frb_generated::StreamSink;
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CacheKey, MediaArtifactEvent,
-    MediaArtifactService, MediaId, QueryEnvelope,
+    ApplicationRequest, ApplicationResponse, CacheKey, MediaArtifactEvent, MediaArtifactService,
+    MediaId, QueryEnvelope,
 };
 
 use super::project::{
-    cache_artifact_kind, cache_unavailable_error, forward_media_artifact_events, host_error,
-    operation_bridge_error, unexpected_response_error, ProjectBridgeError, ProjectHostHandle,
+    ProjectBridgeError, ProjectHostHandle, cache_artifact_kind, cache_unavailable_error,
+    forward_media_artifact_events, host_error, operation_bridge_error, unexpected_response_error,
 };
 use super::views::{
-    MediaArtifactBytesView, MediaArtifactEventView, MediaArtifactKindView,
-    MediaArtifactRequestView,
+    MediaArtifactBytesView, MediaArtifactEventView, MediaArtifactKindView, MediaArtifactRequestView,
 };
 
 impl ProjectHostHandle {
@@ -75,7 +74,9 @@ impl ProjectHostHandle {
         Ok(())
     }
 
-    pub(crate) fn media_artifact_event_receiver(&self) -> Option<mpsc::Receiver<MediaArtifactEvent>> {
+    pub(crate) fn media_artifact_event_receiver(
+        &self,
+    ) -> Option<mpsc::Receiver<MediaArtifactEvent>> {
         self.media_artifact_service
             .as_ref()
             .map(MediaArtifactService::subscribe_events)

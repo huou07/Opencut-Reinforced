@@ -1,15 +1,15 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipContent, ClipId, ClipSettings,
-    CommandEnvelope, CommandResult, ImportedCaption, JobState, MAX_TIMELINE_CLIP_PAGE_SIZE,
-    MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem, MotionMaterializeRequest,
-    OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError, ProjectFileSession,
-    ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-    FontIdentity, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextAlignment,
-    TextBackground, TextColor, TextFormatting, TextVerticalAnchor, TextWeight, TimelineClipState,
-    TrackId, TrackKind, TrackState, TranscriptionRequest, TranscriptionResponse,
-    VisualSettings, apply_project_recovery, command_catalog, discard_project_recovery,
-    encode_caption_file, inspect_project_recovery, parse_caption_file, prepare_media_import,
-    query_catalog,
+    CommandEnvelope, CommandResult, FontIdentity, ImportedCaption, JobState,
+    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
+    MotionMaterializeRequest, OperationError, ProjectFileMediaImportError,
+    ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
+    QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
+    RecoveryInspection, TextAlignment, TextBackground, TextColor, TextFormatting,
+    TextVerticalAnchor, TextWeight, TimelineClipState, TrackId, TrackKind, TrackState,
+    TranscriptionRequest, TranscriptionResponse, VisualSettings, apply_project_recovery,
+    command_catalog, discard_project_recovery, encode_caption_file, inspect_project_recovery,
+    parse_caption_file, prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -811,8 +811,8 @@ fn materialize_and_insert_motion(
         ));
     }
 
-    let (item, _) =
-        attached_media_add(attach, output, json).map_err(|error| error.with_context("media add"))?;
+    let (item, _) = attached_media_add(attach, output, json)
+        .map_err(|error| error.with_context("media add"))?;
     let media_id = item.id().to_string();
     let track_id = match track {
         Some(track_id) => track_id,
@@ -837,14 +837,8 @@ fn materialize_and_insert_motion(
         },
         "mode": "insert",
     });
-    let inserted = timeline_mutation(
-        attach,
-        true,
-        "timeline.clip.insert",
-        insert_arguments,
-        json,
-    )
-    .map_err(|error| error.with_context("timeline.clip.insert"))?;
+    let inserted = timeline_mutation(attach, true, "timeline.clip.insert", insert_arguments, json)
+        .map_err(|error| error.with_context("timeline.clip.insert"))?;
 
     let sidecar = format!("{}.provenance.json", output.display());
     let mut document = provenance;
@@ -3027,10 +3021,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             if let Some(value) = options.value("--background-opacity") {
                 let alpha = parse_u16(value, "--background-opacity", json)?;
                 if alpha > 255 {
-                    return Err(CliError::usage(
-                        json,
-                        "--background-opacity must be 0..255",
-                    ));
+                    return Err(CliError::usage(json, "--background-opacity must be 0..255"));
                 }
                 if let Some(background) = formatting.background.as_mut() {
                     background.color.alpha = alpha as u8;
@@ -4728,10 +4719,7 @@ fn parse_text_color(value: &std::ffi::OsStr, json: bool) -> Result<TextColor, Cl
         .ok_or_else(|| CliError::usage(json, "color must be valid UTF-8"))?;
     let hex = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
     if hex.len() != 6 && hex.len() != 8 {
-        return Err(CliError::usage(
-            json,
-            "color must be #RRGGBB or #RRGGBBAA",
-        ));
+        return Err(CliError::usage(json, "color must be #RRGGBB or #RRGGBBAA"));
     }
     let parsed = u32::from_str_radix(hex, 16)
         .map_err(|_| CliError::usage(json, "color must be hexadecimal"))?;
@@ -4752,11 +4740,7 @@ fn parse_text_color(value: &std::ffi::OsStr, json: bool) -> Result<TextColor, Cl
     }
 }
 
-fn parse_i16(
-    value: &std::ffi::OsStr,
-    flag: &str,
-    json: bool,
-) -> Result<i16, CliError> {
+fn parse_i16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<i16, CliError> {
     value
         .to_str()
         .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
@@ -4764,11 +4748,7 @@ fn parse_i16(
         .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
 }
 
-fn parse_u16(
-    value: &std::ffi::OsStr,
-    flag: &str,
-    json: bool,
-) -> Result<u16, CliError> {
+fn parse_u16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u16, CliError> {
     value
         .to_str()
         .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
@@ -4776,11 +4756,7 @@ fn parse_u16(
         .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
 }
 
-fn parse_u32(
-    value: &std::ffi::OsStr,
-    flag: &str,
-    json: bool,
-) -> Result<u32, CliError> {
+fn parse_u32(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u32, CliError> {
     value
         .to_str()
         .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?

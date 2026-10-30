@@ -12,8 +12,6 @@ use or_core::{JobSnapshot, JobState};
 #[cfg(target_os = "android")]
 use or_core::{MediaSourceRef, prepare_media_import_from_probe};
 
-
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CaptionFileFormatView {
     Srt,
@@ -138,7 +136,9 @@ pub struct ProjectTranscriptProposalView {
     pub segments: Vec<ProjectTranscriptSegmentView>,
 }
 
-pub(crate) fn transcription_model_view(info: TranscriptionModelInfo) -> ProjectTranscriptionModelView {
+pub(crate) fn transcription_model_view(
+    info: TranscriptionModelInfo,
+) -> ProjectTranscriptionModelView {
     ProjectTranscriptionModelView {
         model_id: info.model_id,
         label: info.label,
