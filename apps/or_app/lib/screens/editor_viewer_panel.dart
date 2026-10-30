@@ -631,6 +631,16 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
     );
   }
 
+  double get _transportControlSize =>
+      widget.compact ? OrTouchTargets.comfortable : 40.0;
+
+  ButtonStyle get _transportButtonStyle => IconButton.styleFrom(
+    minimumSize: Size.square(_transportControlSize),
+    fixedSize: Size.square(_transportControlSize),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   Widget _buildViewerSurface() {
     final textureId = _textureId;
     final preview = _preview;
@@ -669,6 +679,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
             fittedWidth = fittedHeight * aspectRatio;
           }
           return SizedBox(
+            key: const ValueKey('editor-viewer-preview'),
             width: fittedWidth,
             height: fittedHeight,
             child: Container(
@@ -712,11 +723,10 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                         (preview?.height ?? 0).toDouble(),
                       ),
                       clip: widget.selectedTextClip!,
-                      onCommit: (formatting) =>
-                          widget.onCommitTextFormatting!(
-                            widget.selectedTextClip!,
-                            formatting,
-                          ),
+                      onCommit: (formatting) => widget.onCommitTextFormatting!(
+                        widget.selectedTextClip!,
+                        formatting,
+                      ),
                       enabled: !_busy,
                     )
                   else if (widget.selectedVisualSettings != null &&
@@ -785,6 +795,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
         .toDouble();
 
     return ColoredBox(
+      key: const ValueKey('editor-viewer-panel'),
       color: OrColors.background,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -799,34 +810,37 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
           final shortPanel = constraints.maxHeight < 200;
           return Column(
             children: [
-              EditorPanelHeader(
-                title: 'Viewer',
-                // The short panel keeps two pixels for the surface's remainder: with
-                // the strip at its minimum the sum came to one pixel more than the
-                // panel, and a one-pixel overflow is still a clipped control.
-                height: shortPanel ? 32 : (widget.compact ? 34 : 38),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OrBadge(
-                      preview == null || preview.width == 0
-                          ? 'Preview'
-                          : '${preview.width} × ${preview.height}',
-                    ),
-                    IconButton(
-                      key: const ValueKey('preview-fullscreen'),
-                      tooltip: 'Full screen preview',
-                      visualDensity: VisualDensity.compact,
-                      onPressed: preview == null || preview.width == 0
-                          ? null
-                          : _openFullscreen,
-                      icon: const Icon(Icons.fullscreen, size: 18),
-                    ),
-                  ],
+              if (!widget.compact)
+                EditorPanelHeader(
+                  key: const ValueKey('editor-viewer-header'),
+                  title: 'Viewer',
+                  // The short panel keeps two pixels for the surface's remainder: with
+                  // the strip at its minimum the sum came to one pixel more than the
+                  // panel, and a one-pixel overflow is still a clipped control.
+                  height: shortPanel ? 32 : (widget.compact ? 34 : 38),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      OrBadge(
+                        preview == null || preview.width == 0
+                            ? 'Preview'
+                            : '${preview.width} × ${preview.height}',
+                      ),
+                      IconButton(
+                        key: const ValueKey('preview-fullscreen'),
+                        tooltip: 'Full screen preview',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: preview == null || preview.width == 0
+                            ? null
+                            : _openFullscreen,
+                        icon: const Icon(Icons.fullscreen, size: 18),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               Expanded(child: _buildViewerSurface()),
               Container(
+                key: const ValueKey('editor-viewer-transport'),
                 decoration: const BoxDecoration(
                   color: OrColors.backgroundRaised,
                   border: Border(top: BorderSide(color: OrColors.border)),
@@ -914,7 +928,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-previous-frame'),
                           tooltip: 'Previous frame',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: canStep
                               ? () => unawaited(
                                   _run(
@@ -933,7 +947,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-play'),
                           tooltip: preview?.playing == true ? 'Pause' : 'Play',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: preview?.playing == true
                               ? () => unawaited(
                                   _run((gateway, session) {
@@ -957,7 +971,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                         IconButton(
                           key: const ValueKey('preview-next-frame'),
                           tooltip: 'Next frame',
-                          visualDensity: VisualDensity.compact,
+                          style: _transportButtonStyle,
                           onPressed: canStep
                               ? () => unawaited(
                                   _run(
@@ -970,6 +984,16 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                               : null,
                           icon: const Icon(Icons.skip_next_outlined, size: 18),
                         ),
+                        if (widget.compact)
+                          IconButton(
+                            key: const ValueKey('preview-fullscreen'),
+                            tooltip: 'Full screen preview',
+                            style: _transportButtonStyle,
+                            onPressed: preview == null || preview.width == 0
+                                ? null
+                                : _openFullscreen,
+                            icon: const Icon(Icons.fullscreen, size: 18),
+                          ),
                         Expanded(
                           child: Tooltip(
                             message: shownPosition == null
@@ -1016,23 +1040,29 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                                   child: Text(choice.label),
                                 ),
                             ],
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                              ),
-                              child: Text(
-                                frameRate == null
-                                    ? 'Set frame rate'
-                                    : frameRateLabel(frameRate),
-                                key: const ValueKey('preview-rate-label'),
-                                style: TextStyle(
-                                  color: frameRate == null
-                                      ? OrColors.selection
-                                      : OrColors.textSecondary,
-                                  fontSize: OrType.tinySize,
-                                  fontWeight: frameRate == null
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
+                            child: SizedBox(
+                              height: _transportControlSize,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                ),
+                                child: Center(
+                                  widthFactor: 1,
+                                  child: Text(
+                                    frameRate == null
+                                        ? 'Set frame rate'
+                                        : frameRateLabel(frameRate),
+                                    key: const ValueKey('preview-rate-label'),
+                                    style: TextStyle(
+                                      color: frameRate == null
+                                          ? OrColors.selection
+                                          : OrColors.textSecondary,
+                                      fontSize: OrType.tinySize,
+                                      fontWeight: frameRate == null
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),

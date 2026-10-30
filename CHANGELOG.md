@@ -175,6 +175,12 @@ product still needs.
   `docs/operations/` and `docs/reference/`; the superseded set is preserved under
   `docs/archive/legacy/`, and OR skills were trimmed to their OR-specific
   contracts.
+- **Compact editor layout**: the compact presentation no longer repeats the
+  desktop `Viewer` and `Timeline` section headers, so a 320x480 preview surface
+  grows from 27.7 px to 51.7 px and the timeline lanes stay visible. Compact
+  transport, timeline toolbar and view controls now meet the 44 px touch target;
+  the desktop keeps its denser 40 px controls and no longer squeezes the
+  timeline view controls to 33 px.
 - **Add to Timeline** now inserts at the occupied timeline's content end rather
   than at the timeline origin.
 - Home no longer presents the visual-only editor shell as a usable project.

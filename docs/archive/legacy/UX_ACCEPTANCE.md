@@ -198,6 +198,11 @@ headless or widget-level checks:
   - The mobile tool dock exposes the same semantics as the desktop tool rail,
     and selection in both is carried by a fill and a border rather than by
     colour alone.
+  - The compact presentation omits the desktop panel headers and every compact
+    action — transport, timeline toolbar, view controls — carries at least a
+    44 px contact area; the pointer-driven desktop keeps at least 24 px.
+  - macOS, Windows and Linux render one measured layout at a given window size;
+    only the platform's spelling of the command modifier differs.
 
 ### Reproduced and fixed (2026-10-18, compact layout)
 
@@ -231,12 +236,9 @@ found by the same guard once the fourth no longer masked it.
   and its clock labels, which the live readout and the timeline ruler carry). The
   compact journey runs end to end and the 320x480/320x440 viewports are clean.
 
-**Measured at 320x440, and not a defect but a limit:** the compact editor gives
-the viewer about 114 px once the toolbar, timeline and dock are laid out, so the
-preview surface is one pixel tall. It is clean — no clipping, no overflow, every
-control present — and it is not *usable* as a preview either. That allocation is
-recorded here as a known limitation with its number; changing the compact flex
-allocation is a design decision, not a bug fix.
+**Measured at 320x440:** that allocation used to leave the preview surface one
+pixel tall. The 2026-10-24 section below records the compact chrome budget that
+replaced it, the current numbers, and the limit that remains at this height.
 
 Two harness defects were found by the same work and fixed: a tap delivered in the
 same frame as `ensureVisible` was hit-tested against the pre-scroll position (the
@@ -274,6 +276,46 @@ journey at 1280x800 and compact journey at 320x440, and a clean `flutter
 analyze`. That is developer evidence; hosted platform verification and native
 acceptance remain separate.
 
+### Reproduced and fixed (2026-10-24, compact presentation and desktop parity)
+
+- **The compact editor spent its height on desktop chrome.** At 320x440 the
+  viewer panel was 114 px and its preview surface 1 px; at 320x480 the surface
+  was 27.7 px with a 47.2x25.7 preview. Two fixed section headers (34 px each)
+  and a 40 px toolbar held space the preview and the lanes needed, while the
+  compact presentation is a single stacked column rather than a scaled desktop.
+  The compact presentation now omits both section headers; the `Viewer` and
+  `Timeline` names remain available to a screen reader through a section
+  container. Measured after: 320x480 viewer surface 51.7 px and preview
+  89.9x49.7; 320x440 surface 25 px and preview 42.4x23; 390x844 surface
+  270.3 px. The 320x440 preview is still a strip, and that is recorded as the
+  limit: at that height the 60 px shell navigation, 58 px tool dock, 52 px
+  project header and the 85 px transport leave no room for a large preview and
+  an editable timeline at once.
+- **The timeline view controls were squeezed on every platform.** The row was
+  34 px while its icon buttons paint 40 px, so macOS, Windows, Linux and Android
+  all presented them at 33 px. The row is now 40 px on desktop and 44 px in the
+  compact touch presentation. A region that cannot hold the controls, the ruler
+  and a 24 px lane keeps the timeline instead of the controls; below that the
+  ruler is dropped so the lanes stay visible (measured: 320x480 keeps the ruler
+  with 68.3 px of region, 320x440 drops it with 55 px).
+- **Compact contact areas were below the project's own floor.** The transport
+  buttons were 40x40, toolbar actions 38 px tall and the timeline view controls
+  33 px, against the 44 px compact requirement in `AGENTS.md` and DESIGN.md.
+  Measured after: transport 44x44, toolbar actions 44 px (the bar is 46 px
+  because its two borders deflate the child area), view controls 44x44, and the
+  snap chip imposed at 44 px. Desktop keeps 40 px controls, above its 24 px
+  pointer minimum.
+- **The three desktop platforms now have one measured layout.** A guard mounts
+  the editor at 1440x900 under `TargetPlatform.macOS`, `windows` and `linux` and
+  asserts identical rects for the top bar, viewer, transport, timeline, toolbar
+  and the transport and timeline controls. The only intended difference is the
+  command modifier in the top bar (`⌘ K` on macOS, `Ctrl+K` elsewhere).
+
+Evidence: Flutter 3.47.7, a clean `dart analyze`, and the widget suite — run
+`flutter test` for the current count rather than a number written here. This is
+developer evidence; hosted platform verification remains the authority for
+native and packaged acceptance.
+
 ### Reproduced and fixed
 
 - The compact editor overflowed its column by 31 px at a 320x480 viewport.
@@ -286,7 +328,8 @@ acceptance remain separate.
   placeholder keeps its icon and exposes the message through semantics when
   the surface is shorter than 56 px or narrower than 120 px (matching the
   existing texture-unavailable path), and the timeline view controls are
-  omitted when their region is shorter than 60 px. A headless regression
+  omitted when their region cannot also hold the ruler and a usable lane (see
+  the 2026-10-24 rule above). A headless regression
   mounts the editor at 320x480 and 320x440; taller compact viewports such as
   390x844 remain clean. This is source implementation with local developer
   evidence (Flutter 3.47.7, a clean analyzer, and the widget suite — run

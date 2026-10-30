@@ -357,8 +357,7 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
     }
     final previousProject = oldWidget.project;
     final nextProject = widget.project;
-    final projectChanged =
-        previousProject?.revision != nextProject?.revision;
+    final projectChanged = previousProject?.revision != nextProject?.revision;
     final projectIdentityChanged = timelineProjectIdentityChanged(
       previousProject,
       nextProject,
@@ -448,6 +447,12 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
       ),
       child: Column(
         children: [
+          if (widget.isProjectWorkspace && !widget.compact)
+            const EditorPanelHeader(
+              key: ValueKey('editor-timeline-header'),
+              title: 'Timeline',
+              height: 32,
+            ),
           if (!widget.isProjectWorkspace)
             Expanded(
               child: Column(
@@ -954,6 +959,16 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
     );
   }
 
+  double get _compactTarget =>
+      widget.compact ? OrTouchTargets.comfortable : 40.0;
+
+  ButtonStyle get _compactIconStyle => IconButton.styleFrom(
+    minimumSize: Size.square(_compactTarget),
+    fixedSize: Size.square(_compactTarget),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  );
+
   Widget _timelineViewControls() {
     final selectedClip = _selectedClip;
     final selectedTrack = _selectedTrack;
@@ -987,7 +1002,8 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
         widget.project != null &&
         widget.onDeleteClip != null;
     return Container(
-      height: 34,
+      key: const ValueKey('timeline-toolbar'),
+      height: widget.compact ? 46 : 42,
       padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x1),
       decoration: const BoxDecoration(
         color: OrColors.backgroundRaised,
@@ -1150,8 +1166,11 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
                   child: IconButton(
                     key: const ValueKey('timeline-blade-toggle'),
                     isSelected: widget.bladeMode,
-                    visualDensity: VisualDensity.compact,
                     style: IconButton.styleFrom(
+                      minimumSize: Size.square(_compactTarget),
+                      fixedSize: Size.square(_compactTarget),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       backgroundColor: widget.bladeMode
                           ? OrColors.surfaceSelected
                           : null,
@@ -1167,7 +1186,7 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
             IconButton(
               key: const ValueKey('timeline-zoom-out'),
               tooltip: 'Zoom out',
-              visualDensity: VisualDensity.compact,
+              style: _compactIconStyle,
               onPressed: _fitTimelineToView || _timelineZoom <= 0.125
                   ? null
                   : () => _changeTimelineZoom(_timelineZoom / 1.25),
@@ -1190,7 +1209,7 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
             IconButton(
               key: const ValueKey('timeline-zoom-in'),
               tooltip: 'Zoom in',
-              visualDensity: VisualDensity.compact,
+              style: _compactIconStyle,
               onPressed: !_fitTimelineToView && _timelineZoom >= 8
                   ? null
                   : () => _changeTimelineZoom(
@@ -1200,6 +1219,10 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
             ),
             TextButton(
               key: const ValueKey('timeline-fit-zoom'),
+              style: TextButton.styleFrom(
+                minimumSize: Size(_compactTarget, _compactTarget),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               onPressed: _fitTimelineToView
                   ? null
                   : () {
@@ -1221,41 +1244,47 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
               ),
               // A FilterChip states its own selection to a screen reader and
               // to a test, which an ad-hoc InkWell does not.
-              FilterChip(
-                key: const ValueKey('timeline-snap-toggle'),
-                selected: widget.snapEnabled,
-                onSelected: widget.busy
-                    ? null
-                    : (value) => widget.onSnapChanged!(value),
-                tooltip: widget.snapEnabled
-                    ? 'Snapping on · hold Option to bypass'
-                    : 'Snapping off',
-                avatar: Icon(
-                  Icons.straighten_outlined,
-                  size: 14,
-                  color: widget.snapEnabled
-                      ? OrColors.selection
-                      : OrColors.textMuted,
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: _compactTarget,
+                  minHeight: _compactTarget,
                 ),
-                label: const Text('Snap'),
-                labelStyle: TextStyle(
-                  fontSize: OrType.tinySize,
-                  color: widget.snapEnabled
-                      ? OrColors.text
-                      : OrColors.textMuted,
-                ),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                showCheckmark: false,
-                side: BorderSide(
-                  color: widget.snapEnabled
-                      ? OrColors.selection
-                      : OrColors.border,
-                ),
-                backgroundColor: Colors.transparent,
-                selectedColor: OrColors.surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(OrRadii.small),
+                child: FilterChip(
+                  key: const ValueKey('timeline-snap-toggle'),
+                  selected: widget.snapEnabled,
+                  onSelected: widget.busy
+                      ? null
+                      : (value) => widget.onSnapChanged!(value),
+                  tooltip: widget.snapEnabled
+                      ? 'Snapping on · hold Option to bypass'
+                      : 'Snapping off',
+                  avatar: Icon(
+                    Icons.straighten_outlined,
+                    size: 14,
+                    color: widget.snapEnabled
+                        ? OrColors.selection
+                        : OrColors.textMuted,
+                  ),
+                  label: const Text('Snap'),
+                  labelStyle: TextStyle(
+                    fontSize: OrType.tinySize,
+                    color: widget.snapEnabled
+                        ? OrColors.text
+                        : OrColors.textMuted,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  showCheckmark: false,
+                  side: BorderSide(
+                    color: widget.snapEnabled
+                        ? OrColors.selection
+                        : OrColors.border,
+                  ),
+                  backgroundColor: Colors.transparent,
+                  selectedColor: OrColors.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(OrRadii.small),
+                  ),
                 ),
               ),
             ],
@@ -2174,7 +2203,6 @@ const double _timelineLaneHeight = 58;
 /// pointer, narrow enough that a clip press beside the line still selects.
 const double _playheadGrabWidth = 12;
 
-
 double _timelineTickSeconds(double duration, double width) {
   final marks = (width / 100).ceil().clamp(1, 1000);
   final needed = duration / marks;
@@ -2275,7 +2303,6 @@ class _TimelineSnapGuide {
   final ProjectTimelineSnapTargetKind targetKind;
   final String? markerId;
 }
-
 
 class _TimelineMarkerRuler extends StatefulWidget {
   const _TimelineMarkerRuler({
@@ -2817,19 +2844,23 @@ class _TimelineTrackHeader extends StatelessWidget {
               button: true,
               label: 'Solo track ${trackIndex + 1}',
               child: IconButton(
-              key: ValueKey('timeline-track-solo-${track.trackId}'),
-              tooltip: track.state.solo ? 'Unsolo track' : 'Solo track',
-              onPressed: busy || project == null || onSetState == null
-                  ? null
-                  : () => submit(track.state.copyWith(solo: !track.state.solo)),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-              visualDensity: VisualDensity.standard,
-              icon: Icon(
-                track.state.solo ? Icons.headphones : Icons.hearing,
-                size: 15,
+                key: ValueKey('timeline-track-solo-${track.trackId}'),
+                tooltip: track.state.solo ? 'Unsolo track' : 'Solo track',
+                onPressed: busy || project == null || onSetState == null
+                    ? null
+                    : () =>
+                          submit(track.state.copyWith(solo: !track.state.solo)),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 40,
+                  height: 40,
+                ),
+                visualDensity: VisualDensity.standard,
+                icon: Icon(
+                  track.state.solo ? Icons.headphones : Icons.hearing,
+                  size: 15,
+                ),
               ),
-            ),
             ),
             Tooltip(
               message: track.clipCount == 0
@@ -3968,7 +3999,6 @@ ProjectRationalTime? _defaultTimelineDuration(
     ProjectTimelineTrackKind.text || ProjectTimelineTrackKind.caption => null,
   };
 }
-
 
 Future<void> showAddTimelineMarkerDialog({
   required BuildContext context,
