@@ -27,10 +27,6 @@ import sys
 REQUIRED_JOBS = (
     "rust",
     "flutter-static",
-    "macos",
-    "linux",
-    "windows",
-    "android",
     "granted-descriptor-capability",
 )
 

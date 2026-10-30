@@ -49,29 +49,29 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertIn("PASS", output)
 
     def test_any_failure_fails_the_gate(self) -> None:
-        code, output = run(["--needs-json", json.dumps(all_success(windows="failure"))])
+        code, output = run(["--needs-json", json.dumps(all_success(**{"flutter-static": "failure"}))])
         self.assertEqual(code, 1, output)
-        self.assertIn("'windows' reported 'failure'", output)
+        self.assertIn("'flutter-static' reported 'failure'", output)
 
     def test_skipped_job_is_not_success(self) -> None:
-        code, output = run(["--needs-json", json.dumps(all_success(android="skipped"))])
+        code, output = run(["--needs-json", json.dumps(all_success(rust="skipped"))])
         self.assertEqual(code, 1, output)
-        self.assertIn("'android' reported 'skipped'", output)
+        self.assertIn("'rust' reported 'skipped'", output)
 
     def test_neutral_job_is_not_success(self) -> None:
-        code, output = run(["--needs-json", json.dumps(all_success(macos="neutral"))])
+        code, output = run(["--needs-json", json.dumps(all_success(**{"granted-descriptor-capability": "neutral"}))])
         self.assertEqual(code, 1, output)
-        self.assertIn("'macos' reported 'neutral'", output)
+        self.assertIn("'granted-descriptor-capability' reported 'neutral'", output)
 
     def test_cancelled_job_is_not_success(self) -> None:
-        code, output = run(["--needs-json", json.dumps(all_success(linux="cancelled"))])
+        code, output = run(["--needs-json", json.dumps(all_success(**{"flutter-static": "cancelled"}))])
         self.assertEqual(code, 1, output)
-        self.assertIn("'linux' reported 'cancelled'", output)
+        self.assertIn("'flutter-static' reported 'cancelled'", output)
 
     def test_missing_job_is_not_success(self) -> None:
         code, output = run(["--needs-json", json.dumps(needs(rust="success"))])
         self.assertEqual(code, 1, output)
-        self.assertIn("'windows' was not reported (missing)", output)
+        self.assertIn("'granted-descriptor-capability' was not reported (missing)", output)
 
     def test_unexpected_extra_job_is_ignored(self) -> None:
         context = all_success()
