@@ -66,6 +66,7 @@ class AssistantController extends ChangeNotifier {
   AgentWorkspace? _agentWorkspace;
   String _agentWorkspacePath = '';
   String? _harnessPath;
+  String _harnessLabel = '';
   String? _orCliPath;
   String? _overlayProfile;
   List<Map<String, Object?>> _configOptions = const [];
@@ -119,6 +120,7 @@ class AssistantController extends ChangeNotifier {
   String get descriptorPath => _descriptorPath;
   bool get hasProject => _descriptorPath.isNotEmpty;
   String? get harnessPath => _harnessPath;
+  String get harnessLabel => _harnessLabel;
   String? get orCliPath => _orCliPath;
   String? get overlayProfile => _overlayProfile;
   int get usageUsed => _usageUsed;
@@ -257,11 +259,19 @@ class AssistantController extends ChangeNotifier {
     _notify();
     await initialize();
     try {
-      final harness = await resolveHarnessPath(settings: _settings);
-      if (harness == null) {
+      final directory = await _assistantDirectory();
+      final patchFile = File(
+        '${directory.path}${Platform.pathSeparator}harness.patch.yml',
+      );
+      final launch = await resolveHarnessLaunch(
+        settings: _settings,
+        patchPath: patchFile.path,
+      );
+      if (launch == null) {
         throw const AssistantHarnessFailure(
-          'DeepSeek Harness is not installed where the assistant can find it.',
-          hint: 'Set the harness path in Assistant settings, or install DeepSeek Harness.',
+          'No ACP harness was found where the assistant can start it.',
+          hint: 'Choose a harness in Assistant settings, install DeepSeek Harness, '
+              'Claude Code ACP, Codex ACP or OpenCode, or point at another ACP command.',
         );
       }
       final orCli = await resolveOrCliPath(settings: _settings);
@@ -271,16 +281,13 @@ class AssistantController extends ChangeNotifier {
           hint: 'Use a packaged build that ships the CLI, build it once with `cargo build -p or_cli`, or set its path in Assistant settings.',
         );
       }
-      _harnessPath = harness;
+      _harnessPath = launch.executable;
+      _harnessLabel = launch.label;
       _orCliPath = orCli;
       await _ensureAgentWorkspace();
       await _writeWorkspaceRuntimeFiles();
       final overlay = await findHarnessOverlay();
       _overlayProfile = overlay?.profile;
-      final directory = await _assistantDirectory();
-      final patchFile = File(
-        '${directory.path}${Platform.pathSeparator}harness.patch.yml',
-      );
       await patchFile.writeAsString(
         buildHarnessPatch(
           overlay: overlay,
@@ -314,8 +321,8 @@ class AssistantController extends ChangeNotifier {
       );
       _client = client;
       await client.start(
-        executable: harness,
-        arguments: ['--profile', 'acp', '--patch', patchFile.path],
+        executable: launch.executable,
+        arguments: launch.arguments,
         workingDirectory: cwd,
         cwd: cwd,
         mcpServers: _lastMcpServers,
@@ -591,6 +598,7 @@ class AssistantController extends ChangeNotifier {
             toolKind: (update['kind'] as String?) ?? 'other',
             state: _toolState(update['status']),
             detail: _toolDetail(update),
+            images: _toolImages(update),
           ),
         );
         _notify();
@@ -613,6 +621,8 @@ class AssistantController extends ChangeNotifier {
         }
         final detail = _toolDetail(update);
         if (detail.isNotEmpty) entry.detail = detail;
+        final images = _toolImages(update);
+        if (images.isNotEmpty) entry.images = images;
         _notify();
         break;
       case 'usage_update':
@@ -746,6 +756,29 @@ class AssistantController extends ChangeNotifier {
       return (map['text'] as String?) ?? '';
     }
     return '';
+  }
+
+  List<AssistantImage> _toolImages(Map<String, Object?> update) {
+    final images = <AssistantImage>[];
+    final content = update['content'];
+    if (content is! List) return images;
+    for (final item in content) {
+      final map = _asMap(item);
+      if (map['type'] != 'image') continue;
+      final data = map['data'];
+      if (data is! String || data.isEmpty) continue;
+      try {
+        images.add(
+          AssistantImage(
+            bytes: base64Decode(data),
+            mimeType: (map['mimeType'] as String?) ?? 'image/png',
+          ),
+        );
+      } on FormatException {
+        // Ignore a malformed image payload; the text transcript still shows.
+      }
+    }
+    return images;
   }
 
   String _toolDetail(Map<String, Object?> update) {

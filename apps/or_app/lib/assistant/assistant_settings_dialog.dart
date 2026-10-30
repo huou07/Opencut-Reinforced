@@ -43,6 +43,8 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
         ? widget.controller.settings.workspacePath
         : widget.controller.workspace,
   );
+  late AssistantHarnessKind _harnessKind =
+      widget.controller.settings.harnessKind;
   late AssistantWorkspaceMode _workspaceMode =
       widget.controller.settings.workspaceMode;
   late bool _autoApprove = widget.controller.settings.autoApprove;
@@ -58,15 +60,22 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
 
   Future<void> _detect() async {
     final current = widget.controller.settings;
-    final harness = await resolveHarnessPath(
-      settings: current.copyWith(harnessPath: ''),
+    final launch = await resolveHarnessLaunch(
+      settings: current.copyWith(
+        harnessKind: AssistantHarnessKind.auto,
+        harnessPath: '',
+      ),
+      patchPath: '',
     );
     final orCli = await resolveOrCliPath(
       settings: current.copyWith(orCliPath: ''),
     );
     if (!mounted) return;
     setState(() {
-      if (harness != null) _harness.text = harness;
+      if (launch != null) {
+        _harness.text = launch.executable;
+        _harnessKind = launch.kind;
+      }
       if (orCli != null) _orCli.text = orCli;
     });
   }
@@ -91,6 +100,7 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
         : _workspaceMode;
     await widget.controller.updateSettings(
       current.copyWith(
+        harnessKind: _harnessKind,
         harnessPath: _harness.text.trim(),
         orCliPath: _orCli.text.trim(),
         workspaceMode: mode,
@@ -146,11 +156,28 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                 ),
               ),
               const SizedBox(height: OrSpacing.x4),
+              DropdownButtonFormField<AssistantHarnessKind>(
+                key: const ValueKey('assistant-settings-harness-kind'),
+                initialValue: _harnessKind,
+                isExpanded: true,
+                dropdownColor: OrColors.surface,
+                decoration: const InputDecoration(
+                  labelText: 'Harness',
+                  isDense: true,
+                ),
+                items: [
+                  for (final kind in AssistantHarnessKind.values)
+                    DropdownMenuItem(value: kind, child: Text(kind.label)),
+                ],
+                onChanged: (value) =>
+                    setState(() => _harnessKind = value ?? _harnessKind),
+              ),
+              const SizedBox(height: OrSpacing.x2),
               _field(
                 keyName: 'assistant-settings-harness',
                 label: 'Harness executable',
                 controller: _harness,
-                hint: 'Auto-detected when empty',
+                hint: 'Auto-detected when empty; any ACP stdio command',
               ),
               const SizedBox(height: OrSpacing.x3),
               _field(

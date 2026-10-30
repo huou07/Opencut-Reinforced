@@ -20,6 +20,7 @@ void main() {
     expect(decoded.workspaceMode, AssistantWorkspaceMode.custom);
     expect(decoded.workspacePath, '/tmp/workspace');
     expect(decoded.autoApprove, isTrue);
+    expect(decoded.harnessKind, AssistantHarnessKind.auto);
 
     final malformed = AssistantSettings.fromJson({
       'harnessPath': 7,
@@ -146,4 +147,34 @@ void main() {
     expect(patch, contains('- id: system-prompt'));
     expect(patch, isNot(contains('- id: acp')));
   });
+  test('the harness kind survives a round-trip and older files default to auto', () {
+    const settings = AssistantSettings(
+      harnessPath: '/opt/opencode',
+      harnessKind: AssistantHarnessKind.opencode,
+    );
+    final decoded = AssistantSettings.fromJson(settings.toJson());
+    expect(decoded.harnessKind, AssistantHarnessKind.opencode);
+    expect(decoded.harnessPath, '/opt/opencode');
+
+    expect(
+      AssistantSettings.fromJson({'version': 2}).harnessKind,
+      AssistantHarnessKind.auto,
+    );
+  });
+
+  test('a custom harness launches without DSH-only arguments', () async {
+    final launch = await resolveHarnessLaunch(
+      settings: AssistantSettings(
+        harnessPath: Platform.resolvedExecutable,
+        harnessKind: AssistantHarnessKind.custom,
+      ),
+      patchPath: '/tmp/patch.yml',
+      environment: const {'PATH': '/usr/bin:/bin'},
+    );
+    expect(launch, isNotNull);
+    expect(launch!.executable, Platform.resolvedExecutable);
+    expect(launch.arguments, isEmpty);
+    expect(launch.kind, AssistantHarnessKind.custom);
+  });
+
 }

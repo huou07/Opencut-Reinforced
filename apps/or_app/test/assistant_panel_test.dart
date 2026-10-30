@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/assistant/assistant_controller.dart';
@@ -139,4 +142,38 @@ void main() {
     expect(find.text('trim_clip'), findsOneWidget);
     expect(find.textContaining('Trimmed the clip to 4 s'), findsOneWidget);
   });
+  testWidgets('a tool image renders as a thumbnail with a Finder link', (
+    tester,
+  ) async {
+    final entry = AssistantEntry(
+      id: 'tool-image',
+      kind: AssistantEntryKind.tool,
+      toolName: 'Read',
+      state: AssistantToolState.done,
+      detail: 'Read image',
+      images: [
+        AssistantImage(
+          bytes: Uint8List.fromList(
+            base64Decode(
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk'
+              '+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            ),
+          ),
+          mimeType: 'image/png',
+        ),
+      ],
+    );
+    final controller = AssistantController()
+      ..debugSeedConversation(state: AssistantConnectionState.ready, entries: [entry]);
+    addTearDown(controller.dispose);
+    await mount(tester, controller);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('assistant-image-tool-image-0')),
+      findsOneWidget,
+    );
+    expect(find.text('Show in Finder'), findsOneWidget);
+  });
+
 }

@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' show Color;
 
 import '../design/or_colors.dart';
@@ -6,6 +7,20 @@ import '../design/or_colors.dart';
 enum AssistantEntryKind { user, assistant, thought, tool, error, note }
 
 enum AssistantToolState { pending, running, done, failed }
+
+class AssistantImage {
+  const AssistantImage({required this.bytes, required this.mimeType});
+
+  final Uint8List bytes;
+  final String mimeType;
+
+  String get extension => switch (mimeType) {
+    'image/jpeg' => 'jpg',
+    'image/webp' => 'webp',
+    'image/gif' => 'gif',
+    _ => 'png',
+  };
+}
 
 class AssistantEntry {
   AssistantEntry({
@@ -17,6 +32,7 @@ class AssistantEntry {
     this.toolKind = '',
     this.state = AssistantToolState.done,
     this.detail = '',
+    this.images = const [],
     this.expanded = false,
   });
 
@@ -28,6 +44,7 @@ class AssistantEntry {
   String toolKind;
   AssistantToolState state;
   String detail;
+  List<AssistantImage> images;
   bool expanded;
 
   bool get isStreamingText =>

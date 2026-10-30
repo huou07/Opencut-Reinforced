@@ -3,6 +3,21 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+/// Which ACP harness the assistant starts. `auto` prefers DSH and falls back
+/// to any other installed ACP-capable command; the others are explicit.
+enum AssistantHarnessKind { auto, dsh, claudeCode, codex, opencode, custom }
+
+extension AssistantHarnessKindLabel on AssistantHarnessKind {
+  String get label => switch (this) {
+    AssistantHarnessKind.auto => 'Auto-detect',
+    AssistantHarnessKind.dsh => 'DeepSeek Harness',
+    AssistantHarnessKind.claudeCode => 'Claude Code (ACP)',
+    AssistantHarnessKind.codex => 'Codex (ACP)',
+    AssistantHarnessKind.opencode => 'OpenCode (ACP)',
+    AssistantHarnessKind.custom => 'Custom ACP command',
+  };
+}
+
 /// Which directory the harness session starts in.
 enum AssistantWorkspaceMode {
   /// The app-managed agent workspace with its AGENTS.md, guides and tools.
@@ -18,6 +33,7 @@ enum AssistantWorkspaceMode {
 /// Local preferences for the assistant panel. Nothing here is project state.
 class AssistantSettings {
   const AssistantSettings({
+    this.harnessKind = AssistantHarnessKind.auto,
     this.harnessPath = '',
     this.orCliPath = '',
     this.workspaceMode = AssistantWorkspaceMode.agent,
@@ -26,6 +42,9 @@ class AssistantSettings {
     this.reasoningValue = '',
     this.autoApprove = false,
   });
+
+  /// Which harness family to launch. [AssistantHarnessKind.auto] discovers one.
+  final AssistantHarnessKind harnessKind;
 
   /// Empty means "discover the installed harness".
   final String harnessPath;
@@ -49,6 +68,7 @@ class AssistantSettings {
   final bool autoApprove;
 
   AssistantSettings copyWith({
+    AssistantHarnessKind? harnessKind,
     String? harnessPath,
     String? orCliPath,
     AssistantWorkspaceMode? workspaceMode,
@@ -57,6 +77,7 @@ class AssistantSettings {
     String? reasoningValue,
     bool? autoApprove,
   }) => AssistantSettings(
+    harnessKind: harnessKind ?? this.harnessKind,
     harnessPath: harnessPath ?? this.harnessPath,
     orCliPath: orCliPath ?? this.orCliPath,
     workspaceMode: workspaceMode ?? this.workspaceMode,
@@ -67,7 +88,8 @@ class AssistantSettings {
   );
 
   Map<String, Object?> toJson() => {
-    'version': 2,
+    'version': 3,
+    'harnessKind': harnessKind.name,
     'harnessPath': harnessPath,
     'orCliPath': orCliPath,
     'workspaceMode': workspaceMode.name,
@@ -86,7 +108,12 @@ class AssistantSettings {
 
     final workspacePath = string('workspacePath');
     final mode = _workspaceMode(value['workspaceMode'], workspacePath);
+    final harnessKind = AssistantHarnessKind.values.firstWhere(
+      (kind) => kind.name == value['harnessKind'],
+      orElse: () => AssistantHarnessKind.auto,
+    );
     return AssistantSettings(
+      harnessKind: harnessKind,
       harnessPath: string('harnessPath'),
       orCliPath: string('orCliPath'),
       workspaceMode: mode,
@@ -175,25 +202,106 @@ class HarnessOverlay {
   final String profile;
 }
 
+/// One resolved ACP harness launch.
+class HarnessLaunch {
+  const HarnessLaunch({
+    required this.executable,
+    required this.arguments,
+    required this.kind,
+  });
+
+  final String executable;
+  final List<String> arguments;
+  final AssistantHarnessKind kind;
+
+  String get label => kind.label;
+}
+
 /// Candidate harness executables, resolved without trusting the GUI PATH.
-Future<String?> resolveHarnessPath({
+Future<HarnessLaunch?> resolveHarnessLaunch({
   required AssistantSettings settings,
+  required String patchPath,
   Map<String, String>? environment,
 }) async {
   final env = environment ?? Platform.environment;
   if (settings.harnessPath.isNotEmpty &&
       await File(settings.harnessPath).exists()) {
-    return settings.harnessPath;
+    return _launchFor(
+      settings.harnessPath,
+      settings.harnessKind == AssistantHarnessKind.auto
+          ? AssistantHarnessKind.dsh
+          : settings.harnessKind,
+      patchPath,
+    );
   }
   final home = env['HOME'];
-  final candidates = <String>[
+  final dshCandidates = <String>[
     '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
     if (home != null) '$home/.local/bin/dsh',
   ];
+  final wanted = settings.harnessKind == AssistantHarnessKind.auto
+      ? <AssistantHarnessKind>[
+          AssistantHarnessKind.dsh,
+          AssistantHarnessKind.claudeCode,
+          AssistantHarnessKind.codex,
+          AssistantHarnessKind.opencode,
+        ]
+      : <AssistantHarnessKind>[settings.harnessKind];
+  for (final kind in wanted) {
+    final path = switch (kind) {
+      AssistantHarnessKind.dsh => await _firstExisting(dshCandidates) ??
+          await _findOnPath('dsh', env),
+      AssistantHarnessKind.claudeCode =>
+        await _findOnPath('claude-code-acp', env) ??
+            await _firstExisting([
+              if (home != null) '$home/.local/bin/claude-code-acp',
+            ]),
+      AssistantHarnessKind.codex =>
+        await _findOnPath('codex-acp', env) ??
+            await _firstExisting([if (home != null) '$home/.local/bin/codex-acp']),
+      AssistantHarnessKind.opencode => await _findOnPath('opencode', env),
+      AssistantHarnessKind.auto || AssistantHarnessKind.custom => null,
+    };
+    if (path != null) return _launchFor(path, kind, patchPath);
+  }
+  return null;
+}
+
+Future<String?> _firstExisting(List<String> candidates) async {
   for (final candidate in candidates) {
     if (await File(candidate).exists()) return candidate;
   }
-  return _findOnPath('dsh', env);
+  return null;
+}
+
+HarnessLaunch _launchFor(
+  String executable,
+  AssistantHarnessKind kind,
+  String patchPath,
+) => HarnessLaunch(
+  executable: executable,
+  arguments: switch (kind) {
+    AssistantHarnessKind.dsh => ['--profile', 'acp', '--patch', patchPath],
+    AssistantHarnessKind.opencode => ['acp'],
+    AssistantHarnessKind.auto ||
+    AssistantHarnessKind.claudeCode ||
+    AssistantHarnessKind.codex ||
+    AssistantHarnessKind.custom => const [],
+  },
+  kind: kind,
+);
+
+/// Backwards-compatible executable lookup used by the settings dialog.
+Future<String?> resolveHarnessPath({
+  required AssistantSettings settings,
+  Map<String, String>? environment,
+}) async {
+  final launch = await resolveHarnessLaunch(
+    settings: settings,
+    patchPath: '',
+    environment: environment,
+  );
+  return launch?.executable;
 }
 
 /// Locates the `or` CLI: the assistant's project surface and MCP bridge.

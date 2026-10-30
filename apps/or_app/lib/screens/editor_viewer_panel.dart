@@ -564,6 +564,73 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
     );
   }
 
+  Future<void> _openFullscreen() async {
+    final preview = _preview;
+    final textureId = _textureId;
+    if (preview == null || textureId == null) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black,
+      builder: (dialogContext) {
+        final width = preview.width.toDouble();
+        final height = preview.height.toDouble();
+        return Dialog.fullscreen(
+          backgroundColor: Colors.black,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox(
+                      width: width,
+                      height: height,
+                      child: Texture(
+                        key: ValueKey('fullscreen-viewer-texture-$textureId'),
+                        textureId: textureId,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: OrSpacing.x3,
+                right: OrSpacing.x3,
+                child: IconButton(
+                  key: const ValueKey('preview-fullscreen-close'),
+                  tooltip: 'Exit full screen',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: OrColors.backgroundRaised,
+                    foregroundColor: OrColors.text,
+                  ),
+                  icon: const Icon(Icons.close_fullscreen),
+                ),
+              ),
+              Positioned(
+                left: OrSpacing.x3,
+                bottom: OrSpacing.x3,
+                child: Text(
+                  _timeFeedback(
+                    preview.position,
+                    preview.presentedTime,
+                    preview.sequenceFrameRate,
+                  ),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontFamily: 'monospace',
+                    fontSize: OrType.bodySize,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildViewerSurface() {
     final textureId = _textureId;
     final preview = _preview;
@@ -738,10 +805,24 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                 // the strip at its minimum the sum came to one pixel more than the
                 // panel, and a one-pixel overflow is still a clipped control.
                 height: shortPanel ? 32 : (widget.compact ? 34 : 38),
-                trailing: OrBadge(
-                  preview == null || preview.width == 0
-                      ? 'Preview'
-                      : '${preview.width} × ${preview.height}',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OrBadge(
+                      preview == null || preview.width == 0
+                          ? 'Preview'
+                          : '${preview.width} × ${preview.height}',
+                    ),
+                    IconButton(
+                      key: const ValueKey('preview-fullscreen'),
+                      tooltip: 'Full screen preview',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: preview == null || preview.width == 0
+                          ? null
+                          : _openFullscreen,
+                      icon: const Icon(Icons.fullscreen, size: 18),
+                    ),
+                  ],
                 ),
               ),
               Expanded(child: _buildViewerSurface()),

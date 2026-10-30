@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
   final _scroll = ScrollController();
   final _focus = FocusNode();
   bool _autoStarted = false;
+  bool _followLatest = true;
 
   AssistantController get controller => widget.controller;
 
@@ -41,6 +43,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
     super.initState();
     controller.addListener(_onChanged);
     _input.addListener(_onInputChanged);
+    _scroll.addListener(_onScroll);
     unawaited(controller.initialize());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -63,8 +66,18 @@ class _AssistantPanelState extends State<AssistantPanel> {
 
   void _onChanged() {
     if (!mounted) return;
+    final follow = _followLatest;
     setState(() {});
-    _scrollToEnd();
+    if (follow) _scrollToEnd();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final atBottom =
+        _scroll.position.maxScrollExtent - _scroll.position.pixels < 48;
+    if (atBottom != _followLatest) {
+      setState(() => _followLatest = atBottom);
+    }
   }
 
   void _onInputChanged() {
@@ -73,9 +86,11 @@ class _AssistantPanelState extends State<AssistantPanel> {
 
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
+      if (!mounted || !_scroll.hasClients || !_followLatest) return;
+      final target = _scroll.position.maxScrollExtent;
+      if ((target - _scroll.position.pixels).abs() < 1) return;
       _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
+        target,
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
       );
@@ -1224,6 +1239,73 @@ class _ToolEntry extends StatefulWidget {
 class _ToolEntryState extends State<_ToolEntry> {
   bool _expanded = false;
 
+  Future<File?> _writeImage(AssistantImage image, int index) async {
+    try {
+      final file = File(
+        '${Directory.systemTemp.path}/or-assistant-${widget.entry.id}-$index-'
+        '${DateTime.now().microsecondsSinceEpoch}.${image.extension}',
+      );
+      await file.writeAsBytes(image.bytes, flush: true);
+      return file;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  Future<void> _openImage(AssistantImage image, int index) async {
+    final file = await _writeImage(image, index);
+    if (file == null) return;
+    await Process.run('open', [file.path]);
+  }
+
+  Future<void> _revealImage(AssistantImage image, int index) async {
+    final file = await _writeImage(image, index);
+    if (file == null) return;
+    await Process.run('open', ['-R', file.path]);
+  }
+
+  Widget _imageTile(AssistantImage image, int index) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Tooltip(
+          message: 'Open image',
+          child: InkWell(
+            key: ValueKey('assistant-image-${widget.entry.id}-$index'),
+            onTap: () => unawaited(_openImage(image, index)),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(OrRadii.control),
+              child: Container(
+                width: 132,
+                height: 84,
+                color: OrColors.backgroundRaised,
+                child: Image.memory(
+                  image.bytes,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+        InkWell(
+          onTap: () => unawaited(_revealImage(image, index)),
+          child: const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Text(
+              'Show in Finder',
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
@@ -1303,6 +1385,23 @@ class _ToolEntryState extends State<_ToolEntry> {
               ),
             ),
           ),
+          if (entry.images.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                OrSpacing.x2,
+                0,
+                OrSpacing.x2,
+                OrSpacing.x2,
+              ),
+              child: Wrap(
+                spacing: OrSpacing.x2,
+                runSpacing: OrSpacing.x2,
+                children: [
+                  for (var index = 0; index < entry.images.length; index++)
+                    _imageTile(entry.images[index], index),
+                ],
+              ),
+            ),
           if (_expanded && entry.detail.isNotEmpty)
             Container(
               width: double.infinity,
