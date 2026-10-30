@@ -49,8 +49,7 @@ void main() {
   });
 
   test('an out-of-flight event is not remembered', () {
-    final mailbox = MediaArtifactMailbox()
-      ..rememberEarly('k', _event());
+    final mailbox = MediaArtifactMailbox()..rememberEarly('k', _event());
     expect(mailbox.earlyFor('k'), isNull);
   });
 

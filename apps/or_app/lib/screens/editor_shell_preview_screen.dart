@@ -1391,7 +1391,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                     : widget.onImportMediaFolder,
                 onLoadMoreMedia: widget.onLoadMoreMedia,
                 onRefreshMedia: widget.onRefreshMedia,
-                  onRetryMediaPreview: widget.onRetryMediaPreview,
+                onRetryMediaPreview: widget.onRetryMediaPreview,
                 onRemoveMedia: widget.busy ? null : widget.onRemoveMedia,
                 onRelinkMedia: widget.busy ? null : widget.onRelinkMedia,
                 onGenerateCaptions: widget.busy

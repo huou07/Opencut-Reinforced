@@ -66,11 +66,7 @@ void main() {
       final response = request.response;
       response.headers.contentType = ContentType('audio', 'wav');
       response.add(
-        wrapPcmAsWav(
-          List<int>.filled(2400, 0),
-          sampleRate: 24000,
-          channels: 1,
-        ),
+        wrapPcmAsWav(List<int>.filled(2400, 0), sampleRate: 24000, channels: 1),
       );
       await response.close();
     });
@@ -223,7 +219,11 @@ void main() {
       final response = request.response;
       if (request.uri.path == '/v1/audio/speech') {
         response.add(
-          wrapPcmAsWav(List<int>.filled(2400, 0), sampleRate: 24000, channels: 1),
+          wrapPcmAsWav(
+            List<int>.filled(2400, 0),
+            sampleRate: 24000,
+            channels: 1,
+          ),
         );
       } else {
         response.statusCode = 404;
@@ -231,10 +231,14 @@ void main() {
       await response.close();
     });
 
-    final directory = await Directory.systemTemp.createTemp('or-local-preview-');
+    final directory = await Directory.systemTemp.createTemp(
+      'or-local-preview-',
+    );
     addTearDown(() => directory.delete(recursive: true));
     final played = <String>[];
-    final service = LocalTtsService(playAudio: (path) async => played.add(path));
+    final service = LocalTtsService(
+      playAudio: (path) async => played.add(path),
+    );
     final output = '${directory.path}/preview.wav';
 
     final duration = await service.synthesize(
@@ -257,10 +261,7 @@ void main() {
     // 404 is the OpenAI-shaped answer for an unknown voice.
     expect(retryAfterReEnroll(http(404, 'Voice not found')), isTrue);
     // Servers that answer 400 with the voice in the text.
-    expect(
-      retryAfterReEnroll(http(400, 'Unknown voice: Mai Anh')),
-      isTrue,
-    );
+    expect(retryAfterReEnroll(http(400, 'Unknown voice: Mai Anh')), isTrue);
     // A generic 400 (bad text) is not a voice problem but the retry is
     // bounded to one attempt, so erring towards recovery is safe.
     expect(retryAfterReEnroll(http(400, 'input is empty')), isTrue);
@@ -286,31 +287,34 @@ void main() {
     // The dialog's own guards still win: no clip, no retry.
   });
 
-  test('a forgotten voice re-enrols against the endpoint that failed', () async {
-    final bases = <String>[];
-    var attempts = 0;
-    var enrolled = 0;
-    final duration = await synthesizeWithVoiceRecovery(
-      base: 'http://127.0.0.1:9000',
-      hasReferenceClip: true,
-      reEnroll: (base) async {
-        bases.add(base);
-        enrolled += 1;
-        return 'recovered';
-      },
-      attempt: () async {
-        attempts += 1;
-        if (attempts == 1) {
-          throw const LocalTtsException('HTTP_404', 'unknown voice');
-        }
-        return 420;
-      },
-    );
-    expect(duration, 420);
-    expect(bases, ['http://127.0.0.1:9000']);
-    expect(enrolled, 1);
-    expect(attempts, 2);
-  });
+  test(
+    'a forgotten voice re-enrols against the endpoint that failed',
+    () async {
+      final bases = <String>[];
+      var attempts = 0;
+      var enrolled = 0;
+      final duration = await synthesizeWithVoiceRecovery(
+        base: 'http://127.0.0.1:9000',
+        hasReferenceClip: true,
+        reEnroll: (base) async {
+          bases.add(base);
+          enrolled += 1;
+          return 'recovered';
+        },
+        attempt: () async {
+          attempts += 1;
+          if (attempts == 1) {
+            throw const LocalTtsException('HTTP_404', 'unknown voice');
+          }
+          return 420;
+        },
+      );
+      expect(duration, 420);
+      expect(bases, ['http://127.0.0.1:9000']);
+      expect(enrolled, 1);
+      expect(attempts, 2);
+    },
+  );
 
   test('without a reference clip the failure is not retried', () async {
     expect(
@@ -371,10 +375,7 @@ void main() {
 
   test('an automatic re-enrolment needs consent and a reference clip', () {
     expect(
-      mayReEnrollClonedVoice(
-        acknowledged: true,
-        referencePath: '/tmp/ref.wav',
-      ),
+      mayReEnrollClonedVoice(acknowledged: true, referencePath: '/tmp/ref.wav'),
       isTrue,
     );
     // Consent withdrawn: the clip is still on disk, but re-cloning it is not

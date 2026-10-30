@@ -50,12 +50,8 @@ void main() {
   });
 
   test('an on-timeline preview also rebuilds the editor', () {
-    build(onTimeline: true).publish(
-      _session,
-      'media-1',
-      _preview,
-      store: stored.add,
-    );
+    build(onTimeline: true)
+        .publish(_session, 'media-1', _preview, store: stored.add);
     expect(rebuilds, 1);
     expect(updates.value['media-1'], _preview);
   });

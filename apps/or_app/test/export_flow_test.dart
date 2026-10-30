@@ -143,28 +143,35 @@ ExportFlow _flow({
 );
 
 void main() {
-  test('a new export is not poisoned by the previous export failures', () async {
-    final gateway = _FakeGateway();
-    final picker = _FakePicker();
-    final exported = <String>[];
-    final flow = _flow(gateway: gateway, picker: picker, onExported: exported.add);
+  test(
+    'a new export is not poisoned by the previous export failures',
+    () async {
+      final gateway = _FakeGateway();
+      final picker = _FakePicker();
+      final exported = <String>[];
+      final flow = _flow(
+        gateway: gateway,
+        picker: picker,
+        onExported: exported.add,
+      );
 
-    final session = _Session();
-    gateway.statusFailuresRemaining = 5;
-    await flow.start(session);
-    await Future<void>.delayed(const Duration(milliseconds: 2600));
-    expect(flow.failed, isTrue);
-    // A job that gave up pollng must not keep the slot claimed.
-    expect(flow.isActive, isFalse);
+      final session = _Session();
+      gateway.statusFailuresRemaining = 5;
+      await flow.start(session);
+      await Future<void>.delayed(const Duration(milliseconds: 2600));
+      expect(flow.failed, isTrue);
+      // A job that gave up pollng must not keep the slot claimed.
+      expect(flow.isActive, isFalse);
 
-    gateway.statusFailuresRemaining = 1;
-    gateway.status = _job('succeeded');
-    await flow.start(session);
-    await Future<void>.delayed(const Duration(milliseconds: 1400));
-    expect(flow.failed, isFalse);
-    expect(exported.single, '/tmp/export.mp4');
-    flow.dispose();
-  });
+      gateway.statusFailuresRemaining = 1;
+      gateway.status = _job('succeeded');
+      await flow.start(session);
+      await Future<void>.delayed(const Duration(milliseconds: 1400));
+      expect(flow.failed, isFalse);
+      expect(exported.single, '/tmp/export.mp4');
+      flow.dispose();
+    },
+  );
 
   test('starting publishes the finished file and reports it once', () async {
     final gateway = _FakeGateway();

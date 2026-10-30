@@ -40,15 +40,14 @@ class MediaArtifactMailbox {
 
   ProjectMediaArtifactEvent? earlyFor(String key) => _early[key];
 
-  List<MediaPreviewTicket> matching(ProjectMediaArtifactEvent event) =>
-      _tickets
-          .where(
-            (ticket) =>
-                ticket.kind == event.kind &&
-                ticket.cacheKey == event.cacheKey &&
-                ticket.jobId == event.jobId,
-          )
-          .toList(growable: false);
+  List<MediaPreviewTicket> matching(ProjectMediaArtifactEvent event) => _tickets
+      .where(
+        (ticket) =>
+            ticket.kind == event.kind &&
+            ticket.cacheKey == event.cacheKey &&
+            ticket.jobId == event.jobId,
+      )
+      .toList(growable: false);
 
   /// Removes and returns the tickets an event settles.
   List<MediaPreviewTicket> takeMatching(ProjectMediaArtifactEvent event) {

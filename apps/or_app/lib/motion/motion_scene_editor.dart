@@ -239,8 +239,9 @@ class _MotionSceneCanvasState extends State<MotionSceneCanvas> {
                             preview,
                             logicalWidth: width,
                             logicalHeight: height,
-                            devicePixelRatio:
-                                MediaQuery.devicePixelRatioOf(context),
+                            devicePixelRatio: MediaQuery.devicePixelRatioOf(
+                              context,
+                            ),
                           ),
                           fit: BoxFit.fill,
                           gaplessPlayback: true,

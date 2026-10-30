@@ -66,7 +66,8 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       AssistantHarnessKind.opencode => 'https://opencode.ai',
       AssistantHarnessKind.dsh ||
       AssistantHarnessKind.auto ||
-      AssistantHarnessKind.custom => 'https://github.com/deepseek-ai/deepseek-harness',
+      AssistantHarnessKind.custom =>
+        'https://github.com/deepseek-ai/deepseek-harness',
     };
     await Process.run('open', [url]);
   }
@@ -108,7 +109,8 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
   Future<void> _save() async {
     final current = widget.controller.settings;
     final customPath = _workspace.text.trim();
-    final mode = _workspaceMode == AssistantWorkspaceMode.custom && customPath.isEmpty
+    final mode =
+        _workspaceMode == AssistantWorkspaceMode.custom && customPath.isEmpty
         ? AssistantWorkspaceMode.agent
         : _workspaceMode;
     await widget.controller.updateSettings(
@@ -244,7 +246,9 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                   if (_workspaceMode == AssistantWorkspaceMode.custom) ...[
                     const SizedBox(width: OrSpacing.x2),
                     OutlinedButton(
-                      key: const ValueKey('assistant-settings-workspace-choose'),
+                      key: const ValueKey(
+                        'assistant-settings-workspace-choose',
+                      ),
                       onPressed: _pickWorkspace,
                       child: const Text('Choose'),
                     ),

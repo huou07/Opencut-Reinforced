@@ -246,114 +246,120 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
         setState(() => _notice = 'Stop the take before closing.');
       },
       child: AlertDialog(
-      title: const Text('Record voice'),
-      content: SizedBox(
-        width: 520,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Records one 48 kHz mono WAV from the microphone. The take is '
-              'ordinary media: import it, or keep it as a sample for a personal voice.',
-              style: TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: OrType.metadataSize,
-              ),
-            ),
-            const SizedBox(height: OrSpacing.x3),
-            Text(
-              _recording ? 'Recording  $_elapsed' : 'Duration  $_elapsed',
-              key: const ValueKey('record-voice-time'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: OrSpacing.x3),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FilledButton.icon(
-                  key: const ValueKey('record-voice-toggle'),
-                  onPressed: _busy
-                      ? null
-                      : _recording
-                      ? _stop
-                      : _start,
-                  icon: Icon(_recording ? Icons.stop : Icons.mic, size: 18),
-                  label: Text(_recording ? 'Stop' : 'Start recording'),
+        title: const Text('Record voice'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Records one 48 kHz mono WAV from the microphone. The take is '
+                'ordinary media: import it, or keep it as a sample for a personal voice.',
+                style: TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataSize,
                 ),
-                if (canUse) ...[
-                  const SizedBox(width: OrSpacing.x2),
-                  OutlinedButton.icon(
-                    key: const ValueKey('record-voice-play'),
-                    onPressed: _busy ? null : _play,
-                    icon: const Icon(Icons.play_arrow, size: 18),
-                    label: const Text('Play'),
+              ),
+              const SizedBox(height: OrSpacing.x3),
+              Text(
+                _recording ? 'Recording  $_elapsed' : 'Duration  $_elapsed',
+                key: const ValueKey('record-voice-time'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: OrSpacing.x3),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FilledButton.icon(
+                    key: const ValueKey('record-voice-toggle'),
+                    onPressed: _busy
+                        ? null
+                        : _recording
+                        ? _stop
+                        : _start,
+                    icon: Icon(_recording ? Icons.stop : Icons.mic, size: 18),
+                    label: Text(_recording ? 'Stop' : 'Start recording'),
                   ),
+                  if (canUse) ...[
+                    const SizedBox(width: OrSpacing.x2),
+                    OutlinedButton.icon(
+                      key: const ValueKey('record-voice-play'),
+                      onPressed: _busy ? null : _play,
+                      icon: const Icon(Icons.play_arrow, size: 18),
+                      label: const Text('Play'),
+                    ),
+                  ],
                 ],
+              ),
+              if (_permission != null && _permission != 'granted') ...[
+                const SizedBox(height: OrSpacing.x2),
+                Text(
+                  'Microphone permission: $_permission. Allow it in System '
+                  'Settings → Privacy & Security → Microphone.',
+                  key: const ValueKey('record-voice-permission'),
+                  style: TextStyle(
+                    color: OrColors.warning,
+                    fontSize: OrType.tinySize,
+                  ),
+                ),
+                if (_permission == 'denied' || _permission == 'restricted')
+                  TextButton.icon(
+                    key: const ValueKey('record-voice-open-settings'),
+                    onPressed: _busy ? null : _openSettings,
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open microphone settings'),
+                  ),
               ],
-            ),
-            if (_permission != null && _permission != 'granted') ...[
-              const SizedBox(height: OrSpacing.x2),
-              Text(
-                'Microphone permission: $_permission. Allow it in System '
-                'Settings → Privacy & Security → Microphone.',
-                key: const ValueKey('record-voice-permission'),
-                style: TextStyle(
-                  color: OrColors.warning,
-                  fontSize: OrType.tinySize,
+              if (_notice != null) ...[
+                const SizedBox(height: OrSpacing.x2),
+                Text(
+                  _notice!,
+                  key: const ValueKey('record-voice-notice'),
+                  style: TextStyle(
+                    color: OrColors.success,
+                    fontSize: OrType.tinySize,
+                  ),
                 ),
-              ),
-              if (_permission == 'denied' || _permission == 'restricted')
-                TextButton.icon(
-                  key: const ValueKey('record-voice-open-settings'),
-                  onPressed: _busy ? null : _openSettings,
-                  icon: const Icon(Icons.open_in_new, size: 16),
-                  label: const Text('Open microphone settings'),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: OrSpacing.x2),
+                Text(
+                  _error!,
+                  key: const ValueKey('record-voice-error'),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
+              ],
             ],
-            if (_notice != null) ...[
-              const SizedBox(height: OrSpacing.x2),
-              Text(
-                _notice!,
-                key: const ValueKey('record-voice-notice'),
-                style: TextStyle(
-                  color: OrColors.success,
-                  fontSize: OrType.tinySize,
-                ),
-              ),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: OrSpacing.x2),
-              Text(
-                _error!,
-                key: const ValueKey('record-voice-error'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-          ],
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : _requestClose,
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          key: const ValueKey('record-voice-save-sample'),
-          onPressed: canUse && !_busy ? _saveSample : null,
-          child: const Text('Save as sample'),
-        ),
-        FilledButton(
-          key: const ValueKey('record-voice-use'),
-          onPressed: canUse && !_busy
-              ? () => Navigator.of(context).pop(
-                  VoiceRecording(path: file.path, durationMs: _durationMs ?? 0),
-                )
-              : null,
-          child: const Text('Add to timeline'),
-        ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: _busy ? null : _requestClose,
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const ValueKey('record-voice-save-sample'),
+            onPressed: canUse && !_busy ? _saveSample : null,
+            child: const Text('Save as sample'),
+          ),
+          FilledButton(
+            key: const ValueKey('record-voice-use'),
+            onPressed: canUse && !_busy
+                ? () => Navigator.of(context).pop(
+                    VoiceRecording(
+                      path: file.path,
+                      durationMs: _durationMs ?? 0,
+                    ),
+                  )
+                : null,
+            child: const Text('Add to timeline'),
+          ),
+        ],
       ),
     );
   }

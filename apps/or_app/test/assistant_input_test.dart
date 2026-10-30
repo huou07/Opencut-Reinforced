@@ -5,38 +5,41 @@ import 'package:or_app/shell/app_shell.dart';
 import 'package:or_app/shell/or_shortcuts.dart';
 
 void main() {
-  test('typing keys are not installed while a text field owns the keyboard', () {
-    final textMap = orShellShortcuts(textInputFocused: true);
-    final editorMap = orShellShortcuts(textInputFocused: false);
+  test(
+    'typing keys are not installed while a text field owns the keyboard',
+    () {
+      final textMap = orShellShortcuts(textInputFocused: true);
+      final editorMap = orShellShortcuts(textInputFocused: false);
 
-    // Text-editing and typing keys must not be captured by the shell.
-    for (final activator in const [
-      SingleActivator(LogicalKeyboardKey.backspace),
-      SingleActivator(LogicalKeyboardKey.space),
-      SingleActivator(LogicalKeyboardKey.keyS),
-      SingleActivator(LogicalKeyboardKey.keyC),
-      SingleActivator(LogicalKeyboardKey.keyV),
-      SingleActivator(LogicalKeyboardKey.keyM),
-      SingleActivator(LogicalKeyboardKey.digit1),
-      SingleActivator(LogicalKeyboardKey.period),
-      OrCommandActivator(LogicalKeyboardKey.keyZ),
-      OrCommandActivator(LogicalKeyboardKey.keyC),
-      OrCommandActivator(LogicalKeyboardKey.keyV),
-    ]) {
-      expect(textMap.containsKey(activator), isFalse, reason: '$activator');
-      expect(editorMap.containsKey(activator), isTrue, reason: '$activator');
-    }
+      // Text-editing and typing keys must not be captured by the shell.
+      for (final activator in const [
+        SingleActivator(LogicalKeyboardKey.backspace),
+        SingleActivator(LogicalKeyboardKey.space),
+        SingleActivator(LogicalKeyboardKey.keyS),
+        SingleActivator(LogicalKeyboardKey.keyC),
+        SingleActivator(LogicalKeyboardKey.keyV),
+        SingleActivator(LogicalKeyboardKey.keyM),
+        SingleActivator(LogicalKeyboardKey.digit1),
+        SingleActivator(LogicalKeyboardKey.period),
+        OrCommandActivator(LogicalKeyboardKey.keyZ),
+        OrCommandActivator(LogicalKeyboardKey.keyC),
+        OrCommandActivator(LogicalKeyboardKey.keyV),
+      ]) {
+        expect(textMap.containsKey(activator), isFalse, reason: '$activator');
+        expect(editorMap.containsKey(activator), isTrue, reason: '$activator');
+      }
 
-    // Commands that do not collide with text editing stay available.
-    expect(
-      textMap.containsKey(const OrCommandActivator(LogicalKeyboardKey.keyS)),
-      isTrue,
-    );
-    expect(
-      textMap.containsKey(const OrCommandActivator(LogicalKeyboardKey.keyK)),
-      isTrue,
-    );
-  });
+      // Commands that do not collide with text editing stay available.
+      expect(
+        textMap.containsKey(const OrCommandActivator(LogicalKeyboardKey.keyS)),
+        isTrue,
+      );
+      expect(
+        textMap.containsKey(const OrCommandActivator(LogicalKeyboardKey.keyK)),
+        isTrue,
+      );
+    },
+  );
 
   testWidgets('Backspace deletes text and never fires an editor verb', (
     tester,

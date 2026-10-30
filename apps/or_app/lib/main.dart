@@ -21,7 +21,9 @@ Future<void> main() async {
   try {
     await RustLib.init(externalLibrary: _bundledMacosRustLibrary());
   } catch (error, stack) {
-    stderr.writeln('Opencut Reinforced could not start its Rust bridge: $error');
+    stderr.writeln(
+      'Opencut Reinforced could not start its Rust bridge: $error',
+    );
     stderr.writeln(stack);
     runApp(OrStartupFailure(message: '$error'));
     return;

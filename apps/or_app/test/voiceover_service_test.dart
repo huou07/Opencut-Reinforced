@@ -13,8 +13,12 @@ Uint8List pcmWav({
   final dataBytes = frames * channels * 2;
   final bytes = BytesBuilder();
   void ascii(String value) => bytes.add(value.codeUnits);
-  void u32(int value) =>
-      bytes.add([value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF, (value >> 24) & 0xFF]);
+  void u32(int value) => bytes.add([
+    value & 0xFF,
+    (value >> 8) & 0xFF,
+    (value >> 16) & 0xFF,
+    (value >> 24) & 0xFF,
+  ]);
   void u16(int value) => bytes.add([value & 0xFF, (value >> 8) & 0xFF]);
 
   ascii('RIFF');
@@ -115,17 +119,13 @@ void main() {
     );
   });
 
-  test(
-    'lists the Vietnamese voice with a short display label',
-    () async {
-      final voices = await VoiceoverService().listVoices();
-      final vietnamese = voices.where((voice) => voice.locale == 'vi_VN');
-      expect(vietnamese, isNotEmpty);
-      expect(vietnamese.first.displayName, 'Linh');
-      expect(vietnamese.first.label, 'Linh (vi_VN)');
-    },
-    skip: !Platform.isMacOS,
-  );
+  test('lists the Vietnamese voice with a short display label', () async {
+    final voices = await VoiceoverService().listVoices();
+    final vietnamese = voices.where((voice) => voice.locale == 'vi_VN');
+    expect(vietnamese, isNotEmpty);
+    expect(vietnamese.first.displayName, 'Linh');
+    expect(vietnamese.first.label, 'Linh (vi_VN)');
+  }, skip: !Platform.isMacOS);
 
   test(
     'the system voice produces a real WAV whose duration is measured',

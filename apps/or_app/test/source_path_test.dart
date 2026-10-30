@@ -20,7 +20,10 @@ void main() {
   test('a symlinked directory names the same file as its target', () {
     File('${real.path}/export.mkv').writeAsStringSync('bytes');
 
-    expect(sameSourcePath('$link/export.mkv', '${real.path}/export.mkv'), isTrue);
+    expect(
+      sameSourcePath('$link/export.mkv', '${real.path}/export.mkv'),
+      isTrue,
+    );
     expect(
       canonicalSourcePath('$link/export.mkv'),
       File('${real.path}/export.mkv').resolveSymbolicLinksSync(),

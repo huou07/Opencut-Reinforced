@@ -120,9 +120,7 @@ void main() {
       expect(commits.single.yMilliCanvas, 0);
     });
 
-    testWidgets('a drag that ends near the centre snaps to it', (
-      tester,
-    ) async {
+    testWidgets('a drag that ends near the centre snaps to it', (tester) async {
       final commits = await mount(tester);
       final centre = tester.getCenter(
         find.byKey(const ValueKey('viewer-transform-overlay')),

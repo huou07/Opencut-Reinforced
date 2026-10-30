@@ -14,10 +14,10 @@ void main() {
 
     await controller.tick();
 
-    expect(
-      statuses.map((status) => status.label),
-      ['Autosaving recovery', 'Recovery saved'],
-    );
+    expect(statuses.map((status) => status.label), [
+      'Autosaving recovery',
+      'Recovery saved',
+    ]);
     expect(controller.status.failed, isFalse);
   });
 

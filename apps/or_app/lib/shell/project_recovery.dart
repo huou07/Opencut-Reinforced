@@ -13,21 +13,30 @@ enum RecoveryMutation { apply, discard }
 enum RecoveryStep {
   /// Create only: a project or checkpoint already occupies the location.
   refuseExisting,
+
   /// Nothing to recover.
   openDirectly,
+
   /// Open the saved project and say the stale checkpoint was ignored.
   openWithStaleNotice,
+
   /// Ask Recover / Discard / Cancel.
   askCandidate,
+
   /// The checkpoint does not match the lineage, so it can only be discarded.
   askConflictDiscard,
+
   /// The checkpoint is malformed, so it can only be discarded.
   askInvalidDiscard,
 }
 
 /// The shell's decision before any checkpoint mutation has run.
 class RecoveryPreparation {
-  const RecoveryPreparation({required this.proceed, this.notice, this.mutation});
+  const RecoveryPreparation({
+    required this.proceed,
+    this.notice,
+    this.mutation,
+  });
 
   final bool proceed;
   final String? notice;

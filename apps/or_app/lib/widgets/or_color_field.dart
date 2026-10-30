@@ -52,8 +52,8 @@ class OrColorField extends StatelessWidget {
 
   static String _hex(ProjectTextColor value) {
     String two(int channel) => channel.toRadixString(16).padLeft(2, '0');
-    final base =
-        '#${two(value.red)}${two(value.green)}${two(value.blue)}'.toUpperCase();
+    final base = '#${two(value.red)}${two(value.green)}${two(value.blue)}'
+        .toUpperCase();
     return value.alpha == 255 ? base : '$base${two(value.alpha)}'.toUpperCase();
   }
 
@@ -89,32 +89,29 @@ Future<ProjectTextColor?> showOrColorPicker(
     context: context,
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setDialogState) {
-        Widget channel(
-          String label,
-          int value,
-          ValueChanged<int> changed,
-        ) => Row(
-          children: [
-            SizedBox(width: 18, child: Text(label)),
-            Expanded(
-              child: Slider(
-                value: value.toDouble(),
-                min: 0,
-                max: 255,
-                divisions: 255,
-                label: '$value',
-                onChanged: (next) => setDialogState(() {
-                  changed(next.round());
-                  syncHex();
-                }),
-              ),
-            ),
-            SizedBox(
-              width: 34,
-              child: Text('$value', textAlign: TextAlign.end),
-            ),
-          ],
-        );
+        Widget channel(String label, int value, ValueChanged<int> changed) =>
+            Row(
+              children: [
+                SizedBox(width: 18, child: Text(label)),
+                Expanded(
+                  child: Slider(
+                    value: value.toDouble(),
+                    min: 0,
+                    max: 255,
+                    divisions: 255,
+                    label: '$value',
+                    onChanged: (next) => setDialogState(() {
+                      changed(next.round());
+                      syncHex();
+                    }),
+                  ),
+                ),
+                SizedBox(
+                  width: 34,
+                  child: Text('$value', textAlign: TextAlign.end),
+                ),
+              ],
+            );
 
         return AlertDialog(
           title: Text(title),
@@ -167,8 +164,7 @@ Future<ProjectTextColor?> showOrColorPicker(
                   channel('R', red, (value) => red = value),
                   channel('G', green, (value) => green = value),
                   channel('B', blue, (value) => blue = value),
-                  if (allowAlpha)
-                    channel('A', alpha, (value) => alpha = value),
+                  if (allowAlpha) channel('A', alpha, (value) => alpha = value),
                   TextField(
                     controller: hexController,
                     decoration: const InputDecoration(
@@ -219,8 +215,8 @@ const _presets = <ProjectTextColor>[
 
 String _hex(ProjectTextColor value) {
   String two(int channel) => channel.toRadixString(16).padLeft(2, '0');
-  final base =
-      '#${two(value.red)}${two(value.green)}${two(value.blue)}'.toUpperCase();
+  final base = '#${two(value.red)}${two(value.green)}${two(value.blue)}'
+      .toUpperCase();
   return value.alpha == 255 ? base : '$base${two(value.alpha)}'.toUpperCase();
 }
 

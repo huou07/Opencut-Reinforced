@@ -29,9 +29,7 @@ void main() {
       var peak = 0;
       var nonzero = 0;
       for (var offset = 44; offset < 44 + 44100; offset += 2) {
-        final sample = header
-            .getInt16(offset, Endian.little)
-            .abs();
+        final sample = header.getInt16(offset, Endian.little).abs();
         if (sample != 0) nonzero += 1;
         if (sample > peak) peak = sample;
       }

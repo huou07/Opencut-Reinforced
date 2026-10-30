@@ -635,10 +635,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     return null;
   }
 
-  List<String> get _scriptLines => _script.text
-      .split('\n')
-      .where((line) => line.trim().isNotEmpty)
-      .toList();
+  List<String> get _scriptLines =>
+      _script.text.split('\n').where((line) => line.trim().isNotEmpty).toList();
 
   /// Speaks one sample with the chosen voice, so a source or a cloned voice
   /// can be judged before generating the whole script.
@@ -682,7 +680,8 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
     } on LocalTtsException catch (error) {
       if (mounted) setState(() => _previewError = error.message);
     } catch (_) {
-      if (mounted) setState(() => _previewError = 'The preview could not play.');
+      if (mounted)
+        setState(() => _previewError = 'The preview could not play.');
     } finally {
       if (mounted) setState(() => _previewing = false);
     }
@@ -1117,10 +1116,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                       )
                       case final hint?) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      hint,
-                      style: TextStyle(color: OrColors.textSecondary),
-                    ),
+                    Text(hint, style: TextStyle(color: OrColors.textSecondary)),
                   ],
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -1157,9 +1153,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
                     alignment: AlignmentDirectional.centerStart,
                     child: TextButton.icon(
                       key: const ValueKey('voiceover-preview-local-voice'),
-                      onPressed: _busy || _previewing
-                          ? null
-                          : _previewVoice,
+                      onPressed: _busy || _previewing ? null : _previewVoice,
                       icon: Icon(
                         _previewing ? Icons.graphic_eq : Icons.play_arrow,
                         size: 18,
@@ -1493,10 +1487,7 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
 ///
 /// A server that never connected and a server that connected with no voice
 /// are different problems; a server with voices needs no hint at all.
-String? localVoiceHintText({
-  required bool connected,
-  required bool hasVoices,
-}) {
+String? localVoiceHintText({required bool connected, required bool hasVoices}) {
   if (hasVoices) return null;
   if (connected) {
     return 'The server reported no voice. Enrol one from a clip below.';

@@ -163,7 +163,10 @@ void main() {
       ],
     );
     final controller = AssistantController()
-      ..debugSeedConversation(state: AssistantConnectionState.ready, entries: [entry]);
+      ..debugSeedConversation(
+        state: AssistantConnectionState.ready,
+        entries: [entry],
+      );
     addTearDown(controller.dispose);
     await mount(tester, controller);
     await tester.pump();
@@ -174,5 +177,4 @@ void main() {
     );
     expect(find.text('Show in Finder'), findsOneWidget);
   });
-
 }

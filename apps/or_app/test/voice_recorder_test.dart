@@ -93,21 +93,24 @@ void main() {
     expect(await recorder.stop(), 1234);
     expect(await recorder.openSystemSettings(), isTrue);
 
-    expect(
-      calls.map((call) => call.method).toList(),
-      <String>[
-        'recordPermission',
-        'recordPermissionRequest',
-        'recordPermission',
-        'recordStart',
-        'recordStop',
-        'recordPermissionSettings',
-      ],
-    );
+    expect(calls.map((call) => call.method).toList(), <String>[
+      'recordPermission',
+      'recordPermissionRequest',
+      'recordPermission',
+      'recordStart',
+      'recordStop',
+      'recordPermissionSettings',
+    ]);
     expect((calls[3].arguments as Map)['path'], file.path);
     // No call carries a keychain account: the microphone path has no credential.
-    expect(calls.every((call) => call.arguments is Map == false ||
-        !(call.arguments as Map).containsKey('account')), isTrue);
+    expect(
+      calls.every(
+        (call) =>
+            call.arguments is Map == false ||
+            !(call.arguments as Map).containsKey('account'),
+      ),
+      isTrue,
+    );
   });
 
   test('a native denial surfaces as a recorder error', () async {
@@ -178,7 +181,11 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('record-voice-toggle')));
     await tester.pump();
     expect(recorder.started, isTrue);
-    expect(recorder.requests, 0, reason: 'a granted recorder is not asked again');
+    expect(
+      recorder.requests,
+      0,
+      reason: 'a granted recorder is not asked again',
+    );
     await tester.tap(find.byKey(const ValueKey('record-voice-toggle')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -298,10 +305,7 @@ void main() {
   });
 
   testWidgets('a denial offers the microphone settings pane', (tester) async {
-    final recorder = _FakeRecorder(
-      state: 'denied',
-      requestedState: 'denied',
-    );
+    final recorder = _FakeRecorder(state: 'denied', requestedState: 'denied');
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

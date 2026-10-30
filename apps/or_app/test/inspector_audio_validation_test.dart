@@ -31,29 +31,22 @@ void main() {
       fadeOut: '0',
     );
     expect(settings, isNull);
-    expect(inspectorAudioValidationMessage, contains('gain between -96 and 24 dB'));
+    expect(
+      inspectorAudioValidationMessage,
+      contains('gain between -96 and 24 dB'),
+    );
   });
 
   test('a pan outside -100..100 is refused', () {
     expect(
-      audioSettingsFromTexts(
-        gain: '0',
-        pan: '200',
-        fadeIn: '0',
-        fadeOut: '0',
-      ),
+      audioSettingsFromTexts(gain: '0', pan: '200', fadeIn: '0', fadeOut: '0'),
       isNull,
     );
   });
 
   test('a fade that is not a time is refused', () {
     expect(
-      audioSettingsFromTexts(
-        gain: '0',
-        pan: '0',
-        fadeIn: 'soon',
-        fadeOut: '0',
-      ),
+      audioSettingsFromTexts(gain: '0', pan: '0', fadeIn: 'soon', fadeOut: '0'),
       isNull,
     );
   });

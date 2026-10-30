@@ -84,7 +84,10 @@ class TimelineRulerPainter extends CustomPainter {
 /// A two pixel line states a position; the notch states that the line has a
 /// draggable end, which is what the pointer cursor alone cannot say.
 class TimelinePlayheadHandlePainter extends CustomPainter {
-  const TimelinePlayheadHandlePainter({required this.color, required this.apex});
+  const TimelinePlayheadHandlePainter({
+    required this.color,
+    required this.apex,
+  });
 
   final Color color;
 

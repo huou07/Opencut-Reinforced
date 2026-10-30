@@ -22,12 +22,17 @@ ProjectMediaItem _audio(String id) => ProjectMediaItem(
 
 void main() {
   test('a page with no previews queues the kind each item previews with', () {
-    final plan = planMediaPreviews([_video('video'), _audio('audio')], const {});
+    final plan = planMediaPreviews([
+      _video('video'),
+      _audio('audio'),
+    ], const {});
 
     expect(plan['video']!.kind, ProjectMediaArtifactKind.thumbnail);
     expect(plan['audio']!.kind, ProjectMediaArtifactKind.waveform);
     expect(
-      plan.values.every((p) => p.state == ProjectMediaArtifactRequestState.queued),
+      plan.values.every(
+        (p) => p.state == ProjectMediaArtifactRequestState.queued,
+      ),
       isTrue,
     );
   });
@@ -49,10 +54,10 @@ void main() {
       state: ProjectMediaArtifactRequestState.ready,
     );
 
-    final plan = planMediaPreviews([_video('video')], {
-      'video': ready,
-      'gone': ready,
-    });
+    final plan = planMediaPreviews(
+      [_video('video')],
+      {'video': ready, 'gone': ready},
+    );
 
     expect(plan.keys, ['video']);
   });

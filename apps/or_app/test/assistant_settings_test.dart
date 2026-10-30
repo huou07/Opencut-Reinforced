@@ -30,17 +30,22 @@ void main() {
     expect(malformed.autoApprove, isFalse);
   });
 
-  test('older settings keep a chosen folder and otherwise use the agent workspace', () {
-    final chosen = AssistantSettings.fromJson({'workspacePath': '/tmp/old'});
-    expect(chosen.workspaceMode, AssistantWorkspaceMode.custom);
-    expect(chosen.workspacePath, '/tmp/old');
+  test(
+    'older settings keep a chosen folder and otherwise use the agent workspace',
+    () {
+      final chosen = AssistantSettings.fromJson({'workspacePath': '/tmp/old'});
+      expect(chosen.workspaceMode, AssistantWorkspaceMode.custom);
+      expect(chosen.workspacePath, '/tmp/old');
 
-    final fresh = AssistantSettings.fromJson({});
-    expect(fresh.workspaceMode, AssistantWorkspaceMode.agent);
+      final fresh = AssistantSettings.fromJson({});
+      expect(fresh.workspaceMode, AssistantWorkspaceMode.agent);
 
-    final invalid = AssistantSettings.fromJson({'workspaceMode': 'elsewhere'});
-    expect(invalid.workspaceMode, AssistantWorkspaceMode.agent);
-  });
+      final invalid = AssistantSettings.fromJson({
+        'workspaceMode': 'elsewhere',
+      });
+      expect(invalid.workspaceMode, AssistantWorkspaceMode.agent);
+    },
+  );
 
   test(
     'the desktop overlay supplies the provider catalog and selected model',
@@ -113,30 +118,33 @@ void main() {
     expect(resolved, cli.path);
   });
 
-  test('an explicit CLI path wins and a missing one resolves to null', () async {
-    final root = await Directory.systemTemp.createTemp('or-cli-explicit-');
-    addTearDown(() => root.delete(recursive: true));
-    final cli = File('${root.path}/or')..writeAsStringSync('');
+  test(
+    'an explicit CLI path wins and a missing one resolves to null',
+    () async {
+      final root = await Directory.systemTemp.createTemp('or-cli-explicit-');
+      addTearDown(() => root.delete(recursive: true));
+      final cli = File('${root.path}/or')..writeAsStringSync('');
 
-    expect(
-      await resolveOrCliPath(
-        settings: AssistantSettings(orCliPath: cli.path),
-        environment: const {'PATH': ''},
-        currentDirectory: root,
-        executablePath: '${root.path}/or_app',
-      ),
-      cli.path,
-    );
-    expect(
-      await resolveOrCliPath(
-        settings: AssistantSettings(orCliPath: '${root.path}/missing-or'),
-        environment: const {'PATH': ''},
-        currentDirectory: root,
-        executablePath: '${root.path}/or_app',
-      ),
-      isNull,
-    );
-  });
+      expect(
+        await resolveOrCliPath(
+          settings: AssistantSettings(orCliPath: cli.path),
+          environment: const {'PATH': ''},
+          currentDirectory: root,
+          executablePath: '${root.path}/or_app',
+        ),
+        cli.path,
+      );
+      expect(
+        await resolveOrCliPath(
+          settings: AssistantSettings(orCliPath: '${root.path}/missing-or'),
+          environment: const {'PATH': ''},
+          currentDirectory: root,
+          executablePath: '${root.path}/or_app',
+        ),
+        isNull,
+      );
+    },
+  );
 
   test('no overlay still yields a usable assistant persona patch', () {
     final patch = buildHarnessPatch(
@@ -147,20 +155,23 @@ void main() {
     expect(patch, contains('- id: system-prompt'));
     expect(patch, isNot(contains('- id: acp')));
   });
-  test('the harness kind survives a round-trip and older files default to auto', () {
-    const settings = AssistantSettings(
-      harnessPath: '/opt/opencode',
-      harnessKind: AssistantHarnessKind.opencode,
-    );
-    final decoded = AssistantSettings.fromJson(settings.toJson());
-    expect(decoded.harnessKind, AssistantHarnessKind.opencode);
-    expect(decoded.harnessPath, '/opt/opencode');
+  test(
+    'the harness kind survives a round-trip and older files default to auto',
+    () {
+      const settings = AssistantSettings(
+        harnessPath: '/opt/opencode',
+        harnessKind: AssistantHarnessKind.opencode,
+      );
+      final decoded = AssistantSettings.fromJson(settings.toJson());
+      expect(decoded.harnessKind, AssistantHarnessKind.opencode);
+      expect(decoded.harnessPath, '/opt/opencode');
 
-    expect(
-      AssistantSettings.fromJson({'version': 2}).harnessKind,
-      AssistantHarnessKind.auto,
-    );
-  });
+      expect(
+        AssistantSettings.fromJson({'version': 2}).harnessKind,
+        AssistantHarnessKind.auto,
+      );
+    },
+  );
 
   test('a custom harness launches without DSH-only arguments', () async {
     final launch = await resolveHarnessLaunch(
@@ -176,5 +187,4 @@ void main() {
     expect(launch.arguments, isEmpty);
     expect(launch.kind, AssistantHarnessKind.custom);
   });
-
 }

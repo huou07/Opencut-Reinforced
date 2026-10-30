@@ -104,7 +104,9 @@ class AssistantController extends ChangeNotifier {
           ? _agentWorkspacePath
           : _defaultWorkspace(),
     AssistantWorkspaceMode.project =>
-      _projectPath.isNotEmpty ? _directoryOf(_projectPath) : _defaultWorkspace(),
+      _projectPath.isNotEmpty
+          ? _directoryOf(_projectPath)
+          : _defaultWorkspace(),
     AssistantWorkspaceMode.custom =>
       _settings.workspacePath.isNotEmpty
           ? _settings.workspacePath
@@ -270,7 +272,8 @@ class AssistantController extends ChangeNotifier {
       if (launch == null) {
         throw const AssistantHarnessFailure(
           'No ACP harness was found where the assistant can start it.',
-          hint: 'Choose a harness in Assistant settings, install DeepSeek Harness, '
+          hint:
+              'Choose a harness in Assistant settings, install DeepSeek Harness, '
               'Claude Code ACP, Codex ACP or OpenCode, or point at another ACP command.',
         );
       }

@@ -20,18 +20,18 @@ import 'voiceover_service.dart';
 /// a cloud provider or a local server, saying so keeps a user from believing
 /// this screen changes the voice they actually hear.
 String narrationSettingsIntroText(String provider) {
-final source = switch (provider) {
-  'local' => 'the local server',
-  'elevenlabs' => 'ElevenLabs',
-  'azure' => 'Microsoft Azure',
-  _ => '',
-};
-if (source.isEmpty) {
-  return 'Voices installed on this Mac. The assistant and the Audio tool use '
-      'the saved default; nothing is uploaded.';
-}
-return 'Narration currently uses $source, chosen in Generate voiceover. This '
-    'screen sets the installed-voice fallback; nothing is uploaded.';
+  final source = switch (provider) {
+    'local' => 'the local server',
+    'elevenlabs' => 'ElevenLabs',
+    'azure' => 'Microsoft Azure',
+    _ => '',
+  };
+  if (source.isEmpty) {
+    return 'Voices installed on this Mac. The assistant and the Audio tool use '
+        'the saved default; nothing is uploaded.';
+  }
+  return 'Narration currently uses $source, chosen in Generate voiceover. This '
+      'screen sets the installed-voice fallback; nothing is uploaded.';
 }
 
 class NarrationSettingsDialog extends StatefulWidget {
@@ -121,6 +121,7 @@ class _NarrationSettingsDialogState extends State<NarrationSettingsDialog> {
       }
     }
   }
+
   VoiceoverService get _effectiveVoiceover => widget.voiceover ?? _voiceover;
 
   List<VoiceOption> get _filtered {

@@ -378,8 +378,7 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                 OrColorField(
                   label: 'Text colour',
                   color: textColor,
-                  onChanged: (value) =>
-                      setDialogState(() => textColor = value),
+                  onChanged: (value) => setDialogState(() => textColor = value),
                 ),
                 DropdownButtonFormField<ProjectTextVerticalAnchor>(
                   isExpanded: true,

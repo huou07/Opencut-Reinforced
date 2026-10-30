@@ -89,10 +89,10 @@ class VoiceoverService {
   Future<List<VoiceOption>> listVoices() async {
     final ProcessResult result;
     try {
-      result = await Process.run(
-        sayExecutable,
-        ['-v', '?'],
-      ).timeout(processTimeout);
+      result = await Process.run(sayExecutable, [
+        '-v',
+        '?',
+      ]).timeout(processTimeout);
     } on ProcessException catch (error) {
       throw VoiceoverException(
         'The macOS say command is unavailable (${error.message}).',
@@ -313,7 +313,10 @@ int wavDurationMsFromBytes(List<int> bytes) {
     }
     offset = body + size + (size & 1);
   }
-  if (channels == null || sampleRate == null || bits == null || dataBytes == null) {
+  if (channels == null ||
+      sampleRate == null ||
+      bits == null ||
+      dataBytes == null) {
     throw const VoiceoverException('The generated WAV has no PCM format.');
   }
   if (bits != 16 || channels < 1 || sampleRate < 1) {
@@ -347,7 +350,12 @@ class VoiceoverApplier {
       current,
       ProjectTimelineTrackKind.audio,
     );
-    current = await _advance(session, current, trackResult, 'add an audio track');
+    current = await _advance(
+      session,
+      current,
+      trackResult,
+      'add an audio track',
+    );
     final tracks = await gateway.listTimelineTracks(session);
     final audioTracks = tracks.items
         .where((track) => track.kind == ProjectTimelineTrackKind.audio)
@@ -425,7 +433,9 @@ class VoiceoverApplier {
     String action,
   ) async {
     if (!result.succeeded) {
-      throw VoiceoverException(result.message.isEmpty ? 'Could not $action.' : result.message);
+      throw VoiceoverException(
+        result.message.isEmpty ? 'Could not $action.' : result.message,
+      );
     }
     return result.view ?? await gateway.summary(session);
   }
@@ -458,7 +468,8 @@ class VoiceoverApplier {
     final duration = media.firstAudioDuration ?? media.containerDuration;
     if (duration == null || duration.denominator == 0) return measuredMs;
     final mediaMs =
-        (duration.numerator * BigInt.from(1000)) ~/ BigInt.from(duration.denominator);
+        (duration.numerator * BigInt.from(1000)) ~/
+        BigInt.from(duration.denominator);
     if (mediaMs <= BigInt.zero) return measuredMs;
     return mediaMs.toInt() < measuredMs ? mediaMs.toInt() : measuredMs;
   }

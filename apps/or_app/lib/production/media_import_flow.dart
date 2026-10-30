@@ -24,8 +24,12 @@ class MediaImportOutcome {
       importStatusLabel(position, total, source);
 
   /// The closing statement, or null when one imported file is its own proof.
-  String? get summary =>
-      importSummary(imported: imported, total: total, failures: failures, folder: folder);
+  String? get summary => importSummary(
+    imported: imported,
+    total: total,
+    failures: failures,
+    folder: folder,
+  );
 }
 
 /// Drives the per-file loop over a picker selection.

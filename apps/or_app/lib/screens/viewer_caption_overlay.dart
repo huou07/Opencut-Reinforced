@@ -117,8 +117,7 @@ class _ViewerCaptionOverlayState extends State<ViewerCaptionOverlay> {
   Rect _box(Size display, ProjectTextFormatting formatting) {
     final canvasWidth = math.max(widget.canvasSize.width, 1);
     final scale = display.width / canvasWidth;
-    final fontPx =
-        formatting.sizeMilliPoints / 1000 * (4 / 3) * scale;
+    final fontPx = formatting.sizeMilliPoints / 1000 * (4 / 3) * scale;
     final painter = TextPainter(
       text: TextSpan(
         text: widget.clip.text ?? '',
@@ -179,8 +178,7 @@ class _ViewerCaptionOverlayState extends State<ViewerCaptionOverlay> {
       setState(() => _draft = start.copyWith(sizeMilliPoints: size.round()));
       return;
     }
-    final dx = (offsetDelta(delta.dx, display.width) +
-            start.offsetXBasisPoints)
+    final dx = (offsetDelta(delta.dx, display.width) + start.offsetXBasisPoints)
         .clamp(-10000, 10000);
     final dy =
         (offsetDelta(delta.dy, display.height) + start.offsetYBasisPoints)
@@ -219,9 +217,10 @@ class _ViewerCaptionOverlayState extends State<ViewerCaptionOverlay> {
     ProjectTextWeight.bold => FontWeight.w700,
   };
 
-  static TextAlign _align(ProjectTextAlignment alignment) => switch (alignment) {
-    ProjectTextAlignment.start => TextAlign.left,
-    ProjectTextAlignment.center => TextAlign.center,
-    ProjectTextAlignment.end => TextAlign.right,
-  };
+  static TextAlign _align(ProjectTextAlignment alignment) =>
+      switch (alignment) {
+        ProjectTextAlignment.start => TextAlign.left,
+        ProjectTextAlignment.center => TextAlign.center,
+        ProjectTextAlignment.end => TextAlign.right,
+      };
 }

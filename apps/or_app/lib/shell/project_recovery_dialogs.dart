@@ -102,7 +102,9 @@ Future<bool> confirmRecoveryDiscardDialog(BuildContext context) async =>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Discard recovery data?'),
-        content: const Text('This removes the recovery checkpoint permanently.'),
+        content: const Text(
+          'This removes the recovery checkpoint permanently.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

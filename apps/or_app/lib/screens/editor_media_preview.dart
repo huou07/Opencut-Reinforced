@@ -32,7 +32,8 @@ class EditorMediaItemPreview extends StatelessWidget {
         ? ProjectMediaArtifactKind.waveform
         : null;
     final failed = preview?.state == ProjectMediaArtifactRequestState.failed;
-    final generating = preview?.kind == kind &&
+    final generating =
+        preview?.kind == kind &&
         (preview?.state == ProjectMediaArtifactRequestState.running ||
             preview?.state == ProjectMediaArtifactRequestState.queued);
     final bytes = preview?.kind == kind && !failed ? preview?.bytes : null;
@@ -73,7 +74,8 @@ class EditorMediaItemPreview extends StatelessWidget {
                 ? Center(
                     key: ValueKey('media-preview-progress-${item.mediaId}'),
                     child: Semantics(
-                      label: 'Generating preview for '
+                      label:
+                          'Generating preview for '
                           '${mediaDisplayName(item.sourceUri)}',
                       child: const Icon(
                         Icons.hourglass_top,
@@ -83,16 +85,16 @@ class EditorMediaItemPreview extends StatelessWidget {
                     ),
                   )
                 : Center(
-              child: Icon(
-                hasVideo
-                    ? Icons.movie_outlined
-                    : kind == ProjectMediaArtifactKind.waveform
-                    ? Icons.graphic_eq
-                    : Icons.perm_media_outlined,
-                size: 16,
-                color: OrColors.textMuted,
-              ),
-            )
+                    child: Icon(
+                      hasVideo
+                          ? Icons.movie_outlined
+                          : kind == ProjectMediaArtifactKind.waveform
+                          ? Icons.graphic_eq
+                          : Icons.perm_media_outlined,
+                      size: 16,
+                      color: OrColors.textMuted,
+                    ),
+                  )
           : ClipRRect(
               borderRadius: BorderRadius.circular(OrRadii.small),
               child: Image(

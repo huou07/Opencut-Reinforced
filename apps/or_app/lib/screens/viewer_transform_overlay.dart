@@ -102,7 +102,11 @@ class _ViewerTransformOverlayState extends State<ViewerTransformOverlay> {
               ),
             ),
             _interior(display, box, centre, rotated),
-            for (final (index, corner) in _corners(box, rotated, display).indexed)
+            for (final (index, corner) in _corners(
+              box,
+              rotated,
+              display,
+            ).indexed)
               _handle(
                 handleKey: const [
                   'viewer-transform-handle-tl',
@@ -341,12 +345,7 @@ class _ViewerTransformOverlayState extends State<ViewerTransformOverlay> {
   /// outside the stage, where the clip region makes it impossible to grab.
   List<Offset> _corners(Rect box, double rotation, Size display) {
     final centre = box.center;
-    return [
-      box.topLeft,
-      box.topRight,
-      box.bottomLeft,
-      box.bottomRight,
-    ]
+    return [box.topLeft, box.topRight, box.bottomLeft, box.bottomRight]
         .map((corner) => _rotatePoint(corner, centre, rotation))
         .map((corner) => _inset(corner, centre, _handleRadius + 4))
         // A clip larger than the frame puts its corners outside the stage,

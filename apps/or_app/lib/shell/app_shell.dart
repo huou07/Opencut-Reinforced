@@ -1502,9 +1502,7 @@ class _AppShellState extends State<AppShell> {
       case RecoveryStep.askCandidate:
         return preparationForChoice(await _askCandidateRecovery(inspection));
       case RecoveryStep.askConflictDiscard:
-        if (!await _askConflictingRecoveryDiscard(
-          inspection.conflictReason,
-        )) {
+        if (!await _askConflictingRecoveryDiscard(inspection.conflictReason)) {
           return const RecoveryPreparation(proceed: false);
         }
         return discardPreparation();
@@ -2068,7 +2066,6 @@ class _AppShellState extends State<AppShell> {
     if (!identical(session, _activeSession)) return null;
     return result.succeeded;
   }
-
 
   Future<void> _undoProject() async {
     await _runProjectAction(widget.projectGateway.undo);
@@ -4595,8 +4592,8 @@ class _AppShellState extends State<AppShell> {
   late final MediaPreviewReader _mediaPreviewReader = MediaPreviewReader(
     isCurrentSession: (session) =>
         mounted && identical(session, _activeSession),
-    readArtifact: (session, kind, cacheKey) => widget.projectGateway
-        .readMediaArtifact(
+    readArtifact: (session, kind, cacheKey) =>
+        widget.projectGateway.readMediaArtifact(
           session as ProjectSessionHandle,
           kind: kind,
           cacheKey: cacheKey,
@@ -4861,7 +4858,6 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
-
 
 /// Result of the create-project dialog. A frame rate is optional so the
 /// rename flow can keep returning just a name.

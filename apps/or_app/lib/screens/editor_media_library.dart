@@ -94,8 +94,12 @@ class EditorMediaLibraryPanel extends StatelessWidget {
       builder: (context, value, _) =>
           ValueListenableBuilder<Map<String, ProjectMediaPreview>>(
             valueListenable: updates,
-            builder: (context, live, _) =>
-                _panel(context, value.text, liveUpdates: live, onClearSearch: clearSearch),
+            builder: (context, live, _) => _panel(
+              context,
+              value.text,
+              liveUpdates: live,
+              onClearSearch: clearSearch,
+            ),
           ),
     );
   }
@@ -241,7 +245,8 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                 // "12 of 50 items" would read as "the library has 50" while
                 // only the loaded page is counted; say so when a page remains.
                 switch ((filtering, page?.nextOffset != null)) {
-                  (true, true) => '${items.length} of ${library.length} '
+                  (true, true) =>
+                    '${items.length} of ${library.length} '
                         'matches · more available',
                   (true, false) => '${items.length} of ${library.length} items',
                   (false, true) =>

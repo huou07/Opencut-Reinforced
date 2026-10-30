@@ -68,11 +68,13 @@ class PacingRecorder {
     builds.sort();
     rasters.sort();
     gaps.sort();
-    final span = (frames.last.timestampInMicroseconds(ui.FramePhase.vsyncStart) -
+    final span =
+        (frames.last.timestampInMicroseconds(ui.FramePhase.vsyncStart) -
             frames.first.timestampInMicroseconds(ui.FramePhase.vsyncStart)) /
         1e6;
     final fps = span <= 0 ? 0.0 : frames.length / span;
-    final line = '{"frames":${frames.length},'
+    final line =
+        '{"frames":${frames.length},'
         '"span_s":${span.toStringAsFixed(3)},'
         '"fps":${fps.toStringAsFixed(1)},'
         '"build_p50_ms":${_percentile(builds, 0.50)},'

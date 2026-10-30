@@ -46,8 +46,7 @@ const localTtsEngines = <LocalTtsEngine>[
         'export PATH="\$HOME/.local/bin:\$PATH"; '
         'if [ ! -d .git ]; then git clone --depth 1 https://github.com/pnnbao97/VieNeu-TTS.git .; fi; '
         'uv sync',
-    startCommand:
-        'export PATH="\$HOME/.local/bin:\$PATH"; exec uv run python apps/openai_speech.py',
+    startCommand: 'export PATH="\$HOME/.local/bin:\$PATH"; exec uv run python apps/openai_speech.py',
   ),
   LocalTtsEngine(
     id: 'custom',
@@ -102,7 +101,8 @@ class LocalTtsServerManager extends ChangeNotifier {
   String? get error => _error;
   String get engineId => _engineId;
   List<String> get log => List.unmodifiable(_log);
-  String get logTail => _log.skip(_log.length > 20 ? _log.length - 20 : 0).join('\n');
+  String get logTail =>
+      _log.skip(_log.length > 20 ? _log.length - 20 : 0).join('\n');
 
   void selectEngine(String id) {
     if (_engineId == id) return;
@@ -140,7 +140,9 @@ class LocalTtsServerManager extends ChangeNotifier {
 
   Future<void> start(LocalTtsEngine engine, {String command = ''}) async {
     if (_busy || _running) return;
-    final effective = command.trim().isEmpty ? engine.startCommand : command.trim();
+    final effective = command.trim().isEmpty
+        ? engine.startCommand
+        : command.trim();
     if (effective.isEmpty) {
       _error = 'Enter the command that starts this server.';
       notifyListeners();
@@ -209,14 +211,16 @@ class LocalTtsServerManager extends ChangeNotifier {
       if (markRunning) {
         _busy = false;
         notifyListeners();
-        unawaited(process.exitCode.then((code) {
-          if (_process == process) {
-            _process = null;
-            _running = false;
-            _append('[server exited with code $code]');
-            notifyListeners();
-          }
-        }));
+        unawaited(
+          process.exitCode.then((code) {
+            if (_process == process) {
+              _process = null;
+              _running = false;
+              _append('[server exited with code $code]');
+              notifyListeners();
+            }
+          }),
+        );
         return;
       }
       final code = await process.exitCode.timeout(timeout);

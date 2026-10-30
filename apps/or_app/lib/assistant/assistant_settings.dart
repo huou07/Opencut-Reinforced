@@ -249,8 +249,8 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
       : <AssistantHarnessKind>[settings.harnessKind];
   for (final kind in wanted) {
     final path = switch (kind) {
-      AssistantHarnessKind.dsh => await _firstExisting(dshCandidates) ??
-          await _findOnPath('dsh', env),
+      AssistantHarnessKind.dsh =>
+        await _firstExisting(dshCandidates) ?? await _findOnPath('dsh', env),
       AssistantHarnessKind.claudeCode =>
         await _findOnPath('claude-code-acp', env) ??
             await _firstExisting([
@@ -258,7 +258,9 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
             ]),
       AssistantHarnessKind.codex =>
         await _findOnPath('codex-acp', env) ??
-            await _firstExisting([if (home != null) '$home/.local/bin/codex-acp']),
+            await _firstExisting([
+              if (home != null) '$home/.local/bin/codex-acp',
+            ]),
       AssistantHarnessKind.opencode => await _findOnPath('opencode', env),
       AssistantHarnessKind.auto || AssistantHarnessKind.custom => null,
     };

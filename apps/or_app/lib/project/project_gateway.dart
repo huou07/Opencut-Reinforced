@@ -1037,6 +1037,7 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalRate rate,
   });
+
   /// Flip the direction a media clip plays. The clip keeps its span, so this is not
   /// a speed change and every other clip property survives.
   Future<ProjectActionResult> setTimelineClipReversed(
@@ -1046,6 +1047,7 @@ abstract interface class ProjectGateway {
     required String clipId,
     required bool reversed,
   });
+
   /// Hold one frame for the clip's whole duration, or release it. The source range
   /// is untouched, so releasing restores the original footage.
   Future<ProjectActionResult> setTimelineClipFrozen(
@@ -1187,6 +1189,7 @@ abstract interface class ProjectGateway {
     required String trackId,
     required ProjectRationalTime timelineStart,
   });
+
   /// Moves every listed clip on [trackId] by [delta] as one undo step.
   ///
   /// A group drag is one gesture; five separate moves would cost five undos and
@@ -1282,6 +1285,7 @@ abstract interface class ProjectGateway {
     required String clipId,
     required ProjectRationalTime timelineTime,
   });
+
   /// Lowers one music clip under every clip on [voiceTrackId] as one command
   /// and one undo entry. The clip is split at voice boundaries in Rust.
   Future<ProjectActionResult> duckTimelineClip(

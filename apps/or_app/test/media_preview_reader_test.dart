@@ -6,18 +6,23 @@ import 'package:or_app/production/media_preview_reader.dart';
 
 const _kind = ProjectMediaArtifactKind.thumbnail;
 
-ProjectMediaPreview _stored({String cacheKey = 'cache-1'}) => ProjectMediaPreview(
-  kind: _kind,
-  state: ProjectMediaArtifactRequestState.running,
-  cacheKey: cacheKey,
-);
+ProjectMediaPreview _stored({String cacheKey = 'cache-1'}) =>
+    ProjectMediaPreview(
+      kind: _kind,
+      state: ProjectMediaArtifactRequestState.running,
+      cacheKey: cacheKey,
+    );
 
 void main() {
   late Map<String, ProjectMediaPreview> previews;
   late bool currentSession;
 
   MediaPreviewReader build(
-    Future<ProjectMediaArtifact?> Function(Object, ProjectMediaArtifactKind, String)
+    Future<ProjectMediaArtifact?> Function(
+      Object,
+      ProjectMediaArtifactKind,
+      String,
+    )
     read,
   ) => MediaPreviewReader(
     isCurrentSession: (_) => currentSession,
@@ -34,19 +39,13 @@ void main() {
     MediaPreviewReader reader, {
     String mediaId = 'media-1',
     String cacheKey = 'cache-1',
-  }) => reader.read(
-    Object(),
-    mediaId: mediaId,
-    kind: _kind,
-    cacheKey: cacheKey,
-  );
+  }) =>
+      reader.read(Object(), mediaId: mediaId, kind: _kind, cacheKey: cacheKey);
 
   test('a PNG artifact becomes a ready preview with bytes', () async {
     final reader = build(
-      (_, _, _) async => ProjectMediaArtifact(
-        mimeType: 'image/png',
-        bytes: _bytes,
-      ),
+      (_, _, _) async =>
+          ProjectMediaArtifact(mimeType: 'image/png', bytes: _bytes),
     );
     final preview = await read(reader);
     expect(preview?.state, ProjectMediaArtifactRequestState.ready);
