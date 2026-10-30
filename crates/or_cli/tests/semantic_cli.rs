@@ -7,7 +7,8 @@ use or_core::{
     write_recovery_checkpoint,
 };
 use or_ipc::{
-    LiveProjectHost, MotionMaterializeHandler, ProjectHostEventKind, TranscriptionRequestHandler,
+    LiveProjectHost, MotionMaterializeHandler, ProjectHostEventKind, ProjectSessionIdentity,
+    TranscriptionRequestHandler,
 };
 use serde_json::Value;
 use std::{
@@ -3371,7 +3372,7 @@ struct FixtureMaterializer;
 impl MotionMaterializeHandler for FixtureMaterializer {
     fn handle_motion_materialize_request(
         &self,
-        _session: &ProjectSession,
+        _identity: ProjectSessionIdentity,
         request: MotionMaterializeRequest,
     ) -> MotionMaterializeResponse {
         let destination = match request {
