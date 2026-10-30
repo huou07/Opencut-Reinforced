@@ -75,7 +75,7 @@ jobs:
           ls -lh dist/*.dmg
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opencut-reinforced-macos-arm64
           path: dist/*.dmg
