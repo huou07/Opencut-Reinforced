@@ -1036,16 +1036,14 @@ impl ProjectSession {
                 OperationErrorCode::TimelineNothingToDuck,
             ));
         }
-        intervals.sort_by(|left, right| left.0.cmp(&right.0));
+        intervals.sort_by_key(|interval| interval.0);
         let mut merged: Vec<(RationalTime, RationalTime)> = Vec::new();
         for (start, end) in intervals {
-            if let Some(last) = merged.last_mut() {
-                if start <= last.1 {
-                    if end > last.1 {
-                        last.1 = end;
-                    }
-                    continue;
-                }
+            if let Some(last) = merged.last_mut()
+                && start <= last.1
+            {
+                last.1 = last.1.max(end);
+                continue;
             }
             merged.push((start, end));
         }

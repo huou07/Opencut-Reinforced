@@ -251,7 +251,8 @@ pub fn clean_audio(request: &AudioCleanupRequest) -> Result<AudioCleanupResult, 
 /// Pure, so the shape of the helper's output is tested without running one. Lines
 /// that are not an RMS figure — the `frame:`/`pts:` headers `ametadata` also prints —
 /// are ignored, and a run with no figures at all is an empty vector rather than an
-
+/// error. This keeps a helper failure distinguishable from a silent recording.
+///
 /// The value at `percentile` (0.0..=1.0) of a sample, using nearest-rank.
 ///
 /// The floor estimate is a low percentile rather than the mean: a recording's mean
@@ -321,8 +322,10 @@ fn read_wav_pcm16(path: &Path) -> Option<Vec<i16>> {
             let end = body.saturating_add(size).min(bytes.len());
             return Some(
                 bytes[body..end]
-                    .chunks_exact(2)
-                    .map(|pair| i16::from_le_bytes([pair[0], pair[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|pair| i16::from_le_bytes(*pair))
                     .collect(),
             );
         }

@@ -359,6 +359,7 @@ impl ProjectHostHandle {
     /// A group drag is one gesture: five separate moves would cost five undos
     /// and could stop half-applied, so the whole selection travels in a single
     /// command whose change carries the track before and after.
+    #[allow(clippy::too_many_arguments)]
     pub fn move_timeline_clips(
         &self,
         project_id: String,

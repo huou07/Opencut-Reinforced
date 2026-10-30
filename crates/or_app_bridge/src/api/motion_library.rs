@@ -837,13 +837,12 @@ pub fn motion_scene_save(
         image: None,
         preview: None,
     };
-    if let Ok((png, preview_width, preview_height)) = render_preview(&scene, &library, 0) {
-        if preview_width > 0
-            && preview_height > 0
-            && let Ok(relative) = library.write_preview(&document.asset_id, &png)
-        {
-            document.preview = Some(relative);
-        }
+    if let Ok((png, preview_width, preview_height)) = render_preview(&scene, &library, 0)
+        && preview_width > 0
+        && preview_height > 0
+        && let Ok(relative) = library.write_preview(&document.asset_id, &png)
+    {
+        document.preview = Some(relative);
     }
     if let Err(error) = library.save(&document, None) {
         return asset_failure(error.code(), error.to_string());
@@ -1204,7 +1203,7 @@ mod tests {
 
     fn first_frame_pixels(path: &Path) -> Vec<u8> {
         let source =
-            MediaSourceRef::local_file(&format!("file://{}", path.to_string_lossy())).unwrap();
+            MediaSourceRef::local_file(format!("file://{}", path.to_string_lossy())).unwrap();
         let budgets = RuntimeBudgets::new(
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
@@ -1559,7 +1558,7 @@ mod tests {
         );
         assert!(view.succeeded, "{} {}", view.code, view.message);
         let source =
-            MediaSourceRef::local_file(&format!("file://{}", output.to_string_lossy())).unwrap();
+            MediaSourceRef::local_file(format!("file://{}", output.to_string_lossy())).unwrap();
         let budgets = RuntimeBudgets::new(
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),

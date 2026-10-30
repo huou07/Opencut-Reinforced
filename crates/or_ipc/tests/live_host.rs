@@ -707,7 +707,7 @@ fn a_motion_render_does_not_block_queries() {
         )
         .unwrap(),
     );
-    let client = LocalIpcClient::open(&directory.descriptor_path()).unwrap();
+    let client = LocalIpcClient::open(directory.descriptor_path()).unwrap();
     let summary = host.describe().unwrap().summary;
     let request = MotionMaterializeRequest::FromCode {
         project_id: summary.project_id,
@@ -725,7 +725,7 @@ fn a_motion_render_does_not_block_queries() {
     entered_rx
         .recv_timeout(Duration::from_secs(5))
         .expect("the motion handler should start");
-    let second_client = LocalIpcClient::open(&directory.descriptor_path()).unwrap();
+    let second_client = LocalIpcClient::open(directory.descriptor_path()).unwrap();
     let (query_tx, query_rx) = mpsc::channel();
     let query = thread::spawn(move || {
         let result = second_client.describe();
@@ -744,5 +744,5 @@ fn a_motion_render_does_not_block_queries() {
     let _ = release_tx.send(());
     let response = worker.join().unwrap().unwrap();
     assert!(matches!(response, ApplicationSuccess::MotionMaterialize(_)));
-    let _ = query.join().unwrap();
+    query.join().unwrap();
 }

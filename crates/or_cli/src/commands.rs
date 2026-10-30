@@ -4743,25 +4743,25 @@ fn parse_text_color(value: &std::ffi::OsStr, json: bool) -> Result<TextColor, Cl
 fn parse_i16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<i16, CliError> {
     value
         .to_str()
-        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
         .parse::<i16>()
-        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
 }
 
 fn parse_u16(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u16, CliError> {
     value
         .to_str()
-        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
         .parse::<u16>()
-        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
 }
 
 fn parse_u32(value: &std::ffi::OsStr, flag: &str, json: bool) -> Result<u32, CliError> {
     value
         .to_str()
-        .ok_or_else(|| CliError::usage(json, &format!("{flag} must be valid UTF-8")))?
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
         .parse::<u32>()
-        .map_err(|_| CliError::usage(json, &format!("{flag} must be an integer")))
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
 }
 
 fn media_project_path(options: &Options, json: bool) -> Result<(PathBuf, bool), CliError> {

@@ -207,8 +207,8 @@ fn writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams() {
     )
     .expect("the macOS FFmpeg profile must include VideoToolbox H.264 and AAC");
     let mut rgba = vec![0; 64 * 48 * 4];
-    for pixel in rgba.chunks_exact_mut(4) {
-        pixel.copy_from_slice(&[80, 140, 210, 255]);
+    for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
+        *pixel = [80, 140, 210, 255];
     }
     for frame_index in 0..10 {
         writer

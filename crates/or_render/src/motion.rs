@@ -389,7 +389,7 @@ fn draw_instruction(
             let mut formatting = TextFormatting {
                 // Vietnamese text gets the display face designed for its stacked
                 // marks; plain Latin stays on the neutral UI face.
-                font: if content.chars().any(|character| !character.is_ascii()) {
+                font: if !content.is_ascii() {
                     FontIdentity::BeVietnamPro
                 } else {
                     FontIdentity::BundledInter

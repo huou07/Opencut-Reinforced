@@ -928,8 +928,9 @@ impl ProjectHostHandle {
     }
 
     /// Prepares media without holding the live-host lock, then dispatches with the
-    /// identity and revision captured by the caller before probing started.
-
+    /// identity and revision captured by the caller before probing started. The
+    /// probe and the command therefore see the same project revision even when
+    /// another client edits the project in between.
     pub fn rename(
         &self,
         project_id: String,

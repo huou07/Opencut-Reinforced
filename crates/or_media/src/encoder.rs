@@ -249,7 +249,7 @@ impl FfmpegExportWriter {
                 options.set("b", "0");
                 options.set("row-mt", "1");
             } else {
-                options.set("b", &video_bitrate(width, height, quality).to_string());
+                options.set("b", video_bitrate(width, height, quality).to_string());
             }
             video_context
                 .open_as_with(video_codec, options)

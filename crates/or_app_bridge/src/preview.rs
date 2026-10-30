@@ -1138,6 +1138,7 @@ mod desktop {
             result
         }
 
+        #[allow(clippy::too_many_arguments)]
         fn render_with_size(
             &self,
             program: &PreviewProgram,
@@ -1524,6 +1525,7 @@ mod desktop {
     }
 
     impl MotionMaterializeHandler for PreviewRuntime {
+        #[allow(clippy::let_and_return)]
         fn handle_motion_materialize_request(
             &self,
             identity: ProjectSessionIdentity,
@@ -2793,6 +2795,7 @@ mod desktop {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_export_audio_until(
         writer: &mut or_media::MatroskaFfv1PcmS16leWriter,
         program: &PreviewProgram,
@@ -3338,7 +3341,7 @@ mod desktop {
         }
         process_audio_clip(&mut resampled, clip_offset, clip.duration, clip.settings)
             .map_err(|error| error.to_string())?;
-        for (frame, stereo) in resampled.chunks_exact(2).enumerate() {
+        for (frame, stereo) in resampled.as_chunks::<2>().0.iter().enumerate() {
             let destination = (first_frame + frame) * 2;
             output[destination] += stereo[0];
             output[destination + 1] += stereo[1];

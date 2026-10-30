@@ -178,16 +178,20 @@ pub fn decode_motion_image(bytes: &[u8]) -> Result<MotionImage, MotionImageError
     let pixels = match frame.color_type {
         png::ColorType::Rgba => raw.to_vec(),
         png::ColorType::Rgb => raw
-            .chunks_exact(3)
-            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 255])
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|[red, green, blue]| [*red, *green, *blue, 255])
             .collect(),
         png::ColorType::Grayscale => raw
             .iter()
             .flat_map(|value| [*value, *value, *value, 255])
             .collect(),
         png::ColorType::GrayscaleAlpha => raw
-            .chunks_exact(2)
-            .flat_map(|pixel| [pixel[0], pixel[0], pixel[0], pixel[1]])
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .flat_map(|[value, alpha]| [*value, *value, *value, *alpha])
             .collect(),
         png::ColorType::Indexed => return Err(MotionImageError::InvalidPng),
     };
@@ -350,7 +354,7 @@ mod tests {
             decode_motion_image(b"not a png").unwrap_err(),
             MotionImageError::InvalidPng
         );
-        let png = encode_png(2, 2, &vec![0; 16]).unwrap();
+        let png = encode_png(2, 2, &[0; 16]).unwrap();
         assert!(decode_motion_image(&png[..png.len() / 2]).is_err());
     }
 
@@ -365,7 +369,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&directory).unwrap();
-        let png = encode_png(2, 2, &vec![10, 20, 30, 255].repeat(4)).unwrap();
+        let png = encode_png(2, 2, &[10, 20, 30, 255].repeat(4)).unwrap();
         std::fs::write(directory.join("pic.png"), &png).unwrap();
 
         let scene = scene_with_image("pic.png");

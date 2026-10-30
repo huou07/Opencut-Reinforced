@@ -336,7 +336,6 @@ pub(super) fn insert_clip_mode(
 }
 
 /// The track's clips as `(id, start, duration)` in timeline order.
-
 pub(super) fn clip_spans(
     session: &ProjectSession,
     track_id: &str,
@@ -423,7 +422,6 @@ pub(super) fn slip_clip(
 }
 
 /// The clip's source window start, which is what a slip moves.
-
 pub(super) fn source_start(
     session: &ProjectSession,
     track_id: &str,
@@ -477,7 +475,6 @@ pub(super) fn slide_clip(
 
 /// Three adjacent one-second clips, which is the smallest track a slide has a
 /// middle clip to move on.
-
 pub(super) fn seed_three_adjacent_clips(session: &mut ProjectSession) {
     seed_media_and_track(session, MEDIA_A, TRACK_A);
     insert_clip_at(session, CLIP_A, TRACK_A, MEDIA_A, (0, 1), (1, 1));
@@ -501,7 +498,6 @@ pub(super) fn move_track(
 }
 
 /// The track kinds in order, which is the only thing a move changes.
-
 pub(super) fn track_order(session: &ProjectSession) -> Vec<String> {
     session
         .project()

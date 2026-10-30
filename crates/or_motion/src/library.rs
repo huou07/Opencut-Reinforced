@@ -322,10 +322,10 @@ impl MotionLibrary {
         // only its own copies, so an unrelated removal cannot break it.
         self.write_catalog(&catalog)?;
         for relative in removed_images {
-            if !self.referenced_images()?.contains(&relative) {
-                if let Ok(path) = self.resolve_relative(&relative) {
-                    let _ = fs::remove_file(path);
-                }
+            if !self.referenced_images()?.contains(&relative)
+                && let Ok(path) = self.resolve_relative(&relative)
+            {
+                let _ = fs::remove_file(path);
             }
         }
         Ok(true)
@@ -355,12 +355,12 @@ impl MotionLibrary {
         let catalog = self.read_catalog()?;
         let mut referenced = std::collections::HashSet::new();
         for entry in &catalog.entries {
-            if let Ok(document) = self.load(&entry.asset_id) {
-                if let Some(scene) = document.scene {
-                    for asset in scene.assets {
-                        if asset.path.starts_with("images/") {
-                            referenced.insert(asset.path);
-                        }
+            if let Ok(document) = self.load(&entry.asset_id)
+                && let Some(scene) = document.scene
+            {
+                for asset in scene.assets {
+                    if asset.path.starts_with("images/") {
+                        referenced.insert(asset.path);
                     }
                 }
             }
@@ -1225,6 +1225,9 @@ mod tests {
     fn the_asset_file_is_bounded_by_the_asset_parser() {
         // MAX_MOTION_ASSET_BYTES is exported for the caller; this test pins that
         // the library and the parser agree on the bound.
-        assert!(MAX_MOTION_ASSET_BYTES >= 1024 * 1024);
+        #[allow(clippy::assertions_on_constants)]
+        {
+            assert!(MAX_MOTION_ASSET_BYTES >= 1024 * 1024);
+        }
     }
 }

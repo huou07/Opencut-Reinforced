@@ -510,11 +510,12 @@ pub fn scene_from_source(
             .char_indices()
             .map(|(start, character)| start + character.len_utf8())
             .collect::<Vec<_>>();
-        let duration_slots = (options.line_milliseconds / 2).max(1) as usize;
+        let duration_slots = usize::try_from(options.line_milliseconds / 2)
+            .unwrap_or(1)
+            .max(1);
         let step_count = character_ends
             .len()
-            .max(1)
-            .min(MAX_CODE_REVEAL_STEPS_PER_LINE)
+            .clamp(1, MAX_CODE_REVEAL_STEPS_PER_LINE)
             .min(duration_slots);
         let line_start_ms = (index as u32)
             .saturating_mul(options.line_milliseconds)

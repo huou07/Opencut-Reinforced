@@ -1662,10 +1662,10 @@ fn apply_camera(
     canvas: MotionCanvas,
 ) {
     let state = sample_camera(camera, time);
-    if (state.pan_x.abs() < f64::EPSILON
+    if state.pan_x.abs() < f64::EPSILON
         && state.pan_y.abs() < f64::EPSILON
         && (state.zoom - 1.0).abs() < f64::EPSILON
-        && state.rotation_degrees.abs() < f64::EPSILON)
+        && state.rotation_degrees.abs() < f64::EPSILON
     {
         return;
     }

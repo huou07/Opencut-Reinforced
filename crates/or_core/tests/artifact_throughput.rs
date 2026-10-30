@@ -62,7 +62,7 @@ fn artifact_throughput_by_pool_width() {
     }
     let directory = TestDirectory::new();
     let mut session =
-        ProjectFileSession::create_new(&directory.0.join("throughput.orproj"), "Throughput")
+        ProjectFileSession::create_new(directory.0.join("throughput.orproj"), "Throughput")
             .expect("create project");
     let mut items: Vec<MediaItem> = Vec::new();
     for index in 0..CLIPS {
