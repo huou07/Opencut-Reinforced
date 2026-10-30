@@ -1,8 +1,7 @@
 use ffmpeg_the_third as ffmpeg;
-use or_media::{
-    FfmpegExportProfile, FfmpegExportWriter, FfmpegSoftwareExportWriter,
-    MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
-};
+#[cfg(target_os = "macos")]
+use or_media::{FfmpegExportProfile, FfmpegExportWriter};
+use or_media::{FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter, SoftwareExportProfile};
 use std::{
     fs,
     path::PathBuf,
@@ -37,6 +36,7 @@ impl TestDirectory {
         self.0.join("profile.webm")
     }
 
+    #[cfg(target_os = "macos")]
     fn mp4_file(&self) -> PathBuf {
         self.0.join("profile.mp4")
     }
