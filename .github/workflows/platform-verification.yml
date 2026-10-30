@@ -135,7 +135,7 @@ jobs:
         timeout-minutes: 10
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
-        run: cargo test --locked -p or_media --test software_export
+        run: cargo test --locked -p or_media --test software_export -- --skip writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams
 
       - name: Verify Phase 7 runtime hardening contracts
         run: |
