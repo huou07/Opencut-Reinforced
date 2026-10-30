@@ -1,0 +1,315 @@
+{
+  "format": "or-assistant-script",
+  "schema_version": 1,
+  "title": "Opencut Reinforced — từ ý tưởng đến video",
+  "language": "vi",
+  "gap_ms": 120,
+  "scenes": [
+    {
+      "id": "mo-cau-hoi",
+      "marker": "Ý tưởng",
+      "narration": "Video bạn đang xem bắt đầu từ một câu hỏi: làm sao kể cho ai đó hiểu Opencut Reinforced là gì, mà không phải mở một buổi demo?"
+    },
+    {
+      "id": "mo-du-an-trong",
+      "narration": "Lúc đó dự án trống. Chưa có hình, chưa có giọng, chưa có phụ đề. Chỉ có một khung timeline rỗng và một con trỏ đang nhấp nháy."
+    },
+    {
+      "id": "mo-nam-phut",
+      "narration": "Năm phút sau, nó thành một video hoàn chỉnh. Đây là cách từng phần của OR nối vào nhau."
+    },
+    {
+      "id": "chat-giong-mo-rong",
+      "marker": "Chat Assistant",
+      "narration": "Mọi thứ bắt đầu ở khung chat bên phải. Hãy nghĩ về nó như một extension trong VS Code: bạn cắm vào đó trợ lý AI quen thuộc đang cài trên máy."
+    },
+    {
+      "id": "chat-khong-phai-agent",
+      "narration": "OR không phải một agent mới. Nó mở harness của bạn, nói chuyện qua giao thức ACP, và đưa cho harness đó một bộ công cụ MCP để chạm vào dự án."
+    },
+    {
+      "id": "chat-chon-workspace",
+      "narration": "Bạn chọn workspace, model và mức suy luận trong phần cài đặt của panel, và lựa chọn đó được giữ cho lần kết nối sau."
+    },
+    {
+      "id": "chat-yeu-cau",
+      "narration": "Bạn gõ một yêu cầu, ví dụ viết cho tôi kịch bản năm phút về cách OR hoạt động. Harness chạy bên ngoài OR, với model và tài khoản của chính bạn."
+    },
+    {
+      "id": "chat-ket-qua",
+      "narration": "Kết quả quay về dưới dạng những dòng trong một tệp kịch bản, chứ không phải một khung chat đẹp. Đó là nguyên liệu đầu tiên của video."
+    },
+    {
+      "id": "chat-tiep",
+      "narration": "Bạn sửa ngay trong panel: thêm một câu, đổi thứ tự, hoặc nhờ viết lại đoạn mở đầu."
+    },
+    {
+      "id": "chat-ngu-canh",
+      "narration": "Bạn cũng có thể hỏi nó về chính dự án: clip này dài bao nhiêu, track nào đang khoá, cảnh nào thiếu nguồn."
+    },
+    {
+      "id": "chat-quyen",
+      "narration": "Nếu một lệnh cần quyền, panel hiện lựa chọn để bạn duyệt, giống cách một extension xin quyền trong trình soạn thảo."
+    },
+    {
+      "id": "chat-lenh-that",
+      "narration": "Mỗi thay đổi trợ lý làm đều là một lệnh thật trên dự án, nên nút hoàn tác vẫn hoạt động y như khi bạn tự tay sửa."
+    },
+    {
+      "id": "canh-tu-kich-ban",
+      "marker": "Motion Scene",
+      "narration": "Từ kịch bản, trợ lý gọi công cụ tạo cảnh động. Mỗi cảnh chỉ là một tệp mô tả hình khối, đường nét, chữ và chuyển động."
+    },
+    {
+      "id": "canh-xem-truoc",
+      "narration": "Panel Motion cho bạn xem trước một khung hình tĩnh trước khi dựng, để biết chữ có tràn ra ngoài khung hay không."
+    },
+    {
+      "id": "canh-khoi-lap-rap",
+      "narration": "Hình chữ nhật, vòng tròn, mũi tên và biểu đồ bay vào, ghép lại thành một bố cục, rồi cả bố cục lùi lại và trượt vào timeline."
+    },
+    {
+      "id": "canh-tat-dinh",
+      "narration": "Không có mã chạy bên trong cảnh, cũng không gọi mạng. Cùng một tệp luôn cho ra cùng một cảnh, nên sửa một chữ rồi dựng lại là an toàn."
+    },
+    {
+      "id": "canh-thu-vien",
+      "narration": "Những cảnh đã dựng có thể lưu lại thành mẫu trong thư viện, lần sau chỉ đổi chữ và màu là dùng được."
+    },
+    {
+      "id": "canh-anh",
+      "narration": "Cảnh cũng có thể đặt ảnh PNG cắt sẵn bên cạnh hình khối và chữ, nên bạn không bị giới hạn ở đồ hoạ thuần vector."
+    },
+    {
+      "id": "canh-mau",
+      "narration": "Cùng một ý tưởng có thể ra nhiều phong cách: tối giản, nhiều chi tiết, hay dạng biểu đồ."
+    },
+    {
+      "id": "canh-chu",
+      "narration": "Chữ trong cảnh cũng là hình khối: bạn đổi nội dung, cỡ, màu và vị trí mà không cần mở trình thiết kế."
+    },
+    {
+      "id": "canh-camera",
+      "narration": "Cảnh còn có máy quay riêng: bạn có thể cho nó tiến vào một chi tiết, lia ngang, hay thu nhỏ để lộ cả bố cục."
+    },
+    {
+      "id": "canh-chuyen-canh",
+      "narration": "Các cảnh được nối bằng clip trên timeline, nên bạn cắt, đổi thứ tự hay thay cảnh mới mà không phải dựng lại cả video."
+    },
+    {
+      "id": "giong-may-chu",
+      "marker": "Giọng đọc",
+      "narration": "Phần lời đọc cũng chạy trên máy. OR gọi một máy chủ giọng nói cục bộ, ví dụ VieNeu, ngay trên máy của bạn."
+    },
+    {
+      "id": "giong-ba-nguon",
+      "narration": "OR cho bạn ba nguồn giọng: giọng hệ thống, một máy chủ cục bộ, hoặc một nhà cung cấp đám mây có khoá riêng."
+    },
+    {
+      "id": "giong-tung-dong",
+      "narration": "Kịch bản được đưa vào, từng dòng trở thành một tệp âm thanh, và dạng sóng hiện ra trên track audio."
+    },
+    {
+      "id": "giong-nhan-ban",
+      "narration": "Với máy chủ cục bộ, bạn còn có thể nhân bản một giọng từ đoạn mẫu vài giây, sau khi xác nhận bạn có quyền dùng đoạn ghi đó."
+    },
+    {
+      "id": "giong-chi-phi",
+      "narration": "Phần này không cần khoá API. Nếu bạn chọn một giọng đám mây, OR vẫn dùng được, nhưng chi phí khi đó do dịch vụ bạn chọn quyết định."
+    },
+    {
+      "id": "giong-nghe-thu",
+      "narration": "Bạn nghe thử từng dòng, đổi giọng hoặc tốc độ, rồi mới đưa vào dự án, nên không phải dựng lại cả video chỉ vì một câu đọc sai."
+    },
+    {
+      "id": "giong-mau",
+      "narration": "Giọng mẫu được lưu cùng dự án, nên mở lại sau vài ngày vẫn đọc đúng chất giọng đó."
+    },
+    {
+      "id": "giong-toc-do",
+      "narration": "Bạn chỉnh được tốc độ và khoảng nghỉ giữa các dòng, nên nhịp kể có thể nhanh hay chậm tuỳ ý."
+    },
+    {
+      "id": "phu-de-whisper",
+      "marker": "Phụ đề",
+      "narration": "Có giọng rồi, phụ đề có thể làm tự động. Whisper chạy ngay trên máy, nghe lại chính đoạn âm thanh đó."
+    },
+    {
+      "id": "phu-de-mo-hinh",
+      "narration": "Có nhiều cỡ mô hình để chọn: nhỏ thì nhanh, lớn thì chính xác hơn. Bạn tải một lần và dùng lại cho các dự án sau."
+    },
+    {
+      "id": "phu-de-tung-tu",
+      "narration": "Sóng âm được cắt thành từng đoạn, mỗi đoạn thành một cụm từ, và thời điểm khớp với lúc giọng đọc nói."
+    },
+    {
+      "id": "phu-de-duyet",
+      "narration": "Kết quả là một bản nháp để bạn xem lại. Đồng ý thì nó thành các clip chữ trên track caption, sửa được từng dòng."
+    },
+    {
+      "id": "phu-de-kieu",
+      "narration": "Bạn đổi cỡ chữ, vị trí và nền cho toàn bộ phụ đề, hoặc chỉnh riêng một câu bị dài."
+    },
+    {
+      "id": "phu-de-nhap-xuat",
+      "narration": "Phụ đề cũng nhập và xuất được dạng SRT hoặc WebVTT, nên bạn có thể làm việc với công cụ bên ngoài nếu muốn."
+    },
+    {
+      "id": "phu-de-sua",
+      "narration": "Bạn có thể sửa một chữ bị nhận sai mà không phải làm lại cả đoạn."
+    },
+    {
+      "id": "dung-nhieu-lop",
+      "marker": "Dựng video",
+      "narration": "Giờ đến phần dựng. Timeline có nhiều lớp: hình, tiếng, phụ đề. Mỗi lớp là một dải, mỗi đoạn là một clip."
+    },
+    {
+      "id": "dung-cat-ghep",
+      "narration": "Bạn kéo để di chuyển, kéo mép để cắt, cắt đôi tại con trỏ, xoá và để các clip sau tự lấp chỗ trống."
+    },
+    {
+      "id": "dung-toc-do",
+      "narration": "Bạn đổi được tốc độ phát của một clip, đảo chiều, hoặc đóng băng một khung hình mà vẫn giữ nguyên đoạn nguồn."
+    },
+    {
+      "id": "dung-xem-truoc",
+      "narration": "Mọi thao tác trả về ngay trên khung xem trước, nên bạn thấy kết quả chứ không phải đoán."
+    },
+    {
+      "id": "dung-phat",
+      "narration": "Khung xem trước có bộ giải mã riêng, nên phát mượt mà không chặn phần bạn đang dựng."
+    },
+    {
+      "id": "dung-nhom",
+      "narration": "Chọn nhiều clip rồi di chuyển cả nhóm như một thao tác, và một lần hoàn tác là trả lại đúng chỗ cũ."
+    },
+    {
+      "id": "dung-nhac",
+      "narration": "Nhạc nền nằm ở lớp dưới. Khi có giọng đọc, nhạc tự hạ xuống để lời nói rõ hơn, và bạn chỉnh lại mức đó bất cứ lúc nào."
+    },
+    {
+      "id": "dung-marker",
+      "narration": "Bạn đặt mốc cho từng chương để nhảy nhanh, và mốc đó dùng luôn cho việc hít đường khi kéo clip."
+    },
+    {
+      "id": "dung-media",
+      "narration": "Tệp phim không bị chép vào dự án. Kéo vào là dự án giữ đường dẫn tới tệp, nên ổ đĩa không phình lên gấp đôi."
+    },
+    {
+      "id": "dung-dinh-dang",
+      "narration": "Nhập được Matroska, WebM, WAV, MP3 và MP4 tuỳ cấu hình, và tệp không hợp lệ sẽ báo đúng lý do."
+    },
+    {
+      "id": "dung-thu-vien",
+      "narration": "Thư viện media giữ mọi tệp bạn đã nhập, kèm độ dài và định dạng để tìm lại nhanh."
+    },
+    {
+      "id": "dung-am-luong",
+      "narration": "Mỗi clip có mức âm lượng riêng, nên một đoạn nhạc có thể nhỏ hơn phần còn lại."
+    },
+    {
+      "id": "auto-mot-yeu-cau",
+      "marker": "Tự động hoá",
+      "narration": "Điều thú vị là bạn có thể nhờ trợ lý làm những việc lặp lại: thêm nhạc, cắt đoạn thừa, tạo phụ đề, đặt mốc chương."
+    },
+    {
+      "id": "auto-nhieu-lenh",
+      "narration": "Một yêu cầu trong chat mở ra nhiều lệnh nhỏ. Bạn thấy chúng chạy lần lượt và thấy timeline đổi theo từng bước."
+    },
+    {
+      "id": "auto-doc-lai",
+      "narration": "Làm xong, trợ lý đọc lại timeline và báo cho bạn nó đã thêm gì, ở track nào, mốc thời gian nào."
+    },
+    {
+      "id": "auto-hoan-tac",
+      "narration": "Vì mọi lệnh đều hoàn tác được, bạn có thể để trợ lý làm nhanh, rồi tự tay sửa những chỗ cần gu của mình."
+    },
+    {
+      "id": "auto-canh",
+      "narration": "Trợ lý cũng dựng được cảnh động, chèn vào timeline, và lưu cảnh đó vào thư viện để lần sau tái sử dụng."
+    },
+    {
+      "id": "auto-motion",
+      "narration": "Ví dụ: tạo một cảnh tiêu đề, đặt ở đầu video, và giữ nguyên nhịp cắt hiện có."
+    },
+    {
+      "id": "local-tren-may",
+      "marker": "Local và miễn phí",
+      "narration": "Có một điểm OR làm khác: phần lớn việc nặng diễn ra trên máy bạn. Âm thanh, phụ đề, cảnh động, dựng và xuất video."
+    },
+    {
+      "id": "local-khong-tai-len",
+      "narration": "Dự án và tệp phim nằm trên ổ đĩa của bạn. Không có tài khoản bắt buộc, và không có bước tải lên nào."
+    },
+    {
+      "id": "local-cache",
+      "narration": "Ảnh thu nhỏ và dạng sóng chỉ là bộ nhớ đệm, xoá đi không ảnh hưởng gì tới dự án."
+    },
+    {
+      "id": "local-ma-nguon-mo",
+      "narration": "OR miễn phí và mã nguồn mở. Những model chạy local như VieNeu hay Whisper cũng miễn phí khi giấy phép của chúng cho phép."
+    },
+    {
+      "id": "local-giay-phep",
+      "narration": "Phần mềm dùng giấy phép MIT. Từng model có giấy phép riêng, nên hãy đọc trước khi dùng cho mục đích thương mại."
+    },
+    {
+      "id": "local-chi-phi",
+      "narration": "Nhưng đừng hiểu nhầm: nếu bạn dùng một harness hay dịch vụ trả phí, chi phí đó vẫn do bên đó quyết định. OR không biến dịch vụ trả phí thành miễn phí."
+    },
+    {
+      "id": "may-nen-tang",
+      "marker": "Hiệu năng",
+      "narration": "OR chạy trên macOS, Windows, Linux và Android. Phần cứng khác nhau thì cách xử lý cũng khác nhau."
+    },
+    {
+      "id": "may-gpu",
+      "narration": "Máy có GPU thì tận dụng đường dựng nhanh hơn. Máy yếu vẫn chạy được bằng đường phần mềm, chậm hơn nhưng không vỡ."
+    },
+    {
+      "id": "may-dien-thoai",
+      "narration": "Trên Android, app làm được phần lớn việc dựng, còn panel trợ lý cần một tiến trình riêng nên được báo là chưa dùng được, thay vì giả vờ chạy."
+    },
+    {
+      "id": "may-cau-hinh",
+      "narration": "OR chọn đường xử lý theo khả năng của máy, và luôn có đường phần mềm để không phụ thuộc vào một loại phần cứng."
+    },
+    {
+      "id": "may-xuat",
+      "narration": "Khi xuất, bạn chọn độ phân giải và định dạng; phần còn lại chạy nền và báo tiến độ."
+    },
+    {
+      "id": "may-o-cung",
+      "narration": "Dự án vẫn mở được khi không có mạng, miễn là các tệp nguồn còn trên máy."
+    },
+    {
+      "id": "ket-hop-nhat",
+      "marker": "Sản phẩm cuối",
+      "narration": "Cuối cùng, tất cả các lớp gặp nhau ở một khung hình: cảnh động ở trên, giọng đọc và nhạc ở dưới, phụ đề bám theo lời."
+    },
+    {
+      "id": "ket-xuat",
+      "narration": "Bạn xem lại, cắt bỏ chỗ thừa, rồi xuất ra tệp Matroska hoặc WebM. Video bạn đang xem đi ra từ đúng quy trình đó."
+    },
+    {
+      "id": "ket-mo-lai",
+      "narration": "Và lần sau, bạn chỉ cần mở lại dự án, thay kịch bản, rồi để phần còn lại chạy lại."
+    },
+    {
+      "id": "ket-khong-phai-chatbot",
+      "narration": "OR không phải một công cụ cắt ghép có thêm chatbot. Nó là chỗ để ý tưởng, hình ảnh, giọng nói, phụ đề và trợ lý làm việc cùng nhau."
+    },
+    {
+      "id": "ket-thu-ngay",
+      "narration": "Bạn có thể thử ngay: mở một dự án trống, kéo một tệp vào, và bắt đầu từ đó."
+    },
+    {
+      "id": "ket-bat-dau-nhanh",
+      "narration": "Nếu chưa biết bắt đầu từ đâu, hãy thử một cảnh động trước: nó cho bạn thấy ngay sức mạnh của công cụ."
+    },
+    {
+      "id": "ket-thu-nghiem",
+      "narration": "Và vì mọi thứ nằm trên máy, bạn có thể thử nghiệm mà không sợ làm hỏng tài khoản hay dữ liệu của ai."
+    }
+  ]
+}

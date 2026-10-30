@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -56,6 +57,18 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
     _orCli.dispose();
     _workspace.dispose();
     super.dispose();
+  }
+
+  Future<void> _downloadHarness() async {
+    final url = switch (_harnessKind) {
+      AssistantHarnessKind.claudeCode => 'https://claude.com/claude-code',
+      AssistantHarnessKind.codex => 'https://github.com/openai/codex',
+      AssistantHarnessKind.opencode => 'https://opencode.ai',
+      AssistantHarnessKind.dsh ||
+      AssistantHarnessKind.auto ||
+      AssistantHarnessKind.custom => 'https://github.com/deepseek-ai/deepseek-harness',
+    };
+    await Process.run('open', [url]);
   }
 
   Future<void> _detect() async {
@@ -146,9 +159,10 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'The assistant runs DeepSeek Harness locally and edits the '
-                'open project through its command path. It never receives '
-                'provider credentials from this app.',
+                'The assistant runs an ACP harness locally — DSH, Claude Code, '
+                'Codex, OpenCode or your own command — and edits the open '
+                'project through its command path. It never receives provider '
+                'credentials from this app.',
                 style: TextStyle(
                   color: OrColors.textMuted,
                   fontSize: OrType.tinySize,
@@ -298,6 +312,10 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                         fontSize: OrType.tinySize,
                       ),
                     ),
+                  ),
+                  TextButton(
+                    onPressed: _downloadHarness,
+                    child: const Text('Get a harness'),
                   ),
                   TextButton(
                     onPressed: _detect,

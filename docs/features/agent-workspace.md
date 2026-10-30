@@ -19,13 +19,18 @@ write, organised like this repository's own routing:
 | `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`) |
 | `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs`; the CLI carries the file-level verbs the tools do not (clean-up, transcription, motion publish and the asset library) |
 | `scenes/` | scene sources the agent authors |
+| `templates/video-pipeline/` | the default workflow for a complete narrated motion-scene video: scaffold, narration, beat scenes, parallel render and one assembly pass |
 | `work/` | scratch files and imported copies |
 | `project.json` | app-written marker: project name, project file, session descriptor, `app_support_path`, `motion_library_path` |
 | `or-cli.json` | app-written marker: the `or` executable used by `tools/or` |
 
 The agent reads `AGENTS.md` automatically as its session instruction file. The
 index says which single guide answers a task, so the agent does not preload the
-whole workspace. `.agents/skills` is the harness's project skill root; the app
+whole workspace. For a whole video, explainer or multi-scene motion piece the
+first route is `templates/video-pipeline/README.md`; the template already
+materialises scenes in parallel (three workers by default) and assembles them in
+one pass, so the assistant does not render beats one at a time unless the user
+asks for that. `.agents/skills` is the harness's project skill root; the app
 does not copy skills into a user-global directory.
 
 ## Installation

@@ -15,6 +15,13 @@ each line below names the situation that makes it the right thing to read.
 
 ### Guides
 
+- **Full video pipeline (default for a complete video)** — local narration,
+  beat-planned MotionScenes with baked captions, parallel scene materialisation,
+  music and one assembly pass into the open project.
+  When: the user asks for a whole video, explainer, narrated sequence, montage or
+  any multi-scene piece built from motion graphics. Start here instead of
+  authoring scenes one at a time, and keep `render.mjs` at 3 workers unless the
+  machine is idle. Path: `templates/video-pipeline/README.md`
 - **Timeline editing** — tracks and their state, clips, markers, slip/roll/slide and sequence commands with exact times.
   When: the user asks to add, move, trim, slip, roll, slide, split, delete, reorder, re-time or mark something on the timeline.
   Path: `docs/timeline-editing.md`
