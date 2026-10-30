@@ -258,6 +258,9 @@ jobs:
       - name: Run shared live-host transport tests
         run: cargo test -p or_ipc --test live_host
 
+      - name: Install media helpers for the attached CLI tests
+        run: brew list ffmpeg >/dev/null 2>&1 || brew install ffmpeg
+
       - name: Run attached CLI shared-host parity tests
         run: cargo test -p or_cli --test semantic_cli
 
