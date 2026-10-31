@@ -773,6 +773,10 @@ impl ProjectHostHandle {
             project_instance_id: result.summary.project_instance_id.to_string(),
             project_revision: result.summary.project_revision.value(),
             sequence_frame_rate: settings.sequence_frame_rate.map(rational_rate_view),
+            sequence_canvas: settings.sequence_canvas.map(|canvas| SequenceCanvasView {
+                width: canvas.width(),
+                height: canvas.height(),
+            }),
         })
     }
 
@@ -805,6 +809,49 @@ impl ProjectHostHandle {
                     project_instance_id,
                     revision,
                     rate,
+                )
+            },
+        )
+    }
+
+    pub fn set_timeline_sequence_canvas(
+        &self,
+        project_id: String,
+        project_instance_id: String,
+        expected_revision: u64,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> ProjectActionResult {
+        let canvas = match (width, height) {
+            (None, None) => None,
+            (Some(width), Some(height)) => match or_core::SequenceCanvas::new(width, height) {
+                Some(canvas) => Some(canvas),
+                None => {
+                    return action_error(ProjectBridgeError {
+                        code: "INVALID_SEQUENCE_CANVAS".to_owned(),
+                        message:
+                            "choose an even canvas size between 16 and 7680 within a 4:1 ratio"
+                                .to_owned(),
+                    });
+                }
+            },
+            _ => {
+                return action_error(ProjectBridgeError {
+                    code: "INVALID_SEQUENCE_CANVAS".to_owned(),
+                    message: "a canvas needs both a width and a height".to_owned(),
+                });
+            }
+        };
+        self.timeline_command(
+            project_id,
+            project_instance_id,
+            expected_revision,
+            |project_id, project_instance_id, revision| {
+                CommandEnvelope::set_timeline_sequence_canvas(
+                    project_id,
+                    project_instance_id,
+                    revision,
+                    canvas,
                 )
             },
         )
@@ -1012,6 +1059,7 @@ impl ProjectHostHandle {
         expected_revision: u64,
         destination: String,
         quality: Option<String>,
+        short_side: Option<u32>,
     ) -> ProjectExportJobView {
         // An optional argument keeps every existing generated caller compiling and
         // gives an old client the quality preference rather than the fastest mode.
@@ -1055,6 +1103,7 @@ impl ProjectHostHandle {
             destination,
             profile,
             quality,
+            short_side,
         })
     }
 
@@ -1378,6 +1427,36 @@ fn caption_time_error() -> ProjectBridgeError {
 }
 
 pub(crate) fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
+    let item = probe_import_source(source)?;
+    ensure_decoders_available(&item)?;
+    Ok(item)
+}
+
+/// Rejects a file whose codecs this build cannot decode.
+///
+/// The static import matrix names what the product supports; the linked FFmpeg
+/// build decides what it can actually play. Checking here turns a late
+/// "unsupported codec" at the first preview frame into an import-time message
+/// the person can act on.
+fn ensure_decoders_available(item: &MediaItem) -> Result<(), or_core::MediaImportError> {
+    for stream in item.metadata().streams() {
+        let codec = match stream {
+            or_core::MediaStreamMetadata::Video(stream) => stream.codec_name(),
+            or_core::MediaStreamMetadata::Audio(stream) => stream.codec_name(),
+            or_core::MediaStreamMetadata::Other(_) => None,
+        };
+        if let Some(codec) = codec {
+            if !or_media::decoder_available(codec) {
+                return Err(or_core::MediaImportError::DecoderUnavailable {
+                    codec: codec.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn probe_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {
     #[cfg(target_os = "android")]
     if source.starts_with("content://") {
         let source = MediaSourceRef::android_saf_document_uri(source)

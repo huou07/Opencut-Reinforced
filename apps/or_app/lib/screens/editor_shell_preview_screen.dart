@@ -37,6 +37,7 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.previewSeekPosition,
     this.onPreviewSeekConsumed,
     this.onSetSequenceFrameRate,
+    this.onProjectChanged,
     this.notice,
     this.busy = false,
     this.mediaPage,
@@ -125,6 +126,9 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final AssistantController? assistant;
   final ProjectRationalTime? previewSeekPosition;
   final ValueChanged<ProjectRationalRate?>? onSetSequenceFrameRate;
+
+  /// Adopts a project view after the viewer changes a sequence setting.
+  final ValueChanged<ProjectReadModel>? onProjectChanged;
   final VoidCallback? onPreviewSeekConsumed;
   final String? notice;
   final bool busy;
@@ -1036,6 +1040,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   previewSeekPosition: widget.previewSeekPosition,
                   onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
                   onStateChanged: _onPreviewStateChanged,
+                  onProjectChanged: widget.onProjectChanged,
                   selectedVisualSettings: _selectedVisualSettings,
                   onCommitTransform: _commitSelectedTransform,
                   selectedTextClip: _selectedTextClip,
@@ -1217,6 +1222,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             previewSeekPosition: widget.previewSeekPosition,
             onPreviewSeekConsumed: widget.onPreviewSeekConsumed,
             onStateChanged: _onPreviewStateChanged,
+            onProjectChanged: widget.onProjectChanged,
             selectedTextClip: _selectedTextClip,
             onCommitTextFormatting: _commitTextFormatting,
           ),

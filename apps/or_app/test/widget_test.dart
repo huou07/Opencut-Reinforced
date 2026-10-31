@@ -6819,6 +6819,99 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('the canvas menu applies a portrait canvas', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/canvas-choice.orproj';
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Canvas choice');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('preview-canvas')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('preview-canvas-1080x1920')));
+    await tester.pumpAndSettle();
+
+    expect(
+      gateway.lastSequenceCanvas,
+      const ProjectSequenceCanvas(1080, 1920),
+      reason: 'the canvas menu must reach the project command',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('preview-canvas-label')))
+          .data,
+      '1080 × 1920',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the export dialog passes a resolution short side', (
+    tester,
+  ) async {
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/export-720.orproj'
+      ..exportPath = '/tmp/export-720.mp4';
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Resolution choice');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pumpAndSettle();
+    expect(find.text('Export video'), findsOneWidget);
+    expect(find.byKey(const ValueKey('export-resolution')), findsOneWidget);
+
+    await tester.tap(find.text('Match project'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('export-resolution-720')).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(
+      gateway.lastExportShortSide,
+      720,
+      reason: 'the chosen resolution must reach the export request',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('skip and speed controls reach the preview gateway', (
+    tester,
+  ) async {
+    final gateway = _FakeProjectGateway()
+      ..preview = ProjectPreviewState(
+        position: ProjectRationalTime(BigInt.from(3), 1),
+        contentEnd: ProjectRationalTime(BigInt.from(10), 1),
+        sequenceFrameRate: const ProjectRationalRate(24, 1),
+        playing: false,
+        generation: BigInt.zero,
+        frameSequence: BigInt.zero,
+        width: 640,
+        height: 360,
+      );
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/skip-and-speed.orproj';
+    _setViewport(tester, const Size(1280, 800));
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Skip and speed');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('preview-skip-forward')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSeek?.secondsForDisplay, closeTo(8, 0.001));
+
+    expect(find.byKey(const ValueKey('preview-speed')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('preview-speed')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('preview-speed-2')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('preview-speed-2')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastPreviewSpeed, 2);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {
@@ -7251,6 +7344,9 @@ class _FakeProjectGateway implements ProjectGateway {
   ProjectRationalTime? lastPreviewSeek;
   ProjectPreviewFrameStep? lastPreviewStep;
   ProjectRationalRate? lastPreviewRate;
+  double? lastPreviewSpeed;
+  ProjectSequenceCanvas? lastSequenceCanvas;
+  int? lastExportShortSide;
   List<ProjectMediaItem> initialMedia = [];
   List<ProjectTimelineTrack> initialTimelineTracks = [];
   Map<String, List<ProjectTimelineClip>> initialTimelineClips = {};
@@ -7511,6 +7607,33 @@ class _FakeProjectGateway implements ProjectGateway {
   @override
   Future<ProjectPreviewState> previewTick(ProjectSessionHandle session) async =>
       preview;
+
+  @override
+  Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
+    ProjectSessionHandle session,
+  ) async => ProjectTimelineSequenceSettings(
+    sequenceFrameRate: preview.sequenceFrameRate,
+    sequenceCanvas: lastSequenceCanvas,
+  );
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceCanvas(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectSequenceCanvas? canvas,
+  ) async {
+    lastSequenceCanvas = canvas;
+    return ProjectActionResult(succeeded: true, view: current);
+  }
+
+  @override
+  Future<ProjectPreviewState> previewSetSpeed(
+    ProjectSessionHandle session,
+    double speed,
+  ) async {
+    lastPreviewSpeed = speed;
+    return _copyPreview(advanceGeneration: true);
+  }
 
   @override
   Future<ProjectActionResult> setTimelineSequenceFrameRate(
@@ -9050,10 +9173,12 @@ class _FakeProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
+    int? shortSide,
   }) async {
     exportCalls++;
     lastExportDestination = destination;
     lastExportQuality = quality;
+    lastExportShortSide = shortSide;
     _exportJob = ProjectExportJob(
       succeeded: true,
       errorCode: '',

@@ -1460,6 +1460,37 @@ impl ProjectSession {
         Ok(change_set)
     }
 
+    pub(super) fn apply_timeline_sequence_set_canvas(
+        &mut self,
+        arguments: Value,
+    ) -> Result<ChangeSet, OperationError> {
+        let arguments: TimelineSequenceSetCanvasArguments = serde_json::from_value(arguments)
+            .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        let before = self.project.timeline().sequence_canvas();
+        let after = arguments
+            .sequence_canvas
+            .ok_or_else(|| OperationError::new(OperationErrorCode::InvalidArguments))?;
+        if before == after {
+            return Ok(ChangeSet::default());
+        }
+        let after_revision = self
+            .project_revision()
+            .checked_next()
+            .map_err(|_| OperationError::new(OperationErrorCode::RevisionOverflow))?;
+        let change_set = ChangeSet::timeline_sequence_canvas_changed(before, after)?;
+        let history_entry = change_set.clone();
+        self.history
+            .undo
+            .try_reserve(1)
+            .map_err(|_| OperationError::new(OperationErrorCode::HistoryStorageFailure))?;
+
+        self.project
+            .set_sequence_canvas_for_command(after, after_revision);
+        self.history.undo.push(history_entry);
+        self.history.redo.clear();
+        Ok(change_set)
+    }
+
     pub(super) fn apply_timeline_marker_add(
         &mut self,
         arguments: Value,
@@ -1731,6 +1762,14 @@ impl ProjectSession {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct TimelineSequenceSetCanvasArguments {
+    // The outer option records key presence; the inner option represents clearing.
+    #[serde(default, deserialize_with = "deserialize_nullable_field")]
+    sequence_canvas: Option<Option<crate::SequenceCanvas>>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineSequenceSetFrameRateArguments {
     // The outer option records key presence; the inner option represents clearing.
     #[serde(default, deserialize_with = "deserialize_nullable_field")]
@@ -1951,13 +1990,14 @@ pub(super) struct TimelineSnapChoice {
     resolved_target_time: RationalTime,
 }
 
-pub(super) fn deserialize_nullable_field<'de, D>(
+pub(super) fn deserialize_nullable_field<'de, D, T>(
     deserializer: D,
-) -> Result<Option<Option<RationalRate>>, D::Error>
+) -> Result<Option<Option<T>>, D::Error>
 where
     D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
 {
-    Option::<RationalRate>::deserialize(deserializer).map(Some)
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 pub(super) fn deserialize_caption_clips<'de, D>(
@@ -2106,7 +2146,9 @@ pub(super) fn resolve_timeline_snap_with_markers(
     raw_target_time: RationalTime,
     marker_aware: bool,
 ) -> Result<TimelineSnapResult, OperationError> {
-    let threshold = RationalTime::new(1, 8)
+    // Dragging is a coarse gesture: a quarter second gives the pointer enough
+    // room to catch an edge without making deliberate off-snap placement hard.
+    let threshold = RationalTime::new(1, 4)
         .map_err(|_| OperationError::new(OperationErrorCode::InvalidArguments))?;
     let (active_track_index, active_clip_index) = find_timeline_clip(project, active_clip_id)
         .ok_or_else(|| OperationError::new(OperationErrorCode::TimelineClipNotFound))?;

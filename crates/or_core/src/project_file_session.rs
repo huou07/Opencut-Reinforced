@@ -492,7 +492,7 @@ mod tests {
         session.save().unwrap();
         let saved = std::fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
             serde_json::Value::Null
@@ -538,7 +538,7 @@ mod tests {
 
         let saved = fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(encoded["project"]["revision"], 11);
         assert!(!session.is_dirty());
     }
@@ -575,7 +575,7 @@ mod tests {
 
         let saved = fs::read_to_string(&path).unwrap();
         let encoded: serde_json::Value = serde_json::from_str(&saved).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(encoded["project"]["revision"], 17);
         assert!(!session.is_dirty());
     }
@@ -612,7 +612,7 @@ mod tests {
 
         session.save().unwrap();
         let encoded: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(encoded["project"]["revision"], 23);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],

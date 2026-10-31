@@ -1822,7 +1822,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "or_ai"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "or_app_bridge"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "flutter_rust_bridge",
  "jni",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "or_audio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cpal",
  "or_core",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "or_cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "or_core",
  "or_ipc",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "or_core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rusqlite",
  "serde",
@@ -1886,7 +1886,7 @@ dependencies = [
 
 [[package]]
 name = "or_ipc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "or_core",
  "serde",
@@ -1907,7 +1907,7 @@ dependencies = [
 
 [[package]]
 name = "or_motion"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "or_core",
  "serde",
@@ -1918,7 +1918,7 @@ dependencies = [
 
 [[package]]
 name = "or_render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cosmic-text",
  "or_core",
@@ -1931,14 +1931,14 @@ dependencies = [
 
 [[package]]
 name = "or_runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "or_core",
 ]
 
 [[package]]
 name = "or_whisper_provider"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "or_ai",
  "serde_json",

@@ -568,16 +568,63 @@ const ID3_HEADER: &[u8; 3] = b"ID3";
 const JPEG_HEADER: &[u8; 3] = b"\xff\xd8\xff";
 const PNG_HEADER: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
 
-/// Video and audio codecs retained by the lossless Matroska profile.
-const MATRIX_VIDEO_CODEC: &str = "ffv1";
-const MATRIX_AUDIO_CODEC: &str = "pcm_s16le";
-const WEBM_VIDEO_CODEC: &str = "vp9";
-const WEBM_AUDIO_CODEC: &str = "opus";
-const MOV_VIDEO_CODEC: &str = "h264";
-const MOV_AUDIO_CODEC: &str = "aac";
+/// Video codecs the import profile carries. The linked FFmpeg build decides
+/// whether a stream can actually be decoded; this list bounds what the project
+/// core accepts before any decoder is opened.
+const IMPORT_VIDEO_CODECS: &[&str] = &[
+    "av1",
+    "dnxhd",
+    "ffv1",
+    "h263",
+    "h264",
+    "hevc",
+    "mjpeg",
+    "mpeg2video",
+    "mpeg4",
+    "prores",
+    "theora",
+    "vc1",
+    "vp6",
+    "vp8",
+    "vp9",
+    "wmv3",
+];
+/// Audio codecs the import profile carries, including the common lossless and
+/// uncompressed families users get from cameras, phones and audio editors.
+const IMPORT_AUDIO_CODECS: &[&str] = &[
+    "aac",
+    "ac3",
+    "alac",
+    "dts",
+    "eac3",
+    "flac",
+    "mp1",
+    "mp2",
+    "mp3",
+    "opus",
+    "pcm_f32le",
+    "pcm_f64le",
+    "pcm_s16be",
+    "pcm_s16le",
+    "pcm_s24be",
+    "pcm_s24le",
+    "pcm_s32be",
+    "pcm_s32le",
+    "pcm_u8",
+    "truehd",
+    "vorbis",
+    "wmav2",
+];
 const MOV_FORMAT_NAMES: &[&str] = &["mov", "mp4", "m4a", "3gp", "3g2", "mj2"];
+const SINGLE_CONTAINER_FORMAT_NAMES: &[&str] = &["wav", "mp3", "ogg", "flac", "aiff", "avi"];
 const STILL_IMAGE_FORMAT_NAMES: &[&str] =
     &["image2", "image2pipe", "jpeg_pipe", "png_pipe", "webp_pipe"];
+const OGG_HEADER: &[u8; 4] = b"OggS";
+const FLAC_HEADER: &[u8; 4] = b"fLaC";
+const FORM_HEADER: &[u8; 4] = b"FORM";
+const AIFF_HEADER: &[u8; 4] = b"AIFF";
+const AIFC_HEADER: &[u8; 4] = b"AIFC";
+const AVI_HEADER: &[u8; 4] = b"AVI ";
 
 fn is_still_image_format(format_names: &[String]) -> bool {
     format_names
@@ -595,49 +642,54 @@ fn reject_unsupported_container(path: &Path) -> Result<(), MediaProbeError> {
     file.read_exact(&mut header[..4])
         .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
     if &header[..4] == EBML_HEADER
+        || &header[..4] == OGG_HEADER
+        || &header[..4] == FLAC_HEADER
         || &header[..3] == ID3_HEADER
         || (header[0] == 0xff && header[1] & 0xe0 == 0xe0)
         || &header[..3] == JPEG_HEADER
     {
-        Ok(())
-    } else if &header[..4] == RIFF_HEADER || &header[..4] == RF64_HEADER {
-        file.read_exact(&mut header[4..])
-            .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
-        if &header[8..12] == WAVE_HEADER
-            || (&header[..4] == RIFF_HEADER && &header[8..12] == WEBP_HEADER)
-        {
-            Ok(())
-        } else {
-            Err(MediaProbeError::new(
-                MediaProbeErrorCode::UnsupportedContainer,
-            ))
-        }
-    } else {
-        file.read_exact(&mut header[4..])
-            .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
-        if &header[..8] == PNG_HEADER {
-            return Ok(());
-        }
-        let declared_size = u32::from_be_bytes(header[..4].try_into().expect("four-byte size"));
-        if &header[4..8] == b"ftyp" && declared_size >= 16 {
-            return Ok(());
-        }
-        Err(MediaProbeError::new(
-            MediaProbeErrorCode::UnsupportedContainer,
-        ))
+        return Ok(());
     }
+    file.read_exact(&mut header[4..])
+        .map_err(|_| MediaProbeError::new(MediaProbeErrorCode::UnsupportedContainer))?;
+    if &header[..4] == RIFF_HEADER || &header[..4] == RF64_HEADER {
+        if &header[8..12] == WAVE_HEADER
+            || (&header[..4] == RIFF_HEADER
+                && (&header[8..12] == WEBP_HEADER || &header[8..12] == AVI_HEADER))
+        {
+            return Ok(());
+        }
+        return Err(MediaProbeError::new(
+            MediaProbeErrorCode::UnsupportedContainer,
+        ));
+    }
+    if &header[..4] == FORM_HEADER
+        && (&header[8..12] == AIFF_HEADER || &header[8..12] == AIFC_HEADER)
+    {
+        return Ok(());
+    }
+    if &header[..8] == PNG_HEADER {
+        return Ok(());
+    }
+    let declared_size = u32::from_be_bytes(header[..4].try_into().expect("four-byte size"));
+    if &header[4..8] == b"ftyp" && declared_size >= 16 {
+        return Ok(());
+    }
+    Err(MediaProbeError::new(
+        MediaProbeErrorCode::UnsupportedContainer,
+    ))
 }
 
-/// Rejects probed streams outside the shipped import profiles.
+/// Rejects probed streams outside the shipped import profile.
 ///
 /// Non-audio/video streams (subtitles, attachments) are inert to OR and pass.
-/// Matroska/WebM accepts FFV1/PCM S16LE, H.264/AAC, or VP9/Opus; still images
-/// accept PNG, JPEG, and WebP; WAV and MP3 are audio-only; MOV/MP4 accepts
-/// H.264 video and/or AAC audio.
-/// Unsupported streams are reported as unsupported, not corrupt.
+/// Containers are bounded to Matroska/WebM, the ISO BMFF family, WAV, MP3, OGG,
+/// FLAC, AIFF, AVI and still images. Every audio and video stream must name a
+/// codec in the import profile; the application additionally checks that the
+/// linked FFmpeg build carries a decoder for it, so a file is never admitted and
+/// then found unplayable during preview.
 fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError> {
-    let is_still_image = is_still_image_format(metadata.format_names());
-    if is_still_image {
+    if is_still_image_format(metadata.format_names()) {
         return match metadata.streams() {
             [MediaStreamMetadata::Video(video)]
                 if still_image_codec_supported(metadata.format_names(), video.codec_name()) =>
@@ -648,58 +700,56 @@ fn enforce_import_matrix(metadata: &MediaMetadata) -> Result<(), MediaProbeError
         };
     }
 
-    let is_matroska = metadata
-        .format_names()
-        .iter()
-        .any(|name| name == "matroska");
-    let is_wav = metadata.format_names().iter().any(|name| name == "wav");
-    let is_mp3 = metadata.format_names().iter().any(|name| name == "mp3");
-    let is_mov = metadata
-        .format_names()
+    let names = metadata.format_names();
+    let is_matroska = names.iter().any(|name| name == "matroska");
+    let is_mov = names
         .iter()
         .any(|name| MOV_FORMAT_NAMES.contains(&name.as_str()));
-    if !is_matroska && !is_wav && !is_mp3 && !is_mov {
-        return Err(MediaProbeError::new(
-            MediaProbeErrorCode::UnsupportedContainer,
-        ));
-    }
-    let mut has_audio = false;
-    for stream in metadata.streams() {
-        let supported = match stream {
-            MediaStreamMetadata::Video(video) => video.codec_name().is_some_and(|codec| {
-                (is_matroska
-                    && matches!(
-                        codec,
-                        MATRIX_VIDEO_CODEC | WEBM_VIDEO_CODEC | MOV_VIDEO_CODEC
-                    ))
-                    || (is_mov && codec == MOV_VIDEO_CODEC)
-            }),
-            MediaStreamMetadata::Audio(audio) => {
-                has_audio = true;
-                audio.codec_name().is_some_and(|codec| {
-                    ((is_wav || is_matroska) && codec == MATRIX_AUDIO_CODEC)
-                        || (is_matroska && matches!(codec, WEBM_AUDIO_CODEC | MOV_AUDIO_CODEC))
-                        || (is_mp3 && codec == "mp3")
-                        || (is_mov && codec == MOV_AUDIO_CODEC)
-                })
-            }
-            MediaStreamMetadata::Other(_) => true,
-        };
-        if !supported {
-            return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
+    let is_audio_only_container = names
+        .iter()
+        .any(|name| matches!(name.as_str(), "wav" | "mp3" | "ogg" | "flac" | "aiff"));
+    let is_avi = names.iter().any(|name| name == "avi");
+    if !is_matroska && !is_mov && !is_audio_only_container && !is_avi {
+        // An AVI file whose format names do not include `avi` is not ours.
+        if !names
+            .iter()
+            .any(|name| SINGLE_CONTAINER_FORMAT_NAMES.contains(&name.as_str()))
+        {
+            return Err(MediaProbeError::new(
+                MediaProbeErrorCode::UnsupportedContainer,
+            ));
         }
     }
-    if (is_wav || is_mp3) && !has_audio {
+
+    let mut has_audio = false;
+    let mut has_video = false;
+    for stream in metadata.streams() {
+        match stream {
+            MediaStreamMetadata::Video(video) => {
+                has_video = true;
+                if !video
+                    .codec_name()
+                    .is_some_and(|codec| IMPORT_VIDEO_CODECS.contains(&codec))
+                {
+                    return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
+                }
+            }
+            MediaStreamMetadata::Audio(audio) => {
+                has_audio = true;
+                if !audio
+                    .codec_name()
+                    .is_some_and(|codec| IMPORT_AUDIO_CODECS.contains(&codec))
+                {
+                    return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
+                }
+            }
+            MediaStreamMetadata::Other(_) => {}
+        }
+    }
+    if is_audio_only_container && (!has_audio || has_video) {
         return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
-    if (is_mov || is_mp3)
-        && !metadata.streams().iter().any(|stream| {
-            matches!(
-                stream,
-                MediaStreamMetadata::Video(_) | MediaStreamMetadata::Audio(_)
-            )
-        })
-    {
+    if !has_audio && !has_video {
         return Err(MediaProbeError::new(MediaProbeErrorCode::UnsupportedCodec));
     }
     Ok(())
@@ -1083,7 +1133,7 @@ mod tests {
         enforce_import_matrix(&parse_probe_json(audio, 1024).unwrap()).unwrap();
 
         for json in [
-            br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"audio","codec_name":"speex","sample_rate":"48000","channels":2}]}"#.as_slice(),
             br#"{"format":{"format_name":"wav"},"streams":[{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16}]}"#.as_slice(),
             br#"{"format":{"format_name":"wav"},"streams":[]}"#.as_slice(),
         ] {
@@ -1102,7 +1152,8 @@ mod tests {
         for (name, signature, supported) in [
             ("pcm.wav", b"RIFF0000WAVE".as_slice(), true),
             ("large.wav", b"RF640000WAVE".as_slice(), true),
-            ("riff.avi", b"RIFF0000AVI ".as_slice(), false),
+            ("riff.avi", b"RIFF0000AVI ".as_slice(), true),
+            ("riff.wma", b"RIFF0000WMA ".as_slice(), false),
         ] {
             let path = directory.0.join(name);
             fs::write(&path, signature).unwrap();
@@ -1129,13 +1180,14 @@ mod tests {
         for json in [
             br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":32,"height":24},{"index":1,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":1}]}"#.as_slice(),
             br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":32,"height":24},{"index":1,"codec_type":"audio","codec_name":"aac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"alac","sample_rate":"44100","channels":2}]}"#.as_slice(),
         ] {
             enforce_import_matrix(&parse_probe_json(json, 2048).unwrap()).unwrap();
         }
 
         for json in [
-            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":32,"height":24}]}"#.as_slice(),
-            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"opus","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[{"index":0,"codec_type":"audio","codec_name":"speex","sample_rate":"48000","channels":2}]}"#.as_slice(),
             br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2"},"streams":[]}"#.as_slice(),
         ] {
             assert_eq!(
@@ -1206,21 +1258,32 @@ mod tests {
     #[test]
     fn import_matrix_rejects_foreign_codecs_and_containers() {
         let unnamed = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","width":16,"height":16}]}"#;
-        let hevc = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":16,"height":16}]}"#;
-        let pcm_float = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"pcm_f32le","sample_rate":"48000","channels":2}]}"#;
-        for json in [unnamed as &[u8], hevc as &[u8], pcm_float as &[u8]] {
+        let hap = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"hap","width":16,"height":16}]}"#;
+        let speex = br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"speex","sample_rate":"48000","channels":2}]}"#;
+        for json in [unnamed as &[u8], hap as &[u8], speex as &[u8]] {
             let metadata = parse_probe_json(json, 64).unwrap();
             assert_eq!(
                 enforce_import_matrix(&metadata).unwrap_err().code(),
                 MediaProbeErrorCode::UnsupportedCodec,
             );
         }
+
+        for json in [
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":16,"height":16}]}"#.as_slice(),
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"video","codec_name":"av1","width":16,"height":16}]}"#.as_slice(),
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"pcm_f32le","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"matroska,webm"},"streams":[{"index":0,"codec_type":"audio","codec_name":"flac","sample_rate":"48000","channels":2}]}"#.as_slice(),
+            br#"{"format":{"format_name":"mov,mp4"},"streams":[{"index":0,"codec_type":"video","codec_name":"prores","width":1920,"height":1080}]}"#.as_slice(),
+        ] {
+            enforce_import_matrix(&parse_probe_json(json, 4096).unwrap()).unwrap();
+        }
+
         let container =
-            br#"{"format":{"format_name":"mov,mp4"},"streams":[{"index":0,"codec_type":"video","codec_name":"ffv1","width":16,"height":16}]}"#;
+            br#"{"format":{"format_name":"asf"},"streams":[{"index":0,"codec_type":"video","codec_name":"h264","width":16,"height":16}]}"#;
         let metadata = parse_probe_json(container, 64).unwrap();
         assert_eq!(
             enforce_import_matrix(&metadata).unwrap_err().code(),
-            MediaProbeErrorCode::UnsupportedCodec,
+            MediaProbeErrorCode::UnsupportedContainer,
         );
     }
 

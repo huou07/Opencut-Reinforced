@@ -145,6 +145,7 @@ fn real_local_transport_runs_semantic_requests_saves_and_shuts_down_cleanly() {
             "timeline.marker.rename",
             "timeline.marker.delete",
             "timeline.sequence.set_frame_rate",
+            "timeline.sequence.set_canvas",
         ]
     );
     assert_eq!(

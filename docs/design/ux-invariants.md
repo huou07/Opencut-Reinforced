@@ -1,6 +1,6 @@
 # UI/UX Acceptance Invariants
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 Scope: behaviour that must not regress, and what counts as evidence for a UI
 change. Do not add an item here without a check that can fail.
@@ -41,7 +41,17 @@ journey. See [operations/verification.md](../operations/verification.md).
 - The mobile tool dock exposes the same semantics as the desktop rail; selection
   is carried by fill and border, not colour alone.
 - Every visible action works or is visibly unavailable — no dead-end controls, no
-  clipped actions at supported window sizes.
+  clipped actions at supported window sizes. A narrow viewer drops the optional
+  skip/speed controls instead of clipping the time readout; full screen keeps
+  them.
+- The canvas is a real, undoable project control, not a badge: the viewer header
+  menu sets or clears it, and the export dialog offers a resolution that keeps
+  that shape. A control that only displays the texture size is a defect.
+- Full-screen preview carries the same transport as the docked viewer — play or
+  pause, ±5 s, a scrub bar, elapsed and total time, speed and exit — and its
+  keyboard path is `Space`, arrows, `Shift`+arrows and `Esc`.
+- Pressing play at the content end replays from zero. A speed other than 1× turns
+  preview audio off and says so; it never plays pitched or drifting audio.
 - Simple mode is a visibility setting over one state and command model.
 - The editor's right rail exposes the Assistant by default and the advanced
   Inspector as an optional second tab over one project state. The Inspector is

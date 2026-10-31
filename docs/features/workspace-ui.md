@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -19,7 +19,10 @@ justification and review.
   command palette — primary actions right-aligned.
 - Tabbed library (Media / Text / Audio / Motion) instead of a placeholder icon
   rail. No dead entries: every control opens a real panel.
-- Centre viewer with transport, timecode and transform/crop affordances.
+- Centre viewer with transport, timecode, a canvas menu (landscape, portrait and
+  square presets, or match the first clip) and transform/crop affordances. Full
+  screen repeats the transport with pause, ±5 s, scrub bar, elapsed/total time and
+  speed. The export dialog offers profile, quality and resolution in one place.
 - Right rail with the **Assistant** and an optional advanced **Inspector** tab.
   The assistant is the default surface; the inspector keeps human units, presets
   and a sticky action row, and is hidden until **Settings → General → Show

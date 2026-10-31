@@ -43,6 +43,7 @@ const TIMELINE_CLIPS_ID: &str = "timeline.clips";
 const TIMELINE_SNAP_ID: &str = "timeline.snap";
 const TIMELINE_MARKERS_ID: &str = "timeline.markers";
 const TIMELINE_SEQUENCE_SET_FRAME_RATE_ID: &str = "timeline.sequence.set_frame_rate";
+const TIMELINE_SEQUENCE_SET_CANVAS_ID: &str = "timeline.sequence.set_canvas";
 const TIMELINE_SEQUENCE_SETTINGS_ID: &str = "timeline.sequence.settings";
 const OPERATION_SCHEMA_VERSION: u64 = 1;
 pub const MAX_MEDIA_PAGE_SIZE: usize = 100;
@@ -120,6 +121,7 @@ mod export_profile_tests {
             destination: "/tmp/default.webm".to_owned(),
             profile: ExportProfile::WebmVp9Opus,
             quality: ExportQuality::default(),
+            short_side: None,
         })
         .unwrap();
         assert_eq!(value["request"]["quality"], "quality");
@@ -597,6 +599,9 @@ impl ProjectSession {
             TIMELINE_SEQUENCE_SET_FRAME_RATE_ID => {
                 self.apply_timeline_sequence_set_frame_rate(envelope.arguments)?
             }
+            TIMELINE_SEQUENCE_SET_CANVAS_ID => {
+                self.apply_timeline_sequence_set_canvas(envelope.arguments)?
+            }
             _ => return Err(OperationError::new(OperationErrorCode::UnknownCommand)),
         };
 
@@ -729,6 +734,7 @@ impl ProjectSession {
             }
             result.timeline_sequence_settings = Some(Box::new(TimelineSequenceSettings {
                 sequence_frame_rate: self.project.timeline().sequence_frame_rate(),
+                sequence_canvas: self.project.timeline().sequence_canvas(),
             }));
         } else {
             return Err(OperationError::new(OperationErrorCode::UnknownQuery));

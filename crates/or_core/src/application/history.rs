@@ -76,6 +76,10 @@ impl ProjectSession {
                 self.project
                     .set_sequence_frame_rate_for_command(rate, after_revision);
             }
+            StagedHistoryChange::SetSequenceCanvas(canvas) => {
+                self.project
+                    .set_sequence_canvas_for_command(canvas, after_revision);
+            }
             StagedHistoryChange::InsertMedia { item, index } => {
                 self.project
                     .insert_media_for_command(item, index, after_revision);

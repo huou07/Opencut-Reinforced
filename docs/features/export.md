@@ -50,6 +50,8 @@ profile's muxer and encoders.
   preference travels on `ExportRequest::Start` and defaults when an older client
   omits it. The export surface offers it as a row beside the profile, and the
   bridge takes it as an optional argument so an old caller keeps compiling.
+- The chosen resolution is applied once to the output frame size; the project
+  canvas and clip transforms are not rewritten by an export.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.

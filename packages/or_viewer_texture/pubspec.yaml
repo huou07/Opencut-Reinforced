@@ -1,7 +1,7 @@
 name: or_viewer_texture
 description: Native CPU pixel-buffer texture adapter for Opencut Reinforced.
 publish_to: none
-version: 0.1.0
+version: 0.1.1
 
 environment:
   sdk: ^3.13.4

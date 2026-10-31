@@ -32,6 +32,7 @@ class _FakeGateway implements ProjectGateway {
   int statusCalls = 0;
   String? destination;
   String? quality;
+  int? lastShortSide;
   ProjectExportJob status = _job('succeeded');
   int statusFailuresRemaining = 0;
 
@@ -47,10 +48,12 @@ class _FakeGateway implements ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
+    int? shortSide,
   }) async {
     startCalls += 1;
     this.destination = destination;
     this.quality = quality;
+    lastShortSide = shortSide;
     return _job('running');
   }
 
@@ -74,6 +77,32 @@ class _FakeGateway implements ProjectGateway {
     ProjectReadModel current,
     String jobId,
   ) async => _job('cancelled');
+
+  @override
+  @override
+  Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
+    ProjectSessionHandle session,
+  ) async => const ProjectTimelineSequenceSettings();
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceCanvas(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectSequenceCanvas? canvas,
+  ) async => ProjectActionResult(succeeded: true, view: current);
+
+  @override
+  Future<ProjectPreviewState> previewSetSpeed(
+    ProjectSessionHandle session,
+    double speed,
+  ) async => ProjectPreviewState(
+    position: ProjectRationalTime(BigInt.zero, 1),
+    playing: true,
+    generation: BigInt.one,
+    frameSequence: BigInt.one,
+    width: 1920,
+    height: 1080,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -137,6 +166,7 @@ ExportFlow _flow({
       (
         profile: ExportProfile.defaultForPlatform,
         quality: ExportQuality.defaultChoice,
+        shortSide: null,
       ),
   onProjectSummary: onProjectSummary ?? (_) {},
   onExported: onExported ?? (_) {},

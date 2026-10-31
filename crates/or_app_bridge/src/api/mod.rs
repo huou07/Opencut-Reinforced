@@ -74,7 +74,7 @@ mod project_media;
 pub mod project_preview;
 mod project_transcription;
 pub mod timeline;
-mod views;
+pub mod views;
 pub use motion::*;
 pub use motion_library::*;
 pub use project::*;

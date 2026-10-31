@@ -1,6 +1,6 @@
 # Feature — Preview and Playback
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 Scope: the viewer and transport — seek, scrub, play/pause, frame step, and the
 timing contract they obey.
@@ -13,7 +13,17 @@ timing contract they obey.
 - Play and frame step stay unavailable until a sequence rate is set through the
   validated project setting command.
 - The timeline content end is half-open and includes audio-only duration. An
-  empty timeline has no playable frames. Playback does not loop.
+  empty timeline has no playable frames. Playback does not loop; pressing play
+  with the playhead already at the content end replays from zero, the way a
+  familiar player behaves.
+- An optional project canvas (`width` × `height`, both even) fixes the
+  composition shape and is what preview and export draw. Without one, the first
+  video clip decides the shape. Setting or clearing the canvas is an undoable
+  command (`timeline.sequence.set_canvas`), never a view-only preference.
+- Playback speed is an exact rational applied to elapsed time: 0.25×, 0.5×,
+  0.75×, 1×, 1.5× or 2×. Audio is mixed at 1×, so a speed other than 1× plays
+  silently and says so in the menu instead of pitching or desyncing the sound.
+  The choice is transport state and does not mutate the project.
 - Seek and scrub preserve the requested exact rational time; display labels may
   convert to floating point for formatting only.
 - Playback, seek, scrub, frame step, buffering and dropped frames never mutate the
@@ -22,8 +32,13 @@ timing contract they obey.
 ## Transport surface
 
 Fit / 25% / 50% / 100% / 200% zoom, exact seek, scrubbing on ruler and lanes,
-play/pause, previous/next frame, timecode, and direct viewer manipulation
-(transform) where the inspector exposes it.
+play/pause, previous/next frame, ±5 s jump (`[` and `]`), 0.25×–2× speed,
+timecode, and direct viewer manipulation (transform) where the inspector exposes
+it. The viewer header carries the canvas menu, and full screen carries the same
+transport plus a scrub bar, elapsed/total time and the canvas menu; its controls
+fade while watching and return on pointer movement or any transport key.
+`Space` plays or pauses, `←`/`→` seek ±1 s, `Shift+←`/`Shift+→` step a frame and
+`Esc` exits full screen.
 
 ## Runtime behaviour
 
@@ -51,6 +66,9 @@ build p95 0.21-0.25 ms, frame span p95 0.32-0.37 ms and vsync gap p95 33.33 ms,
 so the editor's own widget work stays under half a millisecond per frame.
 
 ## Known gaps
+
+- Audio is silent at any speed other than 1× until the mixer can resample at
+  arbitrary rates. The menu states this rather than shipping pitched audio.
 
 No hardware decode path is approved; 1080p software decode is the current path.
 Presented-frame (vsync/compositor) budgeting is measured only through the app's

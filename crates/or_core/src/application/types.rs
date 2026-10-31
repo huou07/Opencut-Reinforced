@@ -1,7 +1,7 @@
 use crate::{
     ClipContent, ClipId, ClipSettings, MarkerId, MediaId, MediaItem, ProjectDocument, ProjectId,
-    ProjectInstanceId, ProjectRevision, RationalRate, RationalTime, TimeRange, TimelineClip,
-    TimelineMarker, TimelineTrack, TrackId, TrackKind, TrackState,
+    ProjectInstanceId, ProjectRevision, RationalRate, RationalTime, SequenceCanvas, TimeRange,
+    TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind, TrackState,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,7 +27,7 @@ pub struct QueryDescriptor {
     pub schema_version: u64,
 }
 
-pub(super) const COMMANDS: [CommandDescriptor; 29] = [
+pub(super) const COMMANDS: [CommandDescriptor; 30] = [
     CommandDescriptor {
         id: PROJECT_RENAME_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
@@ -198,6 +198,12 @@ pub(super) const COMMANDS: [CommandDescriptor; 29] = [
     },
     CommandDescriptor {
         id: TIMELINE_SEQUENCE_SET_FRAME_RATE_ID,
+        schema_version: OPERATION_SCHEMA_VERSION,
+        mutates_project: true,
+        allowed_in_transaction: false,
+    },
+    CommandDescriptor {
+        id: TIMELINE_SEQUENCE_SET_CANVAS_ID,
         schema_version: OPERATION_SCHEMA_VERSION,
         mutates_project: true,
         allowed_in_transaction: false,
@@ -861,6 +867,22 @@ impl CommandEnvelope {
         }
     }
 
+    pub fn set_timeline_sequence_canvas(
+        project_id: ProjectId,
+        project_instance_id: ProjectInstanceId,
+        expected_project_revision: ProjectRevision,
+        sequence_canvas: Option<SequenceCanvas>,
+    ) -> Self {
+        Self {
+            command_id: TIMELINE_SEQUENCE_SET_CANVAS_ID.to_owned(),
+            schema_version: OPERATION_SCHEMA_VERSION,
+            project_id,
+            project_instance_id,
+            expected_project_revision,
+            arguments: serde_json::json!({ "sequence_canvas": sequence_canvas }),
+        }
+    }
+
     pub fn undo(
         project_id: ProjectId,
         project_instance_id: ProjectInstanceId,
@@ -1211,6 +1233,10 @@ pub enum ProjectChange {
         before: Option<RationalRate>,
         after: Option<RationalRate>,
     },
+    TimelineSequenceCanvasChanged {
+        before: Option<SequenceCanvas>,
+        after: Option<SequenceCanvas>,
+    },
     MediaAdded {
         item: MediaItem,
         index: usize,
@@ -1409,6 +1435,16 @@ impl ChangeSet {
         Self::try_single(ProjectChange::TimelineSequenceFrameRateChanged { before, after })
     }
 
+    pub(super) fn timeline_sequence_canvas_changed(
+        before: Option<SequenceCanvas>,
+        after: Option<SequenceCanvas>,
+    ) -> Result<Self, OperationError> {
+        if before == after {
+            return Ok(Self::default());
+        }
+        Self::try_single(ProjectChange::TimelineSequenceCanvasChanged { before, after })
+    }
+
     pub(super) fn stage_history_change(
         &self,
         project: &ProjectDocument,
@@ -1446,6 +1482,21 @@ impl ChangeSet {
                 Ok((
                     StagedHistoryChange::SetSequenceFrameRate(target),
                     Self::timeline_sequence_frame_rate_changed(current, target)?,
+                ))
+            }
+            ProjectChange::TimelineSequenceCanvasChanged { before, after } => {
+                let (expected, target) = if reverse {
+                    (*after, *before)
+                } else {
+                    (*before, *after)
+                };
+                let current = project.timeline().sequence_canvas();
+                if current != expected {
+                    return Err(OperationError::new(OperationErrorCode::HistoryConflict));
+                }
+                Ok((
+                    StagedHistoryChange::SetSequenceCanvas(target),
+                    Self::timeline_sequence_canvas_changed(current, target)?,
                 ))
             }
             ProjectChange::MediaAdded { item, index } => {
@@ -1795,6 +1846,7 @@ impl ChangeSet {
 pub(super) enum StagedHistoryChange {
     Rename(String),
     SetSequenceFrameRate(Option<RationalRate>),
+    SetSequenceCanvas(Option<SequenceCanvas>),
     InsertMedia {
         item: MediaItem,
         index: usize,
@@ -1941,6 +1993,7 @@ pub struct QueryResult {
 #[serde(deny_unknown_fields)]
 pub struct TimelineSequenceSettings {
     pub sequence_frame_rate: Option<RationalRate>,
+    pub sequence_canvas: Option<SequenceCanvas>,
 }
 
 /// One bounded, insertion-ordered page from the persistent media library.
@@ -2269,6 +2322,10 @@ pub enum ExportRequest {
         /// How far a lossy profile may trade encoding time for quality.
         #[serde(default)]
         quality: ExportQuality,
+        /// Tallest delivery resolution; `None` keeps the project canvas or the
+        /// natural source size. Values are rounded down to an even dimension.
+        #[serde(default)]
+        short_side: Option<u32>,
     },
     Status {
         project_id: ProjectId,

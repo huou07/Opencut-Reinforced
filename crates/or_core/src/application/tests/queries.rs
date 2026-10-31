@@ -368,7 +368,7 @@ fn timeline_snap_resolves_zero_clip_boundaries_and_move_end_anchor_exactly() {
             super::super::TimelineSnapOperation::Move,
             CLIP_A,
             Some(TRACK_B),
-            (51, 5),
+            (103, 10),
         ))
         .unwrap()
         .timeline_snap
@@ -376,7 +376,7 @@ fn timeline_snap_resolves_zero_clip_boundaries_and_move_end_anchor_exactly() {
     assert!(!outside.snapped);
     assert_eq!(
         outside.resolved_target_time,
-        RationalTime::new(51, 5).unwrap()
+        RationalTime::new(103, 10).unwrap()
     );
     assert_eq!(outside.moving_anchor, TimelineSnapMovingAnchor::None);
     assert_eq!(outside.target_kind, TimelineSnapTargetKind::None);

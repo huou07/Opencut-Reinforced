@@ -7,6 +7,7 @@ import 'api.dart';
 import 'api/motion.dart';
 import 'api/motion_library.dart';
 import 'api/project.dart';
+import 'api/views.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -120,6 +121,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RationalTimeView dco_decode_box_autoadd_rational_time_view(dynamic raw);
+
+  @protected
+  SequenceCanvasView dco_decode_box_autoadd_sequence_canvas_view(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
@@ -303,6 +310,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RationalTimeView? dco_decode_opt_box_autoadd_rational_time_view(dynamic raw);
 
   @protected
+  SequenceCanvasView? dco_decode_opt_box_autoadd_sequence_canvas_view(
+    dynamic raw,
+  );
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -446,6 +461,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView dco_decode_recovery_inspection_view(dynamic raw);
+
+  @protected
+  SequenceCanvasView dco_decode_sequence_canvas_view(dynamic raw);
 
   @protected
   TextAlignmentView dco_decode_text_alignment_view(dynamic raw);
@@ -608,6 +626,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RationalTimeView sse_decode_box_autoadd_rational_time_view(
     SseDeserializer deserializer,
   );
+
+  @protected
+  SequenceCanvasView sse_decode_box_autoadd_sequence_canvas_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
@@ -833,6 +859,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SequenceCanvasView? sse_decode_opt_box_autoadd_sequence_canvas_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -1012,6 +1046,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RecoveryInspectionView sse_decode_recovery_inspection_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  SequenceCanvasView sse_decode_sequence_canvas_view(
     SseDeserializer deserializer,
   );
 
@@ -1199,6 +1238,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RationalTimeView self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_box_autoadd_sequence_canvas_view(
+    SequenceCanvasView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
@@ -1474,6 +1522,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_sequence_canvas_view(
+    SequenceCanvasView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
@@ -1692,6 +1749,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_recovery_inspection_view(
     RecoveryInspectionView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_sequence_canvas_view(
+    SequenceCanvasView self,
     SseSerializer serializer,
   );
 

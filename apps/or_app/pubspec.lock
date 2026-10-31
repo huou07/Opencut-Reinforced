@@ -357,14 +357,14 @@ packages:
       path: "../../packages/or_app_bridge"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.1"
   or_viewer_texture:
     dependency: "direct main"
     description:
       path: "../../packages/or_viewer_texture"
       relative: true
     source: path
-    version: "0.1.0"
+    version: "0.1.1"
   package_config:
     dependency: transitive
     description:

@@ -107,7 +107,7 @@ pub use timeline::{
     MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TEXT_BYTES,
     MAX_TIMELINE_TRACKS, MAX_TRANSFORM_POSITION_MILLI_CANVAS, MAX_TRANSFORM_SCALE_MILLI,
     MIN_AUDIO_GAIN_MILLIDECIBELS, MIN_TEXT_SIZE_MILLI_POINTS, MarkerId, Opacity, ProjectTimeline,
-    SequenceTimingError, TextAlignment, TextBackground, TextColor, TextFormatting,
+    SequenceCanvas, SequenceTimingError, TextAlignment, TextBackground, TextColor, TextFormatting,
     TextVerticalAnchor, TextWeight, TimelineClip, TimelineIdParseError, TimelineMarker,
     TimelineTrack, TrackId, TrackKind, TrackState, Transform, TransitionKind, TransitionReference,
     VisualSettings,

@@ -43,6 +43,7 @@ import 'autosave_controller.dart';
 import 'project_error_message.dart';
 import 'project_recovery.dart';
 import 'project_recovery_dialogs.dart';
+import 'export_dialog_parts.dart';
 import 'export_flow.dart';
 import 'caption_import_dialog.dart';
 import 'speech_model_messages.dart';
@@ -142,6 +143,8 @@ const Map<ShortcutActivator, Intent> _editingShortcuts = {
       StepPreviewFrameIntent(true),
   SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
       StepPreviewFrameIntent(false),
+  SingleActivator(LogicalKeyboardKey.bracketLeft): SeekPreviewIntent(-5),
+  SingleActivator(LogicalKeyboardKey.bracketRight): SeekPreviewIntent(5),
   SingleActivator(LogicalKeyboardKey.comma): StepPreviewFrameIntent(true),
   SingleActivator(LogicalKeyboardKey.period): StepPreviewFrameIntent(false),
   SingleActivator(LogicalKeyboardKey.equal): ZoomTimelineIntent(1.25),
@@ -757,6 +760,7 @@ class _AppShellState extends State<AppShell> {
                   : null,
               onPreviewSeekConsumed: _consumeMotionPreviewPosition,
               onSetSequenceFrameRate: _setSequenceFrameRate,
+              onProjectChanged: _adoptProjectView,
               notice: _projectNotice,
               busy: _busy,
               mediaPage: _mediaPage,
@@ -2075,6 +2079,19 @@ class _AppShellState extends State<AppShell> {
     await _runProjectAction(widget.projectGateway.redo);
   }
 
+  /// Adopts a project view from a viewer-owned sequence command (canvas or
+  /// frame rate) and reloads the reads that depend on it.
+  ///
+  /// Without this the shell kept the revision it had before the command, so the
+  /// next timeline edit sent a stale base and was refused as a conflict.
+  void _adoptProjectView(ProjectReadModel view) {
+    final session = _activeSession;
+    if (!mounted || session == null) return;
+    if (_activeProject?.projectInstanceId != view.projectInstanceId) return;
+    setState(() => _activeProject = view);
+    unawaited(_refreshProjectState(session, known: view));
+  }
+
   /// Sequence frame rate is a project setting, so it goes through the same
   /// command runner as every other edit: revision check, notice and undo.
   Future<void> _setSequenceFrameRate(ProjectRationalRate? rate) async {
@@ -2914,60 +2931,93 @@ class _AppShellState extends State<AppShell> {
         },
       );
 
-  Future<({ExportProfile profile, ExportQuality quality})?>
-  _chooseExportOptions() {
+  Future<ExportOptions?> _chooseExportOptions() {
     final profiles = ExportProfile.available;
+    if (profiles.isEmpty) return Future.value(null);
     final defaultChoice = (
       profile: ExportProfile.defaultForPlatform,
       quality: ExportQuality.defaultChoice,
+      shortSide: null as int?,
     );
-    if (profiles.length == 1 && !profiles.single.hasQualityChoice) {
-      return Future.value(defaultChoice);
-    }
-    return showDialog<({ExportProfile profile, ExportQuality quality})>(
+    return showDialog<ExportOptions>(
       context: context,
       builder: (context) {
         var selected = defaultChoice.profile;
         var quality = defaultChoice.quality;
+        int? shortSide = defaultChoice.shortSide;
         return StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Export video'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final profile in profiles)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    onTap: () => setDialogState(() => selected = profile),
-                    title: Text(profile.label),
-                    subtitle: Text(profile.description),
-                    trailing: selected == profile
-                        ? const Icon(Icons.check)
-                        : null,
-                  ),
-                if (selected.hasQualityChoice) ...[
-                  const Divider(),
-                  for (final option in ExportQuality.values)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      onTap: () => setDialogState(() => quality = option),
-                      title: Text(option.label),
-                      subtitle: Text(option.description),
-                      trailing: quality == option
-                          ? const Icon(Icons.check)
-                          : null,
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ExportDialogSection('Format'),
+                    for (final profile in profiles)
+                      ExportChoiceTile(
+                        title: profile.label,
+                        subtitle: profile.description,
+                        selected: selected == profile,
+                        onTap: () => setDialogState(() => selected = profile),
+                      ),
+                    if (selected.hasQualityChoice) ...[
+                      const ExportDialogSection('Quality'),
+                      for (final option in ExportQuality.values)
+                        ExportChoiceTile(
+                          title: option.label,
+                          subtitle: option.description,
+                          selected: quality == option,
+                          onTap: () => setDialogState(() => quality = option),
+                        ),
+                    ],
+                    const ExportDialogSection('Resolution'),
+                    DropdownButtonFormField<int?>(
+                      key: const ValueKey('export-resolution'),
+                      initialValue: shortSide,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final option in exportResolutions)
+                          DropdownMenuItem<int?>(
+                            key: ValueKey(
+                              'export-resolution-${option.$1 ?? 'project'}',
+                            ),
+                            value: option.$1,
+                            child: Text(option.$2),
+                          ),
+                      ],
+                      onChanged: (value) =>
+                          setDialogState(() => shortSide = value),
                     ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  'Next you choose where to save the file.',
-                  key: const ValueKey('export-destination-hint'),
-                  style: const TextStyle(
-                    color: OrColors.textSecondary,
-                    fontSize: OrType.metadataSize,
-                  ),
+                    const SizedBox(height: OrSpacing.x2),
+                    Text(
+                      shortSide == null
+                          ? 'The video keeps the shape you chose for the canvas.'
+                          : 'The short side is $shortSide pixels; the other side follows the canvas shape.',
+                      key: const ValueKey('export-resolution-hint'),
+                      style: const TextStyle(
+                        color: OrColors.textSecondary,
+                        fontSize: OrType.metadataSize,
+                      ),
+                    ),
+                    const SizedBox(height: OrSpacing.x3),
+                    Text(
+                      'Next you choose where to save the file.',
+                      key: const ValueKey('export-destination-hint'),
+                      style: const TextStyle(
+                        color: OrColors.textMuted,
+                        fontSize: OrType.metadataSize,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
             actions: [
               TextButton(
@@ -2975,9 +3025,11 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () =>
-                    Navigator.of(context)
-                        .pop((profile: selected, quality: quality)),
+                onPressed: () => Navigator.of(context).pop((
+                  profile: selected,
+                  quality: quality,
+                  shortSide: shortSide,
+                )),
                 child: const Text('Continue'),
               ),
             ],

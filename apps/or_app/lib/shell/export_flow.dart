@@ -8,7 +8,11 @@ import '../project/project_gateway.dart';
 
 /// Options the owner picked in the export dialog, as the picker and gateway
 /// need them.
-typedef ExportOptions = ({ExportProfile profile, ExportQuality quality});
+typedef ExportOptions = ({
+  ExportProfile profile,
+  ExportQuality quality,
+  int? shortSide,
+});
 
 /// One export: options, the job, its polling timer, the chosen destination and
 /// publishing the finished file.
@@ -84,6 +88,7 @@ class ExportFlow extends ChangeNotifier {
         quality: choice.profile.hasQualityChoice
             ? choice.quality.wireName
             : null,
+        shortSide: choice.shortSide,
       );
       if (!_isCurrent(session)) {
         await _discard(destination);

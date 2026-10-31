@@ -1,6 +1,6 @@
 # `.orproj` Project Format
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-01
 
 Type: reference contract for the on-disk project file, for contributors and for
 tooling that reads or validates it.
@@ -29,7 +29,7 @@ UTF-8 JSON:
 ```json
 {
   "format": "opencut-reinforced-project",
-  "schema_version": 8,
+  "schema_version": 9,
   "project": {
     "id": "01234567-89ab-4def-8123-456789abcdef",
     "revision": 0,
@@ -41,7 +41,7 @@ UTF-8 JSON:
 | Field | Type | Meaning |
 |---|---|---|
 | `format` | string | Always `opencut-reinforced-project` |
-| `schema_version` | integer | Document layout version; current **8** |
+| `schema_version` | integer | Document layout version; current **9** |
 | `project` | object | Project identity and revision |
 
 The authoritative constant is `CURRENT_PROJECT_SCHEMA_VERSION` in
@@ -60,6 +60,7 @@ commit that changes it.
 | 6 | Transform, crop, opacity and formatting on clips |
 | 7 | Strict `FileUri` / `AndroidSafDocumentUri` source identities |
 | 8 | Exact rational `playback_rate` on media clips; absent legacy values mean 1× |
+| 9 | Optional sequence canvas (`width`/`height`) beside the sequence frame rate, so preview and export share one composition shape |
 
 The codec and migration tests are the authority; if this table and those tests
 disagree, the tests are right.

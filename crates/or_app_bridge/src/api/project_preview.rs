@@ -2,7 +2,7 @@
 
 use super::project::*;
 use crate::preview::{PreviewError, PreviewPreparationAction, PreviewSnapshot};
-use or_core::RationalTime;
+use or_core::{RationalRate, RationalTime};
 
 impl ProjectHostHandle {
     pub fn preview_state(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
@@ -62,6 +62,34 @@ impl ProjectHostHandle {
     pub fn preview_tick(&self) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
         self.preview_runtime
             .tick(&self.host)
+            .map(preview_state_view)
+            .map_err(preview_bridge_error)
+    }
+
+    pub fn preview_set_speed(
+        &self,
+        speed: f64,
+    ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
+        let rate = match speed {
+            value if value == 0.25 => RationalRate::new(1, 4),
+            value if value == 0.5 => RationalRate::new(1, 2),
+            value if value == 0.75 => RationalRate::new(3, 4),
+            value if value == 1.0 => RationalRate::new(1, 1),
+            value if value == 1.5 => RationalRate::new(3, 2),
+            value if value == 2.0 => RationalRate::new(2, 1),
+            _ => {
+                return Err(ProjectBridgeError {
+                    code: "INVALID_PREVIEW_SPEED".to_owned(),
+                    message: "preview speed must be 0.25, 0.5, 0.75, 1, 1.5 or 2".to_owned(),
+                });
+            }
+        }
+        .map_err(|error| ProjectBridgeError {
+            code: "INVALID_PREVIEW_SPEED".to_owned(),
+            message: error.to_string(),
+        })?;
+        self.preview_runtime
+            .set_speed(&self.host, rate)
             .map(preview_state_view)
             .map_err(preview_bridge_error)
     }
