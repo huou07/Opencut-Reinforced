@@ -550,18 +550,19 @@ mod desktop {
                         or_runtime::PreviewTransportError::FrameRateUnavailable,
                     ));
                 }
-                if let Some(content_end) = playback.content_end {
-                    if playback.position >= content_end {
-                        if content_end <= RationalTime::ZERO {
-                            return Ok(state.snapshot());
-                        }
-                        // Play on the last frame replays from the start, the way
-                        // every familiar player behaves.
-                        state
-                            .transport
-                            .seek(RationalTime::ZERO)
-                            .map_err(transport_error)?;
+                if let Some(content_end) = playback
+                    .content_end
+                    .filter(|content_end| playback.position >= *content_end)
+                {
+                    if content_end <= RationalTime::ZERO {
+                        return Ok(state.snapshot());
                     }
+                    // Play on the last frame replays from the start, the way
+                    // every familiar player behaves.
+                    state
+                        .transport
+                        .seek(RationalTime::ZERO)
+                        .map_err(transport_error)?;
                 }
                 let playback = state.transport.snapshot();
                 (

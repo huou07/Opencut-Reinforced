@@ -38,7 +38,7 @@ impl AudioDeviceOutput {
             .default_output_device()
             .ok_or(AudioDeviceOutputError::NoOutputDevice)?;
         let selection = select_output_configuration(&device)?;
-        let device_config = selection.config.clone();
+        let device_config = selection.config;
         let stream_config = device_config.config();
         let device_rate = device_config.sample_rate();
         let device_channels = usize::from(device_config.channels());
@@ -232,6 +232,9 @@ impl CallbackState {
     }
 }
 
+// The callback owns six pieces of stream wiring plus the device and config; a
+// wrapper struct would only move the same values behind one more name.
+#[allow(clippy::too_many_arguments)]
 fn build_stream<S>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,

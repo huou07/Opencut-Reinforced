@@ -71,12 +71,12 @@ impl ProjectHostHandle {
         speed: f64,
     ) -> Result<ProjectPreviewStateView, ProjectBridgeError> {
         let rate = match speed {
-            value if value == 0.25 => RationalRate::new(1, 4),
-            value if value == 0.5 => RationalRate::new(1, 2),
-            value if value == 0.75 => RationalRate::new(3, 4),
-            value if value == 1.0 => RationalRate::new(1, 1),
-            value if value == 1.5 => RationalRate::new(3, 2),
-            value if value == 2.0 => RationalRate::new(2, 1),
+            0.25 => RationalRate::new(1, 4),
+            0.5 => RationalRate::new(1, 2),
+            0.75 => RationalRate::new(3, 4),
+            1.0 => RationalRate::new(1, 1),
+            1.5 => RationalRate::new(3, 2),
+            2.0 => RationalRate::new(2, 1),
             _ => {
                 return Err(ProjectBridgeError {
                     code: "INVALID_PREVIEW_SPEED".to_owned(),

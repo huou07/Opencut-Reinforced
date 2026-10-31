@@ -1445,12 +1445,10 @@ fn ensure_decoders_available(item: &MediaItem) -> Result<(), or_core::MediaImpor
             or_core::MediaStreamMetadata::Audio(stream) => stream.codec_name(),
             or_core::MediaStreamMetadata::Other(_) => None,
         };
-        if let Some(codec) = codec {
-            if !or_media::decoder_available(codec) {
-                return Err(or_core::MediaImportError::DecoderUnavailable {
-                    codec: codec.to_owned(),
-                });
-            }
+        if let Some(codec) = codec.filter(|codec| !or_media::decoder_available(codec)) {
+            return Err(or_core::MediaImportError::DecoderUnavailable {
+                codec: codec.to_owned(),
+            });
         }
     }
     Ok(())

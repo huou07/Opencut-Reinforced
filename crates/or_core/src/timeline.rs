@@ -939,7 +939,7 @@ impl SequenceCanvas {
     /// Encoders need even dimensions, and a canvas thinner than 1:4 is not a
     /// video shape any supported profile can carry.
     pub fn new(width: u32, height: u32) -> Option<Self> {
-        if width % 2 != 0 || height % 2 != 0 {
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
             return None;
         }
         if !(Self::MIN_SIDE..=Self::MAX_SIDE).contains(&width)

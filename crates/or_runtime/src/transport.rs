@@ -138,7 +138,7 @@ impl PreviewTransport {
             .filter(|end| position >= *end)
             .unwrap_or(position);
         self.speed = speed;
-        self.anchor = self.state.playing.then(|| PlaybackAnchor {
+        self.anchor = self.state.playing.then_some(PlaybackAnchor {
             instant: now,
             time: self.state.position,
         });
@@ -216,17 +216,23 @@ impl PreviewTransport {
         if self.state.frame_rate.is_none() {
             return Err(PreviewTransportError::FrameRateUnavailable);
         }
-        if let Some(content_end) = self.state.content_end {
-            if self.state.position >= content_end {
-                // Pressing play on the last frame replays from the start, which is
-                // what every player users already know does.
-                if content_end <= RationalTime::ZERO {
-                    self.state.playing = false;
-                    self.anchor = None;
-                    return Ok(self.state);
-                }
-                self.state.position = RationalTime::ZERO;
+        if self
+            .state
+            .content_end
+            .is_some_and(|content_end| self.state.position >= content_end)
+        {
+            // Pressing play on the last frame replays from the start, which is
+            // what every player users already know does.
+            if self
+                .state
+                .content_end
+                .is_some_and(|content_end| content_end <= RationalTime::ZERO)
+            {
+                self.state.playing = false;
+                self.anchor = None;
+                return Ok(self.state);
             }
+            self.state.position = RationalTime::ZERO;
         }
         self.state.generation = self.next_generation()?;
         self.state.playing = true;
