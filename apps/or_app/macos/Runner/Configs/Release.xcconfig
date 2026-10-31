@@ -1,2 +1,8 @@
 #include "../../Flutter/Flutter-Release.xcconfig"
 #include "Warnings.xcconfig"
+
+// The distributed image is Apple Silicon only (docs/reference/release.md).
+// Without this, xcodebuild's release default builds every standard
+// architecture, and Flutter's native-assets hook then compiles the Rust bridge
+// for x86_64 against an arm64 FFmpeg — the link fails and no DMG is produced.
+ARCHS = arm64

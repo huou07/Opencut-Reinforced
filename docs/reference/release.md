@@ -9,7 +9,9 @@ what remains for a broader platform matrix.
 
 Stable releases: **macOS Apple Silicon only**, published as a `.dmg` from
 `huou07/Opencut-Reinforced`. The image is ad-hoc signed, not notarised; the first
-launch needs the standard right-click → Open step. The app is self-contained:
+launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
+Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
+self-contained:
 FFmpeg, the `or` CLI and the assistant workspace ship inside the bundle, and the
 workspace is installed into Application Support on first launch. Later beta
 packages for macOS, Windows, Linux and Android were retired because they were not

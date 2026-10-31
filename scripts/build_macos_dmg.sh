@@ -16,6 +16,11 @@ ARCH="$(uname -m)"
 [[ "$ARCH" == "arm64" ]] || { echo "error: the distributable image must be built on Apple Silicon" >&2; exit 1; }
 
 "$ROOT/scripts/build_macos_release.sh"
+app_archs="$(lipo -archs "$APP_BUILD/Contents/MacOS/or_app")"
+[[ "$app_archs" == "arm64" ]] || {
+  echo "error: the distributable app must be arm64 only (found: $app_archs)" >&2
+  exit 1
+}
 (cd "$ROOT" && cargo build --release -p or_cli)
 
 STAGE="$ROOT/dist/dmg-stage"
