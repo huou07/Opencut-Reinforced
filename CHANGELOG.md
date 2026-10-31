@@ -13,6 +13,46 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.1 — 2026-11-01
+
+### Added
+- **Project canvas**: a landscape, portrait or square composition shape chosen from
+  the viewer header (YouTube 16:9, HD, 4:3, TikTok/Reels/Shorts 9:16, Instagram feed
+  4:5, square) or matched to the first clip. The canvas is an undoable project
+  command, persists in `.orproj` as schema 9, drives preview and sets the export
+  shape. Projects without one keep the previous automatic size.
+- **Export resolution**: the export dialog now names profile, quality and
+  resolution together — match project, 2160p, 1440p, 1080p, 720p or 480p — and a
+  short side keeps the canvas shape (a 9:16 project at 1080p exports 1080 × 1920).
+- **Full preview transport**: full screen now has play/pause, ±5 s, a scrub bar,
+  elapsed and total time, speed and exit; controls fade while watching and return
+  on pointer movement or any transport key. The docked viewer gained ±5 s buttons,
+  a 0.25×–2× speed menu and `[`/`]` shortcuts.
+- **Decoder-aware import**: a codec the running build cannot decode is refused at
+  import with `UNSUPPORTED_CODEC` instead of being admitted and failing on the
+  first preview frame.
+
+### Changed
+- Pressing play with the playhead at the content end now replays from the start.
+- Timeline snapping threshold doubled, from 1/8 s to 1/4 s, so a coarse drag snaps
+  more readily; the exact-boundary tests moved with it.
+- Import now accepts the broad profile: Matroska/WebM with AV1, VP8/VP9, H.264,
+  H.265, FFV1, ProRes, MJPEG, MPEG-4 and similar video plus AAC, Opus, Vorbis,
+  FLAC, ALAC, AC-3/E-AC-3 and PCM audio; MOV/MP4/M4V, WAV, MP3, Ogg, FLAC, AIFF and
+  AVI containers; PNG, JPEG and WebP stills. Folder import includes those
+  extensions.
+
+### Fixed
+- **Bluetooth headphones**: preview used to fail with "The default output device
+  does not support stereo f32 audio at 48 kHz" whenever the default device offered
+  another sample format, channel count or rate. Audio output now picks the closest
+  usable device configuration and adapts channels and sample rate, while the
+  timeline clock still runs at 48 kHz.
+- A narrow viewer no longer overflows its transport row; optional skip and speed
+  controls drop out instead of clipping the time readout.
+- The viewer header no longer shows the texture size as if it were the project
+  shape; the canvas control replaces that badge.
+
 ## Unreleased
 
 ### Added

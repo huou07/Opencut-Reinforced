@@ -143,10 +143,12 @@ importing; the second command creates a new caption track and one editable
 caption clip per cue. Edit the SRT first if timing or wording needs correcting.
 
 Caption style — font, size, anchor, offset, background box and text opacity —
-travels with each clip and is edited in the app's Edit Caption dialog through
-`timeline.clip.update`; there is no CLI verb for it. Captions from transcription
-are ordinary caption clips, so the user can restyle every cue without recreating
-the track.
+travels with each clip. The app's Edit Caption dialog is the visual editor; the
+same update is available from the workspace as `timeline set-text --clip --track
+--anchor bottom --size-pt 26 --offset-y -420`. Captions from transcription are
+ordinary caption clips, so every cue can be restyled without recreating the
+track, and `templates/video-pipeline/scripts/style-captions.mjs` re-applies the
+template's look after an SRT edit.
 
 ## Music
 

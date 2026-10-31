@@ -590,7 +590,7 @@ fn headless_media_commands_import_page_remove_and_save() {
         2
     );
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 8);
+    assert_eq!(saved_bytes["schema_version"], 9);
 
     let mut first_page_args = path_args(
         &["media", "list"],
@@ -1438,7 +1438,7 @@ fn project_paths_remain_os_strings_and_names_require_utf8() {
 }
 
 #[test]
-fn headless_timeline_cli_uses_commands_saves_v7_and_keeps_exact_times() {
+fn headless_timeline_cli_uses_commands_saves_the_current_schema_and_keeps_exact_times() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Timeline CLI");
@@ -1640,7 +1640,7 @@ fn headless_timeline_cli_uses_commands_saves_v7_and_keeps_exact_times() {
     assert_eq!(page["timeline_clip_page_v2"]["next_offset"], 1);
 
     let saved_bytes: Value = serde_json::from_slice(&fs::read(&project_path).unwrap()).unwrap();
-    assert_eq!(saved_bytes["schema_version"], 8);
+    assert_eq!(saved_bytes["schema_version"], 9);
     let saved = load_project_file(&project_path).unwrap();
     assert_eq!(saved.revision(), ProjectRevision::new(6));
     assert_eq!(saved.timeline().tracks()[0].clips().len(), 2);
@@ -1952,7 +1952,7 @@ fn timeline_cli_rational_parser_rejects_rounded_or_malformed_times() {
 }
 
 #[test]
-fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v8_result() {
+fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v9_result() {
     let directory = TestDirectory::new();
     let project_path = directory.project_path();
     create_project(&project_path, "Advanced timeline CLI");
@@ -2093,7 +2093,7 @@ fn headless_advanced_timeline_cli_uses_absolute_times_and_saves_the_v8_result() 
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&fs::read(&project_path).unwrap()).unwrap()["schema_version"],
-        8
+        9
     );
 }
 

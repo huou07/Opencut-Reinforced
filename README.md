@@ -1,6 +1,6 @@
 # Opencut Reinforced
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-01
 
 A free and open-source video editor built around one structured editing core
 shared by the human interface, CLI automation and AI agents.
@@ -11,13 +11,15 @@ shared by the human interface, CLI automation and AI agents.
 edits, saves and recovers `.orproj` projects on macOS, Windows, Linux and
 Android. A Rust-owned project session serves the Flutter UI and an attached CLI
 through the same validated commands. Users can import local media or Android SAF
-documents, assemble and revise timeline clips, preview, add titles and manual
-captions, import/export subtitles, and export Matroska or WebM.
+documents, choose a landscape, portrait or square canvas, assemble and revise
+timeline clips, preview with a full transport (speed, ±5 s, full screen), add
+titles and manual captions, import/export subtitles, and export Matroska, WebM or
+MP4 (macOS) at a chosen resolution.
 
 Stable releases: none. Debug Developer Preview prereleases are published from
 [GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for
 testing only; see [docs/reference/developer-preview-install.md](docs/reference/developer-preview-install.md).
-Advanced editing, most codec profiles, AI workflows, hardware acceleration and
+Advanced editing, some codec profiles, AI workflows, hardware acceleration and
 production signing remain open. Current work is selected by
 [docs/reference/roadmap.md](docs/reference/roadmap.md).
 

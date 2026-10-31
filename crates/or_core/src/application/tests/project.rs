@@ -209,6 +209,12 @@ fn catalogs_are_exact_unique_and_deterministic() {
                 mutates_project: true,
                 allowed_in_transaction: false,
             },
+            CommandDescriptor {
+                id: "timeline.sequence.set_canvas",
+                schema_version: 1,
+                mutates_project: true,
+                allowed_in_transaction: false,
+            },
         ]
     );
     assert_eq!(
@@ -249,7 +255,7 @@ fn catalogs_are_exact_unique_and_deterministic() {
         ]
     );
     assert_eq!(command_catalog(), command_catalog());
-    assert_eq!(COMMANDS.len(), 29);
+    assert_eq!(COMMANDS.len(), 30);
     assert_eq!(QUERIES.len(), 8);
 }
 

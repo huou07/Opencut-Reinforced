@@ -81,12 +81,14 @@ read: it returns the snap candidate the editor would use and mutates nothing.
 ## Not available through the CLI
 
 Speed/playback rate (1/16×–16×), reverse, freeze frame, clip volume, mute,
-text/caption styling (font, size, anchor, offset, background box, opacity),
 multi-clip group move, visual effects and transitions all travel through
-`timeline.clip.update`, which has no `tools/or` verb yet. Export has no CLI verb
+`timeline.clip.update`, which has no `tools/or` verb yet. Text and caption content
+and formatting are the exception: `timeline set-text` covers text, font, size,
+weight, alignment, colour, anchor, offset, opacity and background. Export has no CLI verb
 at all. When the user asks for one of these, say the app owns it: speed and
-volume are on the timeline strip once the clip is selected, styling is in the
-Edit Title/Caption dialog and the inspector, and export is the Export button.
+volume are on the timeline strip once the clip is selected, subtitle styling is
+in the Edit Title/Caption dialog or `timeline set-text`, and export is the
+Export button.
 Let the user make that change, then re-read the timeline and save only what the
 commands you ran actually changed. Do not imitate speed with a trim or a split.
 

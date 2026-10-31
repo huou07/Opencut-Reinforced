@@ -9,7 +9,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const BUNDLE_VERSION = 13;
+export const BUNDLE_VERSION = 16;
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const output = path.resolve(
@@ -23,13 +23,33 @@ const output = path.resolve(
   'bundle.json',
 );
 
+// Scratch and production content never ships: `work/` holds session files,
+// `scenes/` local scene sources and `videos/` real productions with rendered
+// media. Only the method and its machinery ship, never a finished video.
 const EXCLUDED_AT_ROOT = new Set([
   'build.mjs',
   'package.json',
   'README.md',
   'node_modules',
   'test',
+  'work',
+  'scenes',
+  'videos',
 ]);
+
+// Per-install state never ships: the live project, its recovery copy and the
+// pointers the app writes when it installs the workspace. They exist only in a
+// working folder and would leak one user's project into every install.
+function isRuntimeFile(relative) {
+  return (
+    relative.endsWith('.orproj') ||
+    relative.endsWith('.orproj.or-recovery') ||
+    relative === 'project.json' ||
+    relative === 'or-cli.json' ||
+    relative === '.or-workspace.json' ||
+    relative === 'tools/or'
+  );
+}
 
 async function collect(directory, prefix = '') {
   const files = {};
@@ -43,6 +63,7 @@ async function collect(directory, prefix = '') {
       continue;
     }
     const relative = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
+    if (isRuntimeFile(relative)) continue;
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) {
       Object.assign(files, await collect(absolute, relative));

@@ -132,6 +132,105 @@ impl AudioProducer {
     }
 }
 
+/// Converts interleaved stereo from the project rate to the device rate with
+/// linear interpolation.
+///
+/// The project audio pipeline always renders 48 kHz stereo, but devices expose
+/// whatever rates, channel counts and sample formats they support (Bluetooth
+/// headsets often offer only 44.1 kHz mono or 16-bit). The resampler is fed
+/// rendered 48 kHz frames and produces device-rate frames, retaining the
+/// interpolation overlap between callbacks so block boundaries stay seamless.
+pub struct LinearResampler {
+    step: f64,
+    position: f64,
+    input: Vec<f32>,
+}
+
+impl LinearResampler {
+    /// `None` when either rate is zero.
+    pub fn new(input_rate: u32, output_rate: u32) -> Option<Self> {
+        if input_rate == 0 || output_rate == 0 {
+            return None;
+        }
+        Some(Self {
+            step: f64::from(input_rate) / f64::from(output_rate),
+            position: 0.0,
+            input: Vec::new(),
+        })
+    }
+
+    /// Input frames consumed per output frame; `1.0` when rates match.
+    pub const fn step(&self) -> f64 {
+        self.step
+    }
+
+    /// Input frames held for interpolation, including the overlap frame.
+    pub fn retained_input_frames(&self) -> usize {
+        self.input.len() / 2
+    }
+
+    /// Total input frames needed to produce `output_frames` without underrun.
+    pub fn required_input_frames(&self, output_frames: usize) -> usize {
+        if output_frames == 0 {
+            return self.retained_input_frames();
+        }
+        let span = self.position
+            + f64::from(u32::try_from(output_frames.saturating_sub(1)).unwrap_or(u32::MAX))
+                * self.step;
+        (span.floor() as usize).saturating_add(2)
+    }
+
+    /// Appends `frame_count` interleaved stereo frames, ignoring extra samples.
+    pub fn push(&mut self, samples: &[f32], frame_count: usize) {
+        let take = frame_count.min(samples.len() / 2) * 2;
+        self.input.extend_from_slice(&samples[..take]);
+    }
+
+    /// Writes `output_frames` interleaved stereo frames; missing input is silence.
+    pub fn pull(&mut self, out: &mut [f32], output_frames: usize) {
+        let frames = output_frames.min(out.len() / 2);
+        if frames == 0 {
+            return;
+        }
+        let available = self.retained_input_frames();
+        let mut position = self.position;
+        for frame in 0..frames {
+            let base = position.floor() as usize;
+            let fraction = (position - base as f64) as f32;
+            for channel in 0..2 {
+                let first = sample_or_silence(&self.input, available, base, channel);
+                let second = sample_or_silence(&self.input, available, base + 1, channel);
+                out[frame * 2 + channel] = first + (second - first) * fraction;
+            }
+            position += self.step;
+        }
+        self.position = position;
+        self.compact(available);
+    }
+
+    fn compact(&mut self, previously_available: usize) {
+        let consumed = (self.position.floor() as usize).min(previously_available);
+        if consumed == 0 {
+            return;
+        }
+        self.input.drain(..consumed * 2);
+        self.position -= consumed as f64;
+    }
+
+    /// Resets the playback position while keeping queued audio.
+    pub fn reset_position(&mut self) {
+        self.position = 0.0;
+        self.input.clear();
+    }
+}
+
+fn sample_or_silence(samples: &[f32], available: usize, frame: usize, channel: usize) -> f32 {
+    if frame >= available {
+        return 0.0;
+    }
+    samples[frame * 2 + channel]
+}
+
 /// The sole callback-side consumer of an audio buffer.
 pub struct AudioConsumer {
     buffer: Arc<AudioBufferInner>,
@@ -523,7 +622,8 @@ pub use device::{AudioDeviceOutput, AudioDeviceOutputError};
 mod tests {
     use super::{
         AudioBuffer, AudioClockError, AudioClockMessage, AudioProcessError, AudioPushError,
-        AudioRenderError, AvSynchronizer, AvSynchronizerError, VideoSyncAction, process_audio_clip,
+        AudioRenderError, AvSynchronizer, AvSynchronizerError, LinearResampler, VideoSyncAction,
+        process_audio_clip,
     };
     use or_core::{AudioSettings, ProjectDocument, RationalTime};
     use or_runtime::{CancellationToken, RenderSnapshot};
@@ -798,5 +898,54 @@ mod tests {
             ),
             Err(AudioProcessError::InvalidSettings)
         );
+    }
+    #[test]
+    fn resampler_is_a_passthrough_when_rates_match() {
+        let mut resampler = LinearResampler::new(48_000, 48_000).unwrap();
+        let input: Vec<f32> = (0..8).map(|value| value as f32 / 8.0).collect();
+        resampler.push(&input, 4);
+        let mut output = [0.0f32; 8];
+        resampler.pull(&mut output, 4);
+        assert_eq!(output, input.as_slice());
+    }
+
+    #[test]
+    fn resampler_keeps_a_constant_signal_across_block_boundaries() {
+        let mut resampler = LinearResampler::new(48_000, 44_100).unwrap();
+        let input = vec![0.5f32; 2 * 20_000];
+        let mut produced = Vec::new();
+        let mut consumed = 0;
+        while consumed < 10_000 {
+            let new_frames = 240;
+            let start = consumed * 2;
+            resampler.push(&input[start..start + new_frames * 2], new_frames);
+            consumed += new_frames;
+            let mut output = [0.0f32; 2 * 512];
+            let frames = 220;
+            resampler.pull(&mut output[..frames * 2], frames);
+            produced.extend_from_slice(&output[..frames * 2]);
+        }
+        assert!(produced.iter().all(|sample| (*sample - 0.5).abs() < 1e-6));
+    }
+
+    #[test]
+    fn resampler_ratio_maps_one_second_of_source_to_one_second_of_device() {
+        let mut resampler = LinearResampler::new(48_000, 44_100).unwrap();
+        let frames = 44_100;
+        let input = vec![0.0f32; 2 * 48_000];
+        resampler.push(&input, 48_000);
+        let mut output = vec![0.0f32; 2 * frames];
+        resampler.pull(&mut output, frames);
+        assert!(resampler.retained_input_frames() <= 2);
+    }
+
+    #[test]
+    fn resampler_reports_required_input_and_survives_underrun_with_silence() {
+        let mut resampler = LinearResampler::new(48_000, 96_000).unwrap();
+        assert_eq!(resampler.required_input_frames(0), 0);
+        assert!(resampler.required_input_frames(100) >= 51);
+        let mut output = [1.0f32; 2 * 100];
+        resampler.pull(&mut output, 100);
+        assert!(output.iter().all(|sample| *sample == 0.0));
     }
 }

@@ -1,0 +1,414 @@
+{
+  "format": "or-assistant-script",
+  "schema_version": 1,
+  "title": "OpenCut Reinforced — Một người bắt đầu, cộng đồng cùng xây",
+  "language": "vi",
+  "tempo": 1.6,
+  "voice": "",
+  "gap_ms": 190,
+  "scenes": [
+    {
+      "id": "mo1",
+      "beat": "open",
+      "marker": "01 · Mở",
+      "start_ms": 500,
+      "narration": "Một video hoàn chỉnh không bắt đầu bằng một cú máy. Nó bắt đầu bằng rất nhiều quyết định nhỏ, xếp chồng lên nhau.",
+      "caption": "Một video hoàn chỉnh không bắt đầu bằng một cú máy. Nó bắt đầu bằng rất nhiều quyết định nhỏ, xếp chồng lên nhau."
+    },
+    {
+      "id": "mo2",
+      "beat": "open",
+      "narration": "Một đoạn phim được đặt xuống. Một lớp âm thanh phủ lên. Một giọng đọc cất lên. Và từng chữ phụ đề khớp vào đúng khoảnh khắc.",
+      "caption": "Một đoạn phim được đặt xuống. Một lớp âm thanh phủ lên. Một giọng đọc cất lên. Và từng chữ phụ đề khớp vào đúng khoảnh khắc."
+    },
+    {
+      "id": "mo3",
+      "beat": "open",
+      "narration": "Tất cả nằm trên một timeline, chờ được cắt, ghép, thử, bỏ đi và làm lại. Đó là công việc của một trình biên tập.",
+      "caption": "Tất cả nằm trên một timeline, chờ được cắt, ghép, thử, bỏ đi và làm lại. Đó là công việc của một trình biên tập."
+    },
+    {
+      "id": "mo4",
+      "beat": "open",
+      "narration": "Có tiếng gió ngoài khung hình. Có một nhịp cắt chỉ dài bằng hai khung. Có một chữ phụ đề đến sớm hơn giọng nói nửa giây — và cảm giác đổi ngay.",
+      "caption": "Có tiếng gió ngoài khung hình. Có một nhịp cắt chỉ dài bằng hai khung. Có một chữ phụ đề đến sớm hơn giọng nói nửa giây — và cảm giác đổi ngay."
+    },
+    {
+      "id": "lop1",
+      "beat": "layers",
+      "narration": "Hình ảnh, âm thanh, giọng nói và chữ — bốn lớp tưởng như rời rạc, nhưng phải khớp với nhau đến từng khung hình.",
+      "caption": "Hình ảnh, âm thanh, giọng nói và chữ — bốn lớp tưởng như rời rạc, nhưng phải khớp với nhau đến từng khung hình."
+    },
+    {
+      "id": "lop2",
+      "beat": "layers",
+      "narration": "Khi chúng thẳng hàng, một video ra đời. Khi lệch đi, người xem cảm nhận được ngay, dù không gọi tên được.",
+      "caption": "Khi chúng thẳng hàng, một video ra đời. Khi lệch đi, người xem cảm nhận được ngay, dù không gọi tên được."
+    },
+    {
+      "id": "ten1",
+      "beat": "reveal",
+      "marker": "02 · OpenCut Reinforced",
+      "narration": "Công cụ đang dựng nên những hình ảnh này là OpenCut Reinforced — một trình biên tập video miễn phí và mã nguồn mở.",
+      "caption": "Công cụ đang dựng nên những hình ảnh này là OpenCut Reinforced — một trình biên tập video miễn phí và mã nguồn mở."
+    },
+    {
+      "id": "ten2",
+      "beat": "reveal",
+      "narration": "Không phải một lớp giao diện khoác lên một mô hình AI. Mà là một môi trường dựng phim thật, nơi con người và trợ lý cùng làm việc.",
+      "caption": "Không phải một lớp giao diện khoác lên một mô hình AI. Mà là một môi trường dựng phim thật, nơi con người và trợ lý cùng làm việc."
+    },
+    {
+      "id": "ui1",
+      "beat": "editor",
+      "marker": "03 · Dựng phim",
+      "narration": "Ở trung tâm là timeline nhiều track: hình ảnh, âm thanh, chữ và phụ đề. Bạn kéo clip vào, cắt đúng khung hình, đổi thứ tự, thêm tiêu đề.",
+      "caption": "Ở trung tâm là timeline nhiều track: hình ảnh, âm thanh, chữ và phụ đề. Bạn kéo clip vào, cắt đúng khung hình, đổi thứ tự, thêm tiêu đề."
+    },
+    {
+      "id": "ui2",
+      "beat": "editor",
+      "narration": "Mỗi thao tác đều có thể hoàn tác. Dự án là một tệp trên máy bạn — mở lại được, sao lưu được, không phụ thuộc vào một tài khoản trực tuyến.",
+      "caption": "Mỗi thao tác đều có thể hoàn tác. Dự án là một tệp trên máy bạn — mở lại được, sao lưu được, không phụ thuộc vào một tài khoản trực tuyến."
+    },
+    {
+      "id": "ui5",
+      "beat": "editor",
+      "narration": "Track có thể khoá, ẩn, đổi thứ tự. Clip có thể cắt, trim, trượt, hoặc chồng lên nhau. Lịch sử giữ lại từng bước để bạn quay về.",
+      "caption": "Track có thể khoá, ẩn, đổi thứ tự. Clip có thể cắt, trim, trượt, hoặc chồng lên nhau. Lịch sử giữ lại từng bước để bạn quay về."
+    },
+    {
+      "id": "ui6",
+      "beat": "editor",
+      "narration": "Ripple, slip, roll — những thao tác nhỏ giữ cho nhịp phim liền mạch.",
+      "caption": "Ripple, slip, roll — những thao tác nhỏ giữ cho nhịp phim liền mạch."
+    },
+    {
+      "id": "ui3",
+      "beat": "actions",
+      "narration": "Một cú cắt ở đúng playhead. Một đoạn bị xoá và phần còn lại trượt vào cho kín. Một clip được kéo sang track khác để chồng hình.",
+      "caption": "Một cú cắt ở đúng playhead. Một đoạn bị xoá và phần còn lại trượt vào cho kín. Một clip được kéo sang track khác để chồng hình."
+    },
+    {
+      "id": "ui4",
+      "beat": "actions",
+      "narration": "Bạn vẫn là người quyết định nhịp điệu. Phần mềm chỉ giữ cho mọi thứ nhất quán, kể cả khi bạn đổi ý nhiều lần.",
+      "caption": "Bạn vẫn là người quyết định nhịp điệu. Phần mềm chỉ giữ cho mọi thứ nhất quán, kể cả khi bạn đổi ý nhiều lần."
+    },
+    {
+      "id": "xuat1",
+      "beat": "export",
+      "narration": "Khi bản dựng đã đủ, khung xem trước phát lại toàn bộ. Rồi quá trình xuất bắt đầu, và kết quả là một tệp video có thể chia sẻ.",
+      "caption": "Khi bản dựng đã đủ, khung xem trước phát lại toàn bộ. Rồi quá trình xuất bắt đầu, và kết quả là một tệp video có thể chia sẻ."
+    },
+    {
+      "id": "xuat2",
+      "beat": "export",
+      "narration": "Khung xem trước và tệp xuất dùng cùng một cách dựng hình, nên điều bạn thấy là điều bạn nhận được.",
+      "caption": "Khung xem trước và tệp xuất dùng cùng một cách dựng hình, nên điều bạn thấy là điều bạn nhận được."
+    },
+    {
+      "id": "ai1",
+      "beat": "scope",
+      "marker": "04 · Chat Assistant",
+      "narration": "Mở bảng Chat Assistant, bạn có thể yêu cầu trợ lý viết kịch bản, tạo một cảnh động, làm giọng đọc, hoặc sắp xếp lại timeline đang mở.",
+      "caption": "Mở bảng Chat Assistant, bạn có thể yêu cầu trợ lý viết kịch bản, tạo một cảnh động, làm giọng đọc, hoặc sắp xếp lại timeline đang mở."
+    },
+    {
+      "id": "ai2",
+      "beat": "scope",
+      "narration": "Nhưng OpenCut Reinforced không tự xây một hệ thống agent mới. Nó là môi trường làm việc cho những harness AI bên ngoài, kết nối qua ACP.",
+      "caption": "Nhưng OpenCut Reinforced không tự xây một hệ thống agent mới. Nó là môi trường làm việc cho những harness AI bên ngoài, kết nối qua ACP."
+    },
+    {
+      "id": "ai3",
+      "beat": "scope",
+      "narration": "Trợ lý không thay bạn quyết định nhịp điệu. Nó làm những việc lặp lại, còn bạn giữ quyền duyệt và sửa.",
+      "caption": "Trợ lý không thay bạn quyết định nhịp điệu. Nó làm những việc lặp lại, còn bạn giữ quyền duyệt và sửa."
+    },
+    {
+      "id": "chat1",
+      "beat": "chat",
+      "narration": "Bạn đặt yêu cầu bằng ngôn ngữ tự nhiên. Trợ lý nhìn thấy clip đang chọn và vị trí playhead, nên “cảnh này” hay “chỗ này” đều có nghĩa.",
+      "caption": "Bạn đặt yêu cầu bằng ngôn ngữ tự nhiên. Trợ lý nhìn thấy clip đang chọn và vị trí playhead, nên “cảnh này” hay “chỗ này” đều có nghĩa."
+    },
+    {
+      "id": "chat2",
+      "beat": "chat",
+      "narration": "Ví dụ: hãy viết một cảnh mở đầu tám giây, dựng nó bằng Motion Scene, đọc bằng giọng đọc mà bạn muốn, rồi tạo phụ đề từ chính đoạn audio đó.",
+      "caption": "Ví dụ: hãy viết một cảnh mở đầu tám giây, dựng nó bằng Motion Scene, đọc bằng giọng đọc mà bạn muốn, rồi tạo phụ đề từ chính đoạn audio đó."
+    },
+    {
+      "id": "acp1",
+      "beat": "acp",
+      "narration": "Yêu cầu rời khỏi OR, đi qua ACP tới harness. Harness quyết định cách làm, rồi quay lại dự án qua CLI và MCP — những lệnh có thể kiểm tra và hoàn tác.",
+      "caption": "Yêu cầu rời khỏi OR, đi qua ACP tới harness. Harness quyết định cách làm, rồi quay lại dự án qua CLI và MCP — những lệnh có thể kiểm tra và hoàn tác."
+    },
+    {
+      "id": "acp2",
+      "beat": "acp",
+      "narration": "Ở bản này, DeepSeek Harness đã được nối sẵn. Cài đặt cũng cho phép trỏ tới Claude Code, Codex, OpenCode hoặc một lệnh ACP khác, khi harness đó đã có trên máy.",
+      "caption": "Ở bản này, DeepSeek Harness đã được nối sẵn. Cài đặt cũng cho phép trỏ tới Claude Code, Codex, OpenCode hoặc một lệnh ACP khác, khi harness đó đã có trên máy."
+    },
+    {
+      "id": "acp3",
+      "beat": "acp",
+      "narration": "Bạn giữ lại công cụ quen thuộc. OR chỉ đảm bảo nó nhìn thấy đúng dự án và ghi lại thay đổi theo cùng một lịch sử.",
+      "caption": "Bạn giữ lại công cụ quen thuộc. OR chỉ đảm bảo nó nhìn thấy đúng dự án và ghi lại thay đổi theo cùng một lịch sử."
+    },
+    {
+      "id": "acp4",
+      "beat": "acp",
+      "narration": "Thông tin đăng nhập của nhà cung cấp nằm trong harness, không đi qua dự án. OR không giữ khoá, không gọi mô hình thay bạn.",
+      "caption": "Thông tin đăng nhập của nhà cung cấp nằm trong harness, không đi qua dự án. OR không giữ khoá, không gọi mô hình thay bạn."
+    },
+    {
+      "id": "kq1",
+      "beat": "result",
+      "narration": "Kết quả quay về không phải một câu trả lời suông. Đó là một clip mới trên timeline, một tệp giọng đọc, một caption track — những thứ bạn có thể sửa tiếp.",
+      "caption": "Kết quả quay về không phải một câu trả lời suông. Đó là một clip mới trên timeline, một tệp giọng đọc, một caption track — những thứ bạn có thể sửa tiếp."
+    },
+    {
+      "id": "ms1",
+      "beat": "motionCode",
+      "marker": "05 · Motion Scene",
+      "narration": "Một trong những khả năng đặc biệt nhất là Motion Scene. Bạn mô tả một cảnh, hoặc viết ra code của nó, và OR biến mô tả đó thành hình ảnh động.",
+      "caption": "Một trong những khả năng đặc biệt nhất là Motion Scene. Bạn mô tả một cảnh, hoặc viết ra code của nó, và OR biến mô tả đó thành hình ảnh động."
+    },
+    {
+      "id": "ms2",
+      "beat": "motionBuild",
+      "narration": "Từng dòng code tách khỏi mặt phẳng và trở thành hình khối. Mặt trời mọc lên. Những rặng núi trượt vào. Camera tiến lại gần.",
+      "caption": "Từng dòng code tách khỏi mặt phẳng và trở thành hình khối. Mặt trời mọc lên. Những rặng núi trượt vào. Camera tiến lại gần."
+    },
+    {
+      "id": "ms5",
+      "beat": "motionBuild",
+      "narration": "Các lớp chuyển động ở tốc độ khác nhau, tạo chiều sâu. Bạn có thể lưu cảnh thành asset có tham số và dùng lại ở video khác.",
+      "caption": "Các lớp chuyển động ở tốc độ khác nhau, tạo chiều sâu. Bạn có thể lưu cảnh thành asset có tham số và dùng lại ở video khác."
+    },
+    {
+      "id": "ms3",
+      "beat": "motionMorph",
+      "narration": "Mọi thứ chạy theo thời gian chính xác, không gọi mô hình, không phụ thuộc mạng. Cùng một cảnh, cùng một kết quả, mỗi lần dựng.",
+      "caption": "Mọi thứ chạy theo thời gian chính xác, không gọi mô hình, không phụ thuộc mạng. Cùng một cảnh, cùng một kết quả, mỗi lần dựng."
+    },
+    {
+      "id": "ms6",
+      "beat": "motionMorph",
+      "narration": "Không có bất ngờ từ mạng, không có phiên bản model thay đổi dưới chân bạn.",
+      "caption": "Không có bất ngờ từ mạng, không có phiên bản model thay đổi dưới chân bạn."
+    },
+    {
+      "id": "ms4",
+      "beat": "motionTimeline",
+      "narration": "Kết quả là một clip bình thường. Bạn có thể cắt, ghép, đặt cạnh footage thật, trộn với giọng đọc và phụ đề.",
+      "caption": "Kết quả là một clip bình thường. Bạn có thể cắt, ghép, đặt cạnh footage thật, trộn với giọng đọc và phụ đề."
+    },
+    {
+      "id": "tts1",
+      "beat": "ttsScript",
+      "marker": "06 · Giọng đọc local",
+      "narration": "Sau hình ảnh là giọng nói. Kịch bản được đưa vào VieNeu-TTS, một engine chạy ngay trên máy. Bạn chọn giọng đọc mà bạn muốn, và engine bắt đầu đọc.",
+      "caption": "Sau hình ảnh là giọng nói. Kịch bản được đưa vào VieNeu-TTS, một engine chạy ngay trên máy. Bạn chọn giọng đọc mà bạn muốn, và engine bắt đầu đọc."
+    },
+    {
+      "id": "tts3",
+      "beat": "ttsScript",
+      "narration": "Engine là một tiến trình riêng trên loopback. Bạn có thể xem log, dừng, mở lại, hoặc thay bằng một engine tương thích khác.",
+      "caption": "Engine là một tiến trình riêng trên loopback. Bạn có thể xem log, dừng, mở lại, hoặc thay bằng một engine tương thích khác."
+    },
+    {
+      "id": "tts2",
+      "beat": "ttsWave",
+      "narration": "Không cần gửi từng câu lên cloud, không cần chờ hàng đợi. Sóng âm thanh hiện ra, và đoạn giọng nói được đặt vào đúng vị trí trên timeline.",
+      "caption": "Không cần gửi từng câu lên cloud, không cần chờ hàng đợi. Sóng âm thanh hiện ra, và đoạn giọng nói được đặt vào đúng vị trí trên timeline."
+    },
+    {
+      "id": "wh1",
+      "beat": "whisperListen",
+      "narration": "Rồi Whisper lắng nghe chính đoạn audio đó. Nó nhận ra lời nói, chia thành từng cụm, và gắn mốc thời gian cho từng cụm.",
+      "caption": "Rồi Whisper lắng nghe chính đoạn audio đó. Nó nhận ra lời nói, chia thành từng cụm, và gắn mốc thời gian cho từng cụm."
+    },
+    {
+      "id": "wh3",
+      "beat": "whisperListen",
+      "narration": "Model được chọn trong ứng dụng — từ bản nhỏ, nhanh, đến bản lớn, chính xác hơn. Bạn đổi model, không phải đổi cả quy trình.",
+      "caption": "Model được chọn trong ứng dụng — từ bản nhỏ, nhanh, đến bản lớn, chính xác hơn. Bạn đổi model, không phải đổi cả quy trình."
+    },
+    {
+      "id": "wh2",
+      "beat": "whisperCues",
+      "narration": "Bạn xem lại nội dung trước khi áp dụng. Chỉ khi đồng ý, các cue mới trở thành một caption track có thể sửa từng chữ.",
+      "caption": "Bạn xem lại nội dung trước khi áp dụng. Chỉ khi đồng ý, các cue mới trở thành một caption track có thể sửa từng chữ."
+    },
+    {
+      "id": "flow1",
+      "beat": "workflow",
+      "marker": "07 · Quy trình khép kín",
+      "narration": "Tạo nội dung, tạo giọng đọc, nhận diện lời nói, tạo phụ đề, hoàn thiện video. Một vòng lặp khép kín, ngay trên máy.",
+      "caption": "Tạo nội dung, tạo giọng đọc, nhận diện lời nói, tạo phụ đề, hoàn thiện video. Một vòng lặp khép kín, ngay trên máy."
+    },
+    {
+      "id": "flow2",
+      "beat": "workflow",
+      "narration": "Và mỗi bước đều để lại một tệp thật: script, WAV, SRT, clip, dự án. Không có bước nào bị khoá trong một dịch vụ bên ngoài.",
+      "caption": "Và mỗi bước đều để lại một tệp thật: script, WAV, SRT, clip, dự án. Không có bước nào bị khoá trong một dịch vụ bên ngoài."
+    },
+    {
+      "id": "free1",
+      "beat": "free",
+      "marker": "08 · Miễn phí và sở hữu",
+      "narration": "OpenCut Reinforced phát hành theo giấy phép MIT. Miễn phí sử dụng, miễn phí thay đổi, miễn phí chia sẻ.",
+      "caption": "OpenCut Reinforced phát hành theo giấy phép MIT. Miễn phí sử dụng, miễn phí thay đổi, miễn phí chia sẻ."
+    },
+    {
+      "id": "free4",
+      "beat": "free",
+      "narration": "Không có gói thuê bao để mở khoá track, không có watermark, không có giới hạn số lần xuất.",
+      "caption": "Không có gói thuê bao để mở khoá track, không có watermark, không có giới hạn số lần xuất."
+    },
+    {
+      "id": "free2",
+      "beat": "free",
+      "narration": "VieNeu-TTS và Whisper local không tính phí theo từng lần xử lý. Bạn vẫn cần phần cứng đủ mạnh, dung lượng lưu trữ, thời gian tải model, và tuân thủ giấy phép của từng model.",
+      "caption": "VieNeu-TTS và Whisper local không tính phí theo từng lần xử lý. Bạn vẫn cần phần cứng đủ mạnh, dung lượng lưu trữ, thời gian tải model, và tuân thủ giấy phép của từng model."
+    },
+    {
+      "id": "free3",
+      "beat": "free",
+      "narration": "Chat Assistant có thể dùng model miễn phí khi nhà cung cấp và cấu hình cho phép — nhưng không phải mọi provider hay dịch vụ AI đều miễn phí.",
+      "caption": "Chat Assistant có thể dùng model miễn phí khi nhà cung cấp và cấu hình cho phép — nhưng không phải mọi provider hay dịch vụ AI đều miễn phí."
+    },
+    {
+      "id": "own1",
+      "beat": "ownership",
+      "narration": "Điều lớn hơn khoản tiết kiệm là quyền sở hữu. Dự án, media, công cụ và quá trình sản xuất nằm trong tay bạn, trên chiếc máy của bạn.",
+      "caption": "Điều lớn hơn khoản tiết kiệm là quyền sở hữu. Dự án, media, công cụ và quá trình sản xuất nằm trong tay bạn, trên chiếc máy của bạn."
+    },
+    {
+      "id": "own2",
+      "beat": "ownership",
+      "narration": "Bạn có thể rút mạng và vẫn dựng tiếp. Dự án vẫn mở, media vẫn phát, model local vẫn chạy.",
+      "caption": "Bạn có thể rút mạng và vẫn dựng tiếp. Dự án vẫn mở, media vẫn phát, model local vẫn chạy."
+    },
+    {
+      "id": "real1",
+      "beat": "reality",
+      "marker": "09 · Thực tế và giới hạn",
+      "narration": "Nhưng câu chuyện chưa trọn vẹn. Hiện tại, bản phát hành chính thức chỉ có cho macOS Apple Silicon. Mình phát triển và kiểm thử chủ yếu trên chiếc Mac của mình.",
+      "caption": "Nhưng câu chuyện chưa trọn vẹn. Hiện tại, bản phát hành chính thức chỉ có cho macOS Apple Silicon. Mình phát triển và kiểm thử chủ yếu trên chiếc Mac của mình."
+    },
+    {
+      "id": "real2",
+      "beat": "reality",
+      "narration": "Mình không có đủ thiết bị và thời gian để tự kiểm thử, tối ưu, đóng gói và duy trì chất lượng cho Windows và Linux.",
+      "caption": "Mình không có đủ thiết bị và thời gian để tự kiểm thử, tối ưu, đóng gói và duy trì chất lượng cho Windows và Linux."
+    },
+    {
+      "id": "real3",
+      "beat": "reality",
+      "narration": "Bản 0.1.0 ra ngày 30 tháng 10, đóng gói cho Apple Silicon. Đó là điểm bắt đầu, không phải đích đến.",
+      "caption": "Bản 0.1.0 ra ngày 30 tháng 10, đóng gói cho Apple Silicon. Đó là điểm bắt đầu, không phải đích đến."
+    },
+    {
+      "id": "gap1",
+      "beat": "platform",
+      "narration": "Đây không chỉ là chuyện biên dịch. Mỗi nền tảng có giao diện, codec, hiệu năng, cách cài đặt và trải nghiệm riêng. Cần người dùng thật, trên máy thật, tìm lỗi và giúp hoàn thiện.",
+      "caption": "Đây không chỉ là chuyện biên dịch. Mỗi nền tảng có giao diện, codec, hiệu năng, cách cài đặt và trải nghiệm riêng. Cần người dùng thật, trên máy thật, tìm lỗi và giúp hoàn thiện."
+    },
+    {
+      "id": "gap2",
+      "beat": "platform",
+      "narration": "Mình cần người dùng Windows và Linux thử trên thiết bị thật, tìm lỗi, và giúp hoàn thiện trải nghiệm — không chỉ báo rằng nó không chạy.",
+      "caption": "Mình cần người dùng Windows và Linux thử trên thiết bị thật, tìm lỗi, và giúp hoàn thiện trải nghiệm — không chỉ báo rằng nó không chạy."
+    },
+    {
+      "id": "mob1",
+      "beat": "mobile",
+      "marker": "10 · Bài toán mobile",
+      "narration": "Với Android và iOS, bài toán còn sâu hơn: đưa Chat Assistant lên mobile cần một giải pháp harness phù hợp. Mình không muốn tạo thêm một hệ agent riêng rồi phải nuôi hàng chục provider.",
+      "caption": "Với Android và iOS, bài toán còn sâu hơn: đưa Chat Assistant lên mobile cần một giải pháp harness phù hợp. Mình không muốn tạo thêm một hệ agent riêng rồi phải nuôi hàng chục provider."
+    },
+    {
+      "id": "mob2",
+      "beat": "mobile",
+      "narration": "Đó là hướng cần những người có kinh nghiệm cùng nghiên cứu và thiết kế. Không phải điều mình hứa sẽ hoàn thành ngay lập tức.",
+      "caption": "Đó là hướng cần những người có kinh nghiệm cùng nghiên cứu và thiết kế. Không phải điều mình hứa sẽ hoàn thành ngay lập tức."
+    },
+    {
+      "id": "mob3",
+      "beat": "mobile",
+      "narration": "Mỗi provider có cách xác thực, cách stream và cách gọi công cụ khác nhau. Nhân chúng lên theo từng nền tảng là con đường rất nhanh dẫn đến kiệt sức.",
+      "caption": "Mỗi provider có cách xác thực, cách stream và cách gọi công cụ khác nhau. Nhân chúng lên theo từng nền tảng là con đường rất nhanh dẫn đến kiệt sức."
+    },
+    {
+      "id": "not1",
+      "beat": "notarize",
+      "narration": "Và bản macOS hiện tại chưa được notarize, vì mình chưa có tài khoản Apple Developer. Đây là một bản chạy được, không phải một quy trình phát hành đã hoàn chỉnh.",
+      "caption": "Và bản macOS hiện tại chưa được notarize, vì mình chưa có tài khoản Apple Developer. Đây là một bản chạy được, không phải một quy trình phát hành đã hoàn chỉnh."
+    },
+    {
+      "id": "com1",
+      "beat": "community",
+      "marker": "11 · Cộng đồng",
+      "narration": "Một sản phẩm tốt có thể bắt đầu từ một người. Nhưng nó chỉ thực sự tốt hơn khi có nhiều người cùng chạm vào.",
+      "caption": "Một sản phẩm tốt có thể bắt đầu từ một người. Nhưng nó chỉ thực sự tốt hơn khi có nhiều người cùng chạm vào."
+    },
+    {
+      "id": "com2",
+      "beat": "community",
+      "narration": "Một báo lỗi rõ ràng, một bản dịch, một bài kiểm thử trên máy thật — tất cả đều là đóng góp.",
+      "caption": "Một báo lỗi rõ ràng, một bản dịch, một bài kiểm thử trên máy thật — tất cả đều là đóng góp."
+    },
+    {
+      "id": "cta1",
+      "beat": "contrib",
+      "marker": "12 · Cùng xây",
+      "narration": "Hãy fork repository, đọc mã nguồn, dùng thử, mở issue hoặc gửi pull request. Bạn có thể chọn đúng phần mình quan tâm: giao diện, media pipeline, hiệu năng, AI integration, packaging.",
+      "caption": "Hãy fork repository, đọc mã nguồn, dùng thử, mở issue hoặc gửi pull request. Bạn có thể chọn đúng phần mình quan tâm: giao diện, media pipeline, hiệu năng, AI integration, packaging."
+    },
+    {
+      "id": "cta2",
+      "beat": "contrib",
+      "narration": "Bạn không cần có SDK của mọi nền tảng. Chỉ cần chạy những kiểm tra phù hợp trên máy mình, và nói rõ phần nào chưa thể chạy.",
+      "caption": "Bạn không cần có SDK của mọi nền tảng. Chỉ cần chạy những kiểm tra phù hợp trên máy mình, và nói rõ phần nào chưa thể chạy."
+    },
+    {
+      "id": "cta3",
+      "beat": "contrib",
+      "narration": "Đường đi của một đóng góp rất đơn giản: fork, tạo thay đổi, kiểm thử, mở pull request, nhận review, và được hợp nhất khi phù hợp.",
+      "caption": "Đường đi của một đóng góp rất đơn giản: fork, tạo thay đổi, kiểm thử, mở pull request, nhận review, và được hợp nhất khi phù hợp."
+    },
+    {
+      "id": "cta4",
+      "beat": "contrib",
+      "narration": "Một pull request tốt nên nhỏ, có mô tả thay đổi, lý do, ảnh hưởng kiến trúc, những kiểm tra đã chạy và những phần chưa chạy được.",
+      "caption": "Một pull request tốt nên nhỏ, có mô tả thay đổi, lý do, ảnh hưởng kiến trúc, những kiểm tra đã chạy và những phần chưa chạy được."
+    },
+    {
+      "id": "cam1",
+      "beat": "commitment",
+      "narration": "Mình cam kết sẽ đọc và review những PR gửi đến, trao đổi với người đóng góp, và merge những thay đổi phù hợp vào các bản release tiếp theo.",
+      "caption": "Mình cam kết sẽ đọc và review những PR gửi đến, trao đổi với người đóng góp, và merge những thay đổi phù hợp vào các bản release tiếp theo."
+    },
+    {
+      "id": "cam2",
+      "beat": "commitment",
+      "narration": "Mình không hứa mọi PR đều được merge. Mình hứa sẽ đọc, phản hồi, và nói rõ lý do.",
+      "caption": "Mình không hứa mọi PR đều được merge. Mình hứa sẽ đọc, phản hồi, và nói rõ lý do."
+    },
+    {
+      "id": "close1",
+      "beat": "close",
+      "narration": "OpenCut Reinforced. Miễn phí, mã nguồn mở, và đang chờ bàn tay của bạn.",
+      "caption": "OpenCut Reinforced. Miễn phí, mã nguồn mở, và đang chờ bàn tay của bạn."
+    },
+    {
+      "id": "close2",
+      "beat": "close",
+      "narration": "Repository ở github chấm com, gạch chéo, huou07, gạch chéo, Opencut, gạch nối, Reinforced.",
+      "caption": "Repository: github.com/huou07/Opencut-Reinforced"
+    }
+  ]
+}

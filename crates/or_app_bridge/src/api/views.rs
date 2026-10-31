@@ -268,6 +268,14 @@ pub struct ProjectTimelineSequenceSettingsView {
     pub project_instance_id: String,
     pub project_revision: u64,
     pub sequence_frame_rate: Option<RationalRateView>,
+    pub sequence_canvas: Option<SequenceCanvasView>,
+}
+
+/// Composition canvas exposed to the Flutter shell.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SequenceCanvasView {
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -4,15 +4,15 @@ use crate::{
     MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS,
     MAX_TIMELINE_TRACKS, MarkerId, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
     MediaStreamMetadata, OtherStreamMetadata, ProjectId, ProjectRevision, ProjectTimeline,
-    RationalRate, RationalTime, TimeRange, TimelineClip, TimelineMarker, TimelineTrack, TrackId,
-    TrackKind, TrackState, VideoStreamMetadata,
+    RationalRate, RationalTime, SequenceCanvas, TimeRange, TimelineClip, TimelineMarker,
+    TimelineTrack, TrackId, TrackKind, TrackState, VideoStreamMetadata,
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::value::RawValue;
 use std::{collections::HashSet, error::Error, fmt, num::NonZeroU32};
 
 const PROJECT_FORMAT_MARKER: &str = "opencut-reinforced-project";
-pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 8;
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 9;
 
 /// Canonical persistent state for a project.
 ///
@@ -76,6 +76,16 @@ impl ProjectDocument {
     ) {
         self.timeline
             .set_sequence_frame_rate_for_command(sequence_frame_rate);
+        self.revision = revision;
+    }
+
+    pub(crate) fn set_sequence_canvas_for_command(
+        &mut self,
+        sequence_canvas: Option<SequenceCanvas>,
+        revision: ProjectRevision,
+    ) {
+        self.timeline
+            .set_sequence_canvas_for_command(sequence_canvas);
         self.revision = revision;
     }
 
@@ -380,6 +390,21 @@ impl ProjectDocument {
         Self::from_v7_state(project, ProjectCodecError::InvalidV8Data)
     }
 
+    fn from_v9(project: ProjectStateV8) -> Result<Self, ProjectCodecError> {
+        let media = decode_media_library_v7(project.media, ProjectCodecError::InvalidV9Data)?;
+        let timeline = project
+            .timeline
+            .into_domain(&media)
+            .map_err(|_| ProjectCodecError::InvalidV9Data)?;
+        Ok(Self {
+            id: project.id,
+            revision: project.revision,
+            name: project.name,
+            media,
+            timeline,
+        })
+    }
+
     fn from_v7_state(
         project: ProjectStateV7,
         invalid_data: ProjectCodecError,
@@ -622,6 +647,37 @@ struct ProjectTimelineV6 {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ProjectFileV9 {
+    format: String,
+    schema_version: u32,
+    project: ProjectStateV8,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectStateV8 {
+    id: ProjectId,
+    revision: ProjectRevision,
+    name: String,
+    media: Vec<MediaItemV7>,
+    timeline: ProjectTimelineV7,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectTimelineV7 {
+    #[serde(deserialize_with = "deserialize_v6_tracks")]
+    tracks: Vec<TimelineTrackV6>,
+    #[serde(deserialize_with = "deserialize_v4_markers")]
+    markers: Vec<TimelineMarkerV4>,
+    #[serde(default, deserialize_with = "deserialize_nullable_field")]
+    sequence_frame_rate: Option<Option<RationalRate>>,
+    #[serde(default, deserialize_with = "deserialize_nullable_field")]
+    sequence_canvas: Option<Option<SequenceCanvas>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TimelineTrackV6 {
     id: TrackId,
     kind: TrackKind,
@@ -793,6 +849,69 @@ impl ProjectTimelineV5 {
             self.sequence_frame_rate
                 .ok_or(crate::timeline::TimelineValidationError)?,
         );
+        timeline.validate(media)?;
+        Ok(timeline)
+    }
+}
+
+impl ProjectTimelineV7 {
+    fn into_domain(
+        self,
+        media: &[MediaItem],
+    ) -> Result<ProjectTimeline, crate::timeline::TimelineValidationError> {
+        let tracks = self
+            .tracks
+            .into_iter()
+            .map(|track| {
+                let clips = track
+                    .clips
+                    .into_iter()
+                    .map(|clip| {
+                        Ok(TimelineClip::from_content_for_codec(
+                            clip.id,
+                            clip.timeline_start
+                                .into_domain()
+                                .map_err(|_| crate::timeline::TimelineValidationError)?,
+                            clip.timeline_duration
+                                .into_domain()
+                                .map_err(|_| crate::timeline::TimelineValidationError)?,
+                            clip.content,
+                            clip.settings,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+                Ok(TimelineTrack::from_parts_with_state_for_codec(
+                    track.id,
+                    track.kind,
+                    track.state,
+                    clips,
+                ))
+            })
+            .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+        let markers = self
+            .markers
+            .into_iter()
+            .map(|marker| {
+                Ok(TimelineMarker::from_parts_for_codec(
+                    marker.id,
+                    marker
+                        .timeline_time
+                        .into_domain()
+                        .map_err(|_| crate::timeline::TimelineValidationError)?,
+                    marker.label,
+                ))
+            })
+            .collect::<Result<Vec<_>, crate::timeline::TimelineValidationError>>()?;
+        let sequence_canvas = self
+            .sequence_canvas
+            .ok_or(crate::timeline::TimelineValidationError)?;
+        let mut timeline = ProjectTimeline::from_parts_with_sequence_rate_for_codec(
+            tracks,
+            markers,
+            self.sequence_frame_rate
+                .ok_or(crate::timeline::TimelineValidationError)?,
+        );
+        timeline.set_sequence_canvas_for_command(sequence_canvas);
         timeline.validate(media)?;
         Ok(timeline)
     }
@@ -1375,7 +1494,7 @@ impl From<&ProjectDocument> for ProjectFileV8 {
     fn from(document: &ProjectDocument) -> Self {
         Self {
             format: PROJECT_FORMAT_MARKER.to_owned(),
-            schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
+            schema_version: 8,
             project: ProjectStateV7 {
                 id: document.id,
                 revision: document.revision,
@@ -1430,6 +1549,66 @@ impl From<&ProjectDocument> for ProjectFileV8 {
     }
 }
 
+impl From<&ProjectDocument> for ProjectFileV9 {
+    fn from(document: &ProjectDocument) -> Self {
+        Self {
+            format: PROJECT_FORMAT_MARKER.to_owned(),
+            schema_version: CURRENT_PROJECT_SCHEMA_VERSION,
+            project: ProjectStateV8 {
+                id: document.id,
+                revision: document.revision,
+                name: document.name.clone(),
+                media: document
+                    .media
+                    .iter()
+                    .map(|item| MediaItemV7 {
+                        id: item.id(),
+                        source: item.source().clone(),
+                        metadata: MediaMetadataV2::from(item.metadata()),
+                    })
+                    .collect(),
+                timeline: ProjectTimelineV7 {
+                    tracks: document
+                        .timeline
+                        .tracks()
+                        .iter()
+                        .map(|track| TimelineTrackV6 {
+                            id: track.id(),
+                            kind: track.kind(),
+                            state: track.state(),
+                            clips: track
+                                .clips()
+                                .iter()
+                                .map(|clip| TimelineClipV6 {
+                                    id: clip.id(),
+                                    timeline_start: RationalTimeV3::from(clip.timeline_start()),
+                                    timeline_duration: RationalTimeV3::from(
+                                        clip.timeline_duration(),
+                                    ),
+                                    content: clip.content().clone(),
+                                    settings: clip.settings().clone(),
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    markers: document
+                        .timeline
+                        .markers()
+                        .iter()
+                        .map(|marker| TimelineMarkerV4 {
+                            id: marker.id(),
+                            timeline_time: RationalTimeV3::from(marker.timeline_time()),
+                            label: marker.label().to_owned(),
+                        })
+                        .collect(),
+                    sequence_frame_rate: Some(document.timeline.sequence_frame_rate()),
+                    sequence_canvas: Some(document.timeline.sequence_canvas()),
+                },
+            },
+        }
+    }
+}
+
 impl From<RationalTime> for RationalTimeV3 {
     fn from(time: RationalTime) -> Self {
         Self {
@@ -1464,6 +1643,7 @@ pub enum ProjectCodecError {
     InvalidV6Data,
     InvalidV7Data,
     InvalidV8Data,
+    InvalidV9Data,
     SerializationFailure,
 }
 
@@ -1494,6 +1674,7 @@ impl fmt::Display for ProjectCodecError {
             Self::InvalidV6Data => formatter.write_str("project schema version 6 data is invalid"),
             Self::InvalidV7Data => formatter.write_str("project schema version 7 data is invalid"),
             Self::InvalidV8Data => formatter.write_str("project schema version 8 data is invalid"),
+            Self::InvalidV9Data => formatter.write_str("project schema version 9 data is invalid"),
             Self::SerializationFailure => {
                 formatter.write_str("project document could not be serialized")
             }
@@ -1510,7 +1691,7 @@ pub fn encode_project(document: &ProjectDocument) -> Result<String, ProjectCodec
         .timeline
         .validate(&document.media)
         .map_err(|_| ProjectCodecError::InvalidV8Data)?;
-    let mut encoded = serde_json::to_string_pretty(&ProjectFileV8::from(document))
+    let mut encoded = serde_json::to_string_pretty(&ProjectFileV9::from(document))
         .map_err(|_| ProjectCodecError::SerializationFailure)?;
     encoded.push('\n');
     Ok(encoded)
@@ -1604,6 +1785,14 @@ pub fn decode_project(encoded: &str) -> Result<ProjectDocument, ProjectCodecErro
                 return Err(ProjectCodecError::InvalidV8Data);
             }
             ProjectDocument::from_v8(file.project)
+        }
+        9 => {
+            let file: ProjectFileV9 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV9Data)?;
+            if file.format != PROJECT_FORMAT_MARKER || file.schema_version != 9 {
+                return Err(ProjectCodecError::InvalidV9Data);
+            }
+            ProjectDocument::from_v9(file.project)
         }
         _ => Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version)),
     }
@@ -1780,7 +1969,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 8);
+        assert_eq!(value["schema_version"], 9);
         assert_eq!(
             value["project"]["timeline"]["tracks"][0]["clips"][0]["content"]["playback_rate"],
             json!({"numerator": 3, "denominator": 2})
@@ -1807,6 +1996,10 @@ mod tests {
             )]);
         let mut legacy: Value = serde_json::from_str(&encode_project(&identity).unwrap()).unwrap();
         legacy["schema_version"] = json!(7);
+        legacy["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
         assert!(
             legacy["project"]["timeline"]["tracks"][0]["clips"][0]["content"]
                 .get("playback_rate")
@@ -1818,7 +2011,7 @@ mod tests {
         assert_eq!(clip.timeline_duration(), source_range.duration());
         assert_eq!(
             serde_json::from_str::<Value>(&encode_project(&migrated).unwrap()).unwrap()["schema_version"],
-            8
+            9
         );
     }
 
@@ -1827,12 +2020,16 @@ mod tests {
         let project = fixed_project();
         let mut legacy: Value = serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
         legacy["schema_version"] = json!(6);
+        legacy["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
 
         let decoded = decode_project(&legacy.to_string()).unwrap();
         assert_eq!(decoded, project);
         assert_eq!(
             serde_json::from_str::<Value>(&encode_project(&decoded).unwrap()).unwrap()["schema_version"],
-            8
+            9
         );
     }
 
@@ -1854,7 +2051,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 8);
+        assert_eq!(value["schema_version"], 9);
         assert_eq!(
             value["project"]["media"][0]["source"]["kind"],
             "android_saf_document_uri"
@@ -1867,6 +2064,10 @@ mod tests {
 
         let mut v6 = value;
         v6["schema_version"] = serde_json::json!(6);
+        v6["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
         assert_eq!(
             decode_project(&v6.to_string()),
             Err(ProjectCodecError::InvalidV6Data)
@@ -1883,7 +2084,7 @@ mod tests {
             value,
             json!({
                 "format": "opencut-reinforced-project",
-                "schema_version": 8,
+                "schema_version": 9,
                 "project": {
                     "id": project.id().to_string(),
                     "revision": 0,
@@ -1892,14 +2093,15 @@ mod tests {
                     "timeline": {
                         "tracks": [],
                         "markers": [],
-                        "sequence_frame_rate": null
+                        "sequence_frame_rate": null,
+                        "sequence_canvas": null
                     }
                 }
             })
         );
         assert!(encoded.ends_with('\n'));
-        assert_eq!(value["schema_version"], 8);
-        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 8);
+        assert_eq!(value["schema_version"], 9);
+        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 9);
     }
 
     #[test]
@@ -1935,11 +2137,11 @@ mod tests {
     #[test]
     fn unsupported_schema_version_is_rejected() {
         let input = encoded_project_with_revision("0")
-            .replace("\"schema_version\":1", "\"schema_version\":9");
+            .replace("\"schema_version\":1", "\"schema_version\":10");
 
         assert_eq!(
             decode_project(&input),
-            Err(ProjectCodecError::UnsupportedSchemaVersion(9))
+            Err(ProjectCodecError::UnsupportedSchemaVersion(10))
         );
     }
 
@@ -1955,7 +2157,7 @@ mod tests {
 
         let encoded = encode_project(&migrated).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 8);
+        assert_eq!(value["schema_version"], 9);
         assert_eq!(
             value["project"]["timeline"]["sequence_frame_rate"],
             Value::Null
@@ -1984,7 +2186,7 @@ mod tests {
         assert!(migrated.timeline().tracks().is_empty());
         assert!(migrated.timeline().markers().is_empty());
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
             Value::Null
@@ -2010,7 +2212,7 @@ mod tests {
         assert_eq!(migrated.timeline().sequence_frame_rate(), None);
 
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 8);
+        assert_eq!(encoded["schema_version"], 9);
         assert_eq!(encoded["project"]["revision"], 19);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
@@ -2026,6 +2228,10 @@ mod tests {
         base["project"]["timeline"]
             .as_object_mut()
             .unwrap()
+            .remove("sequence_canvas");
+        base["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
             .remove("sequence_frame_rate");
         assert_eq!(
             decode_project(&base.to_string()),
@@ -2034,6 +2240,10 @@ mod tests {
 
         let mut base: Value = serde_json::from_str(&encoded).unwrap();
         base["schema_version"] = json!(5);
+        base["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
         for invalid in [
             json!({"numerator": 0, "denominator": 1}),
             json!({"numerator": 24, "denominator": 0}),
@@ -2089,6 +2299,10 @@ mod tests {
         );
         let mut legacy: Value = serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
         legacy["schema_version"] = json!(5);
+        legacy["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
         let track = &mut legacy["project"]["timeline"]["tracks"][0];
         let track_id = track["id"].clone();
         let kind = track["kind"].clone();
@@ -2152,7 +2366,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 8);
+        assert_eq!(value["schema_version"], 9);
         assert_eq!(
             value["project"]["timeline"]["tracks"][0]["state"]["locked"],
             true
@@ -2167,14 +2381,14 @@ mod tests {
         invalid["project"]["timeline"]["tracks"][0]["kind"] = json!("motion");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
 
         let mut invalid = value.clone();
         invalid["project"]["timeline"]["tracks"][0]["clips"][0]["content"]["type"] = json!("html");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
 
         let mut invalid = value.clone();
@@ -2182,7 +2396,7 @@ mod tests {
             json!("host_path");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
 
         let mut invalid = value.clone();
@@ -2190,7 +2404,7 @@ mod tests {
             json!(true);
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
 
         let mut invalid = value;
@@ -2198,7 +2412,7 @@ mod tests {
             json!("x".repeat(MAX_TIMELINE_TEXT_BYTES + 1));
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
     }
 
@@ -2272,7 +2486,7 @@ mod tests {
         let value: Value = serde_json::from_str(&encoded).unwrap();
         let decoded = decode_project(&encoded).unwrap();
 
-        assert_eq!(value["schema_version"], 8);
+        assert_eq!(value["schema_version"], 9);
         assert_eq!(value["project"]["timeline"]["markers"], json!([]));
         assert_eq!(value["project"]["timeline"]["tracks"][0]["kind"], "video");
         assert_eq!(value["project"]["timeline"]["tracks"][1]["kind"], "audio");
@@ -2496,6 +2710,10 @@ mod tests {
         );
         let mut value: Value = serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
         value["schema_version"] = json!(5);
+        value["project"]["timeline"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sequence_canvas");
         let encoded = value.to_string();
         assert_eq!(value["schema_version"], 5);
         assert_eq!(
@@ -2550,7 +2768,7 @@ mod tests {
         for case in cases {
             assert_eq!(
                 decode_project(&case.to_string()),
-                Err(ProjectCodecError::InvalidV8Data)
+                Err(ProjectCodecError::InvalidV9Data)
             );
         }
 
@@ -2561,7 +2779,7 @@ mod tests {
         ]);
         assert_eq!(
             decode_project(&out_of_order.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
 
         let too_many = (0..=crate::MAX_TIMELINE_MARKERS)
@@ -2577,7 +2795,7 @@ mod tests {
         too_many_value["project"]["timeline"]["markers"] = json!(too_many);
         assert_eq!(
             decode_project(&too_many_value.to_string()),
-            Err(ProjectCodecError::InvalidV8Data)
+            Err(ProjectCodecError::InvalidV9Data)
         );
     }
 

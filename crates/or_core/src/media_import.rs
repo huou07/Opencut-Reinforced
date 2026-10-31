@@ -12,6 +12,11 @@ pub enum MediaImportError {
     Probe(MediaProbeError),
     InvalidSourceUri(MediaSourceUriError),
     InvalidMetadata(MediaMetadataValidationError),
+    /// The file passed the import matrix, but this build has no decoder for one
+    /// of its streams, so admitting it would create a clip that cannot play.
+    DecoderUnavailable {
+        codec: String,
+    },
 }
 
 impl MediaImportError {
@@ -27,6 +32,7 @@ impl MediaImportError {
             ) => "INVALID_SOURCE_URI",
             Self::InvalidSourceUri(MediaSourceUriError::TooLong) => "SOURCE_URI_TOO_LONG",
             Self::InvalidMetadata(_) => "INVALID_MEDIA_METADATA",
+            Self::DecoderUnavailable { .. } => "UNSUPPORTED_CODEC",
         }
     }
 
@@ -44,12 +50,16 @@ impl MediaImportError {
                 "media source URI exceeds the configured byte limit"
             }
             Self::InvalidMetadata(_) => "media probe returned invalid media metadata",
+            Self::DecoderUnavailable { .. } => {
+                "this build has no decoder for one of the file's media codecs"
+            }
         }
     }
 
     pub fn diagnostic(&self) -> Option<&str> {
         match self {
             Self::Probe(error) => error.diagnostic(),
+            Self::DecoderUnavailable { codec } => Some(codec),
             _ => None,
         }
     }
@@ -59,6 +69,9 @@ impl fmt::Display for MediaImportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Probe(error) => fmt::Display::fmt(error, formatter),
+            Self::DecoderUnavailable { codec } => {
+                write!(formatter, "no decoder for codec {codec} in this build")
+            }
             _ => formatter.write_str(self.message()),
         }
     }
@@ -70,7 +83,9 @@ impl Error for MediaImportError {
             Self::Probe(error) => Some(error),
             Self::InvalidSourceUri(error) => Some(error),
             Self::InvalidMetadata(error) => Some(error),
-            Self::SourceNotFound | Self::SourceUnavailable => None,
+            Self::SourceNotFound | Self::SourceUnavailable | Self::DecoderUnavailable { .. } => {
+                None
+            }
         }
     }
 }
@@ -169,7 +184,7 @@ mod tests {
         assert!(item.source().uri().starts_with("file:///"));
         std::fs::remove_file(&path).unwrap();
 
-        let unsupported = br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2","duration":"1.5"},"streams":[{"index":0,"codec_type":"video","codec_name":"hevc","width":32,"height":24}]}"#;
+        let unsupported = br#"{"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2","duration":"1.5"},"streams":[{"index":0,"codec_type":"video","codec_name":"hap","width":32,"height":24}]}"#;
         let path = std::env::temp_dir().join(format!("or-probe-{}.mp4", MediaId::generate()));
         std::fs::write(&path, b"probe fixture").unwrap();
         let error = super::prepare_media_import_with_probe(&path, unsupported).unwrap_err();

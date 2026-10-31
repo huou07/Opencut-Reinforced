@@ -1,0 +1,198 @@
+{
+ "name": "canvas-export-transport",
+ "description": "Canvas presets, full-screen transport, speed, replay and a 720p export through the real app.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Canvas check"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-add-video"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "30 fps",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "preview-canvas"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "preview-canvas-1080x1920"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "1080 × 1920",
+   "budget_ms": 20000
+  },
+  {
+   "op": "shot",
+   "name": "portrait-canvas"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "preview-play"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "preview-fullscreen"
+   }
+  },
+  {
+   "op": "expect",
+   "key": "fullscreen-play",
+   "role": "button"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "fullscreen-skip-forward"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "fullscreen-speed"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "fullscreen-speed-2"
+   }
+  },
+  {
+   "op": "shot",
+   "name": "fullscreen-transport"
+  },
+  {
+   "op": "key",
+   "chord": "Escape"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export video",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-resolution"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-resolution-720"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Continue"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export complete",
+   "budget_ms": 180000
+  },
+  {
+   "op": "shot",
+   "name": "exported"
+  }
+ ]
+}

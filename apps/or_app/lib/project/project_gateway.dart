@@ -108,6 +108,34 @@ class ProjectPreviewState {
   final String? errorMessage;
 }
 
+class ProjectSequenceCanvas {
+  const ProjectSequenceCanvas(this.width, this.height);
+
+  final int width;
+  final int height;
+
+  String get label => '$width × $height';
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProjectSequenceCanvas &&
+      other.width == width &&
+      other.height == height;
+
+  @override
+  int get hashCode => Object.hash(width, height);
+}
+
+class ProjectTimelineSequenceSettings {
+  const ProjectTimelineSequenceSettings({
+    this.sequenceFrameRate,
+    this.sequenceCanvas,
+  });
+
+  final ProjectRationalRate? sequenceFrameRate;
+  final ProjectSequenceCanvas? sequenceCanvas;
+}
+
 enum ProjectPreviewFrameStep { previous, next }
 
 class ProjectReadModel {
@@ -977,6 +1005,18 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     ProjectRationalRate? sequenceFrameRate,
   );
+  Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
+    ProjectSessionHandle session,
+  );
+  Future<ProjectActionResult> setTimelineSequenceCanvas(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectSequenceCanvas? canvas,
+  );
+  Future<ProjectPreviewState> previewSetSpeed(
+    ProjectSessionHandle session,
+    double speed,
+  );
   Future<ProjectActionResult> rename(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1363,6 +1403,7 @@ abstract interface class ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
+    int? shortSide,
   });
   Future<ProjectExportJob> exportStatus(
     ProjectSessionHandle session,

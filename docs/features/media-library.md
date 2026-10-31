@@ -1,6 +1,6 @@
 # Feature — Media Library and Import
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 Scope: bringing media into a project, showing it, replacing it, and telling the
 user precisely what is wrong when it cannot be used.
@@ -30,10 +30,15 @@ user precisely what is wrong when it cannot be used.
   `OR_FFPROBE_PATH` pointed at a missing executable, so the fallback is the path
   under test.
 
-Supported profile: Matroska (FFV1/PCM S16LE, VP9/Opus, H.264/AAC), WAV PCM
-S16LE, MP3 audio and WebM VP9/Opus. MP4-family H.264/AAC import is a candidate
-profile pending packaged acceptance and codec-patent review; H.265 and AV1 are
-future. See [architecture/media-pipeline.md](../architecture/media-pipeline.md).
+Supported profile: Matroska and WebM with AV1, VP8/VP9, H.264, H.265, FFV1,
+ProRes, MJPEG, MPEG-4 and similar video codecs plus AAC, Opus, Vorbis, FLAC, ALAC,
+AC-3/E-AC-3 and PCM audio; MOV/MP4/M4V with H.264/H.265/AAC; WAV, MP3, Ogg, FLAC,
+AIFF and AVI single-container files; PNG, JPEG and WebP stills. Rejected
+containers stay named, and a codec the *running build* cannot decode is refused at
+import with `UNSUPPORTED_CODEC` rather than admitted and failing at the first
+preview frame; the release bundle links a full FFmpeg while a local debug build
+links a minimal one. See
+[architecture/media-pipeline.md](../architecture/media-pipeline.md).
 
 ## Library surface
 

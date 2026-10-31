@@ -66,8 +66,8 @@ mod desktop {
         MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
         MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId, ProjectInstanceId,
         ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-        TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2, TrackKind, Transform,
-        TransitionReference,
+        SequenceCanvas, TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2,
+        TrackKind, Transform, TransitionReference,
     };
     use or_ipc::{
         ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
@@ -210,6 +210,7 @@ mod desktop {
                     destination,
                     profile,
                     quality,
+                    short_side,
                 } => {
                     if project_id != session.project_id()
                         || project_instance_id != session.project_instance_id()
@@ -285,12 +286,14 @@ mod desktop {
                             );
                         }
                     };
-                    let output_size = program
-                        .video_clips
-                        .iter()
-                        .find_map(|clip| clip.source_dimensions)
-                        .map(|(width, height)| fit_size(width, height))
-                        .unwrap_or((MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT));
+                    let output_size = export_size(
+                        program.canvas,
+                        short_side,
+                        program
+                            .video_clips
+                            .iter()
+                            .find_map(|clip| clip.source_dimensions),
+                    );
                     let render_resources = Arc::clone(&self.render_resources);
                     let submit = self.export_jobs.submit(JobKind::Export, move |job| {
                         let cancellation = CancellationToken::new();
@@ -536,8 +539,8 @@ mod desktop {
             start_audio: bool,
         ) -> Result<PreviewSnapshot, PreviewError> {
             let program = self.ensure_program(host)?;
-            let (origin, expected_generation) = {
-                let state = lock(&self.state);
+            let (origin, expected_generation, speed) = {
+                let mut state = lock(&self.state);
                 let playback = state.transport.snapshot();
                 if playback.playing {
                     return Ok(state.snapshot());
@@ -547,23 +550,37 @@ mod desktop {
                         or_runtime::PreviewTransportError::FrameRateUnavailable,
                     ));
                 }
-                if playback
+                if let Some(content_end) = playback
                     .content_end
-                    .is_none_or(|content_end| playback.position >= content_end)
+                    .filter(|content_end| playback.position >= *content_end)
                 {
-                    return Ok(state.snapshot());
+                    if content_end <= RationalTime::ZERO {
+                        return Ok(state.snapshot());
+                    }
+                    // Play on the last frame replays from the start, the way
+                    // every familiar player behaves.
+                    state
+                        .transport
+                        .seek(RationalTime::ZERO)
+                        .map_err(transport_error)?;
                 }
-                (playback.position, playback.generation)
-            };
-            let (audio_playback, audio_error) = if !start_audio || program.audio_clips.is_empty() {
-                (None, None)
-            } else {
-                start_audio_playback(
-                    Arc::clone(&program),
-                    origin,
-                    self.render_resources.budgets.clone(),
+                let playback = state.transport.snapshot();
+                (
+                    playback.position,
+                    playback.generation,
+                    state.transport.speed(),
                 )
             };
+            let (audio_playback, audio_error) =
+                if !start_audio || program.audio_clips.is_empty() || speed != RationalRate::ONE {
+                    (None, None)
+                } else {
+                    start_audio_playback(
+                        Arc::clone(&program),
+                        origin,
+                        self.render_resources.budgets.clone(),
+                    )
+                };
             let mut state = lock(&self.state);
             let current = state.transport.snapshot();
             if current.generation != expected_generation || current.position != origin {
@@ -624,6 +641,42 @@ mod desktop {
                     .map_err(transport_error)?;
             }
             let stopped_audio = state.audio_playback.take();
+            let snapshot = state.snapshot();
+            drop(state);
+            drop(stopped_audio);
+            Ok(snapshot)
+        }
+
+        /// Changes preview speed, keeping the exact position.
+        ///
+        /// Audio is turned off because the mixer renders at 1x; a speed other
+        /// than 1x is therefore silent rather than pitched or drifting.
+        pub fn set_speed(
+            &self,
+            host: &LiveProjectHost,
+            speed: RationalRate,
+        ) -> Result<PreviewSnapshot, PreviewError> {
+            let _ = self.ensure_program(host)?;
+            let mut state = lock(&self.state);
+            let was_playing = state.transport.snapshot().playing;
+            let audio_clock = state.audio_playback.as_ref().map(AudioPlayback::clock);
+            if let Some(clock) = audio_clock {
+                if let Ok(position) = clock.timeline_time() {
+                    let _ = state.transport.pause_at_master_clock(position);
+                }
+            } else if was_playing {
+                let _ = state.transport.pause(Instant::now());
+            }
+            let now = Instant::now();
+            state
+                .transport
+                .set_speed(speed, now)
+                .map_err(transport_error)?;
+            let stopped_audio = state.audio_playback.take();
+            if was_playing {
+                let _ = state.transport.play(now).map_err(transport_error)?;
+                self.invalidate()?;
+            }
             let snapshot = state.snapshot();
             drop(state);
             drop(stopped_audio);
@@ -1063,10 +1116,11 @@ mod desktop {
             generation: u64,
             cancellation: &CancellationToken,
         ) -> Result<Presentation, PreviewError> {
+            let fixed_size = program.canvas.map(preview_canvas_size);
             self.render_resources.render_with_size(
                 program,
                 time,
-                None,
+                fixed_size,
                 Some((generation, &self.generation)),
                 false,
                 RenderOutput::Packed,
@@ -1688,6 +1742,7 @@ mod desktop {
         key: ProgramKey,
         frame_rate: Option<RationalRate>,
         content_end: Option<RationalTime>,
+        canvas: Option<SequenceCanvas>,
         video_clips: Vec<VideoClip>,
         text_clips: Vec<TextClip>,
         audio_clips: Vec<AudioClip>,
@@ -1775,6 +1830,55 @@ mod desktop {
     }
 
     #[cfg(test)]
+    mod export_size_tests {
+        use super::*;
+
+        fn canvas(width: u32, height: u32) -> SequenceCanvas {
+            SequenceCanvas::new(width, height).expect("even, bounded canvas")
+        }
+
+        #[test]
+        fn a_canvas_exports_at_its_exact_size() {
+            assert_eq!(
+                export_size(Some(canvas(1080, 1920)), None, None),
+                (1080, 1920)
+            );
+            assert_eq!(
+                export_size(Some(canvas(1920, 1080)), None, Some((64, 48))),
+                (1920, 1080)
+            );
+        }
+
+        #[test]
+        fn a_short_side_keeps_the_canvas_shape_for_portrait_and_landscape() {
+            assert_eq!(
+                export_size(Some(canvas(1080, 1920)), Some(720), None),
+                (720, 1280)
+            );
+            // 4:5 at a 1080 short side is already 1080 wide, so the height
+            // follows the shape instead of scaling up.
+            assert_eq!(
+                export_size(Some(canvas(1080, 1350)), Some(1080), None),
+                (1080, 1350)
+            );
+            assert_eq!(
+                export_size(Some(canvas(1920, 1080)), Some(480), None),
+                (852, 480)
+            );
+        }
+
+        #[test]
+        fn a_project_without_a_canvas_keeps_the_legacy_fit() {
+            assert_eq!(export_size(None, None, Some((32, 24))), (32, 24));
+            assert_eq!(
+                export_size(None, Some(720), Some((3840, 2160))),
+                (1280, 720)
+            );
+            assert_eq!(export_size(None, None, Some((3840, 2160))), (1920, 1080));
+        }
+    }
+
+    #[cfg(test)]
     mod direct_frame_tests {
         use super::*;
 
@@ -1789,6 +1893,7 @@ mod desktop {
         fn program() -> PreviewProgram {
             let project = or_core::ProjectDocument::new("identity export");
             PreviewProgram {
+                canvas: None,
                 key: ProgramKey {
                     project_id: project.id(),
                     project_instance_id: ProjectInstanceId::generate(),
@@ -2110,16 +2215,14 @@ mod desktop {
             key.project_instance_id,
         ))?;
         ensure_key(&result, key)?;
-        let frame_rate = result
-            .timeline_sequence_settings
-            .ok_or_else(|| {
-                PreviewError::new("PREVIEW_QUERY_FAILED", "sequence settings were missing")
-            })?
-            .sequence_frame_rate;
+        let settings = result.timeline_sequence_settings.ok_or_else(|| {
+            PreviewError::new("PREVIEW_QUERY_FAILED", "sequence settings were missing")
+        })?;
         Ok(PreviewProgram {
             key,
-            frame_rate,
+            frame_rate: settings.sequence_frame_rate,
             content_end,
+            canvas: settings.sequence_canvas,
             video_clips,
             text_clips,
             audio_clips,
@@ -2300,6 +2403,68 @@ mod desktop {
             .get_or_init(|| block_on(RenderDevice::new()).map_err(|error| error.to_string()))
             .as_ref()
             .map_err(|message| PreviewError::new("RENDER_UNAVAILABLE", message.clone()))
+    }
+
+    /// Preview renders a portrait or landscape canvas at its own aspect, capped
+    /// on the long edge so the texture stays inside the viewer budget.
+    fn preview_canvas_size(canvas: SequenceCanvas) -> (u32, u32) {
+        let width = f64::from(canvas.width());
+        let height = f64::from(canvas.height());
+        let long_edge = width.max(height);
+        let scale = (f64::from(MAX_VIEWER_WIDTH) / long_edge).min(1.0);
+        (
+            even_dimension(width * scale),
+            even_dimension(height * scale),
+        )
+    }
+
+    /// Resolves the export frame size: the canvas when the project sets one,
+    /// otherwise the first video clip fit inside the viewer budget (historical
+    /// behaviour). `short_side` scales the natural aspect to a delivery height.
+    fn export_size(
+        canvas: Option<SequenceCanvas>,
+        short_side: Option<u32>,
+        clip_dimensions: Option<(u32, u32)>,
+    ) -> (u32, u32) {
+        let (natural_width, natural_height) = match (canvas, clip_dimensions) {
+            (Some(canvas), _) => (canvas.width(), canvas.height()),
+            (None, Some((width, height))) => (width, height),
+            (None, None) => (MAX_BLANK_WIDTH, MAX_BLANK_HEIGHT),
+        };
+        let Some(short_side) = short_side.map(|side| even_dimension(f64::from(side))) else {
+            // A project canvas is an exact composition size; a legacy project
+            // without one keeps the long-standing fit inside 1920x1080.
+            return if canvas.is_some() {
+                (natural_width, natural_height)
+            } else {
+                fit_size(natural_width, natural_height)
+            };
+        };
+        let (width, height) = if natural_width >= natural_height {
+            (
+                even_dimension(
+                    f64::from(short_side) * f64::from(natural_width) / f64::from(natural_height),
+                ),
+                short_side,
+            )
+        } else {
+            (
+                short_side,
+                even_dimension(
+                    f64::from(short_side) * f64::from(natural_height) / f64::from(natural_width),
+                ),
+            )
+        };
+        (
+            even_dimension(f64::from(width)),
+            even_dimension(f64::from(height)),
+        )
+    }
+
+    fn even_dimension(value: f64) -> u32 {
+        let rounded = value.round().max(f64::from(SequenceCanvas::MIN_SIDE));
+        let even = (rounded as u32) & !1;
+        even.max(SequenceCanvas::MIN_SIDE)
     }
 
     fn fit_size(width: u32, height: u32) -> (u32, u32) {
@@ -3909,6 +4074,7 @@ mod desktop {
             let project = or_core::ProjectDocument::new("nv12 export");
             let rate = RationalRate::new(30, 1).expect("rate");
             let program = Arc::new(PreviewProgram {
+                canvas: None,
                 key: ProgramKey {
                     project_id: project.id(),
                     project_instance_id: ProjectInstanceId::generate(),
@@ -3999,6 +4165,7 @@ mod desktop {
                 let project = or_core::ProjectDocument::new("export quality");
                 let rate = RationalRate::new(30, 1).expect("rate");
                 let program = Arc::new(PreviewProgram {
+                    canvas: None,
                     key: ProgramKey {
                         project_id: project.id(),
                         project_instance_id: ProjectInstanceId::generate(),
@@ -4083,6 +4250,7 @@ mod desktop {
             let project = or_core::ProjectDocument::new("export pipeline");
             let rate = RationalRate::new(30, 1).expect("rate");
             let program = Arc::new(PreviewProgram {
+                canvas: None,
                 key: ProgramKey {
                     project_id: project.id(),
                     project_instance_id: ProjectInstanceId::generate(),

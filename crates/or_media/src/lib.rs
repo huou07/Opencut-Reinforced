@@ -25,6 +25,16 @@ pub fn probe_seekable_media(
     seekable_io::probe(capability)
 }
 
+/// Whether this build carries a decoder for `codec_name` (an FFmpeg codec name
+/// such as `h264` or `hevc`).
+///
+/// The release bundle and a local debug build link different FFmpeg builds, so
+/// the import matrix cannot know what this particular process can actually
+/// play. The bridge asks this question before admitting a file.
+pub fn decoder_available(codec_name: &str) -> bool {
+    ffmpeg_the_third::codec::decoder::find_by_name(codec_name).is_some()
+}
+
 /// Initializes the dynamically linked FFmpeg runtime and verifies its license.
 pub fn verify_ffmpeg_runtime() -> bool {
     ffmpeg_the_third::init().is_ok()

@@ -1,0 +1,144 @@
+{
+  "format": "or-assistant-script",
+  "schema_version": 1,
+  "title": "OpenCut Reinforced — 59 giây",
+  "language": "vi",
+  "tempo": 1.6,
+  "voice": "Ngọc Huyền",
+  "duration_ms": 59000,
+  "scenes": [
+    {
+      "id": "mo",
+      "beat": "open",
+      "start_ms": 700,
+      "narration": "Một video hoàn chỉnh. Rồi tách ra thành hình, tiếng, giọng đọc và phụ đề.",
+      "marker": "01 · Mở"
+    },
+    {
+      "id": "ui",
+      "beat": "editor",
+      "start_ms": 5500,
+      "narration": "Đây là OpenCut Reinforced: cắt, ghép, cân chỉnh mọi thứ trên một timeline.",
+      "marker": "02 · Editor"
+    },
+    {
+      "id": "ui2",
+      "beat": "editor",
+      "start_ms": 8850,
+      "narration": "Toàn bộ project, ngay trên máy của bạn.",
+      "marker": "02 · Editor"
+    },
+    {
+      "id": "chat1",
+      "beat": "assistant",
+      "start_ms": 13400,
+      "narration": "Cần một cảnh khó?",
+      "marker": "03 · Assistant + MCP"
+    },
+    {
+      "id": "chat2a",
+      "beat": "assistant",
+      "start_ms": 14400,
+      "narration": "Chat Assistant như một extension trong VS Code.",
+      "marker": "03 · Assistant + MCP"
+    },
+    {
+      "id": "chat2b",
+      "beat": "assistant",
+      "start_ms": 16750,
+      "narration": "Nó gọi Claude Code, Codex, Antigravity hay DSH qua MCP.",
+      "marker": "03 · Assistant + MCP"
+    },
+    {
+      "id": "chat3b",
+      "beat": "assistant",
+      "start_ms": 20000,
+      "narration": "Kết quả quay về thẳng timeline.",
+      "marker": "03 · Assistant + MCP"
+    },
+    {
+      "id": "motion1",
+      "beat": "motion",
+      "start_ms": 22400,
+      "narration": "Motion Scene.",
+      "marker": "04 · Motion Scene"
+    },
+    {
+      "id": "motion2",
+      "beat": "motion",
+      "start_ms": 23300,
+      "narration": "Vài dòng code, hình khối tự dựng lên và chuyển động.",
+      "marker": "04 · Motion Scene"
+    },
+    {
+      "id": "motion3",
+      "beat": "motion",
+      "start_ms": 26300,
+      "narration": "Rồi ghép lại thành một cảnh hoàn chỉnh.",
+      "marker": "04 · Motion Scene"
+    },
+    {
+      "id": "voice",
+      "beat": "voice",
+      "start_ms": 31500,
+      "narration": "VieNeu-TTS đọc kịch bản bằng giọng local.",
+      "marker": "05 · Voice + Whisper"
+    },
+    {
+      "id": "whisper",
+      "beat": "voice",
+      "start_ms": 34100,
+      "narration": "Whisper nghe lại và tạo phụ đề khớp từng từ.",
+      "marker": "05 · Voice + Whisper"
+    },
+    {
+      "id": "conv1",
+      "beat": "assembly",
+      "start_ms": 39700,
+      "narration": "Hình ảnh, giọng đọc, nhạc nền, phụ đề.",
+      "marker": "06 · Assembly"
+    },
+    {
+      "id": "conv2",
+      "beat": "assembly",
+      "start_ms": 41600,
+      "narration": "Tất cả khớp trên một timeline.",
+      "marker": "06 · Assembly"
+    },
+    {
+      "id": "montage",
+      "beat": "assembly",
+      "start_ms": 44300,
+      "narration": "Một cảnh phim, đúng nhịp, đúng cảm xúc.",
+      "marker": "06 · Assembly"
+    },
+    {
+      "id": "brand1",
+      "beat": "close",
+      "start_ms": 52200,
+      "narration": "OpenCut Reinforced.",
+      "marker": "07 · Kết"
+    },
+    {
+      "id": "brand2",
+      "beat": "close",
+      "start_ms": 53550,
+      "narration": "Miễn phí. Chạy local.",
+      "marker": "07 · Kết"
+    },
+    {
+      "id": "brand3",
+      "beat": "close",
+      "start_ms": 55000,
+      "narration": "Và rất nhiều khả năng miễn phí khi máy, model và dịch vụ đáp ứng.",
+      "marker": "07 · Kết"
+    },
+    {
+      "id": "cta",
+      "beat": "close",
+      "start_ms": 57700,
+      "narration": "Trải nghiệm ngay.",
+      "marker": "07 · Kết"
+    }
+  ]
+}

@@ -916,11 +916,86 @@ impl TimelineTrack {
     }
 }
 
+/// The project-level composition canvas, in pixels.
+///
+/// The canvas is the shape of the finished video: preview letterboxes content
+/// into it, export renders at its aspect, and clip transforms are relative to
+/// it. It is optional; an absent canvas keeps the historical behaviour where
+/// the shape is derived from the first video clip.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct SequenceCanvas {
+    width: u32,
+    height: u32,
+}
+
+impl SequenceCanvas {
+    pub const MIN_SIDE: u32 = 16;
+    pub const MAX_SIDE: u32 = 7_680;
+    /// Widest permitted long-side to short-side ratio, tall or wide.
+    pub const MAX_SIDE_RATIO: u32 = 4;
+
+    /// Creates a canvas, rejecting odd, out-of-range and extreme-ratio sizes.
+    ///
+    /// Encoders need even dimensions, and a canvas thinner than 1:4 is not a
+    /// video shape any supported profile can carry.
+    pub fn new(width: u32, height: u32) -> Option<Self> {
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return None;
+        }
+        if !(Self::MIN_SIDE..=Self::MAX_SIDE).contains(&width)
+            || !(Self::MIN_SIDE..=Self::MAX_SIDE).contains(&height)
+        {
+            return None;
+        }
+        let narrow = u64::from(width.min(height));
+        let wide = u64::from(width.max(height));
+        if wide > narrow * u64::from(Self::MAX_SIDE_RATIO) {
+            return None;
+        }
+        Some(Self { width, height })
+    }
+
+    pub const fn width(self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(self) -> u32 {
+        self.height
+    }
+
+    /// Width divided by height, e.g. `16 / 9`.
+    pub fn aspect(self) -> f64 {
+        f64::from(self.width) / f64::from(self.height)
+    }
+}
+
+impl<'de> Deserialize<'de> for SequenceCanvas {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Wire {
+            width: u32,
+            height: u32,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        Self::new(wire.width, wire.height).ok_or_else(|| {
+            serde::de::Error::custom(
+                "sequence canvas must be an even 16..=7680 size within a 4:1 ratio",
+            )
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProjectTimeline {
     tracks: Vec<TimelineTrack>,
     markers: Vec<TimelineMarker>,
     sequence_frame_rate: Option<RationalRate>,
+    sequence_canvas: Option<SequenceCanvas>,
 }
 
 impl ProjectTimeline {
@@ -934,6 +1009,10 @@ impl ProjectTimeline {
 
     pub const fn sequence_frame_rate(&self) -> Option<RationalRate> {
         self.sequence_frame_rate
+    }
+
+    pub const fn sequence_canvas(&self) -> Option<SequenceCanvas> {
+        self.sequence_canvas
     }
 
     /// Returns the greatest exact clip end across all editable tracks.
@@ -1028,6 +1107,7 @@ impl ProjectTimeline {
             tracks,
             markers: Vec::new(),
             sequence_frame_rate: None,
+            sequence_canvas: None,
         }
     }
 
@@ -1039,6 +1119,7 @@ impl ProjectTimeline {
             tracks,
             markers,
             sequence_frame_rate: None,
+            sequence_canvas: None,
         }
     }
 
@@ -1051,6 +1132,7 @@ impl ProjectTimeline {
             tracks,
             markers,
             sequence_frame_rate,
+            sequence_canvas: None,
         }
     }
 
@@ -1059,6 +1141,13 @@ impl ProjectTimeline {
         sequence_frame_rate: Option<RationalRate>,
     ) {
         self.sequence_frame_rate = sequence_frame_rate;
+    }
+
+    pub(crate) fn set_sequence_canvas_for_command(
+        &mut self,
+        sequence_canvas: Option<SequenceCanvas>,
+    ) {
+        self.sequence_canvas = sequence_canvas;
     }
 
     pub(crate) fn validate(&self, media: &[MediaItem]) -> Result<(), TimelineValidationError> {

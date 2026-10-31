@@ -66,6 +66,8 @@ pub struct PreviewTransport {
     state: PlaybackSnapshot,
     anchor: Option<PlaybackAnchor>,
     requested_frame: Option<u64>,
+    /// Timeline seconds advanced per wall-clock second.
+    speed: RationalRate,
 }
 
 impl PreviewTransport {
@@ -82,6 +84,7 @@ impl PreviewTransport {
             },
             anchor: None,
             requested_frame: None,
+            speed: RationalRate::ONE,
         }
     }
 
@@ -103,11 +106,44 @@ impl PreviewTransport {
         };
         self.anchor = None;
         self.requested_frame = None;
+        self.speed = RationalRate::ONE;
         Ok(self.state)
     }
 
     pub const fn snapshot(&self) -> PlaybackSnapshot {
         self.state
+    }
+
+    /// Timeline seconds advanced per wall-clock second.
+    pub const fn speed(&self) -> RationalRate {
+        self.speed
+    }
+
+    /// Changes playback speed while preserving the exact current position.
+    ///
+    /// Presentation buffering is invalidated because the next tick must request
+    /// whatever frame the new rate reaches.
+    pub fn set_speed(
+        &mut self,
+        speed: RationalRate,
+        now: Instant,
+    ) -> Result<PlaybackSnapshot, PreviewTransportError> {
+        if speed == self.speed {
+            return Ok(self.state);
+        }
+        let position = self.clock_position(now)?;
+        self.state.position = self
+            .state
+            .content_end
+            .filter(|end| position >= *end)
+            .unwrap_or(position);
+        self.speed = speed;
+        self.anchor = self.state.playing.then_some(PlaybackAnchor {
+            instant: now,
+            time: self.state.position,
+        });
+        self.requested_frame = None;
+        Ok(self.state)
     }
 
     /// Preserves the requested rational time and does not snap to a frame.
@@ -183,11 +219,20 @@ impl PreviewTransport {
         if self
             .state
             .content_end
-            .is_none_or(|content_end| self.state.position >= content_end)
+            .is_some_and(|content_end| self.state.position >= content_end)
         {
-            self.state.playing = false;
-            self.anchor = None;
-            return Ok(self.state);
+            // Pressing play on the last frame replays from the start, which is
+            // what every player users already know does.
+            if self
+                .state
+                .content_end
+                .is_some_and(|content_end| content_end <= RationalTime::ZERO)
+            {
+                self.state.playing = false;
+                self.anchor = None;
+                return Ok(self.state);
+            }
+            self.state.position = RationalTime::ZERO;
         }
         self.state.generation = self.next_generation()?;
         self.state.playing = true;
@@ -343,7 +388,8 @@ impl PreviewTransport {
         let nanoseconds = i64::try_from(now.saturating_duration_since(anchor.instant).as_nanos())
             .map_err(|_| PreviewTransportError::ClockOverflow)?;
         let elapsed = RationalTime::new(nanoseconds, 1_000_000_000)?;
-        Ok(anchor.time.checked_add(elapsed)?)
+        let scaled = self.speed.apply(elapsed)?;
+        Ok(anchor.time.checked_add(scaled)?)
     }
 
     fn next_generation(&self) -> Result<u64, PreviewTransportError> {
@@ -484,5 +530,70 @@ mod tests {
         transport.seek(time(1, 3)).unwrap();
         assert!(!transport.record_presented(old, time(0, 1)));
         assert!(transport.snapshot().presented_time.is_none());
+    }
+    #[test]
+    fn play_at_content_end_rewinds_and_plays_from_zero() {
+        let start = Instant::now();
+        let mut transport = PreviewTransport::new(Some(rate()), Some(time(2, 1)));
+        transport.seek(time(2, 1)).unwrap();
+
+        let snapshot = transport.play(start).unwrap();
+
+        assert!(snapshot.playing);
+        assert_eq!(snapshot.position, RationalTime::ZERO);
+        assert_eq!(
+            transport.tick(start).unwrap().unwrap().time,
+            RationalTime::ZERO
+        );
+    }
+
+    #[test]
+    fn empty_content_cannot_replay() {
+        let mut transport = PreviewTransport::new(Some(rate()), Some(RationalTime::ZERO));
+        let snapshot = transport.play(Instant::now()).unwrap();
+        assert!(!snapshot.playing);
+    }
+
+    #[test]
+    fn speed_scales_wall_clock_progress_and_preserves_position() {
+        let start = Instant::now();
+        let mut transport = PreviewTransport::new(Some(rate()), Some(time(10, 1)));
+        transport
+            .set_speed(RationalRate::new(2, 1).unwrap(), start)
+            .unwrap();
+        transport.play(start).unwrap();
+
+        let at_one_second = start + std::time::Duration::from_secs(1);
+        let paused = transport.pause(at_one_second).unwrap();
+        assert_eq!(paused.position, time(2, 1));
+
+        transport.seek(time(1, 2)).unwrap();
+        transport
+            .set_speed(RationalRate::new(1, 2).unwrap(), start)
+            .unwrap();
+        transport.play(start).unwrap();
+        let paused = transport
+            .pause(start + std::time::Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(paused.position, time(1, 1));
+    }
+
+    #[test]
+    fn changing_speed_mid_playback_reanchors_from_the_current_position() {
+        let start = Instant::now();
+        let mut transport = PreviewTransport::new(Some(rate()), Some(time(10, 1)));
+        transport.play(start).unwrap();
+        let changed = transport
+            .set_speed(
+                RationalRate::new(2, 1).unwrap(),
+                start + std::time::Duration::from_secs(1),
+            )
+            .unwrap();
+        assert!(changed.playing);
+        assert_eq!(changed.position, time(1, 1));
+        let paused = transport
+            .pause(start + std::time::Duration::from_secs(2))
+            .unwrap();
+        assert_eq!(paused.position, time(3, 1));
     }
 }

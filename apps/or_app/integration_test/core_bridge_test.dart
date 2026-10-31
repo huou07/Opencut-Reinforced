@@ -2438,7 +2438,32 @@ class _ObservedRustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
-  }) => _gateway.startExport(session, current, destination, quality: quality);
+    int? shortSide,
+  }) => _gateway.startExport(
+    session,
+    current,
+    destination,
+    quality: quality,
+    shortSide: shortSide,
+  );
+
+  @override
+  Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
+    ProjectSessionHandle session,
+  ) => _gateway.timelineSequenceSettings(session);
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceCanvas(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectSequenceCanvas? canvas,
+  ) => _gateway.setTimelineSequenceCanvas(session, current, canvas);
+
+  @override
+  Future<ProjectPreviewState> previewSetSpeed(
+    ProjectSessionHandle session,
+    double speed,
+  ) => _gateway.previewSetSpeed(session, speed);
 
   @override
   Future<ProjectExportJob> exportStatus(

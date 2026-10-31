@@ -44,6 +44,19 @@ const _folderMediaExtensions = {
   'webm',
   'wav',
   'mp3',
+  'ogg',
+  'flac',
+  'aiff',
+  'aif',
+  'avi',
+  'mts',
+  'm2ts',
+  'ts',
+  '3gp',
+  'mxf',
+  'wmv',
+  'mka',
+  'opus',
 };
 
 /// Returns a stable, bounded list of supported media files under a folder.

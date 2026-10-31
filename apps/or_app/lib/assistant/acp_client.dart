@@ -88,7 +88,7 @@ class AcpClient {
       'clientCapabilities': {
         'fs': {'readTextFile': false, 'writeTextFile': false},
       },
-      'clientInfo': {'name': 'opencut-reinforced', 'version': '0.1.0'},
+      'clientInfo': {'name': 'opencut-reinforced', 'version': '0.1.1'},
     }, timeout: const Duration(seconds: 30));
     agentInfo = _asMap(initialized['agentInfo']);
     await newSession(cwd: cwd, mcpServers: mcpServers);

@@ -130,6 +130,7 @@ fn export_job_requests_share_the_live_application_and_ipc_route_without_mutation
             .into_owned(),
         profile: or_core::ExportProfile::MatroskaFfv1PcmS16le,
         quality: or_core::ExportQuality::Quality,
+        short_side: None,
     };
 
     let ApplicationResponse::Export(started) = host

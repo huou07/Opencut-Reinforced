@@ -206,6 +206,54 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
+    ProjectSessionHandle session,
+  ) async {
+    try {
+      final settings = await _host(session).timelineSequenceSettings();
+      final rate = settings.sequenceFrameRate;
+      final canvas = settings.sequenceCanvas;
+      return ProjectTimelineSequenceSettings(
+        sequenceFrameRate: rate == null
+            ? null
+            : ProjectRationalRate(rate.numerator, rate.denominator),
+        sequenceCanvas: canvas == null
+            ? null
+            : ProjectSequenceCanvas(canvas.width, canvas.height),
+      );
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceCanvas(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectSequenceCanvas? canvas,
+  ) async => _action(
+    await _host(session).setTimelineSequenceCanvas(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      width: canvas?.width,
+      height: canvas?.height,
+    ),
+  );
+
+  @override
+  Future<ProjectPreviewState> previewSetSpeed(
+    ProjectSessionHandle session,
+    double speed,
+  ) async {
+    try {
+      return _preview(await _host(session).previewSetSpeed(speed: speed));
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
   Future<ProjectActionResult> rename(
     ProjectSessionHandle session,
     ProjectReadModel current,
@@ -1435,6 +1483,7 @@ class RustProjectGateway implements ProjectGateway {
     ProjectReadModel current,
     String destination, {
     String? quality,
+    int? shortSide,
   }) async => _exportJob(
     await _host(session).startExport(
       projectId: current.projectId,
@@ -1442,6 +1491,7 @@ class RustProjectGateway implements ProjectGateway {
       expectedRevision: current.revision,
       destination: destination,
       quality: quality,
+      shortSide: shortSide,
     ),
   );
 

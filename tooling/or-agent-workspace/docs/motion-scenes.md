@@ -2,7 +2,8 @@
 
 Scope: turning code or a declarative `.ormotion.json` scene into an ordinary,
 editable video clip through the app's deterministic MotionScene renderer. No
-provider or network call happens here.
+provider or network call happens here. For several scenes, splitting and
+parallel renders, see [motion-production.md](motion-production.md).
 
 ## Two inputs
 
