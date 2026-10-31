@@ -37,8 +37,12 @@ for helper in ffmpeg ffprobe; do
 done
 
 mkdir -p "$frameworks" "$runtime_dir" "$helpers"
+# libavdevice is optional: the minimal LGPL build the app links does not carry
+# it, while a Homebrew FFmpeg's `ffmpeg` CLI does. Packaging either build must
+# work, so the pattern is copied when present and skipped when absent.
 for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib \
-  libswresample*.dylib libswscale*.dylib libavfilter*.dylib; do
+  libswresample*.dylib libswscale*.dylib libavfilter*.dylib \
+  libavdevice*.dylib; do
   found=0
   for source in "$ffmpeg_lib_dir"/$pattern; do
     [[ -e "$source" ]] || continue
@@ -46,7 +50,8 @@ for pattern in libavcodec*.dylib libavformat*.dylib libavutil*.dylib \
     cp -a "$source" "$runtime_dir/"
     cp -a "$source" "$frameworks/"
   done
-  [[ "$found" -eq 1 ]] || fail "No FFmpeg library matched $ffmpeg_lib_dir/$pattern"
+  [[ "$found" -eq 1 || "$pattern" == libavdevice*.dylib ]] || \
+    fail "No FFmpeg library matched $ffmpeg_lib_dir/$pattern"
 done
 install -m 755 "$ffmpeg_bin_dir/ffmpeg" "$helpers/ffmpeg"
 install -m 755 "$ffmpeg_bin_dir/ffprobe" "$helpers/ffprobe"
@@ -93,9 +98,11 @@ ensure_rpath "$bridge" @loader_path
 for library in "$runtime_dir"/libavcodec*.dylib "$runtime_dir"/libavformat*.dylib \
   "$runtime_dir"/libavutil*.dylib "$runtime_dir"/libswresample*.dylib \
   "$runtime_dir"/libswscale*.dylib "$runtime_dir"/libavfilter*.dylib \
+  "$runtime_dir"/libavdevice*.dylib \
   "$frameworks"/libavcodec*.dylib "$frameworks"/libavformat*.dylib \
   "$frameworks"/libavutil*.dylib "$frameworks"/libswresample*.dylib \
-  "$frameworks"/libswscale*.dylib "$frameworks"/libavfilter*.dylib; do
+  "$frameworks"/libswscale*.dylib "$frameworks"/libavfilter*.dylib \
+  "$frameworks"/libavdevice*.dylib; do
   [[ -f "$library" && ! -L "$library" ]] || continue
   ensure_rpath "$library" @loader_path
 done
@@ -142,7 +149,15 @@ bundle_external_dependencies() {
         case "$dependency" in
           @*|/usr/lib/*|/System/Library/*) continue ;;
           "$ffmpeg_prefix"/*)
-            fail "FFmpeg install-prefix dependency remains in $binary: $dependency"
+            # A library that was copied above keeps its install name; point the
+            # binary at the bundled copy instead of leaving the build prefix in
+            # its load commands.
+            name="${dependency##*/}"
+            if [[ -f "$runtime_dir/$name" ]]; then
+              install_name_tool -change "$dependency" "@rpath/$name" "$binary"
+            else
+              fail "FFmpeg install-prefix dependency remains in $binary: $dependency"
+            fi
             ;;
           *) bundle_external_dependency "$binary" "$dependency" ;;
         esac
