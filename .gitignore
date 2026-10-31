@@ -41,3 +41,12 @@ apps/or_app/android/app/src/main/jniLibs/
 # The Android Gradle plugin's NDK/CMake working directory, created by every
 # `assembleDebug` in the module that owns a native library.
 packages/or_viewer_texture/android/.cxx/
+
+# Agent workspace runtime state: productions, session work, local scenes and the
+# live project. These are user data and can be gigabytes; the workspace source
+# and its shipped bundle are the only tracked parts.
+tooling/or-agent-workspace/videos/
+tooling/or-agent-workspace/work/
+tooling/or-agent-workspace/scenes/
+tooling/or-agent-workspace/*.orproj
+tooling/or-agent-workspace/.*.or-recovery

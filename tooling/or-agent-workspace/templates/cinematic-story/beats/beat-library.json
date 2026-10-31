@@ -1,0 +1,207 @@
+{
+  "format": "or-cinematic-story-beats",
+  "schema_version": 1,
+  "note": "One composer per idea, one idea per beat. Pick by the transformation you want, not by habit. A beat is 4–13 s; a chapter is 3–5 beats. Never repeat a composer in consecutive beats, and never use two dense UI beats back to back — vary the viewpoint (wide shot, user view, close-up, inside-view).",
+  "chapters": [
+    { "id": "open", "label": "01 · Mở", "composers": ["coldOpen", "layerFlow", "reveal"] },
+    { "id": "edit", "label": "02 · Dựng phim", "composers": ["editorBuild", "editActions", "cutRipple", "layersAlign", "previewExport"] },
+    { "id": "assistant", "label": "03 · Chat Assistant", "composers": ["assistantScope", "chatAsk", "assistantRole", "acpBridge", "harnessRail", "chatResult"] },
+    { "id": "motion", "label": "04 · Motion Scene", "composers": ["motionCode", "motionBuild", "motionMorph", "motionTimeline"] },
+    { "id": "voice", "label": "05 · Giọng đọc local", "composers": ["ttsScript", "ttsWave", "whisperListen", "whisperCues", "workflowLoop"] },
+    { "id": "value", "label": "06 · Miễn phí và sở hữu", "composers": ["freeLicense", "mitDoc", "localCost", "ownership"] },
+    { "id": "reality", "label": "07 · Thực tế và giới hạn", "composers": ["reality", "releaseCard", "platformGap", "mobileQuestion", "providerTrap", "notarize", "checks"] },
+    { "id": "community", "label": "08 · Cộng đồng", "composers": ["community", "contribPath", "commitment", "close"] }
+  ],
+  "composers": {
+    "coldOpen": {
+      "window": "4–7 s",
+      "draws": "A finished shot holds the frame, breaks into picture / sound / voice / captions, and folds back into one line.",
+      "use": "The hook. Use it first when the point is that a finished video is made of parts you control."
+    },
+    "layerFlow": {
+      "window": "6–9 s",
+      "draws": "The four layers leave the frame and become four lanes that converge on one timeline.",
+      "use": "The bridge from the concept to the tool. Hand it off to a UI beat."
+    },
+    "reveal": {
+      "window": "5–8 s",
+      "draws": "The product name resolves out of the timeline geometry, camera pushes, one line of value under it.",
+      "use": "Name the product after the hook, once, with no feature list."
+    },
+    "editorBuild": {
+      "window": "7–13 s",
+      "draws": "The editor window builds itself: bin, inspector and timeline fill, clips drop in, gaps close.",
+      "use": "Show the real editing surface for the first time."
+    },
+    "editActions": {
+      "window": "6–10 s",
+      "draws": "A clip is trimmed, split and snapped while the timecode and snap badge track the action.",
+      "use": "Prove the editor does exact-frame work, not a mock-up."
+    },
+    "cutRipple": {
+      "window": "5–8 s",
+      "draws": "One cut ripples the whole track: clips shift, the gap closes, the playhead stays honest.",
+      "use": "Show a single destructive-looking edit that is actually reversible."
+    },
+    "layersAlign": {
+      "window": "5–8 s",
+      "draws": "Picture, sound, voice and captions slide onto the same frame; a mismatch snaps back into sync.",
+      "use": "The sync idea, stated visually before it is named."
+    },
+    "previewExport": {
+      "window": "6–10 s",
+      "draws": "The viewer plays, the export sheet opens with 1080p / Matroska / 30p, a progress bar fills.",
+      "use": "The end of the edit: a real deliverable, not a render farm promise."
+    },
+    "assistantScope": {
+      "window": "6–9 s",
+      "draws": "The open project is the scope: a request in words points at the real timeline behind the chat.",
+      "use": "Establish that the assistant reads the project, not a blank chat."
+    },
+    "chatAsk": {
+      "window": "6–9 s",
+      "draws": "A selected clip, a short request, and a harness chip light up beside the composer.",
+      "use": "The moment a request is made. Keep the request one sentence."
+    },
+    "assistantRole": {
+      "window": "5–8 s",
+      "draws": "The assistant proposes an edit and a caption; the human approves; the work is repeatable.",
+      "use": "State the division of labour: assistant proposes, human decides."
+    },
+    "acpBridge": {
+      "window": "7–11 s",
+      "draws": "A beam crosses the ACP boundary: project → CLI / MCP → harness, with provider keys staying on the near side.",
+      "use": "The integration story. Only show a harness the build supports."
+    },
+    "harnessRail": {
+      "window": "6–9 s",
+      "draws": "A rail of installed harnesses; OR does not install them and does not hold their keys.",
+      "use": "Be precise about what the app does and does not ship."
+    },
+    "chatResult": {
+      "window": "5–8 s",
+      "draws": "The result card returns: what was added, where it landed, one line of confirmation.",
+      "use": "Close the assistant chapter with a visible change in the project."
+    },
+    "motionCode": {
+      "window": "6–9 s",
+      "draws": "A code pane types a scene; each line lifts off and becomes a shape on the stage.",
+      "use": "The first code-to-video beat. Keep the code short enough to read."
+    },
+    "motionBuild": {
+      "window": "7–11 s",
+      "draws": "The shapes assemble a shot: horizon, light, subject; fills sweep in; the camera settles.",
+      "use": "Show the scene being built, not a finished still."
+    },
+    "motionMorph": {
+      "window": "6–9 s",
+      "draws": "The built shot morphs frame by frame; geometry changes form while the camera keeps moving.",
+      "use": "The deterministic payoff: every frame is a function of time."
+    },
+    "motionTimeline": {
+      "window": "5–8 s",
+      "draws": "The rendered scene lands on the timeline as an ordinary clip beside real footage.",
+      "use": "Prove the scene is editable material, not a special case."
+    },
+    "ttsScript": {
+      "window": "5–8 s",
+      "draws": "script.json opens; the chosen local voice card sits beside it; engine and sample rate are named.",
+      "use": "The narration chapter opener. Name the real engine and voice."
+    },
+    "ttsWave": {
+      "window": "6–9 s",
+      "draws": "The waveform fills as the line is spoken; the voice clip lands on its track at the measured time.",
+      "use": "Show the voice becoming a clip, with exact timing."
+    },
+    "whisperListen": {
+      "window": "6–9 s",
+      "draws": "Whisper listens locally: language badge, mic rings, a duration that matches the WAV.",
+      "use": "Local transcription. Say 'review before applying'."
+    },
+    "whisperCues": {
+      "window": "6–9 s",
+      "draws": "Proposed cues appear beside the waveform; a human reviews and applies them to the caption track.",
+      "use": "The subtitle path from audio, with the human check kept in frame."
+    },
+    "workflowLoop": {
+      "window": "5–8 s",
+      "draws": "One loop on one machine: script → voice → transcript → captions → timeline.",
+      "use": "Close the production chapter by showing the closed loop."
+    },
+    "freeLicense": {
+      "window": "6–9 s",
+      "draws": "The MIT licence line, then a per-run cost meter that stays at zero for local work.",
+      "use": "State free precisely, including what still costs."
+    },
+    "mitDoc": {
+      "window": "6–9 s",
+      "draws": "The licence document, then a split: what MIT covers and what it does not.",
+      "use": "Correct the assumption that MIT makes every dependency free."
+    },
+    "localCost": {
+      "window": "5–8 s",
+      "draws": "A local bill: electricity, disk, time — no per-token meter.",
+      "use": "The cost beat. Numbers on screen, no hand-waving."
+    },
+    "ownership": {
+      "window": "5–8 s",
+      "draws": "The projects folder sits on the user's disk; the app has no account gate.",
+      "use": "The ownership feeling after the licence facts."
+    },
+    "reality": {
+      "window": "6–9 s",
+      "draws": "The current release card: version, date, platform, signing status, what is missing.",
+      "use": "The honesty beat. Never skip it in a product film."
+    },
+    "releaseCard": {
+      "window": "5–8 s",
+      "draws": "A release stamp: 0.1.0, macOS, Apple Silicon, arm64, .dmg.",
+      "use": "Pin the facts the film claims to a version."
+    },
+    "platformGap": {
+      "window": "5–8 s",
+      "draws": "A phone outline with 'cần máy thật' and a missing-assistant badge.",
+      "use": "Show a real limitation without apologising for it."
+    },
+    "mobileQuestion": {
+      "window": "6–9 s",
+      "draws": "The mobile gap becomes a harness question: one agent system vs dozens of integrations.",
+      "use": "Explain the design constraint behind the gap."
+    },
+    "providerTrap": {
+      "window": "5–8 s",
+      "draws": "One harness chip against a wall of twelve provider chips that would each need feeding.",
+      "use": "The 'why ACP' argument, as a comparison."
+    },
+    "notarize": {
+      "window": "5–8 s",
+      "draws": "The .dmg card with ad-hoc signed / not notarized stamps and the right-click-to-open step.",
+      "use": "The install reality. Keep the instruction exact."
+    },
+    "checks": {
+      "window": "6–9 s",
+      "draws": "CI checks run on a real runner: same commit, same command, honest green/grey states.",
+      "use": "Evidence beat. Show what was not run as clearly as what was."
+    },
+    "community": {
+      "window": "5–8 s",
+      "draws": "The main branch: one person starts, many people make it better.",
+      "use": "Open the community chapter with the human claim."
+    },
+    "contribPath": {
+      "window": "6–9 s",
+      "draws": "A contribution path: issue → diff + notes → review → main, with the MIT and Apple Silicon gates.",
+      "use": "Make contributing concrete, not a slogan."
+    },
+    "commitment": {
+      "window": "6–9 s",
+      "draws": "A pull request conversation: a real question, a fix, a merge.",
+      "use": "Show the social contract of review."
+    },
+    "close": {
+      "window": "5–8 s",
+      "draws": "Mark and wordmark, one-line value, the honest licence line, one call to action.",
+      "use": "The last beat. Brand, what it is, what it costs, what to do next."
+    }
+  }
+}

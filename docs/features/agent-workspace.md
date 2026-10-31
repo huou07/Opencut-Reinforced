@@ -1,6 +1,6 @@
 # Feature — Agent Workspace
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-01
 
 Scope: the workspace the assistant opens by default, its `AGENTS.md` index,
 guides, skills and tools, and how the app installs and binds it to the open
@@ -15,11 +15,13 @@ write, organised like this repository's own routing:
 | Path | Holds |
 |---|---|
 | `AGENTS.md` | the index: one routing entry per guide, skill and tool, with the task trigger and the exact path |
-| `docs/` | one guide per operating concern: timeline, media/import, motion scenes, project safety, script/narration/music, audio prep (recording, clean-up, speech models) and troubleshooting |
-| `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`) |
+| `docs/` | one guide per operating concern: workspace layout, CLI-first operation, timeline, media/import, motion scenes, motion production, captions, project safety, script/narration/music, audio prep (recording, clean-up, speech models), troubleshooting, style packs and docs maintenance |
+| `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`, `or-video-production`) |
 | `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs`; the CLI carries the file-level verbs the tools do not (clean-up, transcription, motion publish and the asset library) |
 | `scenes/` | scene sources the agent authors |
 | `templates/video-pipeline/` | the default workflow for a complete narrated motion-scene video: scaffold, narration, beat scenes, parallel render and one assembly pass |
+| `templates/cinematic-story/` | the long-form chaptered documentary workflow and its style |
+| `templates/styles/` | method-only style packs (showcase now, documentary by reference) and the promotion contract |
 | `work/` | scratch files and imported copies |
 | `project.json` | app-written marker: project name, project file, session descriptor, `app_support_path`, `motion_library_path` |
 | `or-cli.json` | app-written marker: the `or` executable used by `tools/or` |
@@ -30,8 +32,10 @@ whole workspace. For a whole video, explainer or multi-scene motion piece the
 first route is `templates/video-pipeline/README.md`; the template already
 materialises scenes in parallel (three workers by default) and assembles them in
 one pass, so the assistant does not render beats one at a time unless the user
-asks for that. `.agents/skills` is the harness's project skill root; the app
-does not copy skills into a user-global directory.
+asks for that. A style pack holds the reusable method (timing, palette, camera,
+beat shape, cue rules, voice settings) without any story content; the machinery
+templates hold the scripts. `.agents/skills` is the harness's project skill root;
+the app does not copy skills into a user-global directory.
 
 ## Installation
 
@@ -93,9 +97,10 @@ app shows, and `--library` only overrides it for one call. The assistant session
 pointer carries the same path, so `or mcp` and the CLI agree.
 
 Some operations are deliberately app-only because they have no validated CLI
-verb: playback speed, reverse, freeze, clip volume and mute, title/caption
-styling, multi-clip group move, effects and transitions, export, microphone
-recording, cloud narration and the speech-model picker. The guides say so at the
+verb: playback speed, reverse, freeze, clip volume and mute, multi-clip group
+move, effects and transitions, export, microphone recording, cloud narration and
+the speech-model picker. Title and caption styling is not in this list:
+`timeline set-text` sets it. The guides say so at the
 point of use instead of inventing a command, so an agent reports the owning
 surface and lets the user act.
 
@@ -132,7 +137,8 @@ surface and lets the user act.
   revision (`crates/or_cli/tests/semantic_cli.rs` covers the pointer form).
 - The real-app journey: open the assistant in a packaged build, confirm the
   session workspace is the installed folder, and confirm the harness reports the
-  workspace `AGENTS.md` and the four skills.
+  workspace `AGENTS.md` and the five skills. The bundle test also refuses any
+  `videos/` entry, so a finished production cannot ship as workspace content.
 
 ## Gaps
 
@@ -147,9 +153,10 @@ surface and lets the user act.
 - The production tools are model-free except for transcription; narration uses
   the system `say` voice and music is synthesised, so quality is bounded by
   those local providers. A cloud voice or a recorded take exists only in the app.
-- Speed, volume, freeze, styling, group move, effects, export, recording and
-  cloud narration are app-only; the workspace cannot express them, and a guide
-  may only route the user to the owning surface.
+- Speed, volume, freeze, group move, effects, export, recording and cloud
+  narration are app-only; the workspace cannot express them, and a guide may only
+  route the user to the owning surface. Caption and title styling are CLI-capable
+  through `timeline set-text`.
 - Transcription is a host service: `or captions transcribe` needs the running app
   and the model the app installed.
 - A project-folder or chosen-folder workspace has no `project.json` pointer, so
@@ -159,6 +166,7 @@ surface and lets the user act.
 ## Where
 
 - `tooling/or-agent-workspace/` — source tree, bundle build, production tools and tests
+- `tooling/or-agent-workspace/templates/styles/` — method-only style packs and the promotion contract
 - `tooling/or-agent-workspace/tools/voiceover.mjs` — script narration, timing and captions
 - `tooling/or-agent-workspace/tools/music.mjs` — procedural background bed, prompt or flags
 - `apps/or_app/assets/agent_workspace/bundle.json` — packed bundle

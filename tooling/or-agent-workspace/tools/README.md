@@ -3,8 +3,9 @@
 Scope: the local commands this workspace exposes. `tools/or` is the default way
 to read and change the open project; `mcp__or__*` tools are the fallback for
 motion insertion, the motion library, and a CLI failure. Some operations belong to
-the app alone — speed, volume, styling, export, recording, cloud voices — and
-have no verb here on purpose.
+the app alone — speed, volume, group move, effects, export, recording, cloud
+voices — and have no verb here on purpose. Title and caption styling does have a
+verb: `timeline set-text`.
 
 | Command | Use |
 |---|---|

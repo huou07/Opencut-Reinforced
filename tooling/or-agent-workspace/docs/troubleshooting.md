@@ -21,10 +21,16 @@ pointer to attach through).
 - When this workspace has no `project.json`, use the `mcp__or__*` tools for the
   edit instead, and say which surface you used.
 
+A folder chosen in the GUI is installed with the framework but without
+`project.json` or `tools/or`; only the default **Agent workspace** receives them.
+This is a known gap, not a broken install: tell the user that switching the
+assistant workspace back to **Agent workspace** restores the CLI. Never copy a
+`tools/or` or a `project.json` from another workspace by hand.
+
 ## The CLI has no verb for what was asked
 
-Speed, reverse, freeze, clip volume, mute, text/caption styling, group move,
-effects, export, recording and cloud narration are app-only. This is not a bug
+Speed, reverse, freeze, clip volume, mute, group move, effects, export,
+recording and cloud narration are app-only. This is not a bug
 and not a reason to fake the edit with a trim: tell the user which surface owns it
 (the timeline strip, the inspector, the Edit Title/Caption dialog, the Audio tool,
 the Export button), let them do it, then re-read the project.

@@ -39,6 +39,16 @@ test('the bundle carries the index, guides, skills and tools', async () => {
     'docs/script-and-voice.md',
     'docs/audio-prep.md',
     'docs/troubleshooting.md',
+    'docs/workspace.md',
+    'docs/cli-first.md',
+    'docs/motion-production.md',
+    'docs/captions.md',
+    'docs/style-packs.md',
+    'docs/docs-maintenance.md',
+    'templates/video-pipeline/README.md',
+    'templates/cinematic-story/README.md',
+    'templates/styles/README.md',
+    'templates/styles/showcase/README.md',
     'tools/README.md',
     'tools/motion-scaffold.mjs',
     'tools/voiceover.mjs',
@@ -47,6 +57,7 @@ test('the bundle carries the index, guides, skills and tools', async () => {
     '.agents/skills/or-motion-scene/SKILL.md',
     '.agents/skills/or-project-safety/SKILL.md',
     '.agents/skills/or-script-production/SKILL.md',
+    '.agents/skills/or-video-production/SKILL.md',
   ]) {
     assert.ok(bundle.files[required], `${required} is missing`);
   }
@@ -111,6 +122,22 @@ test('the scaffold writes a scene the V1 envelope accepts', async () => {
     }
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('no rendered production content ships in the bundle', async () => {
+  const bundle = await buildBundle();
+  const files = Object.keys(bundle.files);
+  assert.ok(
+    !files.some((file) => file.startsWith('videos/')),
+    'videos/ leaked into the bundle',
+  );
+  assert.ok(
+    !files.some((file) => file.endsWith('.orproj')),
+    'a project file leaked into the bundle',
+  );
+  for (const pointer of ['project.json', 'or-cli.json', '.or-workspace.json', 'tools/or']) {
+    assert.ok(!files.includes(pointer), `${pointer} leaked into the bundle`);
   }
 });
 
