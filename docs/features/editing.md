@@ -1,6 +1,6 @@
 # Feature — Timeline Editing
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-02
 
 Scope: the editing core — tracks, clips, exact-time operations, selection,
 snapping, undo, and the interaction surface that drives them.
@@ -27,6 +27,11 @@ Every operation below is a validated command on the shared path and produces one
 | Audio | clip volume and mute |
 | Markers | add, move, rename, delete; marker-aware snapping |
 | History | undo, redo, transactional groups |
+
+Every row is reachable from the `or` CLI (`timeline ...`, `media ...`), including
+the group move (`timeline move-clips`), playback rate, reverse and freeze
+(`timeline set-clip-playback`), and the sequence canvas (`timeline set-canvas`),
+so an agent edit and an inspector edit share one validated path.
 
 Time is exact and half-open. A split takes an exact interior point and Rust
 generates the right-clip ID. Ripple delete shifts only later clips on the same

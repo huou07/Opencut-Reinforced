@@ -72,12 +72,10 @@ The app and the workspace both narrate, and they are not the same path:
   first installed Vietnamese voice on this machine. It never falls back to a
   product constant such as `Linh`.
 - **App, optional cloud voices:** **Audio → Generate voiceover…** uses the voice
-  chosen in **Settings → Narration**, including cloud providers. That panel holds
-  the provider cards (save/test/remove a key, the Azure region, and ElevenLabs
-  personal-voice creation from a recorded WAV sample with its consent checkbox),
-  and the keys live in the macOS keychain. The workspace never sees a key and must
-  not ask for one; when the user wants a cloud voice, they run the app action and
-  the result arrives as ordinary media you can edit and save like any other.
+  chosen in **Settings → Narration**, including cloud providers. Provider setup,
+  testing and voice creation all happen in that panel and stay inside the app.
+  When the user wants a cloud voice, they run the app action and the result
+  arrives as ordinary media you can edit and save like any other.
 
 ```sh
 node tools/voiceover.mjs --script work/scripts/gioi-thieu.json --plan --json

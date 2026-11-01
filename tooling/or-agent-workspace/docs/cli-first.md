@@ -14,6 +14,10 @@ would reject.
 |---|---|
 | Project state, tracks, clips, markers, media | `tools/or project summary`, `session describe`, `timeline ...`, `media list` |
 | Any timeline or library mutation | `tools/or ... --attach project.json` |
+| Clip transforms, effects, audio, speed, canvas, group moves | `tools/or timeline set-clip-visual\|set-clip-audio\|set-clip-playback`, `set-canvas`, `move-clips` |
+| Render the sequence to a file | `tools/or export start\|status\|cancel` |
+| Subtitle sidecar | `tools/or captions export --out FILE.srt\|.vtt` |
+| One media item's metadata | `tools/or media get --id MEDIA_ID` |
 | Render a scene to a file | `tools/or motion materialize` (no project change) |
 | Render, import and insert a scene | `tools/or motion publish` |
 | Motion asset library | `tools/or motion asset ...` |
@@ -44,12 +48,16 @@ refused. Run renders in parallel, then import and insert sequentially.
 
 ## MCP fallback
 
-Use `mcp__or__*` only when one of these is true:
+The MCP server mirrors the CLI: first-class tools for the common edits and motion
+work, plus `run_cli`, which runs any `or` verb with the same attach and JSON
+flags. Prefer `tools/or` while it works — one process instead of a tool
+round-trip — and use `mcp__or__*` only when one of these is true:
 
 - `tools/or` is missing or cannot attach because the workspace has no
   `project.json`.
-- The verb is absent from `tools/or commands` (older app build).
-- The CLI returns an error the guides do not explain, and the MCP tool has the
+- The verb is absent from `tools/or commands` (older app build); `run_cli` still
+  reaches it if the app accepts it.
+- The CLI returns an error the guides do not explain, and an MCP tool names the
   exact operation.
 
 Do not use MCP for an operation the CLI already performs. When a fallback runs,

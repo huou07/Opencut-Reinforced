@@ -173,6 +173,21 @@ fn mcp_lists_tools_and_edits_the_live_project() {
     assert!(names.contains(&"motion_asset_insert"));
     assert!(names.contains(&"motion_asset_save"));
     assert!(names.contains(&"captions_transcribe"));
+    for name in [
+        "run_cli",
+        "media_get",
+        "set_canvas",
+        "set_clip_visual",
+        "set_clip_audio",
+        "set_clip_playback",
+        "move_clips",
+        "captions_export",
+        "export_start",
+        "export_status",
+        "export_cancel",
+    ] {
+        assert!(names.contains(&name), "missing tool {name}");
+    }
     for tool in tools["result"]["tools"].as_array().unwrap() {
         assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
     }
@@ -203,6 +218,42 @@ fn mcp_lists_tools_and_edits_the_live_project() {
 
     mcp.call("add_marker", json!({"at": "2", "label": "AI marker"}))
         .expect("add marker");
+
+    // The escape hatch reaches any verb, including ones without a first-class tool.
+    let settings: Value = serde_json::from_str(
+        &mcp.call("run_cli", json!({"args": ["timeline", "settings"]}))
+            .expect("run timeline settings"),
+    )
+    .unwrap();
+    assert!(settings["timeline_sequence_settings"].is_object());
+
+    mcp.call("set_canvas", json!({"width": 1920, "height": 1080}))
+        .expect("set canvas");
+    let settings: Value = serde_json::from_str(
+        &mcp.call("run_cli", json!({"args": ["timeline", "settings"]}))
+            .expect("run timeline settings"),
+    )
+    .unwrap();
+    assert_eq!(
+        settings["timeline_sequence_settings"]["sequence_canvas"]["width"],
+        1920
+    );
+
+    let error = mcp
+        .call(
+            "captions_export",
+            json!({"path": "/tmp/or-captions-test.vtt"}),
+        )
+        .unwrap_err();
+    assert!(error.contains("CAPTION_TRACK_EMPTY"), "{error}");
+
+    let error = mcp
+        .call(
+            "export_start",
+            json!({"destination": "/tmp/or-export-test.mp4"}),
+        )
+        .unwrap_err();
+    assert!(error.contains("EXPORT_RUNTIME_UNAVAILABLE"), "{error}");
     let dirty_status: Value =
         serde_json::from_str(&mcp.call("project_status", json!({})).unwrap()).unwrap();
     assert_eq!(

@@ -1,6 +1,6 @@
 ---
 name: or-video-production
-description: Produce a complete multi-scene video — beat sheet, parallel scene renders, assembly and caption pass — with the workspace pipeline and style packs.
+description: Produce a complete multi-scene video — beat sheet, parallel scene renders, assembly, caption pass and delivery export — with the workspace pipeline and style packs.
 ---
 
 # OR video production
@@ -32,12 +32,19 @@ one headline, the proof it shows.
 6. Render all scenes in parallel — `render.mjs --workers 3` or one background job
    per stream. Renders are file-only and safe to run together.
 7. Assemble sequentially: import, place in order, style captions, save once.
-8. Report rendered/failed counts, total duration, and the saved revision.
+8. Export once the user asked for a file: `tools/or export start --attach
+   project.json --destination work/exports/<slug>.mp4 --json`; add
+   `captions export --out work/exports/<slug>.srt` when a sidecar is wanted.
+   Poll with `export status` and report the job id and path.
+9. Report rendered/failed counts, total duration, the export path, and the saved
+   revision.
 
 ## Rules
 
 - Project mutations are serial; only renders run in parallel.
 - Read composition with `motion layout --at`, not screenshots.
+- Export is the last step and renders every frame; never use it as a smoke test.
+  A `succeeded` job with `completed == total` is the only export evidence.
 - One style pack per video; do not mix packs.
 - Package method only: when the user praises the result, promote the numbers to a
   style pack, never the story text.

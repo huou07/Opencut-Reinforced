@@ -81,8 +81,8 @@ open **Speech model…** once (or install the local helper binaries with
 
 ## Bounds
 
-- No credentials: cloud voice keys live in the macOS keychain and belong to the
-  app's Settings, not to this workspace.
+- No network call: cloud voices and cloud narration are app-only, configured in
+  the app's Settings; this workspace works with local files and local voices.
 - No model weights, no network call, no microphone from the CLI.
 - Clean-up output and transcripts are files under `work/` until imported; they are
   not project state.

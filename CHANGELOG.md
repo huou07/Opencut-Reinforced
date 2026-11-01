@@ -13,6 +13,37 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.3 — 2026-11-02
+
+### Added
+- **Agent toolkit: the CLI now covers every project edit.** New verbs:
+  `timeline set-clip-visual` (transform, crop, opacity, effects, transitions),
+  `timeline set-clip-audio` (gain, pan, fades), `timeline set-clip-playback`
+  (speed, reverse, freeze), `timeline set-canvas`, `timeline move-clips`,
+  `media get`, `captions export`, and `export start|status|cancel`. Canvas,
+  group moves, per-clip settings, subtitle files and export were app-only; an
+  agent working in the installed workspace can now do them through the same
+  validated command path the editor uses.
+- **MCP parity**: the `or` server gains `set_clip_visual`, `set_clip_audio`,
+  `set_clip_playback`, `set_canvas`, `move_clips`, `media_get`,
+  `captions_export`, `export_start`, `export_status` and `export_cancel`, plus
+  `run_cli`, which runs any `or` verb with the same attach and JSON flags so no
+  operation is left without a fallback.
+- **Agent workspace**: new `docs/export-and-delivery.md`; the timeline, captions,
+  CLI-first, media, workspace and troubleshooting guides document the full surface
+  instead of calling these operations app-only.
+
+### Changed
+- `or --help` lists every timeline verb with its flags and units (milli-canvas,
+  milli-degrees, basis points, millidecibels) instead of a partial list, and the
+  unknown-action error names the same set.
+- Workspace bundle version 17 refreshes the framework files on the next assistant
+  connection.
+
+### Fixed
+- The unknown-timeline-action error no longer omits verbs the CLI accepts, and
+  `--help` no longer hides track, clip, trim and playback verbs.
+
 ## 0.1.1 — 2026-11-01
 
 > The published 0.1.1 image predates the bundled FFmpeg and speech-runtime

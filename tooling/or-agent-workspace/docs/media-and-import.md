@@ -22,6 +22,7 @@ importing is a project mutation and is saved like any other edit.
 |---|---|
 | `media probe --file PATH` | Read one file's metadata without a project or an app session. |
 | `media list [--offset N] [--limit N]` | Read the library page by page. |
+| `media get --id MEDIA_ID` | Read one item by id with its source path, duration, dimensions and audio details. |
 | `media add --source PATH` | Import one absolute path; returns the new media id and metadata. |
 | `media relink --id MEDIA_ID --source PATH` | Point an existing item at a new source under the same `MediaId`; undoable, and timeline references survive. |
 | `media remove --id MEDIA_ID` | Remove a library entry; refused while a clip references it. |

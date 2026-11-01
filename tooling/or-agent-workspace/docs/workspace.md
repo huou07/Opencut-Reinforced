@@ -70,12 +70,11 @@ a broken install.
 
 - Never edit a `.orproj` file, anything inside the project directory, or a path
   named in `project.json`.
-- Never read, ask for or store a cloud provider key. Keys live in the macOS
-  keychain and belong to the app's Settings.
-- App-only: playback speed, reverse, freeze, clip volume and mute, group move,
-  effects and transitions, export, microphone recording, cloud voices and the
-  speech-model picker. Title and caption styling is not app-only;
-  `timeline set-text` sets it.
+- The CLI covers every project edit, including playback rate, reverse, freeze,
+  clip audio, group moves, effects, transitions and the sequence canvas; title,
+  caption and clip styling is `timeline set-text` / `timeline set-clip-visual`.
+  Export runs through `tools/or export`, which needs the running app. App-only:
+  microphone recording, cloud voices and the speech-model picker.
 - Project mutations are one stream at a time. File-only renders may run in
   parallel; see [motion-production.md](motion-production.md).
 - Framework files are app-owned and can be replaced. Keep durable notes and

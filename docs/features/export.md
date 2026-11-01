@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-10-30
+Last reviewed: 2026-11-02
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -80,9 +80,22 @@ sees h264 + aac with positive duration and size, and fails when the video
 stream's frame count does not cover the container duration — a job can report
 success and still write a short clip).
 
+## CLI and agent surface
+
+`or export start --attach project.json --destination PATH` enqueues the same job
+the Export dialog starts — same profiles, quality, short side and validation.
+The destination extension selects the container (`.mp4`, `.webm`, `.mkv`); an
+optional `--profile` must agree with it and the path must be absolute. The
+command waits for the terminal state; `--no-wait` returns the queued job. `or export
+status --job ID` and `or export cancel --job ID` poll or stop it. Because the
+queue is shared, a job the user started in the app can be polled by id. The
+workspace guide is `docs/export-and-delivery.md`.
+
 ## Interchange
 
-SRT/WebVTT subtitles are supported. OpenTimelineIO is a bounded Rust/serde JSON
+SRT/WebVTT subtitles are supported. `or captions export --out FILE.srt|.vtt`
+collects every caption clip in start order with the same encoder the app uses.
+OpenTimelineIO is a bounded Rust/serde JSON
 adapter over a documented subset (never a second project format), with Lottie
 1.0/dotLottie 2.0 as bounded interchange; EDL/XML are future. Importers do not
 execute expressions or fetch remote assets.

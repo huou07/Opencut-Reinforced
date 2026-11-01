@@ -27,13 +27,31 @@ This is a known gap, not a broken install: tell the user that switching the
 assistant workspace back to **Agent workspace** restores the CLI. Never copy a
 `tools/or` or a `project.json` from another workspace by hand.
 
-## The CLI has no verb for what was asked
+## A verb exists but the command is refused
 
-Speed, reverse, freeze, clip volume, mute, group move, effects, export,
-recording and cloud narration are app-only. This is not a bug
-and not a reason to fake the edit with a trim: tell the user which surface owns it
-(the timeline strip, the inspector, the Edit Title/Caption dialog, the Audio tool,
-the Export button), let them do it, then re-read the project.
+Every project edit has a verb: `set-clip-playback` covers speed, reverse and
+freeze; `set-clip-audio` covers gain, pan and fades; `set-clip-visual` covers
+transform, crop, opacity, effects and transitions; `set-canvas` sets the output
+shape; `move-clips` shifts a group; `export start` renders; `captions export`
+writes subtitles. A refusal is about the input: read the clip and track again,
+check the unit (milli, basis points, `NUM/DEN`), and check the track is unlocked.
+Only microphone recording, cloud voices and the speech-model picker are app-only.
+
+Do not fake an edit with a different verb, and do not imitate speed with a trim.
+
+## `export start` returns `EXPORT_RUNTIME_UNAVAILABLE`
+
+This build has no encoder runtime registered, or the request reached a host that
+was not started with export support. Do not retry in a loop and do not fall back
+to `motion render` — that renders one scene, not the sequence. Report the code and
+the app build; the user can export from the Export button once a build with the
+runtime is installed.
+
+## `CAPTION_TRACK_EMPTY`
+
+`captions export` found no caption clips. Transcribe or import the captions first
+(`captions transcribe`, `timeline import-captions`); an empty file is not a
+delivery.
 
 ## `no motion library is recorded by this session`
 

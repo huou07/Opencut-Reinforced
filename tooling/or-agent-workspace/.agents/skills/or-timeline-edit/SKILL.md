@@ -1,6 +1,6 @@
 ---
 name: or-timeline-edit
-description: Make one timeline change in the open OR project through the workspace or CLI — add, insert, move, trim, slip, roll, slide, split, delete, re-time or mark clips, tracks and the sequence. Use when the user asks for an edit to the timeline. Do NOT use for media import (read docs/media-and-import.md), MotionScene authoring (or-motion-scene), or developing OR itself.
+description: Make one timeline change in the open OR project through the workspace or CLI — add, insert, move, trim, slip, roll, slide, split, delete, re-time or mark clips; set tracks, the sequence canvas, clip transform/effects/audio/speed; move a clip group. Use when the user asks for an edit to the timeline. Do NOT use for media import (read docs/media-and-import.md), exporting the sequence (docs/export-and-delivery.md), MotionScene authoring (or-motion-scene), or developing OR itself.
 ---
 
 # Timeline edit
@@ -34,10 +34,14 @@ Workspace guide: `docs/timeline-editing.md`.
   neighbour, slide moves the clip and lets the neighbours absorb it. They take a
   signed `--delta`, not an absolute time.
 - `--ripple` on `trim-clip` is accepted on the end edge only.
-- Speed, reverse, freeze, clip volume, mute, title/caption styling, group move,
-  effects and export have no CLI verb. Say the app owns them (timeline strip,
-  inspector, dialog, Export) and let the user make that change; never fake it with
-  a trim or a split.
+- Clip settings have verbs: `set-clip-visual` (transform, crop, opacity,
+  effects, transitions), `set-clip-audio` (gain, pan, fades),
+  `set-clip-playback` (rate, reverse, freeze). Read `timeline clips` first; each
+  call rewrites the full state, so pass only the fields you mean to change.
+- `move-clips` shifts a whole group by one delta in one undo entry.
+  `set-canvas` sets the output shape; odd or extreme sizes are refused.
+- Styling text or captions is `set-text` (font, size, colour, anchor, offset,
+  background). Do not fake a setting with a trim, split or duplicate.
 - When this workspace has no `project.json` to attach through, use the matching
   `mcp__or__*` tool and say so.
 - A refused edit is information: re-read, retry once with valid values, then

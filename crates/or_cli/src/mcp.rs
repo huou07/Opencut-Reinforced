@@ -211,6 +211,17 @@ impl Server {
             "motion_asset_list" => self.motion_asset_list(arguments),
             "motion_asset_insert" => self.motion_asset_insert(arguments),
             "motion_asset_save" => self.motion_asset_save(arguments),
+            "run_cli" => self.run_cli(arguments),
+            "media_get" => self.media_get(arguments),
+            "set_canvas" => self.set_canvas(arguments),
+            "set_clip_visual" => self.set_clip_visual(arguments),
+            "set_clip_audio" => self.set_clip_audio(arguments),
+            "set_clip_playback" => self.set_clip_playback(arguments),
+            "move_clips" => self.move_clips(arguments),
+            "captions_export" => self.captions_export(arguments),
+            "export_start" => self.export_start(arguments),
+            "export_status" => self.export_status(arguments),
+            "export_cancel" => self.export_cancel(arguments),
             other => Err(format!(
                 "unknown tool: {other}. Call tools/list to see the supported tools."
             )),
@@ -889,6 +900,216 @@ impl Server {
         }))
     }
 
+    /// Escape hatch: any `or` verb, so every CLI capability is reachable
+    /// through MCP even before it earns a first-class tool.
+    fn run_cli(&self, arguments: &Value) -> Result<String, String> {
+        let Some(values) = arguments.get("args").and_then(Value::as_array) else {
+            return Err("args must be an array of CLI argument strings".to_owned());
+        };
+        if values.is_empty() {
+            return Err("args must not be empty".to_owned());
+        }
+        let mut args = Vec::with_capacity(values.len());
+        for value in values {
+            let Some(text) = value.as_str() else {
+                return Err("args must contain only strings".to_owned());
+            };
+            if matches!(text, "--attach" | "--json") {
+                return Err(format!("{text} is added automatically; omit it from args"));
+            }
+            args.push(text.to_owned());
+        }
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn media_get(&self, arguments: &Value) -> Result<String, String> {
+        let media_id = required_str(arguments, "media_id")?;
+        self.run_or(&["media", "get", "--id", &media_id])
+            .and_then(pretty)
+    }
+
+    fn set_canvas(&self, arguments: &Value) -> Result<String, String> {
+        let clear = optional_bool(arguments, "clear")?.unwrap_or(false);
+        if clear {
+            return self
+                .run_or(&["timeline", "set-canvas", "--clear"])
+                .and_then(pretty);
+        }
+        let missing = || "width and height are required unless clear is true".to_owned();
+        let width = optional_number(arguments, "width")?.ok_or_else(missing)?;
+        let height = optional_number(arguments, "height")?.ok_or_else(missing)?;
+        self.run_or(&[
+            "timeline",
+            "set-canvas",
+            "--width",
+            &width,
+            "--height",
+            &height,
+        ])
+        .and_then(pretty)
+    }
+
+    fn set_clip_visual(&self, arguments: &Value) -> Result<String, String> {
+        let clip_id = required_str(arguments, "clip_id")?;
+        let mut args = vec![
+            "timeline".to_owned(),
+            "set-clip-visual".to_owned(),
+            "--clip".to_owned(),
+            clip_id,
+        ];
+        append_options(
+            &mut args,
+            arguments,
+            &[
+                ("x", "--x"),
+                ("y", "--y"),
+                ("scale", "--scale"),
+                ("scale_x", "--scale-x"),
+                ("scale_y", "--scale-y"),
+                ("rotation", "--rotation"),
+                ("anchor_x", "--anchor-x"),
+                ("anchor_y", "--anchor-y"),
+                ("opacity", "--opacity"),
+                ("crop_left", "--crop-left"),
+                ("crop_top", "--crop-top"),
+                ("crop_right", "--crop-right"),
+                ("crop_bottom", "--crop-bottom"),
+                ("brightness", "--brightness"),
+                ("contrast", "--contrast"),
+                ("saturation", "--saturation"),
+                ("blur_radius", "--blur-radius"),
+                ("transition_in", "--transition-in"),
+                ("transition_out", "--transition-out"),
+            ],
+        )?;
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn set_clip_audio(&self, arguments: &Value) -> Result<String, String> {
+        let clip_id = required_str(arguments, "clip_id")?;
+        let mut args = vec![
+            "timeline".to_owned(),
+            "set-clip-audio".to_owned(),
+            "--clip".to_owned(),
+            clip_id,
+        ];
+        append_options(
+            &mut args,
+            arguments,
+            &[
+                ("gain_millidecibels", "--gain-millidecibels"),
+                ("pan_basis_points", "--pan-basis-points"),
+                ("fade_in", "--fade-in"),
+                ("fade_out", "--fade-out"),
+            ],
+        )?;
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn set_clip_playback(&self, arguments: &Value) -> Result<String, String> {
+        let clip_id = required_str(arguments, "clip_id")?;
+        let mut args = vec![
+            "timeline".to_owned(),
+            "set-clip-playback".to_owned(),
+            "--clip".to_owned(),
+            clip_id,
+        ];
+        if let Some(rate) = optional_str(arguments, "rate")? {
+            args.push("--rate".to_owned());
+            args.push(normalize_rate(&rate)?);
+        }
+        for (key, flag) in [("reversed", "--reversed"), ("frozen", "--frozen")] {
+            if let Some(value) = optional_bool(arguments, key)? {
+                args.push(flag.to_owned());
+                args.push(value.to_string());
+            }
+        }
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn move_clips(&self, arguments: &Value) -> Result<String, String> {
+        let track_id = required_str(arguments, "track_id")?;
+        let Some(values) = arguments.get("clip_ids").and_then(Value::as_array) else {
+            return Err("clip_ids must be a non-empty array of clip ids".to_owned());
+        };
+        let mut clip_ids = Vec::with_capacity(values.len());
+        for value in values {
+            let Some(clip_id) = value.as_str() else {
+                return Err("clip_ids must contain only strings".to_owned());
+            };
+            clip_ids.push(clip_id);
+        }
+        if clip_ids.is_empty() {
+            return Err("clip_ids must not be empty".to_owned());
+        }
+        let clips = clip_ids.join(",");
+        let delta = normalize_time(&required_str(arguments, "delta")?)?;
+        self.run_or(&[
+            "timeline",
+            "move-clips",
+            "--track",
+            &track_id,
+            "--clips",
+            &clips,
+            "--delta",
+            &delta,
+        ])
+        .and_then(pretty)
+    }
+
+    fn captions_export(&self, arguments: &Value) -> Result<String, String> {
+        let path = absolute_path(required_str(arguments, "path")?)?;
+        let mut args = vec![
+            "captions".to_owned(),
+            "export".to_owned(),
+            "--out".to_owned(),
+            path,
+        ];
+        if let Some(format) = optional_str(arguments, "format")? {
+            args.push("--format".to_owned());
+            args.push(format);
+        }
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn export_start(&self, arguments: &Value) -> Result<String, String> {
+        let destination = absolute_path(required_str(arguments, "destination")?)?;
+        let mut args = vec![
+            "export".to_owned(),
+            "start".to_owned(),
+            "--destination".to_owned(),
+            destination,
+        ];
+        if let Some(profile) = optional_str(arguments, "profile")? {
+            args.push("--profile".to_owned());
+            args.push(profile);
+        }
+        if let Some(quality) = optional_str(arguments, "quality")? {
+            args.push("--quality".to_owned());
+            args.push(quality);
+        }
+        if let Some(short_side) = optional_number(arguments, "short_side")? {
+            args.push("--short-side".to_owned());
+            args.push(short_side);
+        }
+        if !optional_bool(arguments, "wait")?.unwrap_or(false) {
+            args.push("--no-wait".to_owned());
+        }
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn export_status(&self, arguments: &Value) -> Result<String, String> {
+        let job_id = required_str(arguments, "job_id")?;
+        self.run_or(&["export", "status", "--job", &job_id])
+            .and_then(pretty)
+    }
+
+    fn export_cancel(&self, arguments: &Value) -> Result<String, String> {
+        let job_id = required_str(arguments, "job_id")?;
+        self.run_or(&["export", "cancel", "--job", &job_id])
+            .and_then(pretty)
+    }
+
     fn first_video_track(&self) -> Result<String, String> {
         let tracks = self.run_or(&["timeline", "tracks"])?;
         let items = tracks
@@ -1045,6 +1266,12 @@ impl Server {
 
     /// Runs one `or` verb against the live host and returns its JSON result.
     fn run_or(&self, args: &[&str]) -> Result<Value, String> {
+        let owned: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
+        self.run_or_owned(&owned)
+    }
+
+    /// Runs one `or` verb with arguments built at runtime.
+    fn run_or_owned(&self, args: &[String]) -> Result<Value, String> {
         let descriptor = self.descriptor()?;
         if !descriptor.exists() {
             return Err(
@@ -1284,8 +1511,145 @@ fn tool_definitions() -> Value {
                 "category": {"type": "string", "description": "Optional manual category such as background, people, nature, animal, vehicle, object, text, shape, icon, chart, effect or motion."},
                 "tags": {"type": "array", "items": {"type": "string"}}
             }), &["scene_path"]),
+        },
+        {
+            "name": "run_cli",
+            "description": "Run any `or` CLI verb against the live project and return its JSON. `args` is the argument list without the binary name, --attach or --json (both are added). This is the complete escape hatch: every CLI capability is reachable here, including project rename, recovery, snap, slip/roll/slide, track state and markers. Prefer a first-class tool when one exists.",
+            "inputSchema": object_schema(json!({
+                "args": {"type": "array", "items": {"type": "string"}, "description": "e.g. [\"timeline\", \"settings\"] or [\"timeline\", \"slip-clip\", \"--clip\", CLIP_ID, \"--delta\", \"1/10\"]."}
+            }), &["args"]),
+        },
+        {
+            "name": "media_get",
+            "description": "Read one media library item by id: source path, duration, codecs, dimensions and audio layout. Use this when you need full metadata for one asset rather than a page listing.",
+            "inputSchema": object_schema(json!({
+                "media_id": {"type": "string"}
+            }), &["media_id"]),
+        },
+        {
+            "name": "set_canvas",
+            "description": "Set the sequence canvas size in pixels (even values, 16..7680, at most a 4:1 ratio), or clear it with clear=true. The canvas controls the composition frame and export size.",
+            "inputSchema": object_schema(json!({
+                "width": {"type": "integer"},
+                "height": {"type": "integer"},
+                "clear": {"type": "boolean", "description": "Remove the explicit canvas and return to automatic framing."}
+            }), &[]),
+        },
+        {
+            "name": "set_clip_visual",
+            "description": "Change a clip's visual settings: transform (x/y in milli-canvas, scale in milli, rotation in milli-degrees, anchor in basis points), opacity in basis points, crop in basis points per edge, the closed effect set (brightness -1000..1000, contrast/saturation around 1000, gaussian blur radius in milli), and fade transitions. Effects are replaced per kind; a neutral amount clears that effect. Omitted fields keep their current value. Transitions take KIND:NUM/DEN where KIND is cross_dissolve, fade_through_black or wipe; passing none clears.",
+            "inputSchema": object_schema(json!({
+                "clip_id": {"type": "string"},
+                "x": {"type": ["number", "string"]},
+                "y": {"type": ["number", "string"]},
+                "scale": {"type": ["number", "string"]},
+                "scale_x": {"type": ["number", "string"]},
+                "scale_y": {"type": ["number", "string"]},
+                "rotation": {"type": ["number", "string"]},
+                "anchor_x": {"type": ["number", "string"]},
+                "anchor_y": {"type": ["number", "string"]},
+                "opacity": {"type": ["number", "string"]},
+                "crop_left": {"type": ["number", "string"]},
+                "crop_top": {"type": ["number", "string"]},
+                "crop_right": {"type": ["number", "string"]},
+                "crop_bottom": {"type": ["number", "string"]},
+                "brightness": {"type": ["number", "string"]},
+                "contrast": {"type": ["number", "string"]},
+                "saturation": {"type": ["number", "string"]},
+                "blur_radius": {"type": ["number", "string"]},
+                "transition_in": {"type": "string"},
+                "transition_out": {"type": "string"}
+            }), &["clip_id"]),
+        },
+        {
+            "name": "set_clip_audio",
+            "description": "Change an audio clip's gain in millidecibels, pan in basis points (-10000..10000), and exact rational fade-in/fade-out lengths in seconds. Omitted fields keep their current value.",
+            "inputSchema": object_schema(json!({
+                "clip_id": {"type": "string"},
+                "gain_millidecibels": {"type": ["number", "string"]},
+                "pan_basis_points": {"type": ["number", "string"]},
+                "fade_in": {"type": "string", "description": "NUM/DEN seconds"},
+                "fade_out": {"type": "string", "description": "NUM/DEN seconds"}
+            }), &["clip_id"]),
+        },
+        {
+            "name": "set_clip_playback",
+            "description": "Change a media clip's playback speed, direction and freeze. rate is an exact rational such as 2/1 or 1/2 and recomputes the clip's timeline duration from its source range; reversed flips direction for video and audio; frozen holds one frame and works only on video. Omitted fields keep their current value.",
+            "inputSchema": object_schema(json!({
+                "clip_id": {"type": "string"},
+                "rate": {"type": "string"},
+                "reversed": {"type": "boolean"},
+                "frozen": {"type": "boolean"}
+            }), &["clip_id"]),
+        },
+        {
+            "name": "move_clips",
+            "description": "Move one or more clips on the same track by an exact rational delta in seconds, keeping their spacing. Use move_clip to move a single clip to an absolute position instead.",
+            "inputSchema": object_schema(json!({
+                "track_id": {"type": "string"},
+                "clip_ids": {"type": "array", "items": {"type": "string"}},
+                "delta": {"type": "string", "description": "NUM/DEN seconds; may be negative."}
+            }), &["track_id", "clip_ids", "delta"]),
+        },
+        {
+            "name": "captions_export",
+            "description": "Write every caption clip in the project to an SRT or WebVTT file, in timeline order. Format is inferred from the path extension when omitted. Fails with CAPTION_TRACK_EMPTY when the project has no captions.",
+            "inputSchema": object_schema(json!({
+                "path": {"type": "string", "description": "Absolute destination path."},
+                "format": {"type": "string", "enum": ["srt", "vtt"]}
+            }), &["path"]),
+        },
+        {
+            "name": "export_start",
+            "description": "Queue a render of the whole sequence to a file. destination must be an absolute path whose parent exists; profile defaults to mp4 (H.264/AAC), quality defaults to quality. Returns a job id immediately unless wait is true, in which case the call blocks until the render finishes or fails. Poll with export_status.",
+            "inputSchema": object_schema(json!({
+                "destination": {"type": "string"},
+                "profile": {"type": "string", "enum": ["mp4", "webm", "ffv1"]},
+                "quality": {"type": "string", "enum": ["quality", "speed"]},
+                "short_side": {"type": "integer", "description": "Optional output short side in pixels; omitted uses the canvas."},
+                "wait": {"type": "boolean", "description": "Block until the render finishes. Defaults to false."}
+            }), &["destination"]),
+        },
+        {
+            "name": "export_status",
+            "description": "Read an export job's state: queued, running, succeeded, failed or cancelled, with progress and failure message when present.",
+            "inputSchema": object_schema(json!({
+                "job_id": {"type": "string"}
+            }), &["job_id"]),
+        },
+        {
+            "name": "export_cancel",
+            "description": "Request cancellation of a queued or running export job.",
+            "inputSchema": object_schema(json!({
+                "job_id": {"type": "string"}
+            }), &["job_id"]),
         }
     ])
+}
+
+fn optional_number(arguments: &Value, key: &str) -> Result<Option<String>, String> {
+    match arguments.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(value)) => Ok(Some(value.to_string())),
+        Some(Value::String(value)) if value.trim().is_empty() => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.clone())),
+        Some(_) => Err(format!("{key} must be a number or numeric string")),
+    }
+}
+
+/// Appends `--flag value` pairs for every present argument.
+fn append_options(
+    args: &mut Vec<String>,
+    arguments: &Value,
+    flags: &[(&str, &str)],
+) -> Result<(), String> {
+    for (argument, flag) in flags {
+        if let Some(value) = optional_number(arguments, argument)? {
+            args.push((*flag).to_owned());
+            args.push(value);
+        }
+    }
+    Ok(())
 }
 
 fn empty_schema() -> Value {

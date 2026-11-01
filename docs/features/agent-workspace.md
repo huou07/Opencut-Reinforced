@@ -1,6 +1,6 @@
 # Feature — Agent Workspace
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-02
 
 Scope: the workspace the assistant opens by default, its `AGENTS.md` index,
 guides, skills and tools, and how the app installs and binds it to the open
@@ -15,7 +15,7 @@ write, organised like this repository's own routing:
 | Path | Holds |
 |---|---|
 | `AGENTS.md` | the index: one routing entry per guide, skill and tool, with the task trigger and the exact path |
-| `docs/` | one guide per operating concern: workspace layout, CLI-first operation, timeline, media/import, motion scenes, motion production, captions, project safety, script/narration/music, audio prep (recording, clean-up, speech models), troubleshooting, style packs and docs maintenance |
+| `docs/` | one guide per operating concern: workspace layout, CLI-first operation, timeline, media/import, motion scenes, motion production, captions, export and delivery, project safety, script/narration/music, audio prep (recording, clean-up, speech models), troubleshooting, style packs and docs maintenance |
 | `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`, `or-video-production`) |
 | `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs`; the CLI carries the file-level verbs the tools do not (clean-up, transcription, motion publish and the asset library) |
 | `scenes/` | scene sources the agent authors |
@@ -96,13 +96,14 @@ project.json` and `or motion publish --attach project.json` use the same folder 
 app shows, and `--library` only overrides it for one call. The assistant session
 pointer carries the same path, so `or mcp` and the CLI agree.
 
-Some operations are deliberately app-only because they have no validated CLI
-verb: playback speed, reverse, freeze, clip volume and mute, multi-clip group
-move, effects and transitions, export, microphone recording, cloud narration and
-the speech-model picker. Title and caption styling is not in this list:
-`timeline set-text` sets it. The guides say so at the
-point of use instead of inventing a command, so an agent reports the owning
-surface and lets the user act.
+Every project edit has a validated CLI verb. The timeline settings verbs cover
+what the inspector shows — `set-clip-visual` (transform, crop, opacity, effects,
+transitions), `set-clip-audio` (gain, pan, fades), `set-clip-playback` (speed,
+reverse, freeze), `set-canvas`, and `move-clips` for a group — and
+`timeline set-text` covers title and caption styling. `export start|status|cancel`
+renders the sequence, and `captions export` writes subtitles. Microphone
+recording, cloud narration and the speech-model picker remain app-only because
+they are capture or provider surfaces, not project edits.
 
 ## Bounds
 
@@ -153,10 +154,9 @@ surface and lets the user act.
 - The production tools are model-free except for transcription; narration uses
   the system `say` voice and music is synthesised, so quality is bounded by
   those local providers. A cloud voice or a recorded take exists only in the app.
-- Speed, volume, freeze, group move, effects, export, recording and cloud
-  narration are app-only; the workspace cannot express them, and a guide may only
-  route the user to the owning surface. Caption and title styling are CLI-capable
-  through `timeline set-text`.
+- Recording, cloud narration and the speech-model picker are app-only; the
+  CLI cannot capture from a device or choose a provider. Every edit, export and
+  subtitle file is CLI-capable.
 - Transcription is a host service: `or captions transcribe` needs the running app
   and the model the app installed.
 - A project-folder or chosen-folder workspace has no `project.json` pointer, so
