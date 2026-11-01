@@ -18,6 +18,14 @@ and never duplicate a video to change a caption.
 | A written script | `tools/voiceover.mjs` writes `captions.srt` from measured speech; `--apply` imports it |
 | Existing audio or video | `tools/or captions transcribe --attach project.json --media ID --srt-out FILE` then `timeline import-captions` |
 
+## Deliver subtitles
+
+`tools/or captions export --attach project.json --out work/exports/NAME.srt`
+writes every caption clip in start order; `.vtt` writes WebVTT. This is the same
+collection the app exports, so it is the right sidecar for a delivered video.
+`CAPTION_TRACK_EMPTY` means there are no cues yet. Details:
+[export-and-delivery.md](export-and-delivery.md).
+
 Review the SRT before importing. Re-importing the same file creates a second
 track; delete the old one instead of stacking duplicates.
 

@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-02
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -56,6 +56,10 @@ update. The same fields are available without the GUI through
   agents as `or captions transcribe`. Both paths require review before apply and
   apply through the ordinary `timeline.captions.import` command, so an accepted
   proposal is an editable caption track, never a hidden layer.
+- **Subtitle delivery** exports the caption clips themselves: `or captions
+  export --out FILE.srt|FILE.vtt` walks every caption track in start order and
+  writes SRT or WebVTT with the shared encoder. Nothing is burned into the
+  picture, and an empty project reports `CAPTION_TRACK_EMPTY`.
 - Model weights are not bundled. Five multilingual checkpoints are selectable —
   Base (141 MiB), Small (465 MiB), Medium (1.43 GiB), Large v3 Turbo q5
   (547 MiB) and Large v3 Turbo (1.51 GiB). One is downloaded at a time only

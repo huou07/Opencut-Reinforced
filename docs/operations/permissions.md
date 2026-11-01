@@ -1,6 +1,6 @@
 # Agent Authority — Current Local Mission
 
-Last reviewed: 2026-10-26. Source: the owner's direct mission request. This
+Last reviewed: 2026-11-02. Source: the owner's direct mission request. This
 records a task permission boundary; it grants no system privilege and does not
 replace OS or session security controls.
 
@@ -13,6 +13,10 @@ replace OS or session security controls.
 - Create isolated test projects, profiles and small fixtures for repeatable
   verification.
 - Make coherent local commits after a change and its relevant checks are complete.
+- Publish the GitHub patch release the owner asked for on 2026-11-02: push the
+  release commit to `main`, push a `v*` tag, and let the existing macOS release
+  workflow build and publish the DMG, its checksum file and the release notes.
+  Verify the published assets with `gh`.
 - Inspect public source and documentation for the open-source editor references
   named in the mission.
 
@@ -21,11 +25,12 @@ or cross-platform acceptance.
 
 ## Out of scope
 
-No push or sync, no pull requests, no remote CI, no publishing or deployment, no
-GitHub settings changes, no contact with third parties. Do not discard, reset,
-rebase, amend or clean user work or other worktrees. Do not overwrite existing
-projects or application data. Do not install system tooling, change machine
-security settings, use sudo, or accept platform licences as a workaround.
+No pull requests, no GitHub settings changes, no contact with third parties, no
+deployment beyond the release described above. Do not push a tag before the
+release commit is on `main`. Do not discard, reset, rebase, amend or clean user
+work or other worktrees. Do not overwrite existing projects or application data.
+Do not install system tooling, change machine security settings, use sudo, or
+accept platform licences as a workaround.
 
 ## Host snapshot
 

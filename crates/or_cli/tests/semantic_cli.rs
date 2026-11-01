@@ -1,9 +1,10 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, JobId, JobState, MarkerId,
-    MediaId, MotionMaterializeRequest, MotionMaterializeResponse, ProjectDocument,
-    ProjectFileSession, ProjectRevision, ProjectSession, QueryResult, RationalTime, TrackId,
-    TrackKind, TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest,
-    TranscriptionResponse, TranscriptionSegmentView, load_project_file, save_project_file_atomic,
+    ApplicationRequest, ApplicationResponse, ClipId, ClipSettings, CommandEnvelope, JobId,
+    JobState, MarkerId, MediaId, MotionMaterializeRequest, MotionMaterializeResponse,
+    ProjectDocument, ProjectFileSession, ProjectRevision, ProjectSession, QueryResult,
+    RationalTime, SequenceCanvas, TrackId, TrackKind, TranscriptionJobView,
+    TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    TranscriptionSegmentView, TransitionKind, load_project_file, save_project_file_atomic,
     write_recovery_checkpoint,
 };
 use or_ipc::{
@@ -3548,4 +3549,380 @@ fn motion_layout_reads_the_evaluated_boxes_at_an_exact_time() {
     // mid-point box is where the picture puts it, not the raw anchor.
     assert_eq!(middle["nodes"][0]["position"]["x"], 300.0);
     assert_eq!(middle["nodes"][0]["animated"], true);
+}
+
+fn assert_cli_error(args: impl IntoIterator<Item = OsString>, exit: i32, token: &str) {
+    let output = cli(args);
+    assert_eq!(
+        output.status.code(),
+        Some(exit),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: Value = serde_json::from_slice(&output.stdout).expect("JSON error output");
+    let message = value["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains(token), "expected {token:?} in {message:?}");
+}
+
+fn timeline_args(project: &Path, action: &[&str]) -> Vec<OsString> {
+    let mut args = path_args(&["timeline", action[0]], "--project", project, &action[1..]);
+    args.push("--json".into());
+    args
+}
+
+fn add_track(project: &Path, kind: &str, track_id: TrackId) {
+    let (value, _) = json_success(timeline_args(
+        project,
+        &["add-track", "--kind", kind, "--id", &track_id.to_string()],
+    ));
+    assert_eq!(value["command"]["changed"], true);
+}
+
+fn insert_text_clip(
+    project: &Path,
+    track_id: TrackId,
+    clip_id: ClipId,
+    at: &str,
+    duration: &str,
+    text: &str,
+) {
+    let (value, _) = json_success(timeline_args(
+        project,
+        &[
+            "insert-text",
+            "--track",
+            &track_id.to_string(),
+            "--at",
+            at,
+            "--duration",
+            duration,
+            "--text",
+            text,
+            "--id",
+            &clip_id.to_string(),
+        ],
+    ));
+    assert_eq!(value["command"]["changed"], true);
+}
+
+#[test]
+fn headless_canvas_and_clip_settings_round_trip() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    create_project(&path, "Agent toolkit");
+
+    let (canvas, _) = json_success(timeline_args(
+        &path,
+        &["set-canvas", "--width", "1280", "--height", "720"],
+    ));
+    assert_eq!(canvas["command"]["changed"], true);
+    let project = load_project_file(&path).unwrap();
+    assert_eq!(
+        project.timeline().sequence_canvas(),
+        Some(SequenceCanvas::new(1280, 720).unwrap())
+    );
+
+    // Odd pixel counts are refused by the same invariant the app enforces.
+    assert_cli_error(
+        timeline_args(&path, &["set-canvas", "--width", "1279", "--height", "720"]),
+        2,
+        "even",
+    );
+
+    let track_id = TrackId::generate();
+    let clip_id = ClipId::generate();
+    add_track(&path, "text", track_id);
+    insert_text_clip(&path, track_id, clip_id, "0/1", "4/1", "Tieu de");
+
+    let (visual, _) = json_success(timeline_args(
+        &path,
+        &[
+            "set-clip-visual",
+            "--clip",
+            &clip_id.to_string(),
+            "--scale",
+            "1500",
+            "--opacity",
+            "7500",
+            "--rotation",
+            "-9000",
+            "--brightness",
+            "-50",
+            "--blur-radius",
+            "25",
+            "--transition-in",
+            "cross_dissolve:1/2",
+        ],
+    ));
+    assert_eq!(visual["clip_id"], clip_id.to_string());
+
+    let project = load_project_file(&path).unwrap();
+    let clip = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.id() == track_id)
+        .unwrap()
+        .clips()
+        .iter()
+        .find(|clip| clip.id() == clip_id)
+        .unwrap();
+    let ClipSettings::Visual(visual_settings) = clip.settings() else {
+        panic!("text clips carry visual settings");
+    };
+    assert_eq!(visual_settings.transform.scale_x_milli, 1500);
+    assert_eq!(visual_settings.transform.scale_y_milli, 1500);
+    assert_eq!(visual_settings.transform.rotation_milli_degrees, -9000);
+    assert_eq!(visual_settings.opacity.basis_points, 7500);
+    assert_eq!(
+        visual_settings
+            .transition_in
+            .map(|transition| transition.kind),
+        Some(TransitionKind::CrossDissolve)
+    );
+    let mut effects = visual_settings.effects.clone();
+    effects.sort_by_key(|effect| format!("{effect:?}"));
+    assert_eq!(effects.len(), 2);
+
+    // A visual clip cannot accept audio settings, and a text clip cannot play back.
+    assert_cli_error(
+        timeline_args(
+            &path,
+            &[
+                "set-clip-audio",
+                "--clip",
+                &clip_id.to_string(),
+                "--gain-millidecibels",
+                "-300",
+            ],
+        ),
+        2,
+        "audio settings",
+    );
+
+    assert_cli_error(
+        timeline_args(
+            &path,
+            &[
+                "set-clip-playback",
+                "--clip",
+                &clip_id.to_string(),
+                "--rate",
+                "2/1",
+            ],
+        ),
+        2,
+        "media clips",
+    );
+
+    // The effects were removed again by neutral amounts.
+    let (cleared, _) = json_success(timeline_args(
+        &path,
+        &[
+            "set-clip-visual",
+            "--clip",
+            &clip_id.to_string(),
+            "--brightness",
+            "0",
+            "--blur-radius",
+            "0",
+            "--transition-in",
+            "none",
+        ],
+    ));
+    assert_eq!(cleared["command"]["changed"], true);
+    let project = load_project_file(&path).unwrap();
+    let clip = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.id() == track_id)
+        .unwrap()
+        .clips()
+        .iter()
+        .find(|clip| clip.id() == clip_id)
+        .unwrap();
+    let ClipSettings::Visual(visual_settings) = clip.settings() else {
+        panic!("text clips carry visual settings");
+    };
+    assert!(visual_settings.effects.is_empty());
+    assert!(visual_settings.transition_in.is_none());
+}
+
+#[test]
+fn headless_move_clips_shifts_the_whole_group() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    create_project(&path, "Group move");
+
+    let track_id = TrackId::generate();
+    let first = ClipId::generate();
+    let second = ClipId::generate();
+    add_track(&path, "text", track_id);
+    insert_text_clip(&path, track_id, first, "0/1", "2/1", "One");
+    insert_text_clip(&path, track_id, second, "4/1", "2/1", "Two");
+
+    let (moved, _) = json_success(timeline_args(
+        &path,
+        &[
+            "move-clips",
+            "--track",
+            &track_id.to_string(),
+            "--clips",
+            &format!("{first},{second}"),
+            "--delta",
+            "1/2",
+        ],
+    ));
+    assert_eq!(moved["command"]["changed"], true);
+
+    let project = load_project_file(&path).unwrap();
+    let clips = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.id() == track_id)
+        .unwrap()
+        .clips();
+    let starts: Vec<_> = clips.iter().map(|clip| clip.timeline_start()).collect();
+    assert!(starts.contains(&RationalTime::new(1, 2).unwrap()));
+    assert!(starts.contains(&RationalTime::new(9, 2).unwrap()));
+}
+
+#[test]
+fn headless_captions_export_writes_default_srt() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    create_project(&path, "Captions");
+
+    let track_id = TrackId::generate();
+    add_track(&path, "caption", track_id);
+    for (clip_id, at, text) in [
+        (ClipId::generate(), "0/1", "Hello"),
+        (ClipId::generate(), "2/1", "World"),
+    ] {
+        let (value, _) = json_success(timeline_args(
+            &path,
+            &[
+                "insert-caption",
+                "--track",
+                &track_id.to_string(),
+                "--at",
+                at,
+                "--duration",
+                "1/1",
+                "--text",
+                text,
+                "--id",
+                &clip_id.to_string(),
+            ],
+        ));
+        assert_eq!(value["command"]["changed"], true);
+    }
+
+    let out = directory.0.join("captions.vtt");
+    let (export, _) = json_success(path_args(
+        &["captions", "export"],
+        "--project",
+        &path,
+        &["--out", out.to_str().unwrap(), "--json"],
+    ));
+    assert_eq!(export["format"], "vtt");
+    assert_eq!(export["cue_count"], 2);
+    let contents = fs::read_to_string(&out).unwrap();
+    assert!(contents.contains("WEBVTT"));
+    assert!(contents.contains("Hello"));
+    assert!(contents.contains("World"));
+    assert_eq!(contents.matches("-->").count(), 2);
+
+    let empty = TestDirectory::new();
+    let empty_path = empty.project_path();
+    create_project(&empty_path, "No captions");
+    let output = cli(path_args(
+        &["captions", "export"],
+        "--project",
+        &empty_path,
+        &[
+            "--out",
+            empty.0.join("none.srt").to_str().unwrap(),
+            "--json",
+        ],
+    ));
+    assert_eq!(output.status.code(), Some(3));
+    let value: Value = serde_json::from_slice(&output.stdout).expect("JSON error output");
+    assert_eq!(value["error"]["code"], "CAPTION_TRACK_EMPTY");
+}
+
+#[test]
+fn export_verbs_reject_missing_or_malformed_arguments() {
+    assert_cli_error(
+        words(&[
+            "export",
+            "start",
+            "--destination",
+            "/tmp/never.mp4",
+            "--json",
+        ]),
+        2,
+        "--attach requires a path",
+    );
+    assert_cli_error(
+        words(&[
+            "export",
+            "status",
+            "--attach",
+            "/tmp/never.json",
+            "--job",
+            "not-a-job",
+            "--json",
+        ]),
+        2,
+        "canonical lowercase UUIDv4",
+    );
+    assert_cli_error(
+        words(&["export", "pause", "--json"]),
+        2,
+        "unknown export action",
+    );
+    assert_cli_error(
+        words(&[
+            "export",
+            "start",
+            "--attach",
+            "/tmp/never.json",
+            "--destination",
+            "relative.mp4",
+            "--json",
+        ]),
+        2,
+        "absolute path",
+    );
+    assert_cli_error(
+        words(&[
+            "export",
+            "start",
+            "--attach",
+            "/tmp/never.json",
+            "--destination",
+            "/tmp/never.mov",
+            "--json",
+        ]),
+        2,
+        "extension selects the profile",
+    );
+    assert_cli_error(
+        words(&[
+            "export",
+            "start",
+            "--attach",
+            "/tmp/never.json",
+            "--destination",
+            "/tmp/never.mp4",
+            "--profile",
+            "webm",
+            "--json",
+        ]),
+        2,
+        "must match the destination extension",
+    );
 }

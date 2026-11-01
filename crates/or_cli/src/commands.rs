@@ -1,15 +1,17 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipContent, ClipId, ClipSettings,
-    CommandEnvelope, CommandResult, FontIdentity, ImportedCaption, JobState,
+    CommandEnvelope, CommandResult, EffectReference, ExportProfile, ExportQuality, ExportRequest,
+    ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
     MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
-    MotionMaterializeRequest, OperationError, ProjectFileMediaImportError,
+    MotionMaterializeRequest, Opacity, OperationError, ProjectFileMediaImportError,
     ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
     QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, TextAlignment, TextBackground, TextColor, TextFormatting,
+    RecoveryInspection, SequenceCanvas, TextAlignment, TextBackground, TextColor, TextFormatting,
     TextVerticalAnchor, TextWeight, TimelineClipState, TrackId, TrackKind, TrackState,
-    TranscriptionRequest, TranscriptionResponse, VisualSettings, apply_project_recovery,
-    command_catalog, discard_project_recovery, encode_caption_file, inspect_project_recovery,
-    parse_caption_file, prepare_media_import, query_catalog,
+    TranscriptionRequest, TranscriptionResponse, TransitionKind, TransitionReference,
+    VisualSettings, apply_project_recovery, command_catalog, discard_project_recovery,
+    encode_caption_file, inspect_project_recovery, parse_caption_file, prepare_media_import,
+    query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -352,6 +354,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<CommandOutput, CliError> {
         "motion" => run_motion(&args[1..], json)?,
         "timeline" => run_timeline(&args[1..], json)?,
         "captions" => run_captions(&args[1..], json)?,
+        "export" => run_export(&args[1..], json)?,
         "session" => return run_session(&args[1..], json),
         _ => return Err(CliError::usage(json, "unknown command")),
     };
@@ -415,11 +418,12 @@ fn run_media(args: &[OsString], json: bool) -> Result<String, CliError> {
         "list" => run_media_list(&args[1..], json),
         "add" => run_media_add(&args[1..], json),
         "relink" => run_media_relink(&args[1..], json),
+        "get" => run_media_get(&args[1..], json),
         "remove" => run_media_remove(&args[1..], json),
         "clean-audio" => run_media_clean_audio(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown media action; expected probe, list, add, relink, remove, or clean-audio",
+            "unknown media action; expected probe, list, get, add, relink, remove, or clean-audio",
         )),
     }
 }
@@ -2067,13 +2071,17 @@ fn run_media_relink(args: &[OsString], json: bool) -> Result<String, CliError> {
 
 fn run_captions(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
-        return Err(CliError::usage(json, "expected captions transcribe"));
+        return Err(CliError::usage(
+            json,
+            "expected captions transcribe or export",
+        ));
     };
     match action {
         "transcribe" => run_captions_transcribe(&args[1..], json),
+        "export" => run_captions_export(&args[1..], json),
         _ => Err(CliError::usage(
             json,
-            "unknown captions action; expected transcribe",
+            "unknown captions action; expected transcribe or export",
         )),
     }
 }
@@ -2283,6 +2291,45 @@ fn format_caption_time(milliseconds: u64) -> String {
     format!("{minutes:02}:{seconds:02}.{millis:03}")
 }
 
+/// Every timeline verb this build accepts. `--help` and the unknown-action
+/// error both name the same list so a caller never sees a partial surface.
+const TIMELINE_ACTIONS: &[&str] = &[
+    "tracks",
+    "clips",
+    "markers",
+    "settings",
+    "set-frame-rate",
+    "clear-frame-rate",
+    "set-canvas",
+    "snap",
+    "add-marker",
+    "move-marker",
+    "rename-marker",
+    "delete-marker",
+    "add-track",
+    "set-track-state",
+    "remove-track",
+    "move-track",
+    "insert-clip",
+    "insert-text",
+    "insert-caption",
+    "set-text",
+    "import-captions",
+    "set-clip-visual",
+    "set-clip-audio",
+    "set-clip-playback",
+    "move-clip",
+    "move-clips",
+    "trim-clip",
+    "split-clip",
+    "slip-clip",
+    "roll-clip",
+    "slide-clip",
+    "duck-clip",
+    "delete-clip",
+    "ripple-delete-clip",
+];
+
 fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
         return Err(CliError::usage(json, "expected a timeline action"));
@@ -2332,6 +2379,387 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 json,
             )?;
             Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "set-canvas" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--width", "--height"],
+                &["--clear"],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let canvas = if options.has_flag("--clear") {
+                if options.value("--width").is_some() || options.value("--height").is_some() {
+                    return Err(CliError::usage(
+                        json,
+                        "--clear does not accept --width or --height",
+                    ));
+                }
+                Value::Null
+            } else {
+                let width = parse_u32(
+                    options
+                        .value("--width")
+                        .ok_or_else(|| CliError::usage(json, "--width is required"))?,
+                    "--width",
+                    json,
+                )?;
+                let height = parse_u32(
+                    options
+                        .value("--height")
+                        .ok_or_else(|| CliError::usage(json, "--height is required"))?,
+                    "--height",
+                    json,
+                )?;
+                if SequenceCanvas::new(width, height).is_none() {
+                    return Err(CliError::usage(
+                        json,
+                        "--width and --height must be even, between 16 and 7680, within a 4:1 ratio",
+                    ));
+                }
+                json!({"width": width, "height": height})
+            };
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.sequence.set_canvas",
+                json!({"sequence_canvas": canvas}),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "move-clips" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--track", "--clips", "--delta"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let track_id = parse_track_id(&required_name(&options, "--track", json)?, json)?;
+            let mut clip_ids = Vec::new();
+            for raw in required_name(&options, "--clips", json)?.split(',') {
+                let raw = raw.trim();
+                if raw.is_empty() {
+                    continue;
+                }
+                clip_ids.push(parse_clip_id(raw, json)?);
+            }
+            if clip_ids.is_empty() {
+                return Err(CliError::usage(json, "--clips needs at least one clip ID"));
+            }
+            let delta =
+                parse_cli_rational(&required_name(&options, "--delta", json)?, "--delta", json)?;
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clips.move",
+                json!({
+                    "track_id": track_id,
+                    "clip_ids": clip_ids,
+                    "delta": rational_value(delta),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(&result, attached, json, None))
+        }
+        "set-clip-visual" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--x",
+                    "--y",
+                    "--scale",
+                    "--scale-x",
+                    "--scale-y",
+                    "--rotation",
+                    "--anchor-x",
+                    "--anchor-y",
+                    "--opacity",
+                    "--crop-left",
+                    "--crop-top",
+                    "--crop-right",
+                    "--crop-bottom",
+                    "--brightness",
+                    "--contrast",
+                    "--saturation",
+                    "--blur-radius",
+                    "--transition-in",
+                    "--transition-out",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let (_, kind, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            if kind == TrackKind::Audio {
+                return Err(CliError::usage(
+                    json,
+                    "visual settings apply to video, text and caption clips",
+                ));
+            }
+            let ClipSettings::Visual(mut visual) = clip.settings.clone() else {
+                return Err(CliError::usage(json, "this clip has no visual settings"));
+            };
+            if options.value("--scale").is_some()
+                && (options.value("--scale-x").is_some() || options.value("--scale-y").is_some())
+            {
+                return Err(CliError::usage(
+                    json,
+                    "--scale cannot be combined with --scale-x or --scale-y",
+                ));
+            }
+            if let Some(value) = optional_i32(&options, "--x", json)? {
+                visual.transform.x_milli_canvas = value;
+            }
+            if let Some(value) = optional_i32(&options, "--y", json)? {
+                visual.transform.y_milli_canvas = value;
+            }
+            if let Some(value) = optional_u32(&options, "--scale", json)? {
+                if value == 0 {
+                    return Err(CliError::usage(json, "--scale must be positive"));
+                }
+                visual.transform.scale_x_milli = value;
+                visual.transform.scale_y_milli = value;
+            }
+            if let Some(value) = optional_u32(&options, "--scale-x", json)? {
+                visual.transform.scale_x_milli = value;
+            }
+            if let Some(value) = optional_u32(&options, "--scale-y", json)? {
+                visual.transform.scale_y_milli = value;
+            }
+            if let Some(value) = optional_i32(&options, "--rotation", json)? {
+                visual.transform.rotation_milli_degrees = value;
+            }
+            if let Some(value) = optional_u16(&options, "--anchor-x", json)? {
+                visual.transform.anchor_x_basis_points = value;
+            }
+            if let Some(value) = optional_u16(&options, "--anchor-y", json)? {
+                visual.transform.anchor_y_basis_points = value;
+            }
+            if let Some(value) = optional_u16(&options, "--opacity", json)? {
+                visual.opacity = Opacity {
+                    basis_points: value,
+                };
+            }
+            if let Some(value) = optional_u16(&options, "--crop-left", json)? {
+                visual.crop.left_basis_points = value;
+            }
+            if let Some(value) = optional_u16(&options, "--crop-top", json)? {
+                visual.crop.top_basis_points = value;
+            }
+            if let Some(value) = optional_u16(&options, "--crop-right", json)? {
+                visual.crop.right_basis_points = value;
+            }
+            if let Some(value) = optional_u16(&options, "--crop-bottom", json)? {
+                visual.crop.bottom_basis_points = value;
+            }
+            if let Some(value) = optional_i16(&options, "--brightness", json)? {
+                upsert_effect(
+                    &mut visual.effects,
+                    EffectReference::Brightness {
+                        amount_milli: value,
+                    },
+                );
+            }
+            if let Some(value) = optional_u16(&options, "--contrast", json)? {
+                upsert_effect(
+                    &mut visual.effects,
+                    EffectReference::Contrast {
+                        amount_milli: value,
+                    },
+                );
+            }
+            if let Some(value) = optional_u16(&options, "--saturation", json)? {
+                upsert_effect(
+                    &mut visual.effects,
+                    EffectReference::Saturation {
+                        amount_milli: value,
+                    },
+                );
+            }
+            if let Some(value) = optional_u32(&options, "--blur-radius", json)? {
+                upsert_effect(
+                    &mut visual.effects,
+                    EffectReference::GaussianBlur {
+                        radius_milli: value,
+                    },
+                );
+            }
+            if let Some(value) = options.value("--transition-in") {
+                visual.transition_in = parse_transition_reference(value, "--transition-in", json)?;
+            }
+            if let Some(value) = options.value("--transition-out") {
+                visual.transition_out =
+                    parse_transition_reference(value, "--transition-out", json)?;
+            }
+            let settings = ClipSettings::Visual(visual);
+            let result =
+                send_clip_update(&path, attached, &clip, clip.content.clone(), settings, json)?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
+        "set-clip-audio" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--gain-millidecibels",
+                    "--pan-basis-points",
+                    "--fade-in",
+                    "--fade-out",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let (_, _, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            let ClipSettings::Audio(mut audio) = clip.settings.clone() else {
+                return Err(CliError::usage(
+                    json,
+                    "this clip has visual settings, not audio settings; use set-clip-visual",
+                ));
+            };
+            if let Some(value) = optional_i32(&options, "--gain-millidecibels", json)? {
+                audio.gain_millidecibels = value;
+            }
+            if let Some(value) = optional_i16(&options, "--pan-basis-points", json)? {
+                audio.pan_basis_points = value;
+            }
+            if let Some(value) = options.value("--fade-in") {
+                audio.fade_in = parse_cli_rational(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--fade-in must be valid UTF-8"))?,
+                    "--fade-in",
+                    json,
+                )?;
+            }
+            if let Some(value) = options.value("--fade-out") {
+                audio.fade_out = parse_cli_rational(
+                    value
+                        .to_str()
+                        .ok_or_else(|| CliError::usage(json, "--fade-out must be valid UTF-8"))?,
+                    "--fade-out",
+                    json,
+                )?;
+            }
+            let settings = ClipSettings::Audio(audio);
+            let result =
+                send_clip_update(&path, attached, &clip, clip.content.clone(), settings, json)?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
+        "set-clip-playback" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--rate",
+                    "--reversed",
+                    "--frozen",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let (_, kind, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            let mut content = clip.content.clone();
+            let mut touched = false;
+            let mut timeline_duration = clip.timeline_duration;
+            {
+                let ClipContent::Media {
+                    playback_rate,
+                    reversed,
+                    frozen,
+                    source_range,
+                    ..
+                } = &mut content
+                else {
+                    return Err(CliError::usage(
+                        json,
+                        "playback settings apply to media clips",
+                    ));
+                };
+                if let Some(value) = options.value("--rate") {
+                    let rate = parse_cli_rate(
+                        value
+                            .to_str()
+                            .ok_or_else(|| CliError::usage(json, "--rate must be valid UTF-8"))?,
+                        "--rate",
+                        json,
+                    )?;
+                    let inverse = RationalRate::new(rate.denominator(), rate.numerator())
+                        .map_err(|_| CliError::usage(json, "--rate cannot be inverted"))?;
+                    timeline_duration = inverse.apply(source_range.duration()).map_err(|_| {
+                        CliError::usage(
+                            json,
+                            "--rate cannot represent this clip's source duration exactly",
+                        )
+                    })?;
+                    *playback_rate = rate;
+                    touched = true;
+                }
+                if let Some(value) = options.value("--reversed") {
+                    *reversed = parse_bool_value(value, "--reversed", json)?;
+                    touched = true;
+                }
+                if let Some(value) = options.value("--frozen") {
+                    if kind != TrackKind::Video {
+                        return Err(CliError::usage(
+                            json,
+                            "--frozen is available for video clips",
+                        ));
+                    }
+                    *frozen = parse_bool_value(value, "--frozen", json)?;
+                    touched = true;
+                }
+            }
+            if !touched {
+                return Err(CliError::usage(
+                    json,
+                    "set at least one of --rate, --reversed, or --frozen",
+                ));
+            }
+            let settings = clip.settings.clone();
+            let result = timeline_mutation(
+                &path,
+                attached,
+                "timeline.clip.update",
+                json!({
+                    "clip_id": clip.clip_id,
+                    "timeline_duration": rational_value(timeline_duration),
+                    "content": serde_json::to_value(&content)
+                        .expect("clip content is serializable"),
+                    "settings": serde_json::to_value(&settings)
+                        .expect("clip settings are serializable"),
+                }),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
         }
         "clips" => {
             let options = Options::parse(
@@ -3318,7 +3746,10 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown timeline action; expected tracks, clips, markers, settings, set-frame-rate, clear-frame-rate, snap, add-marker, move-marker, rename-marker, delete-marker, add-track, set-track-state, remove-track, insert-clip, insert-text, insert-caption, set-text, import-captions, move-clip, trim-clip, split-clip, duck-clip, delete-clip, or ripple-delete-clip",
+            format!(
+                "unknown timeline action; expected one of: {}",
+                TIMELINE_ACTIONS.join(", ")
+            ),
         )),
     }
 }
@@ -3611,6 +4042,669 @@ fn render_timeline_snap(result: &QueryResult, json: bool) -> Result<String, CliE
         lines.push(format!("Target marker ID: {marker_id}"));
     }
     Ok(lines.join("\n"))
+}
+
+fn optional_i16(options: &Options, flag: &str, json: bool) -> Result<Option<i16>, CliError> {
+    let Some(value) = options.value(flag) else {
+        return Ok(None);
+    };
+    parse_i16(value, flag, json).map(Some)
+}
+
+fn optional_i32(options: &Options, flag: &str, json: bool) -> Result<Option<i32>, CliError> {
+    let Some(value) = options.value(flag) else {
+        return Ok(None);
+    };
+    value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
+        .parse::<i32>()
+        .map(Some)
+        .map_err(|_| CliError::usage(json, format!("{flag} must be an integer")))
+}
+
+fn optional_u16(options: &Options, flag: &str, json: bool) -> Result<Option<u16>, CliError> {
+    let Some(value) = options.value(flag) else {
+        return Ok(None);
+    };
+    parse_u16(value, flag, json).map(Some)
+}
+
+fn optional_u32(options: &Options, flag: &str, json: bool) -> Result<Option<u32>, CliError> {
+    let Some(value) = options.value(flag) else {
+        return Ok(None);
+    };
+    parse_u32(value, flag, json).map(Some)
+}
+
+fn parse_bool_value(value: &OsStr, flag: &str, json: bool) -> Result<bool, CliError> {
+    match value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?
+    {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(CliError::usage(
+            json,
+            format!("{flag} must be true or false"),
+        )),
+    }
+}
+
+/// Keeps at most one effect of each kind, dropping a neutral value so a caller
+/// can clear an effect by setting its identity amount.
+fn upsert_effect(effects: &mut Vec<EffectReference>, effect: EffectReference) {
+    let neutral = match effect {
+        EffectReference::Brightness { amount_milli } => amount_milli == 0,
+        EffectReference::Contrast { amount_milli }
+        | EffectReference::Saturation { amount_milli } => amount_milli == 1_000,
+        EffectReference::GaussianBlur { radius_milli } => radius_milli == 0,
+    };
+    effects
+        .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&effect));
+    if !neutral {
+        effects.push(effect);
+    }
+}
+
+/// Parses `KIND:NUM/DEN` or `none`; the duration is a rational timeline time.
+fn parse_transition_reference(
+    value: &OsStr,
+    flag: &str,
+    json: bool,
+) -> Result<Option<TransitionReference>, CliError> {
+    let raw = value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, format!("{flag} must be valid UTF-8")))?;
+    if raw.eq_ignore_ascii_case("none") {
+        return Ok(None);
+    }
+    let Some((kind, duration)) = raw.split_once(':') else {
+        return Err(CliError::usage(
+            json,
+            format!("{flag} must be KIND:NUM/DEN or none"),
+        ));
+    };
+    let kind = match kind.replace('-', "_").as_str() {
+        "cross_dissolve" => TransitionKind::CrossDissolve,
+        "fade_through_black" => TransitionKind::FadeThroughBlack,
+        "wipe" => TransitionKind::Wipe,
+        _ => {
+            return Err(CliError::usage(
+                json,
+                format!("{flag} kind must be cross_dissolve, fade_through_black, or wipe"),
+            ));
+        }
+    };
+    let duration = parse_cli_rational(duration, flag, json)?;
+    Ok(Some(TransitionReference { kind, duration }))
+}
+
+/// Locates one clip without the caller naming its track.
+///
+/// `timeline.clip.update` needs the clip's full current state, so every
+/// settings verb reads the track list and walks bounded clip pages first.
+fn find_clip_state(
+    path: &Path,
+    attached: bool,
+    clip_id: ClipId,
+    json: bool,
+) -> Result<(TrackId, TrackKind, TimelineClipState), CliError> {
+    let tracks_result = timeline_query(path, attached, "timeline.tracks", json!({}), json)?;
+    let tracks = tracks_result
+        .timeline_tracks_v2
+        .ok_or_else(|| CliError::operation_message(json, "timeline.tracks returned no tracks"))?;
+    for track in tracks {
+        let mut offset = 0usize;
+        loop {
+            let result = timeline_query(
+                path,
+                attached,
+                "timeline.clips",
+                json!({
+                    "track_id": track.track_id,
+                    "offset": offset,
+                    "limit": MAX_TIMELINE_CLIP_PAGE_SIZE,
+                }),
+                json,
+            )?;
+            let page = result.timeline_clip_page_v2.ok_or_else(|| {
+                CliError::operation_message(json, "timeline.clips returned no clip page")
+            })?;
+            let next = page.next_offset;
+            if let Some(clip) = page.items.into_iter().find(|clip| clip.clip_id == clip_id) {
+                return Ok((track.track_id, track.kind, clip));
+            }
+            match next {
+                Some(next) => offset = next,
+                None => break,
+            }
+        }
+    }
+    Err(CliError::usage(
+        json,
+        format!("clip {clip_id} was not found in this project"),
+    ))
+}
+
+/// Sends the full clip state back through `timeline.clip.update`.
+fn send_clip_update(
+    path: &Path,
+    attached: bool,
+    clip: &TimelineClipState,
+    content: ClipContent,
+    settings: ClipSettings,
+    json: bool,
+) -> Result<CommandResult, CliError> {
+    timeline_mutation(
+        path,
+        attached,
+        "timeline.clip.update",
+        json!({
+            "clip_id": clip.clip_id,
+            "timeline_duration": rational_value(clip.timeline_duration),
+            "content": serde_json::to_value(&content).expect("clip content is serializable"),
+            "settings": serde_json::to_value(&settings).expect("clip settings are serializable"),
+        }),
+        json,
+    )
+}
+
+fn run_media_get(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--project", "--attach", "--id"], &[], json)?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let media_id = parse_media_id(&required_name(&options, "--id", json)?, json)?;
+    let result = timeline_query(
+        &path,
+        attached,
+        "media.get",
+        json!({"media_id": media_id}),
+        json,
+    )?;
+    if json {
+        return Ok(json_string(
+            serde_json::to_value(&result).expect("media item result is serializable"),
+        ));
+    }
+    let item = result
+        .media_item
+        .as_ref()
+        .ok_or_else(|| CliError::operation_message(json, "media.get returned no media item"))?;
+    Ok(render_media_item(item))
+}
+
+fn run_captions_export(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &["--project", "--attach", "--format", "--out"],
+        &[],
+        json,
+    )?;
+    let (path, attached) = media_project_path(&options, json)?;
+    let out = required_path(&options, "--out", json)?;
+    let format = match options.value("--format") {
+        Some(value) => parse_caption_format(value, json)?,
+        None => match out.extension().and_then(OsStr::to_str) {
+            Some("srt") => CaptionFileFormat::Srt,
+            Some("vtt") => CaptionFileFormat::WebVtt,
+            _ => {
+                return Err(CliError::usage(
+                    json,
+                    "--format is required when --out does not end in .srt or .vtt",
+                ));
+            }
+        },
+    };
+    let captions = collect_caption_cues(&path, attached, json)?;
+    if captions.is_empty() {
+        return Err(CliError::application_failure(
+            json,
+            "CAPTION_TRACK_EMPTY",
+            "The project has no captions to export.",
+            None,
+        ));
+    }
+    let bytes = encode_caption_file(format, &captions)
+        .map_err(|error| CliError::new(3, json, "application", error.code(), error.to_string()))?;
+    std::fs::write(&out, &bytes).map_err(|error| {
+        CliError::new(
+            4,
+            json,
+            "project_file",
+            "CAPTION_FILE_UNWRITABLE",
+            format!("The subtitle file could not be written: {error}"),
+        )
+    })?;
+    let format_name = match format {
+        CaptionFileFormat::Srt => "SRT",
+        CaptionFileFormat::WebVtt => "WebVTT",
+    };
+    if json {
+        Ok(json_string(json!({
+            "format": match format {
+                CaptionFileFormat::Srt => "srt",
+                CaptionFileFormat::WebVtt => "vtt",
+            },
+            "cue_count": captions.len(),
+            "path": out.to_string_lossy(),
+        })))
+    } else {
+        Ok(format!(
+            "Exported {} {format_name} cues to {}.",
+            captions.len(),
+            out.display()
+        ))
+    }
+}
+
+fn parse_caption_format(value: &OsStr, json: bool) -> Result<CaptionFileFormat, CliError> {
+    match value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "--format must be valid UTF-8"))?
+    {
+        "srt" | "subrip" => Ok(CaptionFileFormat::Srt),
+        "vtt" | "webvtt" => Ok(CaptionFileFormat::WebVtt),
+        _ => Err(CliError::usage(json, "--format must be srt or vtt")),
+    }
+}
+
+/// Gathers every caption clip in start order, exactly as the app exports them.
+fn collect_caption_cues(
+    path: &Path,
+    attached: bool,
+    json: bool,
+) -> Result<Vec<ImportedCaption>, CliError> {
+    let tracks_result = timeline_query(path, attached, "timeline.tracks", json!({}), json)?;
+    let tracks = tracks_result
+        .timeline_tracks_v2
+        .ok_or_else(|| CliError::operation_message(json, "timeline.tracks returned no tracks"))?;
+    let mut captions = Vec::new();
+    for track in tracks
+        .into_iter()
+        .filter(|track| track.kind == TrackKind::Caption)
+    {
+        let mut offset = 0usize;
+        loop {
+            let result = timeline_query(
+                path,
+                attached,
+                "timeline.clips",
+                json!({
+                    "track_id": track.track_id,
+                    "offset": offset,
+                    "limit": MAX_TIMELINE_CLIP_PAGE_SIZE,
+                }),
+                json,
+            )?;
+            let page = result.timeline_clip_page_v2.ok_or_else(|| {
+                CliError::operation_message(json, "timeline.clips returned no clip page")
+            })?;
+            let next = page.next_offset;
+            for clip in page.items {
+                if let ClipContent::Caption { text, .. } = clip.content {
+                    captions.push(ImportedCaption {
+                        start: clip.timeline_start,
+                        duration: clip.timeline_duration,
+                        text,
+                    });
+                }
+            }
+            match next {
+                Some(next) => offset = next,
+                None => break,
+            }
+        }
+    }
+    captions.sort_by_key(|caption| caption.start);
+    Ok(captions)
+}
+
+fn run_export(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let Some(action) = args.first().and_then(|value| value.to_str()) else {
+        return Err(CliError::usage(
+            json,
+            "expected export start, status, or cancel",
+        ));
+    };
+    match action {
+        "start" => run_export_start(&args[1..], json),
+        "status" => run_export_status(&args[1..], json),
+        "cancel" => run_export_cancel(&args[1..], json),
+        _ => Err(CliError::usage(
+            json,
+            "unknown export action; expected start, status, or cancel",
+        )),
+    }
+}
+
+fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(
+        args,
+        &[
+            "--attach",
+            "--destination",
+            "--profile",
+            "--quality",
+            "--short-side",
+        ],
+        &["--no-wait"],
+        json,
+    )?;
+    let path = required_path(&options, "--attach", json)?;
+    let destination = required_path(&options, "--destination", json)?;
+    if !destination.is_absolute() {
+        return Err(CliError::usage(
+            json,
+            "--destination must be an absolute path",
+        ));
+    }
+    let profile = match destination
+        .extension()
+        .and_then(OsStr::to_str)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("mp4") => ExportProfile::Mp4H264Aac,
+        Some("webm") => ExportProfile::WebmVp9Opus,
+        Some("mkv") => ExportProfile::MatroskaFfv1PcmS16le,
+        _ => {
+            return Err(CliError::usage(
+                json,
+                "--destination must end in .mp4, .webm, or .mkv; the extension selects the profile",
+            ));
+        }
+    };
+    if let Some(value) = options.value("--profile")
+        && parse_export_profile(value, json)? != profile
+    {
+        return Err(CliError::usage(
+            json,
+            "--profile must match the destination extension (.mp4, .webm, .mkv)",
+        ));
+    }
+    let quality = match options.value("--quality") {
+        Some(value) => parse_export_quality(value, json)?,
+        None => ExportQuality::Quality,
+    };
+    let short_side = optional_u32(&options, "--short-side", json)?;
+    let client = attached_client(&path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = request_export(
+        &client,
+        ExportRequest::Start {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            expected_project_revision: description.project_revision,
+            destination: destination.to_string_lossy().into_owned(),
+            profile,
+            quality,
+            short_side,
+        },
+        json,
+    )?;
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            if response.error_code.is_empty() {
+                "EXPORT_FAILED".to_owned()
+            } else {
+                response.error_code.clone()
+            },
+            response.message,
+            None,
+        ));
+    }
+    let Some(mut job) = response.job else {
+        return Err(CliError::ipc_message(
+            json,
+            "the host did not return an export job",
+        ));
+    };
+    if !options.has_flag("--no-wait") {
+        job = wait_for_export(&client, &description, job, json)?;
+    }
+    if json {
+        Ok(json_string(json!({
+            "job": job,
+            "destination": destination.to_string_lossy(),
+        })))
+    } else if options.has_flag("--no-wait") {
+        Ok(format!(
+            "Queued export job {} to {}.",
+            job.id,
+            destination.display()
+        ))
+    } else {
+        Ok(format!(
+            "Exported to {} as job {}.",
+            destination.display(),
+            job.id
+        ))
+    }
+}
+
+fn wait_for_export(
+    client: &LocalIpcClient,
+    description: &DescribeResponse,
+    mut job: JobSnapshot,
+    json: bool,
+) -> Result<JobSnapshot, CliError> {
+    let started = Instant::now();
+    loop {
+        match job.state {
+            JobState::Succeeded => return Ok(job),
+            JobState::Failed => {
+                return Err(CliError::application_failure(
+                    json,
+                    "EXPORT_FAILED",
+                    job.failure_message
+                        .clone()
+                        .unwrap_or_else(|| "The export did not complete.".to_owned()),
+                    None,
+                ));
+            }
+            JobState::Cancelled => {
+                return Err(CliError::application_failure(
+                    json,
+                    "EXPORT_CANCELLED",
+                    "The export was cancelled.",
+                    None,
+                ));
+            }
+            JobState::Queued | JobState::Running => {}
+        }
+        if started.elapsed() >= Duration::from_secs(12 * 60 * 60) {
+            return Err(CliError::application_failure(
+                json,
+                "EXPORT_TIMEOUT",
+                "The export exceeded its twelve-hour wait.",
+                None,
+            ));
+        }
+        thread::sleep(Duration::from_millis(500));
+        job = export_job(client, description, job.id, json)?;
+    }
+}
+
+fn export_job(
+    client: &LocalIpcClient,
+    description: &DescribeResponse,
+    job_id: JobId,
+    json: bool,
+) -> Result<JobSnapshot, CliError> {
+    let response = request_export(
+        client,
+        ExportRequest::Status {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            job_id,
+        },
+        json,
+    )?;
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            if response.error_code.is_empty() {
+                "EXPORT_STATUS_FAILED".to_owned()
+            } else {
+                response.error_code.clone()
+            },
+            response.message,
+            None,
+        ));
+    }
+    response
+        .job
+        .ok_or_else(|| CliError::ipc_message(json, "the host did not return an export job"))
+}
+
+fn run_export_status(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--attach", "--job"], &[], json)?;
+    let path = required_path(&options, "--attach", json)?;
+    let job_id = parse_job_id(&required_name(&options, "--job", json)?, json)?;
+    let client = attached_client(&path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = request_export(
+        &client,
+        ExportRequest::Status {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            job_id,
+        },
+        json,
+    )?;
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            if response.error_code.is_empty() {
+                "EXPORT_STATUS_FAILED".to_owned()
+            } else {
+                response.error_code.clone()
+            },
+            response.message,
+            None,
+        ));
+    }
+    if json {
+        Ok(json_string(
+            serde_json::to_value(&response).expect("export response is serializable"),
+        ))
+    } else {
+        Ok(match (&response.job, response.message.as_str()) {
+            (Some(job), _) => format!("Export {}: {}.", job.id, job_state_label(job.state)),
+            (None, message) => format!("Export {job_id}: {message}"),
+        })
+    }
+}
+
+fn run_export_cancel(args: &[OsString], json: bool) -> Result<String, CliError> {
+    let options = Options::parse(args, &["--attach", "--job"], &[], json)?;
+    let path = required_path(&options, "--attach", json)?;
+    let job_id = parse_job_id(&required_name(&options, "--job", json)?, json)?;
+    let client = attached_client(&path, json)?;
+    let description = client
+        .describe()
+        .map_err(|error| CliError::ipc(error, json))?;
+    let response = request_export(
+        &client,
+        ExportRequest::Cancel {
+            project_id: description.project_id,
+            project_instance_id: description.project_instance_id,
+            job_id,
+        },
+        json,
+    )?;
+    if !response.succeeded {
+        return Err(CliError::application_failure(
+            json,
+            if response.error_code.is_empty() {
+                "EXPORT_CANCEL_FAILED".to_owned()
+            } else {
+                response.error_code.clone()
+            },
+            response.message,
+            None,
+        ));
+    }
+    if json {
+        Ok(json_string(
+            serde_json::to_value(&response).expect("export response is serializable"),
+        ))
+    } else {
+        Ok(format!(
+            "Export {job_id}: {}.",
+            job_state_label(
+                response
+                    .job
+                    .as_ref()
+                    .map(|job| job.state)
+                    .unwrap_or(JobState::Cancelled)
+            )
+        ))
+    }
+}
+
+fn request_export(
+    client: &LocalIpcClient,
+    request: ExportRequest,
+    json: bool,
+) -> Result<ExportResponse, CliError> {
+    match client
+        .application(ApplicationRequest::Export(request))
+        .map_err(|error| CliError::ipc(error, json))?
+    {
+        ApplicationSuccess::Export(response) => Ok(response),
+        _ => Err(CliError::ipc_message(
+            json,
+            "server returned an unexpected application response",
+        )),
+    }
+}
+
+fn parse_job_id(value: &str, json: bool) -> Result<JobId, CliError> {
+    value
+        .parse()
+        .map_err(|_| CliError::usage(json, "--job must be a canonical lowercase UUIDv4"))
+}
+
+fn parse_export_profile(value: &OsStr, json: bool) -> Result<ExportProfile, CliError> {
+    match value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "--profile must be valid UTF-8"))?
+    {
+        "mp4" | "mp4_h264_aac" => Ok(ExportProfile::Mp4H264Aac),
+        "webm" | "webm_vp9_opus" => Ok(ExportProfile::WebmVp9Opus),
+        "ffv1" | "matroska_ffv1_pcm_s16le" => Ok(ExportProfile::MatroskaFfv1PcmS16le),
+        _ => Err(CliError::usage(
+            json,
+            "--profile must be mp4, webm, or ffv1",
+        )),
+    }
+}
+
+fn parse_export_quality(value: &OsStr, json: bool) -> Result<ExportQuality, CliError> {
+    match value
+        .to_str()
+        .ok_or_else(|| CliError::usage(json, "--quality must be valid UTF-8"))?
+    {
+        "quality" => Ok(ExportQuality::Quality),
+        "speed" => Ok(ExportQuality::Speed),
+        _ => Err(CliError::usage(json, "--quality must be quality or speed")),
+    }
+}
+
+fn job_state_label(state: JobState) -> &'static str {
+    match state {
+        JobState::Queued => "queued",
+        JobState::Running => "running",
+        JobState::Succeeded => "succeeded",
+        JobState::Failed => "failed",
+        JobState::Cancelled => "cancelled",
+    }
 }
 
 fn render_timeline_command(

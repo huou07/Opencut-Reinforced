@@ -23,7 +23,7 @@ is the fallback when the CLI cannot act. This file is an index, not a handbook.
 - **CLI-first operation** — read and mutation order, the CLI/MCP split, failure policy.
   When: choosing how to read or change the project.
   Path: `docs/cli-first.md`
-- **Timeline editing** — tracks, clips, exact times, trims, splits, markers, captions, frame rate.
+- **Timeline editing** — tracks, clips, exact times, trims, splits, markers, canvas, clip settings, frame rate.
   When: changing anything on the timeline.
   Path: `docs/timeline-editing.md`
 - **Media and import** — probe, import, relink, remove, paths, supported formats.
@@ -35,9 +35,12 @@ is the fallback when the CLI cannot act. This file is an index, not a handbook.
 - **Motion production** — splitting scenes into parallel streams and background render jobs.
   When: producing several scenes or a multi-scene sequence.
   Path: `docs/motion-production.md`
-- **Captions** — cue sources, timing, styling, review and import.
-  When: adding, editing or restyling subtitles.
+- **Captions** — cue sources, timing, styling, review, import and subtitle export.
+  When: adding, editing, restyling or delivering subtitles.
   Path: `docs/captions.md`
+- **Export and delivery** — render the sequence, job status and cancel, subtitle sidecars.
+  When: producing a finished file, or checking an export job.
+  Path: `docs/export-and-delivery.md`
 - **Script and voice** — script schema, offline narration, voice selection, music bed.
   When: writing narration or generating a voiceover.
   Path: `docs/script-and-voice.md`

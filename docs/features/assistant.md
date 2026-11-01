@@ -1,6 +1,6 @@
 # Feature — Assistant Panel
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-02
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
 ACP, the `or` CLI surface and MCP fallback that edit the open project, and the
@@ -50,9 +50,10 @@ ships the CLI in `Contents/MacOS/or`, so the assistant does not depend on the
 checkout's `target/` after the app is installed.
 
 The harness still receives one MCP server named `or`; its tools appear to the
-model as `mcp__or__<tool>` and attach over the same local IPC. It exists for the
-operations the CLI cannot express — motion scene insertion, the motion asset
-library, and a CLI failure its error does not explain:
+model as `mcp__or__<tool>` and attach over the same local IPC. It mirrors the CLI
+surface: first-class tools for the common edits plus `run_cli`, which runs any
+`or` verb with the same attach and JSON flags, so no operation is left without a
+fallback:
 
 | CLI verb (`tools/or ...`) | MCP fallback | Effect |
 |---|---|---|
@@ -69,6 +70,12 @@ library, and a CLI failure its error does not explain:
 | `timeline set-frame-rate`, `timeline add-marker` | `set_frame_rate`, `add_marker` | sequence and marker edits |
 | `captions transcribe` | `captions_transcribe` | local multilingual transcript proposal; review before applying |
 | `timeline import-captions` | — | apply a reviewed SRT/WebVTT file as a new caption track |
+| `timeline set-clip-visual`, `set-clip-audio`, `set-clip-playback` | `set_clip_visual`, `set_clip_audio`, `set_clip_playback` | transform, crop, opacity, effects, transitions, gain, pan, fades, speed, reverse, freeze |
+| `timeline set-canvas`, `timeline move-clips` | `set_canvas`, `move_clips` | sequence shape and one-command group moves |
+| `media get` | `media_get` | one media item by id with its probe metadata |
+| `captions export` | `captions_export` | write every caption clip as SRT or WebVTT |
+| `export start`, `export status`, `export cancel` | `export_start`, `export_status`, `export_cancel` | render the sequence and poll or stop the job |
+| any `or` verb | `run_cli` | complete coverage: runs the CLI with the same attach and JSON flags |
 | `timeline duck-clip` | `duck_music` | lower a music clip under a voice track as one undoable command |
 | `motion publish` | `motion_insert_scene` | validate a scene, save it to the library, render it, import it and insert it in one call |
 | `motion asset list` | `motion_asset_list` | page the reusable motion library with ids, categories and durations |
@@ -173,10 +180,11 @@ them. Android has no assistant: the desktop process boundary is explicit.
 - The agent can call `undo`, but there is no grouped "revert this turn".
 - No in-panel model catalog editing; it reflects the harness configuration.
 - Provider credential setup stays in DeepSeek Harness, not in OR.
-- The MCP server's tool set is fixed and smaller than the CLI's: orientation, the
-  common timeline edits, transcription, ducking and motion insertion/library.
-  Verbs without an MCP twin (slip/roll/slide, track state, marker move/rename/
-  delete, clean-up, and importing a caption file) have no fallback surface.
+- The MCP server mirrors the CLI through first-class tools plus `run_cli`, but it
+  is still a second process per call and only works while the app session is
+  running. Prefer `tools/or` when it can attach; verbs without a first-class tool
+  (slip/roll/slide, track state, marker move/rename/delete, clean-up) go through
+  `run_cli`.
 - Narration quality is the installed system `say` voice, a configured cloud
   provider, or a local speech server. The voice is selectable and previewable in
   Settings → Narration; ElevenLabs and Azure keys are stored in the keychain, and

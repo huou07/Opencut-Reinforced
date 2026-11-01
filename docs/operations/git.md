@@ -1,6 +1,6 @@
 # Git and External Actions
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-02
 
 Scope: repository history rules and the actions that are out of bounds for the
 current mission.
@@ -16,10 +16,14 @@ current mission.
 - Keep historical evidence records and protected workflows untouched unless the
 owner explicitly scopes that change.
 
-## Not authorized in this mission
+## Authorized external actions
 
-No push, no pull request, no remote CI trigger, no release publication, no
-deploy, no GitHub settings change. See [permissions.md](permissions.md).
+The owner's 2026-11-02 instruction authorizes one release path. The
+`main-safety` ruleset requires the `release-gate` check on `main`, so the release
+commit lands through a release branch and PR whose checks pass; then push a `v*`
+tag and let `.github/workflows/macos-release.yml` build and publish the DMG,
+checksum file and notes for that tag. No other pull request, deployment or GitHub
+settings change. See [permissions.md](permissions.md).
 
 ## Local branches and worktrees
 

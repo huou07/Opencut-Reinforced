@@ -15,8 +15,7 @@ Ask for, or confirm from the request: length in seconds, language (`vi` or
 `en`), audience, tone, voice, and music mood. If the user asked for a 30-second
 video, do not write a 90-second script. If the user names a cloud voice, say the
 app generates that one: **Audio → Generate voiceover…** uses the voice from
-**Settings → Narration**, whose provider keys live in the keychain and never
-enter this workspace.
+**Settings → Narration**, and the result arrives as ordinary media.
 
 ## 2. Write one line per scene
 

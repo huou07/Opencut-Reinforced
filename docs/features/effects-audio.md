@@ -1,6 +1,6 @@
 # Feature — Visual Settings, Effects, Colour and Audio Controls
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-02
 
 Scope: per-clip visual and audio parameters, the closed effect/transition set, and
 the colour assumptions behind preview and export.
@@ -17,6 +17,15 @@ units (%, °, px, dB, s) while retaining exact project values.
 A closed, typed set with typed parameters and presets that fill the fields before
 Apply. An effect reference is part of clip state; it is not an arbitrary shader or
 a script. New effects require a typed parameter contract and render-path work.
+
+## Agent surface
+
+`or timeline set-clip-visual|set-clip-audio|set-clip-playback` writes these
+fields through `timeline.clip.update`, the same command the inspector uses, so a
+CLI edit cannot produce state the UI rejects. The CLI names the model's units
+(milli-canvas, milli-degrees, basis points, millidecibels) and takes transitions
+as `KIND:NUM/DEN`; neutral effect values clear an effect. `or timeline
+set-canvas` sets the sequence shape.
 
 ## Colour
 

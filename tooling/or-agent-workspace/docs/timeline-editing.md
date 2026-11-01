@@ -48,6 +48,10 @@ Every command below takes `--attach project.json --json` plus the flags shown.
 | `timeline insert-clip --track --media --at --source-start --duration [--id] [--mode insert\|overwrite] [--overwrite-split-id]` | Place imported media at an exact time. `insert` (the default) moves later clips right; `overwrite` clears the range, and an overwrite that lands strictly inside an existing clip must name the id for the split remainder. |
 | `timeline insert-text \| insert-caption --track --at --duration --text [--id]` | Add a text clip, or a caption clip on a caption track. |
 | `timeline move-clip --clip --track --at` | Move a clip in time, possibly to another track. |
+| `timeline set-clip-visual --clip [--x] [--y] [--scale \| --scale-x --scale-y] [--rotation] [--anchor-x] [--anchor-y] [--opacity] [--crop-left ...] [--brightness] [--contrast] [--saturation] [--blur-radius] [--transition-in KIND:NUM/DEN] [--transition-out ...]` | Transform, crop, opacity, effects and transitions. Omitted flags keep their current value; see the units table below. |
+| `timeline set-clip-audio --clip [--gain-millidecibels] [--pan-basis-points] [--fade-in NUM/DEN] [--fade-out NUM/DEN]` | Gain, pan and fades. Audio clips only. |
+| `timeline set-clip-playback --clip [--rate NUM/DEN] [--reversed true\|false] [--frozen true\|false]` | Speed, reverse and freeze frame. Rate recomputes the clip's duration from its source range; freeze is video only. |
+| `timeline move-clips --track --clips ID[,ID...] --delta` | Shift several clips on one track by the same exact delta in one undoable command. |
 | `timeline trim-clip --clip --edge start\|end --to [--ripple]` | Trim one edge to an exact timeline time; `--ripple` pulls later clips and is accepted on an end edge only. |
 | `timeline slip-clip --clip --delta` | Move the source window inside a fixed clip; the clip stays where it is. |
 | `timeline roll-clip --clip --delta` | Move the cut between this clip and its neighbour. |
@@ -60,6 +64,7 @@ Every command below takes `--attach project.json --json` plus the flags shown.
 | `timeline add-marker --at --label [--id]` | Add a labelled marker. |
 | `timeline move-marker --id --to` / `rename-marker --id --label` / `delete-marker --id` | Change or remove a marker. |
 | `timeline set-frame-rate --rate NUM/DEN` / `clear-frame-rate` | Set or unset the sequence rate. |
+| `timeline set-canvas --width N --height N` / `--clear` | Set the finished-video shape, or `--clear` to derive it from the first video clip again. Sides must be even, 16–7680, and at most 4:1. |
 
 `tools/or commands` lists every mutating verb and `tools/or queries` every read,
 with their schema versions, when the exact surface is not obvious.
@@ -78,19 +83,56 @@ read: it returns the snap candidate the editor would use and mutates nothing.
 - Track order on screen is the order `timeline tracks` returns; `move-track`
   changes it.
 
-## Not available through the CLI
+## Clip settings
 
-Speed/playback rate (1/16×–16×), reverse, freeze frame, clip volume, mute,
-multi-clip group move, visual effects and transitions all travel through
-`timeline.clip.update`, which has no `tools/or` verb yet. Text and caption content
-and formatting are the exception: `timeline set-text` covers text, font, size,
-weight, alignment, colour, anchor, offset, opacity and background. Export has no CLI verb
-at all. When the user asks for one of these, say the app owns it: speed and
-volume are on the timeline strip once the clip is selected, subtitle styling is
-in the Edit Title/Caption dialog or `timeline set-text`, and export is the
-Export button.
-Let the user make that change, then re-read the timeline and save only what the
-commands you ran actually changed. Do not imitate speed with a trim or a split.
+A clip's visual and audio settings travel through the same validated command the
+app's inspector uses. Read `timeline clips` first: every verb rewrites the full
+current state, so the CLI fills in the fields you did not pass.
+
+Units are the model's own, not seconds or pixels:
+
+| Flag | Unit |
+|---|---|
+| `--x`, `--y` | milli-canvas: 1000 is 1/1000 of the canvas side |
+| `--scale`, `--scale-x`, `--scale-y` | milli: 1000 keeps the source size, 2000 doubles it |
+| `--rotation` | milli-degrees: 90000 is a quarter turn |
+| `--anchor-x`, `--anchor-y` | basis points: 5000 is the clip centre |
+| `--opacity` | basis points: 10000 is opaque, 0 is invisible |
+| `--crop-left`, `--crop-top`, `--crop-right`, `--crop-bottom` | basis points of that edge |
+| `--brightness` | milli: -1000…1000, 0 neutral |
+| `--contrast`, `--saturation` | milli: 1000 neutral |
+| `--blur-radius` | milli-pixels of Gaussian blur |
+| `--gain-millidecibels` | millidecibels: -600 is -0.6 dB |
+| `--pan-basis-points` | basis points: -10000 hard left, 10000 hard right |
+| `--fade-in`, `--fade-out` | exact `NUM/DEN` seconds |
+
+- One effect of each kind is kept; pass the neutral value (`--brightness 0`,
+  `--contrast 1000`, `--saturation 1000`, `--blur-radius 0`) to remove it.
+- Transitions take `cross_dissolve`, `fade_through_black` or `wipe` plus a
+  duration, e.g. `--transition-in cross_dissolve:1/2`; `--transition-in none`
+  clears it. The transition consumes timeline on the clip, so the server may
+  refuse a duration the clip cannot hold.
+- `--rate` accepts the app's speed range and recomputes
+  `timeline_duration`; do not also trim by hand. Reverse and freeze keep the
+  duration. Freeze holds one source frame and is video only.
+- A text or caption clip carries visual settings; an audio clip carries audio
+  settings. Asking for the wrong family is a usage error, not a no-op.
+
+## Export and subtitle files
+
+The CLI can render the open sequence and write subtitle files:
+
+- `tools/or export start --attach project.json --destination OUT.mp4|.webm|.mkv
+  [--quality quality|speed] [--short-side N]` waits for the job and prints its
+  id; add `--no-wait` to return a queued job. The extension selects the codec,
+  and the destination must be absolute.
+- `export status --attach project.json --job JOB_ID` and `export cancel ...`
+  poll or stop that job.
+- `captions export --attach project.json --out FILE.srt|FILE.vtt` writes every
+  caption clip in start order; `--format` is inferred from the extension.
+
+The Export button and the CLI share one job queue, so a job the user started in
+the app can be polled by id. See [export-and-delivery.md](export-and-delivery.md).
 
 ## Examples
 
