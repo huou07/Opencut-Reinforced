@@ -1,26 +1,44 @@
 # Release and Distribution
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-01
 
 Scope: what is published today, how the macOS release is built and verified, and
 what remains for a broader platform matrix.
 
 ## Current status
 
-Stable releases: **macOS Apple Silicon only**, published as a `.dmg` from
+Stable releases: **macOS 13+ on Apple Silicon only**, published as a `.dmg` from
 `huou07/Opencut-Reinforced`. The image is ad-hoc signed, not notarised; the first
 launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
 Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
-self-contained:
-FFmpeg, the `or` CLI and the assistant workspace ship inside the bundle, and the
-workspace is installed into Application Support on first launch. Later beta
-packages for macOS, Windows, Linux and Android were retired because they were not
-usable; the workflow and tags are kept out of the current release line.
+self-contained: FFmpeg 8.1.3, the local speech runtime (`whisper-cli` and the
+provider), the `or` CLI and the assistant workspace ship inside the bundle, and
+the workspace is installed into Application Support on first launch. Speech
+models and an assistant harness remain optional downloads. Later beta packages
+for macOS, Windows, Linux and Android were retired because they were not usable;
+the workflow and tags are kept out of the current release line.
 
-Build locally with `scripts/build_macos_dmg.sh`; it refuses to publish an image
-built anywhere except Apple Silicon. `.github/workflows/macos-release.yml` runs
-the same build on a fresh `macos-14` runner, runs the Flutter and Rust tests, and
-publishes the DMG for a `v*` tag or a manual dispatch with `publish` enabled.
+Build locally with `scripts/stage_macos_ffmpeg.sh` followed by
+`scripts/build_macos_dmg.sh`; the DMG script refuses an image built anywhere except
+Apple Silicon and refuses a missing or non-LGPL FFmpeg prefix. The packaging gate
+also rejects any Mach-O in the bundle whose deployment target is newer than
+macOS 13, so a build made on a newer Mac cannot silently raise the public minimum.
+`.github/workflows/macos-release.yml` runs the same build on a fresh `macos-15`
+runner, runs the Flutter and Rust tests, publishes the DMG and `SHA256SUMS.txt`
+for a `v*` tag or a manual dispatch with `publish` enabled, and writes install,
+requirement and limitation notes.
+
+## Updates and optional resources
+
+The app is not self-updating in the background. **Settings → Resources &
+updates** (also available from Home) reports whether the bundled runtime is
+intact, opens the speech-model manager when a project is open, links to the
+assistant harness installer, and checks the public GitHub `releases/latest`
+endpoint when the user asks. A newer DMG is downloaded to Downloads, verified
+against the release asset digest when GitHub supplies one, and opened for the
+user to drag into Applications. The app never replaces `/Applications` while it
+is running. The release page carries `SHA256SUMS.txt` for users who prefer a
+manual check.
 
 ## Developer Preview pipeline
 

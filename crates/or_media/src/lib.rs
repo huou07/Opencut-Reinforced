@@ -40,3 +40,14 @@ pub fn verify_ffmpeg_runtime() -> bool {
     ffmpeg_the_third::init().is_ok()
         && ffmpeg_the_third::util::license() == "LGPL version 2.1 or later"
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_linked_ffmpeg_runtime_is_the_approved_lgpl_build() {
+        assert!(
+            super::verify_ffmpeg_runtime(),
+            "the linked FFmpeg runtime must report LGPL version 2.1 or later"
+        );
+    }
+}

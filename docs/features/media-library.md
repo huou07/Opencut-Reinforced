@@ -36,8 +36,8 @@ AC-3/E-AC-3 and PCM audio; MOV/MP4/M4V with H.264/H.265/AAC; WAV, MP3, Ogg, FLAC
 AIFF and AVI single-container files; PNG, JPEG and WebP stills. Rejected
 containers stay named, and a codec the *running build* cannot decode is refused at
 import with `UNSUPPORTED_CODEC` rather than admitted and failing at the first
-preview frame; the release bundle links a full FFmpeg while a local debug build
-links a minimal one. See
+preview frame; the release bundle links the approved LGPL media-interchange build
+while a local debug build may link a different, smaller set. See
 [architecture/media-pipeline.md](../architecture/media-pipeline.md).
 
 ## Library surface

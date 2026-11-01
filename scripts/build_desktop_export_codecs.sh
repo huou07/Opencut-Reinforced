@@ -40,6 +40,11 @@ if [[ "$platform" == linux ]]; then
     *) echo "unsupported Linux architecture: $(uname -m)" >&2; exit 2 ;;
   esac
 elif [[ "$platform" == macos ]]; then
+  deployment_target="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+  export MACOSX_DEPLOYMENT_TARGET="$deployment_target"
+  export CFLAGS="${CFLAGS:-} -mmacosx-version-min=$deployment_target"
+  export CXXFLAGS="${CXXFLAGS:-} -mmacosx-version-min=$deployment_target"
+  export LDFLAGS="${LDFLAGS:-} -mmacosx-version-min=$deployment_target"
   case "$(uname -m)" in
     arm64|aarch64) vpx_target=arm64-darwin25-gcc ;;
     x86_64) vpx_target=x86_64-darwin24-gcc ;;
@@ -128,6 +133,9 @@ if [[ "$platform" == android ]]; then
     -DANDROID_STL=c++_static
   )
 fi
+if [[ "$platform" == macos ]]; then
+  opus_cmake_args+=("-DCMAKE_OSX_DEPLOYMENT_TARGET=$deployment_target")
+fi
 if [[ "$platform" == windows ]]; then
   opus_cmake_args[1]="-DCMAKE_INSTALL_PREFIX=$(cygpath -aw "$prefix")"
   cmake -S "$work/opus-$opus_version" -B "$opus_build" \
@@ -181,6 +189,9 @@ vpx_configure_args=(
   --enable-pic \
   --enable-vp9
 )
+if [[ "$platform" == macos ]]; then
+  vpx_configure_args+=("--extra-cflags=-mmacosx-version-min=$deployment_target")
+fi
 if [[ "$platform" == windows ]]; then
   # FFmpeg's documented MSVC toolchain uses /MT; match it to avoid mixing the
   # UCRT imports from libvpx's default /MD archive into FFmpeg's msvcrt build.
@@ -191,6 +202,7 @@ if [[ "$platform" == android ]]; then
 else
   "$vpx_source/configure" "${vpx_configure_args[@]}"
 fi
+if [[ "$platform" == macos && -f Makefile ]]; then make clean; fi
 make -j2
 make install
 

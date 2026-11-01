@@ -34,7 +34,9 @@ justification and review.
   adds a volume (gain) control; both write the ordinary typed commands and keep
   their values in the advanced inspector.
 - The Audio tool exposes **Record voice…**, **Generate voiceover…**,
-  **Generate music…** and **Speech model…** next to import/add-track. Each opens one dialog that owns the offline synthesis,
+  **Generate music…** and **Speech model…** next to import/add-track; the speech
+  picker states when the build has no local runtime, disables **Use model** then,
+  and offers a **Download** action on each not-installed row when it does. Each opens one dialog that owns the offline synthesis,
   import, placement and (for music) optional ducking, then refreshes through the
   normal project reads. The music dialog leads with a **Describe the music**
   field: one sentence in Vietnamese or English is read for mood, bpm, length and
@@ -61,6 +63,12 @@ justification and review.
   Settings panel holds the cloud provider cards (key save/test/remove, Azure
   region, ElevenLabs personal-voice creation from a recorded WAV sample); keys
   live in the macOS keychain, not in this app's files.
+- **Settings → Resources & updates** (also a Home quick action) is the
+  clean-machine surface: it checks the packaged FFmpeg, speech runtime and `or`
+  CLI, links to the assistant harness, opens the speech-model manager when a
+  project is open, and checks the public GitHub release. A newer DMG downloads to
+  Downloads and opens for the user to drag into Applications; the app never
+  replaces itself silently. Optional model and harness downloads stay explicit.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

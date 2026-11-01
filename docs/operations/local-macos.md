@@ -1,6 +1,6 @@
 # Local macOS Development and Verification
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-01
 
 Scope: the concrete commands for this host — build, run, check, measure — and
 the traps that cost real time. Generic policy is in
@@ -53,6 +53,30 @@ The whisper CLI is taken from `OR_WHISPER_CLI_PATH`, a packaged local app, or
 verified against the small model's SHA-256 before it is placed in the app's
 private model folder. The script never builds whisper.cpp itself, so a missing
 CLI is a setup error rather than a silent fallback.
+
+## Pinned FFmpeg runtime
+
+The app loads FFmpeg in-process and refuses a runtime whose license is not exactly
+`LGPL version 2.1 or later`. Homebrew's FFmpeg is a **GPL** build, so packaging it
+produces an app that starts and then reports `the approved LGPL FFmpeg runtime
+could not be loaded` on the first viewer frame or export. Build and install the
+pinned LGPL prefix instead:
+
+```sh
+scripts/stage_macos_ffmpeg.sh
+ln -sfn "$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install" \
+  apps/or_app/.dart_tool/macos-ffmpeg-install
+```
+
+The script downloads the SHA-512-verified FFmpeg 8.1.3 source, builds the pinned
+libvpx/libopus, installs the packaged-helper profile with VideoToolbox H.264/AAC,
+and writes `BUILD-INFO.txt` beside the prefix. It pins the FFmpeg and codec
+deployment target to macOS 12 (`MACOSX_DEPLOYMENT_TARGET`) so a build on a newer
+Mac does not raise it silently. Packaging reads the symlink, copies the matching
+libraries into the bundle, removes any stale ABI from an earlier package, refuses
+to sign when `libavutil` reports another license, and rejects any Mach-O whose
+deployment target is newer than macOS 13. The app's own Xcode target and the
+public release claim are macOS 13+.
 
 ## FFmpeg library path
 

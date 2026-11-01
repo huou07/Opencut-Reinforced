@@ -203,6 +203,21 @@ void main() {
     expect(OrBreakpoints.isWide(1180), isTrue);
   });
 
+  testWidgets('home opens the resources and updates settings section', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    await _mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('home-resources')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const ValueKey('settings-resources')), findsOneWidget);
+    expect(find.text('Resources & updates'), findsWidgets);
+    expect(find.byKey(const ValueKey('resource-update-check')), findsOneWidget);
+  });
+
   testWidgets('settings diagnostics remain sourced from CoreGateway', (
     tester,
   ) async {
@@ -434,6 +449,78 @@ void main() {
         findsOneWidget,
       );
       expect(gateway.startTranscriptionCalls, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the speech model picker names a missing runtime and disables its use action',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/speech-model-missing.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Speech model missing');
+
+      await tester.tap(find.byKey(const ValueKey('editor-tool-audio')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tool-speech-model')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Speech model'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('speech-model-runtime-missing')),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('Not available in this build'),
+        findsOneWidget,
+      );
+      final use = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('speech-model-use')),
+      );
+      expect(use.onPressed, isNull);
+      expect(
+        find.byKey(
+          const ValueKey('speech-model-download-whisper-small-multilingual'),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the speech model picker offers a download when the runtime is present',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway()
+        ..transcriptionProviderAvailable = true;
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/speech-model-present.orproj';
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Speech model present');
+
+      await tester.tap(find.byKey(const ValueKey('editor-tool-audio')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tool-speech-model')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          const ValueKey('speech-model-download-whisper-small-multilingual'),
+        ),
+        findsOneWidget,
+      );
+      final use = tester.widget<FilledButton>(
+        find.byKey(const ValueKey('speech-model-use')),
+      );
+      expect(use.onPressed, isNotNull);
+      expect(
+        find.byKey(const ValueKey('speech-model-runtime-missing')),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
@@ -6846,6 +6933,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+    'the preview zoom menu scales the viewer without a project edit',
+    (tester) async {
+      final gateway = _FakeProjectGateway()
+        ..preview = ProjectPreviewState(
+          position: ProjectRationalTime(BigInt.zero, 1),
+          playing: false,
+          generation: BigInt.zero,
+          frameSequence: BigInt.zero,
+          width: 1920,
+          height: 1080,
+          contentEnd: ProjectRationalTime(BigInt.from(5), 1),
+        );
+      final picker = _FakeProjectPicker()..savePath = '/tmp/zoom.orproj';
+      _setViewport(tester, const Size(1280, 800));
+      await _mount(tester, gateway: gateway, picker: picker);
+      await _createProject(tester, 'Zoom');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('preview-zoom')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('200%').last);
+      await tester.pumpAndSettle();
+
+      final zoomed = tester.widget<Transform>(
+        find.byKey(const ValueKey('editor-viewer-zoom')),
+      );
+      expect(zoomed.transform.getMaxScaleOnAxis(), greaterThan(1));
+
+      await tester.tap(find.byKey(const ValueKey('preview-zoom')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fit').last);
+      await tester.pumpAndSettle();
+      final fitted = tester.widget<Transform>(
+        find.byKey(const ValueKey('editor-viewer-zoom')),
+      );
+      expect(fitted.transform.getMaxScaleOnAxis(), 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('the export dialog passes a resolution short side', (
     tester,
   ) async {
@@ -7258,6 +7386,9 @@ Future<void> _openAdvancedClipActions(WidgetTester tester, Finder clip) async {
 }
 
 class _FakeProjectGateway implements ProjectGateway {
+  /// Lets a widget test exercise the installable-runtime path.
+  bool transcriptionProviderAvailable = false;
+
   /// Reverse flips the surface asked for, in order.
   int reversedCalls = 0;
   bool? lastReversed;
@@ -8168,7 +8299,7 @@ class _FakeProjectGateway implements ProjectGateway {
     sizeBytes: BigInt.from(487601967),
     source: 'https://example.invalid/model',
     installed: false,
-    providerAvailable: false,
+    providerAvailable: transcriptionProviderAvailable,
   );
 
   @override

@@ -17,6 +17,41 @@ import 'editor_rational_time.dart';
 import 'viewer_caption_overlay.dart';
 import 'viewer_transform_overlay.dart';
 
+/// The viewer's presentation zoom. Only `fit` changes the box the preview is
+/// laid out in; the other levels scale the picture inside that box, so zoom is
+/// view state and never touches the project or a revision.
+enum ViewerZoomLevel { fit, x25, x50, x100, x200 }
+
+extension ViewerZoomLevelInfo on ViewerZoomLevel {
+  String get label => switch (this) {
+    ViewerZoomLevel.fit => 'Fit',
+    ViewerZoomLevel.x25 => '25%',
+    ViewerZoomLevel.x50 => '50%',
+    ViewerZoomLevel.x100 => '100%',
+    ViewerZoomLevel.x200 => '200%',
+  };
+
+  /// One source pixel per logical pixel as a ratio; `fit` has none.
+  double? get sourceRatio => switch (this) {
+    ViewerZoomLevel.fit => null,
+    ViewerZoomLevel.x25 => 0.25,
+    ViewerZoomLevel.x50 => 0.5,
+    ViewerZoomLevel.x100 => 1,
+    ViewerZoomLevel.x200 => 2,
+  };
+}
+
+double viewerZoomScale(
+  ViewerZoomLevel zoom,
+  double sourceWidth,
+  double fittedWidth,
+) {
+  final ratio = zoom.sourceRatio;
+  if (ratio == null || sourceWidth <= 0 || fittedWidth <= 0) return 1;
+  final fitScale = fittedWidth / sourceWidth;
+  return (ratio / fitScale).clamp(0.05, 8);
+}
+
 class EditorViewerPanel extends StatefulWidget {
   const EditorViewerPanel({
     super.key,
@@ -91,11 +126,15 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
   ProjectPreviewState? _preview;
   ProjectSequenceCanvas? _canvas;
   double _speed = 1;
+  ViewerZoomLevel _zoom = ViewerZoomLevel.fit;
   bool _speedInFlight = false;
   final ValueNotifier<ProjectPreviewState?> _previewNotifier = ValueNotifier(
     null,
   );
   final ValueNotifier<double> _speedNotifier = ValueNotifier(1);
+  final ValueNotifier<ViewerZoomLevel> _zoomNotifier = ValueNotifier(
+    ViewerZoomLevel.fit,
+  );
   final ValueNotifier<ProjectSequenceCanvas?> _canvasNotifier = ValueNotifier(
     null,
   );
@@ -234,6 +273,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
   void dispose() {
     _previewNotifier.dispose();
     _speedNotifier.dispose();
+    _zoomNotifier.dispose();
     _canvasNotifier.dispose();
     _epoch++;
     WidgetsBinding.instance.removeObserver(this);
@@ -689,6 +729,41 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
     onSelected: (canvas) => unawaited(_setCanvas(canvas)),
   );
 
+  /// The viewer zoom is presentation only: it never changes a project value,
+  /// the revision or the frame the transport asks the runtime for.
+  void _setZoom(ViewerZoomLevel zoom) {
+    if (_zoom == zoom) return;
+    setState(() => _zoom = zoom);
+    _zoomNotifier.value = zoom;
+  }
+
+  Widget _zoomButton({bool fullscreen = false}) =>
+      PopupMenuButton<ViewerZoomLevel>(
+        key: ValueKey(fullscreen ? 'fullscreen-zoom' : 'preview-zoom'),
+        tooltip: 'Preview zoom',
+        initialValue: _zoom,
+        onSelected: _setZoom,
+        icon: const Icon(Icons.zoom_out_map, size: 18),
+        itemBuilder: (context) => [
+          for (final level in ViewerZoomLevel.values)
+            PopupMenuItem<ViewerZoomLevel>(
+              value: level,
+              child: Row(
+                children: [
+                  Icon(
+                    level == _zoom
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(level.label),
+                ],
+              ),
+            ),
+        ],
+      );
+
   Future<void> _openFullscreen() async {
     final preview = _preview;
     final textureId = _textureId;
@@ -703,6 +778,8 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
           preview: _previewNotifier,
           speed: _speedNotifier,
           canvas: _canvasNotifier,
+          zoom: _zoomNotifier,
+          onZoom: _setZoom,
           onClose: () => Navigator.of(dialogContext).pop(),
           onPlayPause: togglePlayPause,
           onSeekBy: seekBy,
@@ -776,6 +853,11 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
             fittedHeight = math.min(availableHeight, limitHeight);
             fittedWidth = fittedHeight * aspectRatio;
           }
+          final zoomScale = viewerZoomScale(
+            _zoom,
+            width.toDouble(),
+            fittedWidth,
+          );
           return SizedBox(
             key: const ValueKey('editor-viewer-preview'),
             width: fittedWidth,
@@ -787,86 +869,92 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                 borderRadius: BorderRadius.circular(OrRadii.small),
               ),
               clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (preview?.contentEnd == null)
-                    _viewerPlaceholder(
-                      icon: Icons.movie_outlined,
-                      message: widget.hasTimelineContent
-                          ? 'No clip at the playhead'
-                          : 'Drag a clip to the timeline to preview it',
-                    )
-                  else if (textureId != null)
-                    Texture(
-                      key: ValueKey('or-viewer-texture-$textureId'),
-                      textureId: textureId,
-                      filterQuality: FilterQuality.medium,
-                    )
-                  else
-                    _viewerPlaceholder(
-                      icon: hasSession
-                          ? Icons.error_outline
-                          : Icons.movie_outlined,
-                      message: hasSession
-                          ? 'Viewer texture unavailable'
-                          : 'Open a project to preview',
-                    ),
-                  if (widget.selectedTextClip != null &&
-                      widget.onCommitTextFormatting != null)
-                    ViewerCaptionOverlay(
-                      key: const ValueKey('viewer-caption-overlay'),
-                      canvasSize: Size(
-                        (preview?.width ?? 0).toDouble(),
-                        (preview?.height ?? 0).toDouble(),
+              child: Transform.scale(
+                key: const ValueKey('editor-viewer-zoom'),
+                scale: zoomScale,
+                alignment: Alignment.center,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (preview?.contentEnd == null)
+                      _viewerPlaceholder(
+                        icon: Icons.movie_outlined,
+                        message: widget.hasTimelineContent
+                            ? 'No clip at the playhead'
+                            : 'Drag a clip to the timeline to preview it',
+                      )
+                    else if (textureId != null)
+                      Texture(
+                        key: ValueKey('or-viewer-texture-$textureId'),
+                        textureId: textureId,
+                        filterQuality: FilterQuality.medium,
+                      )
+                    else
+                      _viewerPlaceholder(
+                        icon: hasSession
+                            ? Icons.error_outline
+                            : Icons.movie_outlined,
+                        message: hasSession
+                            ? 'Viewer texture unavailable'
+                            : 'Open a project to preview',
                       ),
-                      clip: widget.selectedTextClip!,
-                      onCommit: (formatting) => widget.onCommitTextFormatting!(
-                        widget.selectedTextClip!,
-                        formatting,
-                      ),
-                      enabled: !_busy,
-                    )
-                  else if (widget.selectedVisualSettings != null &&
-                      widget.onCommitTransform != null)
-                    ViewerTransformOverlay(
-                      key: const ValueKey('viewer-transform-overlay'),
-                      canvasSize: Size(
-                        (preview?.width ?? 0).toDouble(),
-                        (preview?.height ?? 0).toDouble(),
-                      ),
-                      settings: widget.selectedVisualSettings!,
-                      onCommit: widget.onCommitTransform!,
-                      enabled: !_busy,
-                    ),
-                  if (_busy)
-                    const Center(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: OrColors.backgroundRaised,
-                          border: Border.fromBorderSide(
-                            BorderSide(color: OrColors.border),
-                          ),
-                          borderRadius: BorderRadius.all(
-                            Radius.circular(OrRadii.small),
-                          ),
+                    if (widget.selectedTextClip != null &&
+                        widget.onCommitTextFormatting != null)
+                      ViewerCaptionOverlay(
+                        key: const ValueKey('viewer-caption-overlay'),
+                        canvasSize: Size(
+                          (preview?.width ?? 0).toDouble(),
+                          (preview?.height ?? 0).toDouble(),
                         ),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: OrSpacing.x2,
-                            vertical: OrSpacing.x1,
+                        clip: widget.selectedTextClip!,
+                        onCommit: (formatting) =>
+                            widget.onCommitTextFormatting!(
+                              widget.selectedTextClip!,
+                              formatting,
+                            ),
+                        enabled: !_busy,
+                      )
+                    else if (widget.selectedVisualSettings != null &&
+                        widget.onCommitTransform != null)
+                      ViewerTransformOverlay(
+                        key: const ValueKey('viewer-transform-overlay'),
+                        canvasSize: Size(
+                          (preview?.width ?? 0).toDouble(),
+                          (preview?.height ?? 0).toDouble(),
+                        ),
+                        settings: widget.selectedVisualSettings!,
+                        onCommit: widget.onCommitTransform!,
+                        enabled: !_busy,
+                      ),
+                    if (_busy)
+                      const Center(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: OrColors.backgroundRaised,
+                            border: Border.fromBorderSide(
+                              BorderSide(color: OrColors.border),
+                            ),
+                            borderRadius: BorderRadius.all(
+                              Radius.circular(OrRadii.small),
+                            ),
                           ),
-                          child: Text(
-                            'Updating preview',
-                            style: TextStyle(
-                              color: OrColors.textSecondary,
-                              fontSize: OrType.tinySize,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: OrSpacing.x2,
+                              vertical: OrSpacing.x1,
+                            ),
+                            child: Text(
+                              'Updating preview',
+                              style: TextStyle(
+                                color: OrColors.textSecondary,
+                                fontSize: OrType.tinySize,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -920,6 +1008,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _zoomButton(),
                       _canvasButton(),
                       IconButton(
                         key: const ValueKey('preview-fullscreen'),
@@ -1539,6 +1628,8 @@ class _FullscreenPreview extends StatefulWidget {
     required this.preview,
     required this.speed,
     required this.canvas,
+    required this.zoom,
+    required this.onZoom,
     required this.onClose,
     required this.onPlayPause,
     required this.onSeekBy,
@@ -1552,6 +1643,8 @@ class _FullscreenPreview extends StatefulWidget {
   final ValueListenable<ProjectPreviewState?> preview;
   final ValueListenable<double> speed;
   final ValueListenable<ProjectSequenceCanvas?> canvas;
+  final ValueListenable<ViewerZoomLevel> zoom;
+  final ValueChanged<ViewerZoomLevel> onZoom;
   final VoidCallback onClose;
   final VoidCallback onPlayPause;
   final ValueChanged<double> onSeekBy;
@@ -1658,21 +1751,42 @@ class _FullscreenPreviewState extends State<_FullscreenPreview> {
                     fit: StackFit.expand,
                     children: [
                       if (preview != null && preview.width > 0)
-                        Center(
-                          child: FittedBox(
-                            fit: BoxFit.contain,
-                            child: SizedBox(
-                              width: preview.width.toDouble(),
-                              height: preview.height.toDouble(),
-                              child: Texture(
-                                key: ValueKey(
-                                  'fullscreen-viewer-texture-${widget.textureId}',
-                                ),
-                                textureId: widget.textureId,
-                                filterQuality: FilterQuality.medium,
-                              ),
-                            ),
-                          ),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final fitScale = math.min(
+                              constraints.maxWidth / preview.width,
+                              constraints.maxHeight / preview.height,
+                            );
+                            return ValueListenableBuilder<ViewerZoomLevel>(
+                              valueListenable: widget.zoom,
+                              builder: (context, zoom, _) {
+                                final ratio = zoom.sourceRatio;
+                                final scale = ratio == null || fitScale <= 0
+                                    ? 1.0
+                                    : (ratio / fitScale).clamp(0.05, 8.0);
+                                return Center(
+                                  child: Transform.scale(
+                                    scale: scale,
+                                    alignment: Alignment.center,
+                                    child: FittedBox(
+                                      fit: BoxFit.contain,
+                                      child: SizedBox(
+                                        width: preview.width.toDouble(),
+                                        height: preview.height.toDouble(),
+                                        child: Texture(
+                                          key: ValueKey(
+                                            'fullscreen-viewer-texture-${widget.textureId}',
+                                          ),
+                                          textureId: widget.textureId,
+                                          filterQuality: FilterQuality.medium,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         )
                       else
                         const Center(
@@ -1697,6 +1811,39 @@ class _FullscreenPreviewState extends State<_FullscreenPreview> {
                             ignoring: !_visible,
                             child: Row(
                               children: [
+                                ValueListenableBuilder<ViewerZoomLevel>(
+                                  valueListenable: widget.zoom,
+                                  builder: (context, zoom, _) =>
+                                      PopupMenuButton<ViewerZoomLevel>(
+                                        key: const ValueKey('fullscreen-zoom'),
+                                        tooltip: 'Preview zoom',
+                                        initialValue: zoom,
+                                        onSelected: widget.onZoom,
+                                        iconColor: OrColors.text,
+                                        icon: const Icon(Icons.zoom_out_map),
+                                        itemBuilder: (context) => [
+                                          for (final level
+                                              in ViewerZoomLevel.values)
+                                            PopupMenuItem<ViewerZoomLevel>(
+                                              value: level,
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    level == zoom
+                                                        ? Icons
+                                                              .radio_button_checked
+                                                        : Icons
+                                                              .radio_button_unchecked,
+                                                    size: 16,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(level.label),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                ),
                                 ValueListenableBuilder<ProjectSequenceCanvas?>(
                                   valueListenable: widget.canvas,
                                   builder: (context, canvas, _) =>

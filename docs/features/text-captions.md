@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-10-30
+Last reviewed: 2026-11-01
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -73,7 +73,12 @@ update. The same fields are available without the GUI through
 - A plain local debug build does not ship the whisper runtime. `scripts/
   install_local_transcription_helpers.sh` copies a pinned `whisper-cli` and the
   rebuilt provider into the app bundle, re-signs it ad hoc, and can install a
-  verified small model; packaged Developer Preview builds include both binaries.
+  verified small model; packaged macOS builds include both binaries, and the
+  packaging script refuses an image that asks for them without them.
+- The picker says when a build has no local speech runtime and disables **Use
+  model** instead of offering a download that cannot run. With the runtime
+  present, every not-installed row carries a **Download** action; the dialog
+  still states the size, licence and source before transferring anything.
 
 ## Rules
 

@@ -40,15 +40,17 @@ if [[ "$rust_hash" != "$dart_hash" ]]; then
   exit 1
 fi
 
+app_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' "$APP/pubspec.yaml" | head -1)"
+marker_value="$rust_hash:$app_version"
 built_hash=""
 [[ -f "$MARKER" ]] && built_hash="$(cat "$MARKER")"
-if [[ "$built_hash" != "$rust_hash" ]]; then
-  echo "bridge hash changed ($built_hash -> $rust_hash): clearing the native-assets hook cache"
+if [[ "$built_hash" != "$marker_value" ]]; then
+  echo "bridge hash or app version changed ($built_hash -> $marker_value): clearing the native-assets hook cache"
   rm -rf "$APP/.dart_tool/hooks_runner/shared/or_app_bridge/build" "$APP/.dart_tool/flutter_build"
 fi
 
 (cd "$APP" && flutter --no-version-check build macos --release)
-printf '%s' "$rust_hash" > "$MARKER"
+printf '%s' "$marker_value" > "$MARKER"
 
 if [[ -n "$package_id" ]]; then
   # The packaged bundle carries the `or` CLI the assistant edits through, so it

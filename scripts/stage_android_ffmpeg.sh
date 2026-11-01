@@ -82,10 +82,10 @@ common_configure_args=(
   --disable-static --enable-shared --disable-programs --disable-doc
   --disable-autodetect --disable-everything --disable-asm --disable-avdevice
   --disable-avfilter --enable-protocol=file
-  --enable-demuxer=matroska,mov,wav,mp3,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe
-  --enable-muxer=matroska
-  --enable-decoder=ffv1,pcm_s16le,h264,aac,mp3,mp3float,vp9,opus,png,mjpeg,webp
-  --enable-parser=h264,aac,mp3 --enable-encoder=ffv1,pcm_s16le
+  --enable-demuxer=matroska,mov,wav,mp3,ogg,flac,aiff,avi,image2,image2pipe,png_pipe,jpeg_pipe,webp_pipe
+  --enable-muxer=matroska,mov,mp4
+  --enable-decoder=ffv1,pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le,pcm_s24be,pcm_s16be,h264,hevc,av1,vp8,vp9,prores,aac,mp3,mp3float,opus,vorbis,flac,alac,ac3,eac3,mpeg4,png,mjpeg,webp
+  --enable-parser=h264,hevc,av1,vp8,vp9,vorbis,flac,ac3,mpegaudio,aac,mp3 --enable-encoder=ffv1,pcm_s16le
 )
 # The shared WebM/VP9/Opus delivery profile, copied from
 # FFMPEG_EXPORT_CONFIGURE_ARGS.

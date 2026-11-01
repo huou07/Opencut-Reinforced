@@ -11,9 +11,10 @@ import '../production/editor_settings.dart';
 import '../production/narration_settings.dart';
 import '../production/narration_settings_dialog.dart';
 import '../project/project_gateway.dart';
+import '../updates/resource_center_panel.dart';
 import '../widgets/or_widgets.dart';
 
-enum _SettingsSection { appearance, general, advanced }
+enum SettingsSection { resources, appearance, general, advanced }
 
 typedef _Diagnostics = ({
   AppInfo appInfo,
@@ -28,19 +29,23 @@ class SettingsScreen extends StatefulWidget {
     required this.project,
     required this.onCopyDescriptor,
     required this.onOpenEditorPreview,
+    this.initialSection = SettingsSection.appearance,
+    this.onManageSpeechModels,
   });
 
   final CoreGateway gateway;
   final ProjectReadModel? project;
   final VoidCallback onCopyDescriptor;
   final VoidCallback onOpenEditorPreview;
+  final SettingsSection initialSection;
+  final VoidCallback? onManageSpeechModels;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  _SettingsSection _selected = _SettingsSection.appearance;
+  SettingsSection _selected = SettingsSection.appearance;
   late Future<_Diagnostics> _diagnostics = _loadDiagnostics();
   final NarrationSettingsStore _narrationStore = NarrationSettingsStore();
   final EditorSettingsStore _editorStore = EditorSettingsStore();
@@ -50,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    _selected = widget.initialSection;
     _loadNarration();
     _loadEditorSettings();
   }
@@ -129,7 +135,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      for (final section in _SettingsSection.values)
+                      for (final section in SettingsSection.values)
                         Padding(
                           padding: const EdgeInsets.only(right: OrSpacing.x2),
                           child: _SectionButton(
@@ -145,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final section in _SettingsSection.values)
+                    for (final section in SettingsSection.values)
                       Padding(
                         padding: const EdgeInsets.only(bottom: OrSpacing.x2),
                         child: _SectionButton(
@@ -183,10 +189,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _sectionContent() => switch (_selected) {
-    _SettingsSection.appearance => _appearanceSection(),
-    _SettingsSection.general => _generalSection(),
-    _SettingsSection.advanced => _advancedSection(),
+    SettingsSection.resources => _resourcesSection(),
+    SettingsSection.appearance => _appearanceSection(),
+    SettingsSection.general => _generalSection(),
+    SettingsSection.advanced => _advancedSection(),
   };
+
+  Widget _resourcesSection() {
+    return FutureBuilder<_Diagnostics>(
+      future: _diagnostics,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const OrPanel(
+            key: ValueKey('settings-resources'),
+            title: 'Resources & updates',
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: OrSpacing.x3),
+                Text('Reading this installation…'),
+              ],
+            ),
+          );
+        }
+        final version = snapshot.data?.appInfo.version ?? 'unknown';
+        return ResourceCenterPanel(
+          currentVersion: version,
+          onManageSpeechModels: widget.onManageSpeechModels,
+        );
+      },
+    );
+  }
 
   Widget _appearanceSection() {
     const swatches = [
@@ -442,15 +478,16 @@ class _SectionButton extends StatelessWidget {
     this.compact = false,
   });
 
-  final _SettingsSection section;
+  final SettingsSection section;
   final bool selected;
   final VoidCallback onTap;
   final bool compact;
 
   String get _label => switch (section) {
-    _SettingsSection.appearance => 'Appearance',
-    _SettingsSection.general => 'General',
-    _SettingsSection.advanced => 'Advanced / Developer',
+    SettingsSection.resources => 'Resources & updates',
+    SettingsSection.appearance => 'Appearance',
+    SettingsSection.general => 'General',
+    SettingsSection.advanced => 'Advanced / Developer',
   };
 
   @override

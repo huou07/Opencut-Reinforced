@@ -108,6 +108,20 @@ Map<String, dynamic> _applyFakeEdit(
             edit['fill'] ??
             {'red': 245, 'green': 245, 'blue': 245, 'alpha': 255},
       });
+    case 'apply_preset':
+      final animations = (scene['animations'] as List?) ?? <dynamic>[];
+      animations.removeWhere(
+        (animation) =>
+            (animation as Map<String, dynamic>)['node_id'] == id &&
+            animation['property'] == edit['property'],
+      );
+      animations.add({
+        'node_id': id,
+        'property': edit['property'],
+        'keyframes': edit['keyframes'],
+        'easing': edit['easing'],
+      });
+      scene['animations'] = animations;
   }
   return scene;
 }
@@ -163,19 +177,23 @@ List<MotionSceneNodeView> _fakeNodes(Map<String, dynamic> scene) {
   ];
 }
 
-MotionAssetEntryView _entry(String id, String name, String category) =>
-    MotionAssetEntryView(
-      assetId: id,
-      name: name,
-      category: category,
-      categorySource: 'filename',
-      kind: 'scene',
-      tags: const [],
-      canvasWidth: 1920,
-      canvasHeight: 1080,
-      durationMilliseconds: 4000,
-      previewPath: '',
-    );
+MotionAssetEntryView _entry(
+  String id,
+  String name,
+  String category, {
+  String kind = 'scene',
+}) => MotionAssetEntryView(
+  assetId: id,
+  name: name,
+  category: category,
+  categorySource: 'filename',
+  kind: kind,
+  tags: const [],
+  canvasWidth: 1920,
+  canvasHeight: 1080,
+  durationMilliseconds: 4000,
+  previewPath: '',
+);
 
 MotionAssetView _asset(String id, String name, String category) =>
     MotionAssetView(
@@ -220,6 +238,49 @@ MotionAssetView _asset(String id, String name, String category) =>
       ],
     );
 
+MotionAssetView _presetAsset(String id, String name) => MotionAssetView(
+  ok: true,
+  code: 'OK',
+  message: '',
+  assetId: id,
+  name: name,
+  category: 'motion',
+  categorySource: 'filename',
+  kind: 'motion',
+  tags: const [],
+  canvasWidth: 1920,
+  canvasHeight: 1080,
+  durationMilliseconds: 4000,
+  previewPath: '',
+  documentJson: jsonEncode({
+    'format': 'opencut-reinforced-motion-asset',
+    'schema_version': 1,
+    'asset_id': id,
+    'name': name,
+    'category': 'motion',
+    'category_source': 'filename',
+    'kind': 'motion',
+    'canvas': {'width': 1920, 'height': 1080},
+    'duration': {'numerator': 4, 'denominator': 1},
+    'parameters': [],
+    'preset': {
+      'property': 'opacity',
+      'keyframes': [
+        {
+          'at': {'numerator': 0, 'denominator': 1},
+          'value': 0,
+        },
+        {
+          'at': {'numerator': 1, 'denominator': 1},
+          'value': 1,
+        },
+      ],
+      'easing': 'ease_out',
+    },
+  }),
+  parameters: const [],
+);
+
 class _FakeMotionGateway implements MotionLibraryGateway {
   final List<String> insertedCategories = [];
   int removes = 0;
@@ -261,19 +322,30 @@ class _FakeMotionGateway implements MotionLibraryGateway {
             'background',
           ),
           _entry('0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f', 'Car', 'vehicle'),
+          _entry(
+            '9a1b2c3d-4e5f-4a6b-8c7d-6e5f4a3b2c1d',
+            'Fade in',
+            'motion',
+            kind: 'motion',
+          ),
         ],
       );
 
   @override
-  Future<MotionAssetView> load(String root, String assetId) async => _asset(
-    assetId,
-    assetId == '0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f'
-        ? 'Car'
-        : 'Mountain background',
-    assetId == '0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f'
-        ? 'vehicle'
-        : 'background',
-  );
+  Future<MotionAssetView> load(String root, String assetId) async {
+    if (assetId == '9a1b2c3d-4e5f-4a6b-8c7d-6e5f4a3b2c1d') {
+      return _presetAsset(assetId, 'Fade in');
+    }
+    return _asset(
+      assetId,
+      assetId == '0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f'
+          ? 'Car'
+          : 'Mountain background',
+      assetId == '0b9d2f6e-5c1a-4f3b-9d8e-7a6b5c4d3e2f'
+          ? 'vehicle'
+          : 'background',
+    );
+  }
 
   @override
   Future<MotionAssetView> save(
@@ -539,7 +611,7 @@ void main() {
     'the catalogue, values and composition are driven by the bridge',
     () async {
       final (controller, gateway, _) = await buildController();
-      expect(controller.entries, hasLength(2));
+      expect(controller.entries, hasLength(3));
       expect(controller.root, endsWith('motion-library'));
 
       await controller.select(controller.entries.first);
@@ -741,6 +813,25 @@ void main() {
       expect(gateway.edits.last['op'], 'delete');
       expect(controller.sceneNodes, hasLength(1));
       expect(controller.selectedNodeId, isNull);
+    },
+  );
+
+  test(
+    'a motion preset applies to the selected node through the edit path',
+    () async {
+      final (controller, gateway, _) = await buildController();
+      await controller.addTextNode(text: 'Fade target');
+      final preset = controller.entries.firstWhere(
+        (entry) => entry.kind == 'motion',
+      );
+      await controller.select(preset);
+      expect(controller.selected?.kind, 'motion');
+
+      await controller.applySelectedPresetToNode();
+      expect(gateway.edits.last['op'], 'apply_preset');
+      expect(gateway.edits.last['node_id'], 'text-1');
+      expect(gateway.edits.last['property'], 'opacity');
+      expect(controller.error, isNull);
     },
   );
 
@@ -1123,10 +1214,10 @@ void main() {
     'the library deletes and adds a multi-selection in one action',
     () async {
       final (controller, gateway, _) = await buildController();
-      expect(controller.entries, hasLength(2));
+      expect(controller.entries, hasLength(3));
 
       controller.toggleAssetSelection(controller.entries.first.assetId);
-      controller.toggleAssetSelection(controller.entries.last.assetId);
+      controller.toggleAssetSelection(controller.entries[1].assetId);
       expect(controller.selectedAssetIds, hasLength(2));
 
       await controller.deleteSelectedAssets();
@@ -1135,7 +1226,7 @@ void main() {
       expect(controller.notice, contains('2 assets'));
 
       controller.toggleAssetSelection(controller.entries.first.assetId);
-      controller.toggleAssetSelection(controller.entries.last.assetId);
+      controller.toggleAssetSelection(controller.entries[1].assetId);
       await controller.addSelectedAssetsToScene();
       expect(gateway.appends, 2);
       expect(controller.hasDraft, isTrue);
@@ -1178,7 +1269,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('motion-library-select-all')));
     await tester.pump();
     expect(find.byKey(const ValueKey('motion-library-bulk')), findsOneWidget);
-    expect(controller.selectedAssetIds, hasLength(2));
+    expect(controller.selectedAssetIds, hasLength(3));
 
     await tester.tap(find.byKey(const ValueKey('motion-library-bulk-clear')));
     await tester.pump();

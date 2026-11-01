@@ -1,6 +1,6 @@
 # Tooling Inventory
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-01
 
 Scope: the scripts and machine-local tools an agent uses, and what each is for.
 Host-specific commands are in [operations/local-macos.md](../operations/local-macos.md).
@@ -16,6 +16,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/packaged_drive.py` | CoreGraphics mouse/keyboard driving of the packaged app |
 | `scripts/bench_quality.py` | local performance budget rows |
 | `scripts/build_macos_release.sh` | build/package/codesign the macOS bundle with bridge hash check; a packaged local bundle also carries the `or` CLI the assistant edits through |
+| `scripts/stage_macos_ffmpeg.sh` | build the pinned LGPL FFmpeg 8.1.3 prefix (codec sources, packaged helpers, VideoToolbox) that macOS app packaging consumes |
 | `scripts/check_doc_links.py`, `scripts/check_doc_freshness.sh`, `scripts/check_claims.py` | documentation and claim gates |
 | `scripts/check_or_core_deps.py` | keeps `or_core` free of GPU/media/audio/text/AI dependencies |
 | `scripts/run_local_lane.sh`, `scripts/run_android_lane.sh` | platform lanes for future/other-platform work |
