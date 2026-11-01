@@ -638,6 +638,53 @@ class MotionLibraryController extends ChangeNotifier {
     offsetY: offsetY,
   );
 
+  /// Applies the selected motion-kind asset to the one selected canvas node.
+  ///
+  /// A preset is a property track, not a scene body, so it cannot be appended;
+  /// it replaces the node's existing track for that property through the same
+  /// validated scene-edit path every other gesture uses.
+  Future<void> applySelectedPresetToNode() async {
+    final asset = _selected;
+    final node = selectedNode;
+    if (asset == null || asset.kind != 'motion') return;
+    if (_draftSceneJson == null) {
+      _error = 'Add an object to the composition before applying a preset.';
+      _notify();
+      return;
+    }
+    if (node == null) {
+      _error = 'Select exactly one object on the canvas first.';
+      _notify();
+      return;
+    }
+    Object? preset;
+    try {
+      final document = jsonDecode(asset.documentJson);
+      if (document is Map) preset = document['preset'];
+    } on FormatException {
+      preset = null;
+    }
+    if (preset is! Map) {
+      _error = 'This motion asset carries no preset.';
+      _notify();
+      return;
+    }
+    final keyframes = preset['keyframes'];
+    final property = preset['property'];
+    if (keyframes is! List || property is! String) {
+      _error = 'This motion preset is incomplete.';
+      _notify();
+      return;
+    }
+    await _applyEdit({
+      'op': 'apply_preset',
+      'node_id': node.nodeId,
+      'property': property,
+      'keyframes': keyframes,
+      'easing': preset['easing'] ?? 'linear',
+    });
+  }
+
   Future<void> _appendToScene({
     required String assetId,
     required String valuesJson,
@@ -1108,7 +1155,18 @@ class MotionLibraryController extends ChangeNotifier {
   /// they do not land on top of each other.
   Future<void> addSelectedAssetsToScene() async {
     if (_selectedAssetIds.isEmpty) return;
-    final ids = _selectedAssetIds.toList();
+    final ids = _selectedAssetIds
+        .where(
+          (id) => entries.any(
+            (entry) => entry.assetId == id && entry.kind != 'motion',
+          ),
+        )
+        .toList();
+    if (ids.isEmpty) {
+      _error = 'A motion preset applies to a selected object, not to the composition.';
+      _notify();
+      return;
+    }
     final canvas = canvasSize;
     for (var index = 0; index < ids.length; index++) {
       await addAssetFromLibrary(

@@ -646,16 +646,23 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                       : () => unawaited(_editSavedScene(entry)),
                   icon: const Icon(Icons.edit_outlined),
                 ),
-              const Icon(
-                Icons.drag_indicator,
-                size: 14,
-                color: OrColors.textMuted,
-              ),
+              if (entry.kind != 'motion')
+                const Icon(
+                  Icons.drag_indicator,
+                  size: 14,
+                  color: OrColors.textMuted,
+                ),
             ],
           ),
         ),
       ),
     );
+    if (entry.kind == 'motion') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: OrSpacing.x1),
+        child: tile,
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: OrSpacing.x1),
       child: Draggable<MotionAssetDragData>(
@@ -865,29 +872,38 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
           for (final parameter in asset.parameters)
             _parameterControl(asset, parameter),
           const SizedBox(height: OrSpacing.x2),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  key: const ValueKey('motion-insert-selected'),
-                  onPressed: controller.busy
-                      ? null
-                      : () => _insert(draft: false),
-                  child: const Text('Add to timeline'),
+          if (asset.kind == 'motion')
+            FilledButton(
+              key: const ValueKey('motion-apply-preset'),
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(controller.applySelectedPresetToNode()),
+              child: const Text('Apply to selected object'),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    key: const ValueKey('motion-insert-selected'),
+                    onPressed: controller.busy
+                        ? null
+                        : () => _insert(draft: false),
+                    child: const Text('Add to timeline'),
+                  ),
                 ),
-              ),
-              const SizedBox(width: OrSpacing.x2),
-              Expanded(
-                child: OutlinedButton(
-                  key: const ValueKey('motion-add-to-scene'),
-                  onPressed: controller.busy
-                      ? null
-                      : () => unawaited(controller.addSelectedToScene()),
-                  child: const Text('Add to scene'),
+                const SizedBox(width: OrSpacing.x2),
+                Expanded(
+                  child: OutlinedButton(
+                    key: const ValueKey('motion-add-to-scene'),
+                    onPressed: controller.busy
+                        ? null
+                        : () => unawaited(controller.addSelectedToScene()),
+                    child: const Text('Add to scene'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(

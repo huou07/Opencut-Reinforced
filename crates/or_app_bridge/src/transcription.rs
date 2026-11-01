@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     env,
+    ffi::OsStr,
     fs::{self, DirBuilder, File, OpenOptions},
     io::{self, BufReader, Read, Write},
     path::{Path, PathBuf},
@@ -970,8 +971,28 @@ fn helper_path(environment_name: &str, binary_name: &str) -> PathBuf {
         if packaged.is_file() {
             return packaged;
         }
+        // A macOS helper staged under Resources is still part of the bundle;
+        // accept it so packaging can choose either the executable folder or the
+        // resource folder without the app silently losing the runtime.
+        if let Some(resources) = directory.parent().map(|parent| parent.join("Resources")) {
+            let packaged = resources.join(&file_name);
+            if packaged.is_file() {
+                return packaged;
+            }
+        }
+    }
+    if let Some(found) = env::var_os("PATH").and_then(|path| helper_on_path(&file_name, &path)) {
+        return found;
     }
     PathBuf::from(file_name)
+}
+
+/// Finds an executable on a PATH-shaped list. Split out so the lookup can be
+/// tested without mutating this process's environment.
+fn helper_on_path(file_name: &str, path: &OsStr) -> Option<PathBuf> {
+    env::split_paths(path)
+        .map(|directory| directory.join(file_name))
+        .find(|candidate| candidate.is_file())
 }
 
 fn read_bounded(path: &Path, limit: usize) -> io::Result<Vec<u8>> {
@@ -1098,6 +1119,21 @@ mod tests {
             service.remove_model("whisper-base-multilingual"),
             Err(TranscriptionServiceError::ModelNotInstalled)
         ));
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn helper_lookup_searches_path_without_mutating_the_process_environment() {
+        let root = temporary_model_root();
+        fs::create_dir_all(&root).unwrap();
+        let binary = root.join("whisper-cli-test");
+        File::create(&binary).unwrap();
+        let path = env::join_paths([root.as_path()]).unwrap();
+        assert_eq!(
+            helper_on_path("whisper-cli-test", &path),
+            Some(binary.clone())
+        );
+        assert!(helper_on_path("missing-helper", &path).is_none());
         fs::remove_dir_all(root).ok();
     }
 

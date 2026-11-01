@@ -16,8 +16,9 @@
 //! the UI uses to draw its handles.
 
 use crate::{
-    MAX_MOTION_NODES, MAX_MOTION_TEXT_BYTES, MotionCanvas, MotionColor, MotionNode, MotionNodeKind,
-    MotionPoint, MotionProperty, MotionScene, MotionSize, validate_scene,
+    MAX_MOTION_KEYFRAMES, MAX_MOTION_NODES, MAX_MOTION_TEXT_BYTES, MotionAnimation, MotionCanvas,
+    MotionColor, MotionEasing, MotionKeyframe, MotionNode, MotionNodeKind, MotionPoint,
+    MotionProperty, MotionScene, MotionSize, validate_scene,
 };
 use or_core::RationalTime;
 use serde::{Deserialize, Serialize};
@@ -107,6 +108,16 @@ pub enum MotionSceneEdit {
         font_size: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fill: Option<MotionColor>,
+    },
+    /// Applies one reusable motion preset to an existing node. A preset is a
+    /// property track, so an existing animation for the same property is
+    /// replaced rather than duplicated.
+    ApplyPreset {
+        node_id: String,
+        property: MotionProperty,
+        keyframes: Vec<MotionKeyframe>,
+        #[serde(default)]
+        easing: MotionEasing,
     },
 }
 
@@ -552,6 +563,35 @@ pub fn apply_scene_edit(
                 opacity: None,
                 rotation_degrees: None,
                 spans: None,
+            });
+        }
+        MotionSceneEdit::ApplyPreset {
+            node_id,
+            property,
+            keyframes,
+            easing,
+        } => {
+            if keyframes.is_empty() {
+                return Err(MotionSceneEditError::InvalidValue(
+                    "a motion preset needs at least one keyframe".to_owned(),
+                ));
+            }
+            if keyframes.len() > MAX_MOTION_KEYFRAMES {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "a motion preset may hold at most {MAX_MOTION_KEYFRAMES} keyframes"
+                )));
+            }
+            if find_node_mut(&mut next.nodes, node_id).is_none() {
+                return Err(MotionSceneEditError::UnknownNode(node_id.clone()));
+            }
+            next.animations.retain(|animation| {
+                !(animation.node_id == *node_id && animation.property == *property)
+            });
+            next.animations.push(MotionAnimation {
+                node_id: node_id.clone(),
+                property: *property,
+                keyframes: keyframes.clone(),
+                easing: *easing,
             });
         }
     }
@@ -1450,5 +1490,52 @@ mod tests {
         assert_eq!(boxes[2].stroke, Some(red()));
         assert_eq!(boxes[2].stroke_width, 6.0);
         assert_eq!(boxes[2].rotation_degrees, -30.0);
+    }
+
+    #[test]
+    fn a_preset_applies_to_a_node_and_replaces_its_existing_track() {
+        let preset = MotionSceneEdit::ApplyPreset {
+            node_id: "title".to_owned(),
+            property: MotionProperty::Opacity,
+            keyframes: vec![
+                MotionKeyframe {
+                    at: RationalTime::ZERO,
+                    value: 1.0,
+                },
+                MotionKeyframe {
+                    at: RationalTime::new(2, 1).unwrap(),
+                    value: 0.0,
+                },
+            ],
+            easing: MotionEasing::EaseInOut,
+        };
+        let edited = apply_scene_edit(&scene(), &preset).unwrap();
+        assert_eq!(edited.animations.len(), 1);
+        assert_eq!(edited.animations[0].node_id, "title");
+        assert_eq!(edited.animations[0].property, MotionProperty::Opacity);
+        assert_eq!(edited.animations[0].easing, MotionEasing::EaseInOut);
+
+        let replaced = apply_scene_edit(&edited, &preset).unwrap();
+        assert_eq!(replaced.animations.len(), 1);
+        assert_eq!(replaced.animations[0].keyframes.len(), 2);
+
+        let missing = apply_scene_edit(
+            &scene(),
+            &MotionSceneEdit::ApplyPreset {
+                node_id: "missing".to_owned(),
+                property: MotionProperty::Opacity,
+                keyframes: preset_keyframes(),
+                easing: MotionEasing::Linear,
+            },
+        )
+        .unwrap_err();
+        assert_eq!(missing.code(), "MOTION_EDIT_UNKNOWN_NODE");
+    }
+
+    fn preset_keyframes() -> Vec<MotionKeyframe> {
+        vec![MotionKeyframe {
+            at: RationalTime::ZERO,
+            value: 1.0,
+        }]
     }
 }

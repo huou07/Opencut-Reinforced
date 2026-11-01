@@ -1,6 +1,6 @@
 # Feature — Motion Assets and Library
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-01
 
 Scope: the reusable MotionAsset document, its deterministic classifier, the
 app-level library, the Motion surface and the timeline/agent insertion paths
@@ -34,7 +34,7 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `asset_id`, `name`, `category`,
 | `scene` | `scene` body: assets, nodes, animations | instantiate as a whole scene |
 | `fragment` | `scene` body | instantiate with ids remapped by the asset id |
 | `image` | `image` reference plus a `scene` body with an image node | instantiate as a full-canvas cutout with opacity/width/height/rotation parameters |
-| `motion` | `preset`: property, keyframes, easing | catalogued and validated; applying it to a node is not implemented yet |
+| `motion` | `preset`: property, keyframes, easing | applied to the selected canvas node through `apply_preset`, replacing that property's existing track |
 
 The `scene` body is validated by the same node, asset and animation rules as a
 MotionScene. An image asset's scene body must carry an asset whose id equals the

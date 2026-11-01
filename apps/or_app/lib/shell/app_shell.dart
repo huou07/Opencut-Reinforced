@@ -205,6 +205,7 @@ class _AppShellState extends State<AppShell> {
   bool _ownsAssistant = false;
   bool _assistantSyncScheduled = false;
   AppDestination _destination = AppDestination.home;
+  SettingsSection _settingsInitialSection = SettingsSection.appearance;
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
@@ -716,6 +717,7 @@ class _AppShellState extends State<AppShell> {
       onOpenProject: _openProject,
       onOpenRecentProject: _openRecentProject,
       onOpenProjects: () => _select(AppDestination.projects),
+      onOpenResources: _openResources,
     ),
     AppDestination.projects => ProjectsScreen(
       project: _activeProject,
@@ -736,6 +738,8 @@ class _AppShellState extends State<AppShell> {
       project: _activeProject,
       onCopyDescriptor: _copyDescriptorPath,
       onOpenEditorPreview: () => _select(AppDestination.editorPreview),
+      initialSection: _settingsInitialSection,
+      onManageSpeechModels: _activeSession == null ? null : _manageSpeechModel,
     ),
     AppDestination.editorPreview =>
       _activeSession == null
@@ -856,7 +860,19 @@ class _AppShellState extends State<AppShell> {
   };
 
   void _select(AppDestination destination) {
-    setState(() => _destination = destination);
+    setState(() {
+      if (destination == AppDestination.settings) {
+        _settingsInitialSection = SettingsSection.appearance;
+      }
+      _destination = destination;
+    });
+  }
+
+  void _openResources() {
+    setState(() {
+      _settingsInitialSection = SettingsSection.resources;
+      _destination = AppDestination.settings;
+    });
   }
 
   Future<void> _openCommandPalette() => showOrCommandPalette(
@@ -2463,6 +2479,9 @@ class _AppShellState extends State<AppShell> {
             BigInt.zero,
             (sum, model) => sum + model.sizeBytes,
           );
+          final providerAvailable = catalog.any(
+            (model) => model.providerAvailable,
+          );
           return AlertDialog(
             title: const Text('Speech model'),
             content: SizedBox(
@@ -2477,6 +2496,18 @@ class _AppShellState extends State<AppShell> {
                     'especially for Vietnamese. '
                     '${installed.isEmpty ? 'No model is installed yet.' : 'Installed: ${_speechModelBytes(installedBytes)} across ${installed.length} ${installed.length == 1 ? 'model' : 'models'}.'}',
                   ),
+                  if (!providerAvailable) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'This build does not include the local speech runtime, so '
+                      'models cannot be downloaded or run here. Reinstall the '
+                      'packaged app or install the local transcription helpers.',
+                      key: const ValueKey('speech-model-runtime-missing'),
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 420),
@@ -2501,11 +2532,72 @@ class _AppShellState extends State<AppShell> {
                               ),
                               subtitle: Text(
                                 '${_speechModelSize(model)} · '
-                                '${model.installed ? 'Installed' : 'Download needed'} · '
+                                '${!model.providerAvailable
+                                    ? 'Not available in this build'
+                                    : model.installed
+                                    ? 'Installed'
+                                    : 'Download needed'} · '
                                 '${model.license}',
                               ),
-                              trailing: model.installed
-                                  ? IconButton(
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!model.installed &&
+                                      model.providerAvailable)
+                                    IconButton(
+                                      key: ValueKey(
+                                        'speech-model-download-${model.modelId}',
+                                      ),
+                                      tooltip: 'Download model',
+                                      icon: const Icon(
+                                        Icons.download_outlined,
+                                        size: 20,
+                                      ),
+                                      onPressed: () async {
+                                        try {
+                                          final downloaded =
+                                              await _downloadSpeechModel(
+                                                session,
+                                                modelId: model.modelId,
+                                              );
+                                          if (downloaded == null ||
+                                              !dialogContext.mounted) {
+                                            return;
+                                          }
+                                          final refreshed = await widget
+                                              .projectGateway
+                                              .transcriptionModels(session);
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(() {
+                                            catalog = refreshed;
+                                            choice = catalog.firstWhere(
+                                              (candidate) =>
+                                                  candidate.modelId ==
+                                                  downloaded.modelId,
+                                              orElse: () => catalog.first,
+                                            );
+                                            errorText = '';
+                                          });
+                                        } on ProjectGatewayException catch (
+                                          error
+                                        ) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText = error.message,
+                                          );
+                                        } catch (error) {
+                                          if (!dialogContext.mounted) return;
+                                          setDialogState(
+                                            () => errorText =
+                                                speechModelFailureMessage(
+                                                  error,
+                                                ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  if (model.installed)
+                                    IconButton(
                                       key: ValueKey(
                                         'speech-model-remove-${model.modelId}',
                                       ),
@@ -2576,8 +2668,12 @@ class _AppShellState extends State<AppShell> {
                                           );
                                         }
                                       },
-                                    )
-                                  : null,
+                                    ),
+                                  if (!model.installed &&
+                                      !model.providerAvailable)
+                                    const Icon(Icons.block, size: 20),
+                                ],
+                              ),
                               onTap: () => setDialogState(() => choice = model),
                             ),
                         ],
@@ -2603,7 +2699,10 @@ class _AppShellState extends State<AppShell> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(choice),
+                key: const ValueKey('speech-model-use'),
+                onPressed: choice.providerAvailable
+                    ? () => Navigator.of(dialogContext).pop(choice)
+                    : null,
                 child: const Text('Use model'),
               ),
             ],

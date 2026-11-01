@@ -16,6 +16,7 @@ class HomeScreen extends StatelessWidget {
     required this.recentProjectsLoaded,
     required this.recentProjectsUnavailable,
     required this.onOpenRecentProject,
+    required this.onOpenResources,
   });
 
   final bool canPickProjects;
@@ -26,6 +27,7 @@ class HomeScreen extends StatelessWidget {
   final bool recentProjectsLoaded;
   final bool recentProjectsUnavailable;
   final ValueChanged<RecentProject> onOpenRecentProject;
+  final VoidCallback onOpenResources;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +75,12 @@ class HomeScreen extends StatelessWidget {
                   reason: androidMessage,
                   onPressed: onOpenProject,
                 ),
+              OutlinedButton.icon(
+                key: const ValueKey('home-resources'),
+                onPressed: onOpenResources,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('Resources & updates'),
+              ),
             ],
           ),
           const SizedBox(height: OrSpacing.x8),

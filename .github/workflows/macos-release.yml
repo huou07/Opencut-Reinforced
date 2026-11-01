@@ -46,8 +46,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install ffmpeg pkg-config
-          prefix="$(brew --prefix ffmpeg)"
+          brew install cmake nasm pkg-config xz
+
+      - name: Build pinned LGPL FFmpeg 8.1.3 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/ffmpeg-install"
+          scripts/stage_macos_ffmpeg.sh --prefix "$prefix" --work "$RUNNER_TEMP/ffmpeg-build"
+          mkdir -p apps/or_app/.dart_tool
+          ln -sfn "$prefix" apps/or_app/.dart_tool/macos-ffmpeg-install
           echo "OR_FFMPEG_PREFIX=$prefix" >> "$GITHUB_ENV"
           echo "FFMPEG_DIR=$prefix" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$prefix/lib/pkgconfig" >> "$GITHUB_ENV"
@@ -63,22 +71,54 @@ jobs:
           flutter test --no-pub
 
       - name: Test the IPC and bridge contracts
+        shell: bash
+        env:
+          DYLD_LIBRARY_PATH: ${{ env.FFMPEG_DIR }}/lib
         run: |
           cargo test -p or_ipc
           cargo test -p or_app_bridge --lib
+          cargo test -p or_media --lib
+
+      - name: Build pinned local transcription runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/whisper.cpp-1.9.4"
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git "$source"
+          test "$(git -C "$source" rev-parse HEAD)" = 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S "$source" -B "$source/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DGGML_NATIVE=OFF
+          cmake --build "$source/build" --config Release --target whisper-cli -j 2
+          cargo build --locked --release -p or_whisper_provider
+          "$source/build/bin/whisper-cli" --version
+          echo "OR_WHISPER_CLI_PATH=$source/build/bin/whisper-cli" >> "$GITHUB_ENV"
+          echo "OR_WHISPER_PROVIDER_PATH=$GITHUB_WORKSPACE/target/release/or-whisper-provider" >> "$GITHUB_ENV"
+          echo "OR_WHISPER_LICENSE_PATH=$source/LICENSE" >> "$GITHUB_ENV"
 
       - name: Build the Apple Silicon disk image
         shell: bash
         run: |
           set -euo pipefail
           scripts/build_macos_dmg.sh
-          ls -lh dist/*.dmg
+          (cd dist && shasum -a 256 *.dmg > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+          ls -lh dist/*.dmg dist/SHA256SUMS.txt
 
       - name: Upload the disk image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: opencut-reinforced-macos-arm64
-          path: dist/*.dmg
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
           retention-days: 14
 
       - name: Publish the GitHub release
@@ -92,10 +132,40 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           if [[ "$tag" != v* ]]; then tag="v${version}"; fi
           dmg="$(ls dist/*.dmg | head -1)"
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "Opencut Reinforced $version is an Apple Silicon macOS build."
+            echo
+            echo "## Install"
+            echo "If you are updating from 0.1.1, download this image once manually;"
+            echo "the in-app updater starts with 0.1.2. The 0.1.1 image carried an"
+            echo "incompatible FFmpeg build, so 0.1.2 is a required repair."
+            echo
+            echo "Open the DMG, drag **Opencut Reinforced** into Applications, then"
+            echo "right-click the app once and choose **Open**. The build is ad-hoc"
+            echo "signed, not notarized, so macOS asks for this first-launch confirmation."
+            echo
+            echo "## What is included"
+            echo "FFmpeg 8.1.3 (LGPL), the local speech runtime, the or CLI and the"
+            echo "app workspace are bundled. Speech models and an assistant harness are"
+            echo "optional downloads; use Settings -> Resources & updates for the"
+            echo "current status, model manager, harness link and update check."
+            echo
+            echo "## Verify the download"
+            echo "SHA256SUMS.txt is attached to this release."
+            echo
+            echo "## Requirements"
+            echo "macOS 13 or later on Apple Silicon. No terminal, Homebrew or separate"
+            echo "FFmpeg installation is required."
+            echo
+            echo "## Known limitations"
+            echo "The assistant harness (for example DeepSeek Harness) is a separate"
+            echo "install. Speech models download on demand. This build is not notarized."
+          } > "$notes"
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "$dmg" --clobber
+            gh release upload "$tag" "$dmg" dist/SHA256SUMS.txt --clobber
           else
-            gh release create "$tag" "$dmg" \
+            gh release create "$tag" "$dmg" dist/SHA256SUMS.txt \
               --title "Opencut Reinforced $version" \
-              --notes "Apple Silicon macOS build. Drag the app to Applications, then right-click it once and choose Open. No terminal or separate setup is required; the assistant workspace is installed on first launch and companion engines can be downloaded inside the app."
+              --notes-file "$notes"
           fi

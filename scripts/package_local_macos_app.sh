@@ -37,6 +37,22 @@ for helper in ffmpeg ffprobe; do
 done
 
 mkdir -p "$frameworks" "$runtime_dir" "$helpers"
+# Start from a clean FFmpeg surface. A previous package may have left another
+# ABI (or a GPL build's codec libraries) in these folders, and loading is by
+# install name: a stale libavcodec beside a newly linked one is a runtime error
+# waiting for the next rebuild.
+for directory in "$runtime_dir" "$frameworks"; do
+  rm -f "$directory"/libavcodec*.dylib "$directory"/libavformat*.dylib \
+    "$directory"/libavutil*.dylib "$directory"/libswresample*.dylib \
+    "$directory"/libswscale*.dylib "$directory"/libavfilter*.dylib \
+    "$directory"/libavdevice*.dylib "$directory"/libx264*.dylib \
+    "$directory"/libx265*.dylib "$directory"/libSvtAv1Enc*.dylib \
+    "$directory"/libvpx*.dylib "$directory"/libopus*.dylib \
+    "$directory"/libdav1d*.dylib "$directory"/libmp3lame*.dylib \
+    "$directory"/libvmaf*.dylib "$directory"/libmpg123*.dylib \
+    "$directory"/libssl*.dylib "$directory"/libcrypto*.dylib \
+    "$directory"/liblzma*.dylib
+done
 # libavdevice is optional: the minimal LGPL build the app links does not carry
 # it, while a Homebrew FFmpeg's `ffmpeg` CLI does. Packaging either build must
 # work, so the pattern is copied when present and skipped when absent.
@@ -169,6 +185,135 @@ bundle_external_dependencies() {
 
 bundle_external_dependencies
 
+# The app refuses to run media unless the loaded runtime reports the approved
+# license, so packaging must prove it here rather than ship a GPL build that
+# fails the first time a user opens the viewer or exports. libavutil has no
+# non-system dependencies, which makes a ctypes load safe at package time.
+bundled_license="$(python3 - "$frameworks/libavutil.dylib" <<'PY'
+import ctypes
+import sys
+
+library = ctypes.CDLL(sys.argv[1])
+library.avutil_license.restype = ctypes.c_char_p
+print(library.avutil_license().decode())
+PY
+)" || fail "could not read the bundled FFmpeg license"
+[[ "$bundled_license" == "LGPL version 2.1 or later" ]] || \
+  fail "bundled FFmpeg is not the approved LGPL 2.1-or-later build: $bundled_license"
+
+# Optional local transcription runtime. The release pipeline builds a pinned
+# whisper.cpp and the provider adapter and points these variables at them; a
+# local release bundle may reuse a debug bundle's helpers. Packaging is not
+# allowed to silently omit the runtime when the caller asked for it.
+whisper_cli="${OR_WHISPER_CLI_PATH:-}"
+whisper_provider="${OR_WHISPER_PROVIDER_PATH:-}"
+whisper_license="${OR_WHISPER_LICENSE_PATH:-}"
+if [[ -n "$whisper_cli" || -n "$whisper_provider" ]]; then
+  [[ -n "$whisper_cli" && -n "$whisper_provider" ]] || \
+    fail "set both OR_WHISPER_CLI_PATH and OR_WHISPER_PROVIDER_PATH"
+  [[ -x "$whisper_cli" ]] || fail "whisper CLI is missing or not executable: $whisper_cli"
+  [[ -x "$whisper_provider" ]] || fail "whisper provider is missing or not executable: $whisper_provider"
+  install -m 755 "$whisper_cli" "$helpers/whisper-cli"
+  install -m 755 "$whisper_provider" "$helpers/or-whisper-provider"
+  notices="$app/Contents/Resources/ThirdPartyNotices/whisper.cpp"
+  mkdir -p "$notices"
+  if [[ -n "$whisper_license" && -f "$whisper_license" ]]; then
+    cp "$whisper_license" "$notices/LICENSE"
+  else
+    cat > "$notices/LICENSE" <<'EOF'
+MIT License
+
+Copyright (c) 2023-2024 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+  fi
+  cat > "$notices/NOTICE.txt" <<'EOF'
+whisper.cpp v1.9.4 is distributed under the included MIT license. The
+whisper-cli helper is built from that pinned source; the OR provider adapter is
+built from this repository. Model weights are not bundled and are downloaded
+only after the user confirms the size, source and licence in the app.
+EOF
+  env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH \
+    -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
+    "$helpers/whisper-cli" --version >/dev/null
+  test -x "$helpers/or-whisper-provider"
+elif [[ "${OR_REQUIRE_TRANSCRIPTION:-0}" == "1" ]]; then
+  fail "OR_REQUIRE_TRANSCRIPTION=1 but no whisper helpers were supplied"
+fi
+
+# Keep the FFmpeg licence notice with the libraries this bundle relocates. The
+# app dynamically links FFmpeg, so the LGPL text and an accurate notice must
+# travel with the packaged artifact rather than only living in the build tree.
+ffmpeg_notices="$app/Contents/Resources/ThirdPartyNotices/FFmpeg"
+mkdir -p "$ffmpeg_notices"
+if [[ -f "$ffmpeg_prefix/COPYING.LGPLv2.1" ]]; then
+  cp "$ffmpeg_prefix/COPYING.LGPLv2.1" "$ffmpeg_notices/COPYING.LGPLv2.1"
+fi
+if [[ -d "$ffmpeg_prefix/ThirdPartyNotices" ]]; then
+  cp -R "$ffmpeg_prefix/ThirdPartyNotices/." "$app/Contents/Resources/ThirdPartyNotices/"
+fi
+cat > "$ffmpeg_notices/FFmpeg-NOTICE.txt" <<'EOF'
+This application dynamically links FFmpeg under LGPL-2.1-or-later.
+FFmpeg shared libraries are separate files beside the Rust bridge and may be
+replaced with a compatible LGPL-compliant build under the applicable license
+terms. The ffmpeg and ffprobe programs beside the application binary are built
+from the same source and configuration for import, media previews and WebM
+export. FFmpeg's WebM export statically links libvpx and libopus.
+EOF
+
+# A bundle built on a newer Mac must still launch on the documented minimum.
+# clang records the SDK's default deployment target in every Mach-O; without
+# this gate a locally built FFmpeg/whisper helper silently raises the app's
+# minimum macOS version even though the Xcode project says 13.0.
+python3 - "$app" "${OR_MACOS_DEPLOYMENT_TARGET:-13.0}" <<'PY'
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+bundle = Path(sys.argv[1])
+target = tuple(int(part) for part in sys.argv[2].split(".")[:2])
+for path in sorted(bundle.rglob("*")):
+    if not path.is_file() or path.is_symlink():
+        continue
+    kind = subprocess.run(
+        ["file", "-b", str(path)], capture_output=True, text=True
+    ).stdout
+    if "Mach-O" not in kind:
+        continue
+    output = subprocess.run(
+        ["otool", "-l", str(path)], capture_output=True, text=True
+    ).stdout
+    minimums = re.findall(r"LC_BUILD_VERSION.*?\n.*?minos\s+([0-9.]+)", output, re.S)
+    minimums += re.findall(
+        r"LC_VERSION_MIN_MACOSX.*?\n.*?version\s+([0-9.]+)", output, re.S
+    )
+    for minimum in minimums:
+        actual = tuple(int(part) for part in minimum.split(".")[:2])
+        if actual > target:
+            raise SystemExit(
+                f"{path.relative_to(bundle)} requires macOS {minimum}, "
+                f"expected {sys.argv[2]} or earlier"
+            )
+PY
+
 codesign --force --deep --sign - --timestamp=none --preserve-metadata=entitlements "$app"
 codesign --verify --deep --strict "$app"
 # The Developer Preview runs unsandboxed: the in-editor assistant starts the
@@ -219,6 +364,15 @@ encoders="$(env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH \
   "$helpers/ffmpeg" -hide_banner -encoders)"
 printf '%s\n' "$encoders" | grep -Fq h264_videotoolbox || fail "Bundled FFmpeg has no VideoToolbox H.264 encoder"
 printf '%s\n' "$encoders" | grep -Eq '[[:space:]]aac[[:space:]]' || fail "Bundled FFmpeg has no AAC encoder"
+muxers="$(env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH \
+  -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
+  "$helpers/ffmpeg" -hide_banner -muxers)"
+for muxer in matroska mov mp4 webm image2 image2pipe wav; do
+  if ! printf '%s\n' "$muxers" | awk -v muxer="$muxer" \
+    '$1 ~ /^E/ && $2 == muxer {found = 1} END {exit !found}'; then
+    fail "Bundled FFmpeg has no required $muxer muxer"
+  fi
+done
 env -u DYLD_LIBRARY_PATH -u DYLD_FALLBACK_LIBRARY_PATH \
   -u DYLD_FRAMEWORK_PATH -u DYLD_ROOT_PATH \
   "$helpers/ffprobe" -hide_banner -version >/dev/null

@@ -15,6 +15,10 @@ product still needs.
 
 ## 0.1.1 — 2026-11-01
 
+> The published 0.1.1 image predates the bundled FFmpeg and speech-runtime
+> fixes below. Install 0.1.2 or later; the in-app **Resources & updates**
+> panel can download it.
+
 ### Added
 - **Project canvas**: a landscape, portrait or square composition shape chosen from
   the viewer header (YouTube 16:9, HD, 4:3, TikTok/Reels/Shorts 9:16, Instagram feed
@@ -43,6 +47,17 @@ product still needs.
   extensions.
 
 ### Fixed
+- **FFmpeg runtime in packaged builds**: packaging now stages the pinned LGPL
+  FFmpeg 8.1.3 runtime instead of Homebrew's GPL build, removes any stale ABI or
+  GPL codec library from an earlier package, and refuses to sign a bundle whose
+  `libavutil` does not report `LGPL version 2.1 or later`. The macOS release
+  workflow builds the same pinned prefix, and `scripts/stage_macos_ffmpeg.sh`
+  reproduces it locally. The pinned profile also enables the `mov` muxer required
+  by the MP4/VideoToolbox export path, and the decoder list now covers the documented
+  import profile (HEVC, AV1, VP8, ProRes, Vorbis, FLAC, ALAC, AC-3/E-AC-3, PCM and
+  Ogg/FLAC/AIFF/AVI demuxers). This fixes `the approved LGPL FFmpeg runtime
+  could not be loaded` on the first viewer frame or export in the new DMG, and the
+  MP4 export failing with an argument error.
 - **Bluetooth headphones**: preview used to fail with "The default output device
   does not support stereo f32 audio at 48 kHz" whenever the default device offered
   another sample format, channel count or rate. Audio output now picks the closest
@@ -53,9 +68,40 @@ product still needs.
 - The viewer header no longer shows the texture size as if it were the project
   shape; the canvas control replaces that badge.
 
-## Unreleased
+## 0.1.2 — 2026-11-01
+
+- **Resources & updates**: Settings → Resources & updates (also a Home quick
+  action) reports whether FFmpeg, the local speech runtime and the `or` CLI are
+  bundled, links to the assistant harness, opens the speech-model manager when a
+  project is open, and checks the public GitHub release. A newer DMG can be
+  downloaded to Downloads, checksum-verified when GitHub publishes a digest, and
+  opened for drag-to-Applications; the app never replaces itself silently.
+- **Clean-machine setup path**: a packaged build now distinguishes a missing
+  runtime from a missing optional resource and points at the latest signed image
+  for repair instead of failing with an unexplained FFmpeg or caption error.
+- **Release checksum**: the macOS release publishes `SHA256SUMS.txt` beside the
+  DMG, and the release job writes install, requirement and limitation notes.
 
 ### Added
+- **Opt-in update check**: it calls the public GitHub Releases API only when the
+  user presses **Check for updates**, and never checks in the background.
+- **Viewer zoom**: the viewer header and full-screen controls offer Fit, 25%, 50%,
+  100% and 200%. The zoom is presentation-only: it scales the picture and never
+  changes the project, its revision or the frame the runtime is asked for.
+- **Motion presets apply to a selected object**: a `motion` library asset can be
+  applied to the chosen canvas node from the Motion panel. It writes one property
+  track through the validated scene-edit path, replacing an existing track for
+  that property rather than duplicating it.
+- **Packaged local speech runtime**: the macOS release pipeline builds pinned
+  whisper.cpp v1.9.4 and the provider adapter, the packaging script copies both
+  beside the app and refuses an image that asks for them without them, and the
+  speech-model picker offers a **Download** action on each not-installed row.
+  A build without the runtime now says so and disables **Use model** instead of
+  leading to a download it cannot run.
+- **Helper lookup follows PATH and Resources**: `whisper-cli` and the provider are
+  found beside the executable, under the bundle's `Resources`, or on `PATH`, so a
+  system install documented in the local guide is actually reachable.
+- Packaged builds now carry the whisper.cpp and FFmpeg third-party notices.
 - **Prompt-driven background music**: the Generate music dialog accepts a free
   sentence in Vietnamese or English, shows the interpreted mood, tempo, length
   and drum intent, then generates exactly that bed. A tempo in bpm, a length in

@@ -31,7 +31,9 @@ timing contract they obey.
 
 ## Transport surface
 
-Fit / 25% / 50% / 100% / 200% zoom, exact seek, scrubbing on ruler and lanes,
+Fit / 25% / 50% / 100% / 200% zoom from the viewer header and full-screen controls;
+zoom scales presentation only and never changes the project, revision or frame
+request; exact seek, scrubbing on ruler and lanes,
 play/pause, previous/next frame, ±5 s jump (`[` and `]`), 0.25×–2× speed,
 timecode, and direct viewer manipulation (transform) where the inspector exposes
 it. The viewer header carries the canvas menu, and full screen carries the same

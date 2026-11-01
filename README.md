@@ -16,12 +16,16 @@ timeline clips, preview with a full transport (speed, ±5 s, full screen), add
 titles and manual captions, import/export subtitles, and export Matroska, WebM or
 MP4 (macOS) at a chosen resolution.
 
-Stable releases: none. Debug Developer Preview prereleases are published from
-[GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases) for
-testing only; see [docs/reference/developer-preview-install.md](docs/reference/developer-preview-install.md).
-Advanced editing, some codec profiles, AI workflows, hardware acceleration and
-production signing remain open. Current work is selected by
-[docs/reference/roadmap.md](docs/reference/roadmap.md).
+Public macOS builds are published from
+[GitHub Releases](https://github.com/huou07/Opencut-Reinforced/releases); the
+latest image is ad-hoc signed and requires macOS 13+ on Apple Silicon. The
+project is still pre-MVP: no API, project-format or plugin stability is promised.
+The app bundles FFmpeg, the local speech runtime, the `or` CLI and the assistant
+workspace; speech models and an assistant harness are optional downloads.
+**Settings → Resources & updates** reports those resources and checks for newer
+public builds. Advanced editing, some codec profiles, AI workflows, hardware
+acceleration and notarised production signing remain open. Current work is
+selected by [docs/reference/roadmap.md](docs/reference/roadmap.md).
 
 ## Architecture in one paragraph
 

@@ -1,6 +1,6 @@
 # Quality Bar
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-01
 
 Scope: the attributes OR holds itself to, how each is measured, and which gaps
 are known. The current runtime target is the local macOS app on the owner's M5
@@ -368,6 +368,33 @@ The fake server and its scenario are throwaway files; they are not committed.
   superseded-refresh branches behind a stale `listMediaPage`/`getProject` reply,
   which is the only way to assert the round 112 rule ("a losing refresh touches
   no state") end to end.
+
+### Interaction, frame and playback budget on the local M5 (2026-11-01)
+
+- Workload: `scripts/ui_scenarios/editor-frames.json`,
+  `scripts/ui_scenarios/playback-pacing.json` and
+  `scripts/ui_scenarios/interaction-latency.json` through the semantic harness on
+  the Flutter test binding; 1440×900 editor, 1280×800 latency probe, 720p30
+  H.264/AAC fixture.
+- Source/build: this checkout after the viewer-zoom and packaged-speech changes,
+  debug lane. Machine: MacBook Air M5 (Mac17,3), 10 CPU cores, 16 GB unified
+  memory, idle host.
+- Editor frames: open 89 frames at 29.47 fps, build p50 0.55 / p95 0.64 ms, span
+  p95 0.94 ms; Audio panel p95 0.68 ms / 0.91 ms; Text panel p95 0.65 / 0.95 ms.
+  All are well inside the 4 ms build and 8 ms span budgets.
+- Playback: 151 frames over 5.02 s (29.78 fps), build p95 0.70 ms, span p95
+  0.95 ms, vsync gap p95 33.36 ms, worst gap 50.04 ms.
+- Interaction latency, two runs: screen switch p50 67–83 / p95 123–128 ms;
+  preview frame step p50 3.1–4.0 / p95 7.4–23.1 ms; export dialog open+cancel
+  p50 100–133 / p95 130–135 ms; opening a recent project 1434–1504 ms.
+- Debt: the 23.1 ms frame-step p95 was a single-run outlier and did not reproduce
+  (7.4 ms next run), so the tail needs a longer repeated measurement before it is
+  called a regression. Screen and export-dialog latency are user-visible but
+  below 200 ms; the ~1.5 s recent-project open is the largest single wait
+  measured.
+- Limits: the harness runs the Flutter test binding, so this is a software-path
+  relative signal, not a GPU/compositor claim; release pacing was not recorded in
+  this run.
 
 ## Known gaps
 
