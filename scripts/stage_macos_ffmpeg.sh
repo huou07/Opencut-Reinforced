@@ -154,7 +154,7 @@ configure_args=(
 
 export PKG_CONFIG_PATH="$work/ffmpeg-codecs/lib/pkgconfig"
 cd "$source"
-if [[ -f Makefile ]]; then make clean; fi
+if [[ -f ffbuild/config.mak ]]; then make clean; fi
 ./configure "${configure_args[@]}"
 make -j2
 make install
