@@ -23,7 +23,9 @@ class GithubReleaseAsset {
     final url = json['browser_download_url'];
     final size = json['size'];
     if (name is! String || url is! String) {
-      throw const FormatException('A release asset is missing its name or URL.');
+      throw const FormatException(
+        'A release asset is missing its name or URL.',
+      );
     }
     return GithubReleaseAsset(
       name: name,
@@ -64,7 +66,9 @@ class GithubRelease {
     final tag = json['tag_name'];
     final page = json['html_url'];
     if (tag is! String || page is! String) {
-      throw const FormatException('The release is missing its tag or page URL.');
+      throw const FormatException(
+        'The release is missing its tag or page URL.',
+      );
     }
     final assets = json['assets'];
     return GithubRelease(
@@ -114,9 +118,7 @@ Future<GithubRelease?> fetchLatestGithubRelease({
   final ownsClient = client == null;
   final http = client ?? HttpClient();
   try {
-    final request = await http
-        .getUrl(uri)
-        .timeout(const Duration(seconds: 15));
+    final request = await http.getUrl(uri).timeout(const Duration(seconds: 15));
     request.headers.set(
       HttpHeaders.acceptHeader,
       'application/vnd.github+json',

@@ -63,7 +63,8 @@ class ResourceCenterService {
     }
     return RuntimeSnapshot(
       packaged: packaged,
-      ffmpeg: ffmpegLibraries &&
+      ffmpeg:
+          ffmpegLibraries &&
           await File('${macos.path}/ffmpeg').exists() &&
           await File('${macos.path}/ffprobe').exists(),
       speechRuntime:
@@ -78,7 +79,8 @@ class ResourceCenterService {
   /// Finds `Foo.app/Contents` even when Flutter reports a nested binary as the
   /// resolved executable. The packaged check must not depend on a single shape
   /// of [Platform.resolvedExecutable].
-  Directory? _bundleContents() => bundleContentsFor(Platform.resolvedExecutable);
+  Directory? _bundleContents() =>
+      bundleContentsFor(Platform.resolvedExecutable);
 
   Future<String?> _findAssistant() async {
     try {
@@ -137,10 +139,7 @@ class ResourceCenterService {
             .getUrl(uri)
             .timeout(const Duration(seconds: 20));
         request.followRedirects = false;
-        request.headers.set(
-          HttpHeaders.userAgentHeader,
-          'Opencut-Reinforced',
-        );
+        request.headers.set(HttpHeaders.userAgentHeader, 'Opencut-Reinforced');
         response = await request.close().timeout(const Duration(seconds: 30));
         if (response.statusCode >= 300 && response.statusCode < 400) {
           final location = response.headers.value(HttpHeaders.locationHeader);
@@ -240,7 +239,9 @@ class ResourceCenterService {
 Directory? bundleContentsFor(String executablePath) {
   var directory = File(executablePath).parent;
   for (var depth = 0; depth < 8; depth++) {
-    final segments = directory.uri.pathSegments.where((part) => part.isNotEmpty);
+    final segments = directory.uri.pathSegments.where(
+      (part) => part.isNotEmpty,
+    );
     final name = segments.isEmpty ? '' : segments.last;
     if (name == 'Contents' &&
         File('${directory.path}/MacOS/or_app').existsSync()) {

@@ -59,11 +59,9 @@ const _release = GithubRelease(
   assets: [
     GithubReleaseAsset(
       name: 'Opencut-Reinforced-0.1.2-arm64.dmg',
-      url:
-          'https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.2/Opencut-Reinforced-0.1.2-arm64.dmg',
+      url: 'https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.2/Opencut-Reinforced-0.1.2-arm64.dmg',
       sizeBytes: 10,
-      digest:
-          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      digest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ),
   ],
 );
@@ -82,7 +80,9 @@ void main() {
   test('a packaged executable resolves to its Contents directory', () async {
     final root = await Directory.systemTemp.createTemp('or-bundle-test-');
     addTearDown(() => root.delete(recursive: true));
-    final macos = Directory('${root.path}/Opencut Reinforced.app/Contents/MacOS');
+    final macos = Directory(
+      '${root.path}/Opencut Reinforced.app/Contents/MacOS',
+    );
     await macos.create(recursive: true);
     final executable = File('${macos.path}/or_app');
     await executable.writeAsBytes(const [0]);
@@ -96,17 +96,16 @@ void main() {
     final release = GithubRelease.fromJson({
       'tag_name': 'v0.1.2',
       'name': 'Opencut Reinforced 0.1.2',
-      'html_url': 'https://github.com/huou07/Opencut-Reinforced/releases/tag/v0.1.2',
+      'html_url':
+          'https://github.com/huou07/Opencut-Reinforced/releases/tag/v0.1.2',
       'body': 'Notes',
       'published_at': '2026-11-01T12:00:00Z',
       'assets': [
         {
           'name': 'Opencut-Reinforced-0.1.2-arm64.dmg',
-          'browser_download_url':
-              'https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.2/Opencut-Reinforced-0.1.2-arm64.dmg',
+          'browser_download_url': 'https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.2/Opencut-Reinforced-0.1.2-arm64.dmg',
           'size': 1234,
-          'digest':
-              'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          'digest': 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         },
       ],
     });

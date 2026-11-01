@@ -16,7 +16,8 @@ class ResourceCenterPanel extends StatefulWidget {
     required this.currentVersion,
     this.onManageSpeechModels,
     this.service = const ResourceCenterService(),
-    this.assistantInstallUrl = 'https://github.com/deepseek-ai/deepseek-harness',
+    this.assistantInstallUrl =
+        'https://github.com/deepseek-ai/deepseek-harness',
   });
 
   final String currentVersion;
@@ -61,7 +62,9 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
       _downloaded = null;
     });
     try {
-      final release = await widget.service.checkForUpdate(widget.currentVersion);
+      final release = await widget.service.checkForUpdate(
+        widget.currentVersion,
+      );
       if (!mounted) return;
       setState(() => _release = release);
     } on GithubReleaseException catch (error) {
@@ -69,9 +72,7 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
       setState(() => _updateError = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(
-        () => _updateError = 'The update check could not be completed.',
-      );
+      setState(() => _updateError = 'The update check could not be completed.');
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -107,9 +108,7 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
       setState(() => _actionError = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(
-        () => _actionError = 'The update could not be downloaded.',
-      );
+      setState(() => _actionError = 'The update could not be downloaded.');
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -198,7 +197,8 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
           _ResourceRow(
             icon: Icons.auto_awesome_outlined,
             title: 'Assistant harness',
-            detail: 'The editor’s AI panel connects to a harness installed '
+            detail:
+                'The editor’s AI panel connects to a harness installed '
                 'outside the app bundle. DeepSeek Harness is the default.',
             action: OutlinedButton.icon(
               key: const ValueKey('resources-install-assistant'),
@@ -372,7 +372,8 @@ class _RuntimeSummary extends StatelessWidget {
     if (!runtime.packaged) {
       return const _StatusLine(
         ok: true,
-        label: 'Development build: the runtime is read from the build tree. '
+        label:
+            'Development build: the runtime is read from the build tree. '
             'Packaged releases carry FFmpeg, the speech runtime and the or CLI.',
       );
     }
@@ -486,10 +487,7 @@ class _ResourceRow extends StatelessWidget {
               ],
             ),
           ),
-          if (action != null) ...[
-            const SizedBox(width: OrSpacing.x3),
-            action!,
-          ],
+          if (action != null) ...[const SizedBox(width: OrSpacing.x3), action!],
         ],
       ),
     );

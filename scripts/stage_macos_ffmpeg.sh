@@ -127,6 +127,8 @@ bash "$ROOT/scripts/build_desktop_export_codecs.sh" macos \
 
 deployment_flag="-mmacosx-version-min=$DEPLOYMENT_TARGET"
 
+# FFmpeg option values contain commas; SC2054 is a false positive here.
+# shellcheck disable=SC2054
 configure_args=(
   "--prefix=$prefix"
   --install-name-dir=@rpath

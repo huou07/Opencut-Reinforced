@@ -215,10 +215,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('settings-resources')), findsOneWidget);
     expect(find.text('Resources & updates'), findsWidgets);
-    expect(
-      find.byKey(const ValueKey('resource-update-check')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('resource-update-check')), findsOneWidget);
   });
 
   testWidgets('settings diagnostics remain sourced from CoreGateway', (
