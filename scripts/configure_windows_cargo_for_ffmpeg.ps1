@@ -19,14 +19,16 @@ if (-not (Test-Path (Join-Path $Prefix 'lib'))) {
 }
 $Prefix = (Resolve-Path $Prefix).Path
 
+# TOML literal strings keep Windows backslashes intact; a basic string would
+# treat \t or \f as escapes and cargo would refuse the whole file.
 $lines = @(
   '[env]',
-  "FFMPEG_DIR = { value = `"$Prefix`", force = true }",
-  "PKG_CONFIG_PATH = { value = `"$Prefix\lib\pkgconfig`", force = true }"
+  "FFMPEG_DIR = { value = '$Prefix', force = true }",
+  "PKG_CONFIG_PATH = { value = '$Prefix\lib\pkgconfig', force = true }"
 )
 if ($env:LIBCLANG_PATH -and (Test-Path $env:LIBCLANG_PATH)) {
   $libclang = (Resolve-Path $env:LIBCLANG_PATH).Path
-  $lines += "LIBCLANG_PATH = { value = `"$libclang`", force = true }"
+  $lines += "LIBCLANG_PATH = { value = '$libclang', force = true }"
 }
 
 $cargoDir = Join-Path $RepoRoot '.cargo'
