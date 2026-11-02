@@ -107,6 +107,11 @@ if ($Steps -contains 'stage') {
 
 if ($Steps -contains 'journey') {
   $env:OR_PACKAGED_HELPERS_DIRECTORY = $bundle
+  # The hosted job exports this from the staging step; a local run has to point
+  # the journey at the same bundle so both paths load the packaged bridge.
+  if (-not $env:OR_PACKAGED_BRIDGE_DIRECTORY) {
+    $env:OR_PACKAGED_BRIDGE_DIRECTORY = $bundle
+  }
   if (-not $env:FFMPEG_DIR -and $env:FFMPEG_INSTALL_PREFIX) {
     $env:FFMPEG_DIR = $env:FFMPEG_INSTALL_PREFIX
   }
