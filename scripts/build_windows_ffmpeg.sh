@@ -195,7 +195,7 @@ done
   echo "Enabled parsers: h264, aac"
   echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
   echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
-  echo "libvpx configure target: $LIBVPX_CONFIGURE_TARGET"
+  echo "libvpx configure target: ${LIBVPX_CONFIGURE_TARGET:-ASM=auto by FFmpeg configure (no forced target)}"
   echo "Enabled muxers: matroska, webm, image2, image2pipe"
   echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
   echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
