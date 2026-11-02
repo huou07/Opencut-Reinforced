@@ -19,6 +19,9 @@ pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
 pub use probe::probe_media_path;
 
+/// Probes a seekable Android document through the file descriptor the SAF
+/// capability hands over. It is Unix-only because the capability itself is.
+#[cfg(unix)]
 pub fn probe_seekable_media(
     capability: &SeekableMediaIoCapability,
 ) -> Result<Vec<u8>, ffmpeg_the_third::Error> {
