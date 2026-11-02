@@ -120,7 +120,15 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'new project workspace',
   );
 
-  await tester.tap(find.byKey(const ValueKey('media-import')));
+  final importButton = find.byKey(const ValueKey('media-import'));
+  debugPrint(
+    'JOURNEY_IMPORT_BUTTON found=${importButton.evaluate().length} '
+    'hitTestable=${importButton.hitTestable().evaluate().length} '
+    'rect=${importButton.evaluate().isEmpty ? '<none>' : tester.getRect(importButton)} '
+    'onPressed=${importButton.evaluate().isEmpty ? '<none>' : tester.widget<OutlinedButton>(importButton).onPressed}',
+  );
+  await tester.tap(importButton);
+  await tester.pump();
   // A refusal (busy project action, unreadable source) shows a snackbar for a
   // few seconds; the ten-second progress tick would miss it entirely, so every
   // attempt records the last message the app showed.

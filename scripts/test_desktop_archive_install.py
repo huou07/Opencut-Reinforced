@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Exercise install, replacement, launch, and removal of desktop ZIP packages."""
+"""Exercise install, replacement, launch, and removal of desktop ZIP packages.
+
+The archive this script builds is exactly the archive a release ships. Pass
+``--archive <path>`` to keep a copy of the verified package; the path is then
+printed with its SHA-256 so a release can publish the tested bytes.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -124,10 +130,21 @@ def launch_from_install(executable: Path, install_dir: Path, *, windows: bool) -
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: test_desktop_archive_install.py <built-app-directory>")
+    arguments = sys.argv[1:]
+    keep_archive: Path | None = None
+    if "--archive" in arguments:
+        index = arguments.index("--archive")
+        if index + 1 >= len(arguments):
+            raise SystemExit("--archive needs a destination path")
+        keep_archive = Path(arguments[index + 1]).resolve()
+        del arguments[index : index + 2]
+    if len(arguments) != 1:
+        raise SystemExit(
+            "usage: test_desktop_archive_install.py <built-app-directory> "
+            "[--archive <destination.zip>]"
+        )
 
-    source = Path(sys.argv[1]).resolve()
+    source = Path(arguments[0]).resolve()
     macos = sys.platform == "darwin"
     windows = sys.platform == "win32"
     if not macos and not windows:
@@ -156,6 +173,9 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="or-desktop-package-") as temporary:
             work = Path(temporary)
             archive = create_package(source, work, macos=macos)
+            if keep_archive is not None:
+                keep_archive.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(archive, keep_archive)
             initial_extract = work / "initial-extract"
             staged_app = extract_package(archive, initial_extract, macos=macos)
             install_parent.mkdir(parents=True, exist_ok=False)
@@ -187,6 +207,10 @@ def main() -> int:
         "Desktop ZIP install, launch from user install location, replacement, "
         "uninstall, and project-data preservation passed."
     )
+    if keep_archive is not None:
+        digest = hashlib.sha256(keep_archive.read_bytes()).hexdigest()
+        print(f"ARCHIVE={keep_archive}")
+        print(f"SHA256={digest}")
     return 0
 
 
