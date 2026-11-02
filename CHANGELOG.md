@@ -54,6 +54,32 @@ product still needs.
   current directory.
 - The CLI export argument test used Unix-only paths, so on Windows it asserted
   the absolute-path error instead of the error under test.
+- **The Linux build linked the host FFmpeg.** `libor_app_bridge.so` came out
+  with `NEEDED libavutil.so.59` because another dependency's pkg-config search
+  path preceded the packaged prefix, so the editor refused to export with the
+  approved-runtime message. `scripts/configure_linux_cargo_for_ffmpeg.sh` now
+  writes the pinned prefix into rustflags ahead of every build-script search
+  path, and both the lane and the hosted Linux job call that one script.
+- **`or_media` did not compile for the desktop Windows target.** The SAF
+  seekable-media probe was declared unconditionally while the capability it
+  takes is Unix-only; the helper is now gated to the platforms that have it.
+- **Windows could not build the bridge through the Flutter hook.** The hook
+  runs cargo with an empty environment, so the FFmpeg build script fell through
+  to pkg-config; `scripts/configure_windows_cargo_for_ffmpeg.ps1` pins the
+  prefix in the cargo config the hook reads. Staging also needs PowerShell 7 and
+  the Debug bundle the journey actually runs, both of which the lane now
+  guarantees.
+- **The close-project control was enabled while a project action was in
+  flight** and silently ignored the click, which is what stalled the Windows
+  journey after reopening a recent project. The control is disabled while the
+  shell is busy, matching the save control.
+- The packaged journey's missing-inspector phase asserted a message the app
+  cannot show while the in-process decode fallback exists; it now asserts the
+  refusal the reader actually sees and that no media joins the library.
+- The bounded Linux preflight builds its own bundle, so the lane now stages the
+  packaged runtime for it instead of relying on whatever an earlier step left
+  behind; the release lane can therefore build a release package and still run
+  the preflight.
 
 ## 0.1.3 — 2026-11-02
 
