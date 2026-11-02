@@ -21,6 +21,14 @@ if ($env:FFMPEG_INSTALL_PREFIX) {
   if (Test-Path $ffmpegBin) { $env:PATH = "$ffmpegBin;$env:PATH" }
 }
 
+# bindgen opens libclang from LIBCLANG_PATH, and libclang in turn loads the other
+# clang64 DLLs from its own directory. The hosted job gets that directory on PATH
+# from the msys2 action, so the real host has to add it explicitly or every Rust
+# build that runs bindgen fails with "LoadLibraryExW failed".
+if ($env:LIBCLANG_PATH -and (Test-Path $env:LIBCLANG_PATH)) {
+  $env:PATH = "$($env:LIBCLANG_PATH);$env:PATH"
+}
+
 Set-Location $RepoRoot
 
 if ([string]::IsNullOrWhiteSpace($Archive)) {
