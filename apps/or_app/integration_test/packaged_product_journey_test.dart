@@ -460,7 +460,32 @@ Future<void> _reopenAndExport(
     tester,
     () => find.text('Saved').evaluate().isNotEmpty,
     'save relinked media source',
+    diagnostic: () => _saveDiagnostic(tester, saveButton),
   );
+}
+
+/// What the workspace showed when a save did not settle, so a timeout can be
+/// read as either a refused write or a control that never reported success.
+String _saveDiagnostic(WidgetTester tester, Finder saveButton) {
+  final labels = find
+      .byType(Text)
+      .evaluate()
+      .map((element) => (element.widget as Text).data)
+      .whereType<String>()
+      .where((text) => text == 'Saved' || text == 'Unsaved')
+      .toList();
+  final snack = find.byType(SnackBar);
+  final message = snack.evaluate().isEmpty
+      ? '<none>'
+      : find
+            .descendant(of: snack.first, matching: find.byType(Text))
+            .evaluate()
+            .map((element) => (element.widget as Text).data)
+            .whereType<String>()
+            .join(' | ');
+  return 'save_state=${labels.isEmpty ? '<none>' : labels.join(',')} '
+      'enabled=${_controlIsEnabled(tester, saveButton)} '
+      'snackbar="${message.isEmpty ? '<empty>' : message}"';
 }
 
 Future<void> _preserveProjectAcrossMissingSource(
