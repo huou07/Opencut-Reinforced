@@ -3829,6 +3829,7 @@ class _AppShellState extends State<AppShell> {
   Future<void> _importMediaFolder() => _importMediaSources(folder: true);
 
   Future<void> _importMediaSources({required bool folder}) async {
+    _journeyTrace('enter folder=$folder busy=$_busy session=${_activeSession != null}');
     final session = _activeSession;
     if (session == null) return;
     if (_busy) {
@@ -3854,14 +3855,14 @@ class _AppShellState extends State<AppShell> {
       return;
     }
     // TRACE: temporary diagnostic for the packaged journey import hang.
-    debugPrint(
-      'OR_IMPORT_TRACE picker=${sources.length} '
+    _journeyTrace(
+      'picker=${sources.length} '
       'first=${sources.isEmpty ? '<none>' : sources.first} '
       'mounted=$mounted busy=$_busy',
     );
     sources = sources.toSet().toList(growable: false);
     if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
-      debugPrint('OR_IMPORT_TRACE return-early-empty-or-closed');
+      _journeyTrace('return-early-empty-or-closed');
       return;
     }
 
@@ -3899,9 +3900,9 @@ class _AppShellState extends State<AppShell> {
         final updated = await _runProjectAction((session, _) async {
           // Capture identity and revision immediately before Rust probes each
           // file.
-          debugPrint('OR_IMPORT_TRACE summary-start');
+          _journeyTrace('summary-start');
           final current = await widget.projectGateway.summary(session);
-          debugPrint('OR_IMPORT_TRACE summary-done rev=${current.revision}');
+          _journeyTrace('summary-done rev=${current.revision}');
           if (!mounted || !identical(session, _activeSession)) {
             return const ProjectActionResult(
               succeeded: false,
@@ -3915,13 +3916,13 @@ class _AppShellState extends State<AppShell> {
             current,
             source,
           );
-          debugPrint(
-            'OR_IMPORT_TRACE import-done ok=${imported.succeeded} '
+          _journeyTrace(
+            'import-done ok=${imported.succeeded} '
             'code=${imported.errorCode} msg=${imported.message}',
           );
           return imported;
         }, onFailure: (message) => failure = message);
-        debugPrint('OR_IMPORT_TRACE updated=${updated != null} failure=$failure');
+        _journeyTrace('updated=${updated != null} failure=$failure');
         if (updated == null) {
           return (
             imported: false,
@@ -5214,4 +5215,19 @@ bool _matchesTimelineMarkerPage(
   }
   final end = offset + page.items.length;
   return page.nextOffset == (end < page.totalCount ? end : null);
+}
+
+/// TRACE: temporary diagnostic for the packaged journey import hang. Writes to
+/// the file named by OR_IMPORT_TRACE_FILE so the line survives the test runner's
+/// stdout handling, and does nothing when that variable is absent.
+void _journeyTrace(String message) {
+  final target = Platform.environment['OR_IMPORT_TRACE_FILE'];
+  if (target == null || target.isEmpty) return;
+  try {
+    File(target).writeAsStringSync(
+      '${DateTime.now().toIso8601String()} $message\n',
+      mode: FileMode.append,
+      flush: true,
+    );
+  } catch (_) {}
 }
