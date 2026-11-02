@@ -566,6 +566,9 @@ Future<void> _preserveProjectAcrossMissingProbe(
         .evaluate()
         .isNotEmpty,
     'missing packaged probe feedback',
+    diagnostic: () => 'unprobeable=${unprobeable.path} '
+        'exists=${unprobeable.existsSync()} '
+        '${_importDiagnostic(tester, _visibleSnackBarMessage(tester))}',
   );
   expect(find.text('relinked-bunny.mp4'), findsWidgets);
 
