@@ -120,13 +120,12 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'new project workspace',
   );
 
+  // The editor renders its panels while the project action that opened them is
+  // still finishing, and every shell action is disabled until it does. Tapping
+  // the import control inside that window dispatched nothing, which is what made
+  // the packaged import look like a codec hang.
   final importButton = find.byKey(const ValueKey('media-import'));
-  debugPrint(
-    'JOURNEY_IMPORT_BUTTON found=${importButton.evaluate().length} '
-    'hitTestable=${importButton.hitTestable().evaluate().length} '
-    'rect=${importButton.evaluate().isEmpty ? '<none>' : tester.getRect(importButton)} '
-    'onPressed=${importButton.evaluate().isEmpty ? '<none>' : tester.widget<OutlinedButton>(importButton).onPressed}',
-  );
+  await _waitForImportButton(tester, importButton);
   await tester.tap(importButton);
   await tester.pump();
   // A refusal (busy project action, unreadable source) shows a snackbar for a
@@ -679,10 +678,7 @@ String _importDiagnostic(WidgetTester tester, [String? seenSnackBar]) {
       'libraryItems=${previews.length} visible="$visible"';
 }
 
-Future<void> _createFromTimelineMenu(
-  WidgetTester tester,
-  String entry,
-) async {
+Future<void> _createFromTimelineMenu(WidgetTester tester, String entry) async {
   final menu = find.byKey(const ValueKey('timeline-create-menu'));
   await tester.ensureVisible(menu);
   await tester.tap(menu);
