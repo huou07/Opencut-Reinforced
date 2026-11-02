@@ -13,7 +13,8 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::{
-        CloseHandle, ERROR_BROKEN_PIPE, ERROR_PIPE_CONNECTED, GENERIC_READ, GENERIC_WRITE,
+        CloseHandle, ERROR_BROKEN_PIPE, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, GENERIC_READ,
+        GENERIC_WRITE,
         GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
     },
     Security::Authorization::{
@@ -31,7 +32,9 @@ use windows_sys::Win32::{
 };
 
 const PIPE_BUFFER_BYTES: u32 = MAX_IPC_FRAME_BYTES as u32 + 4;
-const PIPE_INSTANCES: u32 = 2;
+// A motion render can hold one instance for seconds, so the accept loop
+// keeps spare instances for concurrent queries, edits and CLI clients.
+const PIPE_INSTANCES: u32 = 8;
 const OWNER_ONLY_DACL: &str = "D:P(A;;GA;;;OW)";
 const OWNER_ONLY_DIRECTORY_DACL: &str = "D:P(A;OICI;GA;;;OW)";
 
@@ -146,6 +149,10 @@ pub(crate) struct PipeStream {
     raw: HANDLE,
 }
 
+// The handle is uniquely owned and Windows kernel handles have no thread
+// affinity, so a connected pipe instance can move to its handler thread.
+unsafe impl Send for PipeStream {}
+
 impl PipeStream {
     fn handle(&self) -> HANDLE {
         self.raw
@@ -250,9 +257,13 @@ pub(crate) fn serve(
     mut pipe: PipeHandle,
     pipe_name: &str,
     stopping: &Arc<AtomicBool>,
-    mut handle_request: impl FnMut(&mut PipeStream) -> Result<bool, IpcProtocolError>,
+    handle_request: impl Fn(&mut PipeStream) -> Result<bool, IpcProtocolError> + Send + Sync + 'static,
 ) -> Result<(), IpcProtocolError> {
+    let handle_request = Arc::new(handle_request);
     loop {
+        if stopping.load(Ordering::SeqCst) {
+            break;
+        }
         let connected = unsafe { ConnectNamedPipe(pipe.raw, null_mut()) };
         if connected == 0 && unsafe { GetLastError() } != ERROR_PIPE_CONNECTED {
             if stopping.load(Ordering::SeqCst) {
@@ -262,15 +273,22 @@ pub(crate) fn serve(
                 unsafe { GetLastError() } as i32,
             )));
         }
+        if stopping.load(Ordering::SeqCst) {
+            break;
+        }
 
-        // Keep another instance ready before returning the current request so
+        // Keep another instance ready before this request is dispatched so
         // consecutive CLI connections do not race the server's rebind.
-        let next_pipe = create_server_pipe(pipe_name)?;
+        let next_pipe = next_server_pipe(pipe_name, stopping)?;
         let mut stream = pipe.into_stream();
-        let shutdown = if stopping.load(Ordering::SeqCst) {
-            true
-        } else {
-            match handle_request(&mut stream) {
+        let handle_request = Arc::clone(&handle_request);
+        let worker_stopping = Arc::clone(stopping);
+        // A motion render can take seconds. Serve each connection on its own
+        // thread, exactly like the Unix accept loop, so a render never queues
+        // preview, queries or edits behind it; the project host state is still
+        // serialised by its own mutex.
+        std::thread::spawn(move || {
+            let shutdown = match handle_request(&mut stream) {
                 Ok(shutdown) => {
                     unsafe {
                         FlushFileBuffers(stream.handle());
@@ -278,18 +296,39 @@ pub(crate) fn serve(
                     shutdown
                 }
                 Err(_) => false,
+            };
+            unsafe {
+                DisconnectNamedPipe(stream.handle());
             }
-        };
-        unsafe {
-            DisconnectNamedPipe(stream.handle());
-        }
-        drop(stream);
-        if shutdown || stopping.load(Ordering::SeqCst) {
-            break;
-        }
+            drop(stream);
+            if shutdown {
+                worker_stopping.store(true, Ordering::SeqCst);
+            }
+        });
         pipe = next_pipe;
     }
     Ok(())
+}
+
+/// Creates the next pipe instance, waiting for a free slot when every instance
+/// is already serving a request. This mirrors an accept backlog instead of
+/// failing the whole server while clients are active.
+fn next_server_pipe(
+    pipe_name: &str,
+    stopping: &Arc<AtomicBool>,
+) -> Result<PipeHandle, IpcProtocolError> {
+    loop {
+        match create_server_pipe(pipe_name) {
+            Ok(pipe) => return Ok(pipe),
+            Err(error) if stopping.load(Ordering::SeqCst) => return Err(error),
+            Err(IpcProtocolError::Io(error))
+                if error.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) =>
+            {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 pub(crate) fn wake(name: &str) {
