@@ -569,7 +569,8 @@ Future<void> _preserveProjectAcrossMissingProbe(
         .evaluate()
         .isNotEmpty,
     'missing packaged probe feedback',
-    diagnostic: () => 'unprobeable=${unprobeable.path} '
+    diagnostic: () =>
+        'unprobeable=${unprobeable.path} '
         'exists=${unprobeable.existsSync()} '
         '${_importDiagnostic(tester, _visibleSnackBarMessage(tester))}',
   );
@@ -649,7 +650,9 @@ Set<String> _keySuffixes(WidgetTester tester, String prefix) => tester
     // `media-preview-<id>` and the row's decorations (`media-preview-progress-<id>`,
     // `media-preview-retry-<id>`) share a prefix; the decorations carry the id
     // again, so they must not look like a second item.
-    .where((value) => !value.startsWith('progress-') && !value.startsWith('retry-'))
+    .where(
+      (value) => !value.startsWith('progress-') && !value.startsWith('retry-'),
+    )
     .toSet();
 
 Set<String> _timelineClipIds(WidgetTester tester) => _keySuffixes(

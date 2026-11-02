@@ -631,8 +631,9 @@ class _AppShellState extends State<AppShell> {
                           onRedo: editor ? _redoProject : null,
                           onRenameProject: editor ? _renameProject : null,
                           onSaveProject: editor ? _saveProject : null,
-                          onCloseProject:
-                              editor && !_busy ? _closeProject : null,
+                          onCloseProject: editor && !_busy
+                              ? _closeProject
+                              : null,
                           onExport:
                               editor &&
                                   _activeSession != null &&
@@ -3830,7 +3831,9 @@ class _AppShellState extends State<AppShell> {
   Future<void> _importMediaFolder() => _importMediaSources(folder: true);
 
   Future<void> _importMediaSources({required bool folder}) async {
-    _journeyTrace('enter folder=$folder busy=$_busy session=${_activeSession != null}');
+    _journeyTrace(
+      'enter folder=$folder busy=$_busy session=${_activeSession != null}',
+    );
     final session = _activeSession;
     if (session == null) return;
     if (_busy) {
