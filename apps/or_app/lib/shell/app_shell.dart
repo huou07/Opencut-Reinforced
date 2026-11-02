@@ -571,7 +571,7 @@ class _AppShellState extends State<AppShell> {
                 onExport: () => unawaited(_startExport()),
                 onUndo: _undoProject,
                 onRedo: _redoProject,
-                onCloseProject: _closeProject,
+                onCloseProject: () => unawaited(_closeProject()),
                 onHome: () => _select(AppDestination.home),
                 onProjects: () => _select(AppDestination.projects),
                 onSettings: () => _select(AppDestination.settings),
@@ -631,7 +631,8 @@ class _AppShellState extends State<AppShell> {
                           onRedo: editor ? _redoProject : null,
                           onRenameProject: editor ? _renameProject : null,
                           onSaveProject: editor ? _saveProject : null,
-                          onCloseProject: editor ? _closeProject : null,
+                          onCloseProject:
+                              editor && !_busy ? _closeProject : null,
                           onExport:
                               editor &&
                                   _activeSession != null &&
