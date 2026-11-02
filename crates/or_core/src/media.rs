@@ -82,7 +82,13 @@ impl MediaSourceUri {
             || parsed
                 .host_str()
                 .is_some_and(|host| !host.is_empty() && !host.eq_ignore_ascii_case("localhost"))
-            || parsed.to_file_path().is_err()
+            // A project file travels: a source recorded on another platform is
+            // still a valid file URI and must keep this document openable.
+            // Whether the path resolves on *this* host is decided when the
+            // media is used, where an unreachable source becomes a missing
+            // source the user can relink, not a load failure.
+            || !parsed.path().starts_with('/')
+            || parsed.path().len() == 1
         {
             return Err(MediaSourceUriError::Invalid);
         }
@@ -863,6 +869,31 @@ mod tests {
         assert_eq!(
             MediaSourceUri::parse(long),
             Err(MediaSourceUriError::TooLong)
+        );
+    }
+
+    #[test]
+    fn foreign_absolute_file_uris_stay_valid_even_when_they_cannot_be_native_paths() {
+        // A project written on macOS, Linux or Windows has to open anywhere it
+        // travels to. The URI must therefore be validated structurally, not by
+        // asking this host whether it can turn the path into a native one.
+        for uri in [
+            "file:///home/huou07/Videos/clip.mp4",
+            "file:///Users/meomeo/Movies/clip.mp4",
+            "file:///C:/Users/hp/Videos/clip.mp4",
+            "file:///media/usb/Video%20with%20spaces.mkv",
+        ] {
+            let parsed = MediaSourceUri::parse(uri).expect(uri);
+            assert_eq!(parsed.as_str(), uri);
+        }
+        // A relative file URI is still invalid: a project source is absolute.
+        assert_eq!(
+            MediaSourceUri::parse("file:clip.mp4"),
+            Err(MediaSourceUriError::Invalid)
+        );
+        assert_eq!(
+            MediaSourceUri::parse("file:///"),
+            Err(MediaSourceUriError::Invalid)
         );
     }
 
