@@ -268,9 +268,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => _controlIsEnabled(tester, find.byKey(const ValueKey('preview-play'))),
     'sequence frame rate configuration',
   );
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
+  await _cyclePlayback(tester);
 
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
   await tester.pumpAndSettle();
@@ -367,9 +365,7 @@ Future<void> _reopenAndExport(
   final mediaId = _singleKeySuffix(tester, 'media-actions-');
   final timelineClipCountBeforeImport = _timelineClipCount(tester);
 
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
+  await _cyclePlayback(tester);
 
   await tester.tap(find.byKey(const ValueKey('export-project')));
   await _pumpUntil(
@@ -686,6 +682,39 @@ bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
       }),
     )
     .isNotEmpty;
+
+/// Plays for a moment and pauses again through the transport controls rather
+/// than a fixed delay: the play control is disabled while a play request is in
+/// flight, so a tap that lands in that window is silently dropped and the
+/// journey would keep playing while it saves.
+Future<void> _cyclePlayback(WidgetTester tester) async {
+  final play = find.byKey(const ValueKey('preview-play'));
+  await _pumpUntil(
+    tester,
+    () => _controlIsEnabled(tester, play),
+    'play control readiness',
+  );
+  await tester.tap(play);
+  await _pumpUntil(
+    tester,
+    () => find.byTooltip('Pause').evaluate().isNotEmpty,
+    'playback to start',
+  );
+  await tester.pump(const Duration(milliseconds: 300));
+  await _pumpUntil(
+    tester,
+    () => _controlIsEnabled(tester, play),
+    'pause control readiness',
+  );
+  await tester.tap(play);
+  await _pumpUntil(
+    tester,
+    () =>
+        find.byTooltip('Play').evaluate().isNotEmpty &&
+        _controlIsEnabled(tester, play),
+    'playback to pause',
+  );
+}
 
 Future<void> _pumpUntil(
   WidgetTester tester,
