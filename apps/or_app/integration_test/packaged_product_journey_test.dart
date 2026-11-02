@@ -379,11 +379,14 @@ Future<void> _reopenAndExport(
   );
   final exportTimer = Stopwatch()..start();
   await tester.tap(find.text('Continue'));
+  // 720 frames of 1080p VP9 encode in ~95 s on the Linux lane and in over
+  // three minutes on a two-core Windows runner, so the bound has to cover the
+  // slowest host we ship while still failing an export that stops advancing.
   await _pumpUntil(
     tester,
     () => find.text('Export complete').evaluate().isNotEmpty,
     'export to the existing destination',
-    attempts: 1800,
+    attempts: 6000,
     diagnostic: () => 'status="${_exportStatusText(tester)}"',
   );
   exportTimer.stop();
