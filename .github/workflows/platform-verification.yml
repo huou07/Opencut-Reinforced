@@ -1853,9 +1853,11 @@ jobs:
   # The one aggregate check the owner can require for merge. It runs even when a
   # dependency failed or was skipped (`if: always()`), and it fails unless every
   # required job reports `success`: a skipped or neutral job is not success and
-  # cannot satisfy a gate. The release line is macOS-only, so the Linux, Windows
-  # and Android packaging jobs stay available as diagnostics but do not gate a
-  # macOS release. Keep this job's name stable — the branch ruleset requires the
+  # cannot satisfy a gate. The gate covers the desktop platforms the product
+  # ships for, so `macos`, `linux` and `windows` must all build and pass on the
+  # same source tree; the Android emulator job stays a separate diagnostic lane
+  # because its hosted emulator is not a desktop release requirement.
+  # Keep this job's name stable — the branch ruleset requires the
   # `release-gate` check.
   release-gate:
     name: release-gate
@@ -1864,6 +1866,9 @@ jobs:
       - rust
       - flutter-static
       - granted-descriptor-capability
+      - macos
+      - linux
+      - windows
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

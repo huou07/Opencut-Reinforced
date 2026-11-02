@@ -6,6 +6,10 @@ merge. It must fail not only when a required job failed, but also when one was
 skipped, neutral, cancelled or never reported: in the evidence vocabulary a
 skipped or neutral check is not success, so it cannot satisfy a gate.
 
+The gate covers the three desktop platforms the product ships for. Each native
+desktop job builds and exercises the same shared tree, so a green gate is the
+only evidence that Linux, Windows and macOS are all release-ready together.
+
 Usage:
 
     python3 scripts/release_gate.py --needs-json "$NEEDS_JSON"
@@ -24,11 +28,23 @@ import argparse
 import json
 import sys
 
-REQUIRED_JOBS = (
+# Shared evidence that is not platform-specific.
+CORE_JOBS = (
     "rust",
     "flutter-static",
     "granted-descriptor-capability",
 )
+
+# The native desktop jobs that must build and pass on the same source tree.
+# Adding a desktop platform to the product means adding it here; a skipped or
+# neutral platform job never satisfies the gate.
+DESKTOP_JOBS = (
+    "macos",
+    "linux",
+    "windows",
+)
+
+REQUIRED_JOBS = CORE_JOBS + DESKTOP_JOBS
 
 
 def evaluate(needs: object, required: tuple[str, ...] = REQUIRED_JOBS) -> list[str]:
