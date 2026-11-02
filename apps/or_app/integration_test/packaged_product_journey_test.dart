@@ -542,7 +542,19 @@ Future<void> _preserveProjectAcrossMissingProbe(
   );
 
   final importButton = find.byKey(const ValueKey('media-import'));
-  picker.nextMediaPath = picker.mediaPaths[0];
+  // This phase runs with the packaged helper removed. The bridge deliberately
+  // falls back to the libavformat it links, so a readable media file would
+  // import successfully; a file neither backend can probe keeps the phase
+  // honest about the installation failure it is meant to expose.
+  final unprobeable = File(
+    '${Directory.systemTemp.path}/or-journey-unprobeable-'
+    '${DateTime.now().microsecondsSinceEpoch}.mp4',
+  );
+  await unprobeable.writeAsBytes(List<int>.filled(4096, 0x41));
+  addTearDown(() {
+    if (unprobeable.existsSync()) unprobeable.deleteSync();
+  });
+  picker.nextMediaPath = unprobeable.path;
   await _waitForImportButton(tester, importButton);
   await tester.tap(importButton);
   await _pumpUntil(
