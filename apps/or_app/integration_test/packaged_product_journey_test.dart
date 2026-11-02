@@ -683,36 +683,48 @@ bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     )
     .isNotEmpty;
 
-/// Plays for a moment and pauses again through the transport controls rather
-/// than a fixed delay: the play control is disabled while a play request is in
-/// flight, so a tap that lands in that window is silently dropped and the
-/// journey would keep playing while it saves.
+/// Presses a transport control until the transport reports the state the press
+/// should produce. The play control is disabled whenever a project action is in
+/// flight, so a single tap can land in a disabled window and be dropped; the
+/// loop presses again instead of sleeping and hoping.
+Future<void> _pressTransport(
+  WidgetTester tester,
+  Finder control, {
+  required String expectation,
+  required String settleTooltip,
+}) async {
+  for (var attempt = 0; attempt < 600; attempt++) {
+    final ready =
+        _controlIsEnabled(tester, control) &&
+        control.hitTestable().evaluate().isNotEmpty;
+    if (ready) {
+      await tester.tap(control, warnIfMissed: false);
+      await tester.pump(const Duration(milliseconds: 100));
+      if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
+        return;
+      }
+    }
+    await tester.pump(const Duration(milliseconds: 100));
+  }
+  fail('Timed out waiting for $expectation.');
+}
+
+/// Plays for a moment and pauses again, so later steps save a project whose
+/// transport is idle.
 Future<void> _cyclePlayback(WidgetTester tester) async {
   final play = find.byKey(const ValueKey('preview-play'));
-  await _pumpUntil(
+  await _pressTransport(
     tester,
-    () => _controlIsEnabled(tester, play),
-    'play control readiness',
-  );
-  await tester.tap(play);
-  await _pumpUntil(
-    tester,
-    () => find.byTooltip('Pause').evaluate().isNotEmpty,
-    'playback to start',
+    play,
+    expectation: 'playback to start',
+    settleTooltip: 'Pause',
   );
   await tester.pump(const Duration(milliseconds: 300));
-  await _pumpUntil(
+  await _pressTransport(
     tester,
-    () => _controlIsEnabled(tester, play),
-    'pause control readiness',
-  );
-  await tester.tap(play);
-  await _pumpUntil(
-    tester,
-    () =>
-        find.byTooltip('Play').evaluate().isNotEmpty &&
-        _controlIsEnabled(tester, play),
-    'playback to pause',
+    play,
+    expectation: 'playback to pause',
+    settleTooltip: 'Play',
   );
 }
 
