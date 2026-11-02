@@ -888,10 +888,17 @@ void main() {
             ),
           ],
         };
+      // Absolute on every host: the shell canonicalises this path to find the
+      // media it just imported, and a POSIX fixture path is not absolute on
+      // Windows, so the lookup missed the item it had added a moment earlier.
+      final illustrationPath = p.join(
+        Directory.systemTemp.path,
+        'illustration.mkv',
+      );
       final picker = _FakeProjectPicker()
-        ..savePath = '/tmp/motion-insert.orproj'
-        ..mediaPaths = ['/tmp/count_words.rs']
-        ..exportPath = '/tmp/illustration.mkv';
+        ..savePath = p.join(Directory.systemTemp.path, 'motion-insert.orproj')
+        ..mediaPaths = [p.join(Directory.systemTemp.path, 'count_words.rs')]
+        ..exportPath = illustrationPath;
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Motion insertion');
 
@@ -919,7 +926,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gateway.illustrationRequests, hasLength(1));
-      expect(gateway.importMediaSources, ['/tmp/illustration.mkv']);
+      expect(gateway.importMediaSources, [illustrationPath]);
       expect(gateway.addTimelineTrackCalls, 1);
       expect(gateway.lastInsertTrackId, 'track-1');
       expect(gateway.lastInsertTimelineStart?.canonical, contentEnd.canonical);
