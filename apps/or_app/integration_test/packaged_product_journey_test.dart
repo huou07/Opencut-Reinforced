@@ -712,6 +712,26 @@ Future<void> _pressTransport(
     }
     await tester.pump(const Duration(milliseconds: 100));
   }
+  final visible = tester
+      .widgetList<Text>(find.byType(Text))
+      .map((text) => text.data ?? text.textSpan?.toPlainText() ?? '')
+      .where((label) => label.isNotEmpty)
+      .toSet()
+      .join(' / ');
+  final tooltips = find
+      .byType(Tooltip)
+      .evaluate()
+      .map((element) => (element.widget as Tooltip).message ?? '')
+      .where((message) => message.isNotEmpty)
+      .toSet()
+      .join(',');
+  debugPrint(
+    'OR_PACKAGED_TRANSPORT_DIAGNOSTIC expectation=$expectation '
+    'settleTooltip=$settleTooltip '
+    'hitTestable=${control.hitTestable().evaluate().length} '
+    'enabled=${_controlIsEnabled(tester, control)} '
+    'tooltips="$tooltips" visible="$visible"',
+  );
   fail('Timed out waiting for $expectation.');
 }
 
