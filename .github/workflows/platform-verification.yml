@@ -675,16 +675,9 @@ jobs:
             --bin "$prefix/bin" \
             --work "$RUNNER_TEMP/ffmpeg-denoise-measurement"
           export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
-          mkdir -p "$HOME/.cargo"
-          # Cargo config reaches Rust build scripts through Flutter's isolated native-assets hook.
-          cat > "$HOME/.cargo/config.toml" <<EOF
-          [build]
-          rustflags = ["-C", "link-arg=-Wl,-rpath,\$ORIGIN"]
-
-          [env]
-          FFMPEG_DIR = { value = "$prefix", force = true }
-          PKG_CONFIG_PATH = { value = "$prefix/lib/pkgconfig", force = true }
-          EOF
+          # Cargo config reaches Rust build scripts through Flutter's isolated
+          # native-assets hook, so the lane and CI share one writer.
+          bash "$GITHUB_WORKSPACE/scripts/configure_linux_cargo_for_ffmpeg.sh" "$prefix"
           for library in avcodec avformat avutil swresample swscale; do
             test -f "$prefix/lib/pkgconfig/lib$library.pc"
           done
