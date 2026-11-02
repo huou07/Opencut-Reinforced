@@ -21,6 +21,14 @@ if ($env:FFMPEG_INSTALL_PREFIX) {
   if (Test-Path $ffmpegBin) { $env:PATH = "$ffmpegBin;$env:PATH" }
 }
 
+# ffmpeg-sys prefers FFMPEG_DIR and only falls back to pkg-config, which the
+# hosted job does not install on Windows. The FFmpeg build script records the
+# prefix, so derive FFMPEG_DIR from it rather than depending on a cargo config
+# file that any checkout or stash can remove.
+if (-not $env:FFMPEG_DIR -and $env:FFMPEG_INSTALL_PREFIX) {
+  $env:FFMPEG_DIR = $env:FFMPEG_INSTALL_PREFIX
+}
+
 # bindgen opens libclang from LIBCLANG_PATH, and libclang in turn loads the other
 # clang64 DLLs from its own directory. The hosted job gets that directory on PATH
 # from the msys2 action, so the real host has to add it explicitly or every Rust
