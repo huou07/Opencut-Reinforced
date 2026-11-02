@@ -8,6 +8,7 @@ import 'package:flutter/material.dart'
         AlertDialog,
         IconButton,
         OutlinedButton,
+        PopupMenuItem,
         PopupMenuButton,
         SnackBar,
         Text,
@@ -123,6 +124,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     tester,
     () => find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
     'packaged 1080p H.264/AAC MP4 import',
+    diagnostic: () => _importDiagnostic(tester),
   );
   final mediaId = _singleKeySuffix(tester, 'media-preview-');
   await _pumpUntil(
@@ -147,7 +149,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   );
   expect(find.text('unsupported.mp4'), findsNothing);
 
-  await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+  await _createFromTimelineMenu(tester, 'Add video track');
   await _pumpUntil(
     tester,
     () => find.text('No timeline tracks').evaluate().isEmpty,
@@ -168,9 +170,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
 
   final mediaClipIds = _timelineClipIds(tester);
   final existingTrackIds = _keySuffixes(tester, 'timeline-track-lock-');
-  final addTextTrack = find.byKey(const ValueKey('timeline-add-text-track'));
-  await tester.ensureVisible(addTextTrack);
-  await tester.tap(addTextTrack);
+  await _createFromTimelineMenu(tester, 'Add text track');
   await _pumpUntil(
     tester,
     () =>
@@ -178,9 +178,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
         existingTrackIds.length,
     'text track creation',
   );
-  final addTitle = find.byKey(const ValueKey('timeline-add-title'));
-  await tester.ensureVisible(addTitle);
-  await tester.tap(addTitle);
+  await _createFromTimelineMenu(tester, 'Add title');
   await _pumpUntil(
     tester,
     () => find
@@ -635,6 +633,38 @@ Future<void> _pumpUntil(
   }
   final detail = diagnostic == null ? '' : ' ${diagnostic()}';
   fail('Timed out waiting for $operation.$detail');
+}
+
+/// The editor creates tracks, titles and captions from one menu, so a journey
+/// that taps a per-kind button is tapping a control this editor does not have.
+/// What the library was showing when an import did not arrive. A bare timeout
+/// says nothing about whether the picker, the probe or the UI was at fault.
+String _importDiagnostic(WidgetTester tester) {
+  final snack = find.byType(SnackBar);
+  final message = snack.evaluate().isEmpty
+      ? '<none>'
+      : find
+            .descendant(of: snack.first, matching: find.byType(Text))
+            .evaluate()
+            .map((element) => (element.widget as Text).data)
+            .whereType<String>()
+            .join(' | ');
+  final previews = _keySuffixes(tester, 'media-preview-');
+  return 'snackbar=${snack.evaluate().isNotEmpty} message="$message" '
+      'libraryItems=${previews.length}';
+}
+
+Future<void> _createFromTimelineMenu(
+  WidgetTester tester,
+  String entry,
+) async {
+  final menu = find.byKey(const ValueKey('timeline-create-menu'));
+  await tester.ensureVisible(menu);
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  final item = find.widgetWithText(PopupMenuItem<String>, entry);
+  await tester.tap(item.last);
+  await tester.pumpAndSettle();
 }
 
 bool _enabledAndHitTestableTextButton(WidgetTester tester, Finder finder) =>

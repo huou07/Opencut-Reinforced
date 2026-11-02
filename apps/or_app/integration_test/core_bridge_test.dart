@@ -1619,8 +1619,10 @@ Future<void> _pumpUntilMediaCaptionsAction(
 }
 
 Future<void> _pumpUntilProjectPanelsLoaded(WidgetTester tester) async {
-  final noMedia = find.text('No media imported');
-  final noTracks = find.text('No timeline tracks');
+  // Keyed, not copy-based: the empty-panel wording is design-facing and has
+  // already drifted once, which turned a copy edit into a red macOS job.
+  final noMedia = find.byKey(const ValueKey('media-library-empty'));
+  final noTracks = find.byKey(const ValueKey('timeline-empty-add-video'));
   for (var attempt = 0; attempt < 300; attempt++) {
     if (tester.any(noMedia) && tester.any(noTracks)) {
       return;
