@@ -630,9 +630,10 @@ Set<String> _keySuffixes(WidgetTester tester, String prefix) => tester
     .map((widget) => (widget.key as ValueKey<String>).value)
     .where((value) => value.length > prefix.length)
     .map((value) => value.substring(prefix.length))
-    // `media-preview-<id>` and `media-preview-progress-<id>` share a prefix; the
-    // progress row carries the id again, so it must not look like a second item.
-    .where((value) => !value.startsWith('progress-'))
+    // `media-preview-<id>` and the row's decorations (`media-preview-progress-<id>`,
+    // `media-preview-retry-<id>`) share a prefix; the decorations carry the id
+    // again, so they must not look like a second item.
+    .where((value) => !value.startsWith('progress-') && !value.startsWith('retry-'))
     .toSet();
 
 Set<String> _timelineClipIds(WidgetTester tester) => _keySuffixes(
