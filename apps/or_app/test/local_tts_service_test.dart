@@ -70,13 +70,19 @@ void main() {
       );
       await response.close();
     });
+    // A file used as a directory fails the same way on every platform, while
+    // `/dev/null/...` only fails on Unix.
+    final blocker = File(
+      '${Directory.systemTemp.path}/or-tts-blocker-${DateTime.now().microsecondsSinceEpoch}.bin',
+    )..writeAsBytesSync(const [0]);
+    addTearDown(() => blocker.deleteSync());
     final service = LocalTtsService();
     await expectLater(
       service.synthesize(
         baseUrl: 'http://127.0.0.1:${server.port}',
         text: 'One line.',
         voiceId: 'voice',
-        outputPath: '/dev/null/preview.wav',
+        outputPath: '${blocker.path}/preview.wav',
       ),
       throwsA(
         isA<LocalTtsException>().having(

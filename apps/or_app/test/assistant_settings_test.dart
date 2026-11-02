@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:or_app/assistant/assistant_settings.dart';
 
 void main() {
@@ -115,7 +116,11 @@ void main() {
       currentDirectory: root,
       executablePath: executable,
     );
-    expect(resolved, cli.path);
+    expect(
+      resolved != null && p.equals(resolved, cli.path),
+      isTrue,
+      reason: 'resolved $resolved from ${cli.path}',
+    );
   });
 
   test(
