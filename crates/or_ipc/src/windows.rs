@@ -14,8 +14,7 @@ use std::{
 use windows_sys::Win32::{
     Foundation::{
         CloseHandle, ERROR_BROKEN_PIPE, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, GENERIC_READ,
-        GENERIC_WRITE,
-        GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
+        GENERIC_WRITE, GetLastError, HANDLE, INVALID_HANDLE_VALUE, LocalFree,
     },
     Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -264,12 +263,7 @@ pub(crate) fn serve(
         if stopping.load(Ordering::SeqCst) {
             break;
         }
-        eprintln!("[or_ipc trace] waiting for a client");
         let connected = unsafe { ConnectNamedPipe(pipe.raw, null_mut()) };
-        eprintln!(
-            "[or_ipc trace] connect returned {connected} last_error {}",
-            unsafe { GetLastError() }
-        );
         if connected == 0 && unsafe { GetLastError() } != ERROR_PIPE_CONNECTED {
             if stopping.load(Ordering::SeqCst) {
                 break;
@@ -284,23 +278,16 @@ pub(crate) fn serve(
 
         // Keep another instance ready before this request is dispatched so
         // consecutive CLI connections do not race the server's rebind.
-        let next_pipe = match next_server_pipe(pipe_name, stopping) {
-            Ok(next) => next,
-            Err(error) => {
-                eprintln!("[or_ipc trace] next_server_pipe failed: {error:?}");
-                return Err(error);
-            }
-        };
-        eprintln!("[or_ipc trace] next pipe instance ready");
+        let next_pipe = next_server_pipe(pipe_name, stopping)?;
         let mut stream = pipe.into_stream();
         let handle_request = Arc::clone(&handle_request);
         let worker_stopping = Arc::clone(stopping);
+        let worker_name = pipe_name.to_string();
         // A motion render can take seconds. Serve each connection on its own
         // thread, exactly like the Unix accept loop, so a render never queues
         // preview, queries or edits behind it; the project host state is still
         // serialised by its own mutex.
         std::thread::spawn(move || {
-            eprintln!("[or_ipc trace] handler started");
             let shutdown = match handle_request(&mut stream) {
                 Ok(shutdown) => {
                     unsafe {
@@ -310,13 +297,16 @@ pub(crate) fn serve(
                 }
                 Err(_) => false,
             };
-            eprintln!("[or_ipc trace] handler finished shutdown={shutdown}");
             unsafe {
                 DisconnectNamedPipe(stream.handle());
             }
             drop(stream);
             if shutdown {
                 worker_stopping.store(true, Ordering::SeqCst);
+                // The accept loop is already parked in ConnectNamedPipe on the
+                // next instance, so a shutdown has to arrive as a connection
+                // for it to observe the stop and return.
+                wake(&worker_name);
             }
         });
         pipe = next_pipe;
@@ -340,10 +330,7 @@ fn next_server_pipe(
             {
                 std::thread::sleep(Duration::from_millis(5));
             }
-            Err(error) => {
-                eprintln!("[or_ipc trace] create_server_pipe failed: {error:?}");
-                return Err(error);
-            }
+            Err(error) => return Err(error),
         }
     }
 }
