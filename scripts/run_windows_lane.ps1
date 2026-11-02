@@ -6,7 +6,7 @@
 [CmdletBinding()]
 param(
   [ValidateSet('debug', 'release')][string]$Mode = 'debug',
-  [string[]]$Steps = @('tests', 'flutter-static', 'build', 'stage', 'journey', 'zip'),
+  [string[]]$Steps = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip'),
   [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
   [string]$Archive = ''
 )
@@ -65,6 +65,12 @@ if ($Steps -contains 'build') {
   }
   finally {
     Pop-Location
+  }
+}
+
+if ($Steps -contains 'probe') {
+  Invoke-Step 'production media probe' {
+    cargo build --locked --release --manifest-path (Join-Path $RepoRoot 'tools/ffmpeg-link-probe/Cargo.toml')
   }
 }
 

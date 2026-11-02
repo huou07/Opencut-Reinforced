@@ -5,16 +5,15 @@ import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
-        FilledButton,
         AlertDialog,
+        ButtonStyleButton,
         IconButton,
-        OutlinedButton,
         PopupMenuItem,
         PopupMenuButton,
         SnackBar,
         Text,
-        TextButton,
         Tooltip,
+        VoidCallback,
         Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -211,7 +210,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     '5/1',
   );
   final saveTitle = find.byKey(const ValueKey('timeline-save-text'));
-  expect(tester.widget<FilledButton>(saveTitle).onPressed, isNotNull);
+  expect(_controlIsEnabled(tester, saveTitle), isTrue);
   await tester.tap(saveTitle);
   await _pumpUntil(
     tester,
@@ -266,11 +265,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(find.text('24 fps').hitTestable());
   await _pumpUntil(
     tester,
-    () =>
-        tester
-            .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
-            .onPressed !=
-        null,
+    () => _controlIsEnabled(tester, find.byKey(const ValueKey('preview-play'))),
     'sequence frame rate configuration',
   );
   await tester.tap(find.byKey(const ValueKey('preview-play')));
@@ -295,7 +290,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<TextButton>(saveButton).onPressed != null &&
+        _controlIsEnabled(tester, saveButton) &&
         saveButton.hitTestable().evaluate().isNotEmpty,
     'project save control readiness',
   );
@@ -456,7 +451,7 @@ Future<void> _reopenAndExport(
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<TextButton>(saveButton).onPressed != null &&
+        _controlIsEnabled(tester, saveButton) &&
         saveButton.hitTestable().evaluate().isNotEmpty,
     'relinked project save control readiness',
   );
@@ -688,15 +683,32 @@ Future<void> _createFromTimelineMenu(WidgetTester tester, String entry) async {
   await tester.pumpAndSettle();
 }
 
+/// Reads the enabled state of a Material button whatever its concrete type.
+/// The shell has changed control types before (the save control moved from a
+/// TextButton to an IconButton), and a cast turned a moved control into what
+/// looked like a product defect.
+bool _controlIsEnabled(WidgetTester tester, Finder finder) {
+  for (final element in finder.evaluate()) {
+    final widget = element.widget;
+    final VoidCallback? onPressed = switch (widget) {
+      IconButton() => widget.onPressed,
+      ButtonStyleButton() => widget.onPressed,
+      _ => null,
+    };
+    if (onPressed != null) return true;
+  }
+  return false;
+}
+
 bool _enabledAndHitTestableTextButton(WidgetTester tester, Finder finder) =>
     finder.evaluate().isNotEmpty &&
-    tester.widget<TextButton>(finder).onPressed != null &&
+    _controlIsEnabled(tester, finder) &&
     finder.hitTestable().evaluate().isNotEmpty;
 
 String _projectCloseDiagnostic(WidgetTester tester, Finder closeButton) {
-  final closeEnabled = closeButton.evaluate().isNotEmpty
-      ? tester.widget<TextButton>(closeButton).onPressed != null
-      : false;
+  final closeEnabled =
+      closeButton.evaluate().isNotEmpty &&
+      _controlIsEnabled(tester, closeButton);
   return 'closeEnabled=$closeEnabled '
       'projectVisible=${find.byKey(const ValueKey("workspace-project-name")).evaluate().isNotEmpty} '
       'savedBadge=${find.text("Saved").evaluate().isNotEmpty} '
@@ -716,7 +728,7 @@ Future<void> _waitForImportButton(WidgetTester tester, Finder button) async {
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<OutlinedButton>(button).onPressed != null &&
+        _controlIsEnabled(tester, button) &&
         button.hitTestable().evaluate().isNotEmpty,
     'media import control readiness',
   );
@@ -730,7 +742,7 @@ Future<void> _waitForMediaAddToTimelineButton(
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<IconButton>(button).onPressed != null &&
+        _controlIsEnabled(tester, button) &&
         button.hitTestable().evaluate().isNotEmpty,
     'media add-to-timeline control readiness',
   );
