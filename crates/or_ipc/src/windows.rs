@@ -284,7 +284,14 @@ pub(crate) fn serve(
 
         // Keep another instance ready before this request is dispatched so
         // consecutive CLI connections do not race the server's rebind.
-        let next_pipe = next_server_pipe(pipe_name, stopping)?;
+        let next_pipe = match next_server_pipe(pipe_name, stopping) {
+            Ok(next) => next,
+            Err(error) => {
+                eprintln!("[or_ipc trace] next_server_pipe failed: {error:?}");
+                return Err(error);
+            }
+        };
+        eprintln!("[or_ipc trace] next pipe instance ready");
         let mut stream = pipe.into_stream();
         let handle_request = Arc::clone(&handle_request);
         let worker_stopping = Arc::clone(stopping);
@@ -333,7 +340,10 @@ fn next_server_pipe(
             {
                 std::thread::sleep(Duration::from_millis(5));
             }
-            Err(error) => return Err(error),
+            Err(error) => {
+                eprintln!("[or_ipc trace] create_server_pipe failed: {error:?}");
+                return Err(error);
+            }
         }
     }
 }
