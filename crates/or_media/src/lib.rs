@@ -52,8 +52,26 @@ pub fn ffmpeg_runtime_problem() -> Option<String> {
         None
     } else {
         Some(format!(
-            "the library reports {license:?} instead of the approved LGPL build"
+            "the library reports {license:?} instead of the approved LGPL build (loaded {})",
+            loaded_avutil_path().unwrap_or_else(|| "an unknown library".to_owned())
         ))
+    }
+}
+
+/// The libavutil this process actually mapped, so a licence refusal names the
+/// file instead of only the verdict. Linux only; other targets report unknown.
+fn loaded_avutil_path() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
+        maps.lines()
+            .find(|line| line.contains("libavutil.so"))
+            .and_then(|line| line.split_whitespace().last())
+            .map(std::string::ToString::to_string)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
     }
 }
 
