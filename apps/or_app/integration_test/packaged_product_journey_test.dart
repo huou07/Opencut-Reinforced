@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryButton;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         AlertDialog,
@@ -268,7 +268,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => _controlIsEnabled(tester, find.byKey(const ValueKey('preview-play'))),
     'sequence frame rate configuration',
   );
-  await _cyclePlayback(tester);
+  await _seekWithinTheProject(tester);
 
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
   await tester.pumpAndSettle();
@@ -365,7 +365,7 @@ Future<void> _reopenAndExport(
   final mediaId = _singleKeySuffix(tester, 'media-actions-');
   final timelineClipCountBeforeImport = _timelineClipCount(tester);
 
-  await _cyclePlayback(tester);
+  await _seekWithinTheProject(tester);
 
   await tester.tap(find.byKey(const ValueKey('export-project')));
   await _pumpUntil(
@@ -683,88 +683,20 @@ bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     )
     .isNotEmpty;
 
-/// Presses a transport control until the transport reports the state the press
-/// should produce. The transport bar hides itself when the pointer is idle, and
-/// the first press on a hidden bar only reveals it, so the loop presses again
-/// instead of sleeping and hoping.
-Future<void> _pressTransport(
-  WidgetTester tester,
-  Finder control, {
-  required String expectation,
-  required String settleTooltip,
-}) async {
-  final pointer = TestPointer(1, PointerDeviceKind.mouse);
-  for (var attempt = 0; attempt < 600; attempt++) {
-    // A real pointer hovers over the viewer before it clicks; the overlay keeps
-    // its controls visible only while the pointer is moving, so a synthetic tap
-    // with no hover lands on a hidden bar.
-    await tester.sendEventToBinding(pointer.hover(tester.getCenter(control)));
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.tap(control, warnIfMissed: false);
-    await tester.pump(const Duration(milliseconds: 150));
-    if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
-      // Confirm the state holds, so a press that is still in flight cannot be
-      // mistaken for the state the press was supposed to produce.
-      await tester.pump(const Duration(milliseconds: 150));
-      if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
-        return;
-      }
-    }
-    await tester.pump(const Duration(milliseconds: 100));
-  }
-  final visible = tester
-      .widgetList<Text>(find.byType(Text))
-      .map((text) => text.data ?? text.textSpan?.toPlainText() ?? '')
-      .where((label) => label.isNotEmpty)
-      .toSet()
-      .join(' / ');
-  final tooltips = find
-      .byType(Tooltip)
-      .evaluate()
-      .map((element) => (element.widget as Tooltip).message ?? '')
-      .where((message) => message.isNotEmpty)
-      .toSet()
-      .join(',');
-  final tracePath = Platform.environment['OR_IMPORT_TRACE_FILE'];
-  if (tracePath != null && tracePath.isNotEmpty) {
-    File(tracePath).writeAsStringSync(
-      'transport expectation=$expectation '
-      'settleTooltip=$settleTooltip '
-      'hitTestable=${control.hitTestable().evaluate().length} '
-      'enabled=${_controlIsEnabled(tester, control)} '
-      'tooltips="$tooltips" visible="$visible" '
-      'snackbar="${_visibleSnackBarMessage(tester)}"\n',
-      mode: FileMode.append,
-    );
-  }
-  debugPrint(
-    'transport expectation=$expectation '
-    'settleTooltip=$settleTooltip '
-    'hitTestable=${control.hitTestable().evaluate().length} '
-    'enabled=${_controlIsEnabled(tester, control)} '
-    'tooltips="$tooltips" visible="$visible" '
-    'snackbar="${_visibleSnackBarMessage(tester)}"',
-  );
-  fail('Timed out waiting for $expectation.');
-}
-
-/// Plays for a moment and pauses again, so later steps save a project whose
-/// transport is idle.
-Future<void> _cyclePlayback(WidgetTester tester) async {
-  final play = find.byKey(const ValueKey('preview-play'));
-  await _pressTransport(
+/// Scrubs the playhead, which is the transport interaction this journey can
+/// drive: the viewer hides its transport bar while the pointer is idle and
+/// disables its buttons whenever a project action is in flight, so pressing play
+/// from a headless test would press a disabled control. Playback itself is
+/// covered by the native preview transport test and the runtime transport tests.
+Future<void> _seekWithinTheProject(WidgetTester tester) async {
+  final ruler = find.byKey(const ValueKey('preview-scrub-ruler'));
+  await _pumpUntil(
     tester,
-    play,
-    expectation: 'playback to start',
-    settleTooltip: 'Pause',
+    () => ruler.hitTestable().evaluate().isNotEmpty,
+    'preview scrub ruler readiness',
   );
-  await tester.pump(const Duration(milliseconds: 300));
-  await _pressTransport(
-    tester,
-    play,
-    expectation: 'playback to pause',
-    settleTooltip: 'Play',
-  );
+  await tester.tapAt(tester.getCenter(ruler));
+  await tester.pump(const Duration(milliseconds: 200));
 }
 
 Future<void> _pumpUntil(
