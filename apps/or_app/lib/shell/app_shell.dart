@@ -1135,11 +1135,13 @@ class _AppShellState extends State<AppShell> {
       var media = await _findMaterializedMedia(session, project, path);
       debugPrint('ILLUSTRATION_ADD media_found=${media != null}');
       if (media == null) {
+        debugPrint('ILLUSTRATION_ADD importing busy=$_busy');
         final imported = await _runProjectActionAtSnapshot(
           project,
           (session, current) =>
               widget.projectGateway.importMedia(session, current, path),
         );
+        debugPrint('ILLUSTRATION_ADD imported=${imported != null}');
         if (imported == null || !identical(session, _activeSession)) {
           return false;
         }
