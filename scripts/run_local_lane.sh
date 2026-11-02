@@ -54,6 +54,14 @@ if [[ "$BUILD_MODE" != debug && "$BUILD_MODE" != release ]]; then
   echo "OR_LANE_BUILD_MODE must be debug or release, not $BUILD_MODE" >&2
   exit 2
 fi
+# Rust builds inside the Flutter native-assets hook do not see the exported
+# FFMPEG_DIR, so pin the packaged prefix in the user cargo config the way CI does.
+if [[ -d "$FFMPEG_PREFIX/lib/pkgconfig" ]]; then
+  bash "$ROOT/scripts/configure_linux_cargo_for_ffmpeg.sh" "$FFMPEG_PREFIX" >/dev/null
+else
+  echo "warning: no FFmpeg prefix at $FFMPEG_PREFIX; leaving the cargo config alone" >&2
+fi
+
 BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/$BUILD_MODE/bundle}"
 
 usage() {
