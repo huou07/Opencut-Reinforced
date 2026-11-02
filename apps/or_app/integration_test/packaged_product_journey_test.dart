@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
-import 'package:flutter/gestures.dart' show kSecondaryButton;
+import 'package:flutter/gestures.dart' show PointerDeviceKind, kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         AlertDialog,
@@ -693,7 +693,13 @@ Future<void> _pressTransport(
   required String expectation,
   required String settleTooltip,
 }) async {
+  final pointer = TestPointer(1, PointerDeviceKind.mouse);
   for (var attempt = 0; attempt < 600; attempt++) {
+    // A real pointer hovers over the viewer before it clicks; the overlay keeps
+    // its controls visible only while the pointer is moving, so a synthetic tap
+    // with no hover lands on a hidden bar.
+    await tester.sendEventToBinding(pointer.hover(tester.getCenter(control)));
+    await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(control, warnIfMissed: false);
     await tester.pump(const Duration(milliseconds: 150));
     if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
