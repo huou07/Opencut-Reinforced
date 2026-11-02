@@ -14,6 +14,13 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows_lane_common.ps1')
 
+# The hosted job puts the pinned FFmpeg bin directory on PATH, so media-probe
+# tests find ffprobe.exe the same way they do in CI.
+if ($env:FFMPEG_INSTALL_PREFIX) {
+  $ffmpegBin = Join-Path $env:FFMPEG_INSTALL_PREFIX 'bin'
+  if (Test-Path $ffmpegBin) { $env:PATH = "$ffmpegBin;$env:PATH" }
+}
+
 Set-Location $RepoRoot
 
 if ([string]::IsNullOrWhiteSpace($Archive)) {
