@@ -37,8 +37,24 @@ pub fn decoder_available(codec_name: &str) -> bool {
 
 /// Initializes the dynamically linked FFmpeg runtime and verifies its license.
 pub fn verify_ffmpeg_runtime() -> bool {
-    ffmpeg_the_third::init().is_ok()
-        && ffmpeg_the_third::util::license() == "LGPL version 2.1 or later"
+    ffmpeg_runtime_problem().is_none()
+}
+
+/// Explains why the linked runtime is not the approved LGPL build. A caller
+/// that refuses a request because of this returns the reason, so a packaged
+/// failure says what actually went wrong instead of only that it did.
+pub fn ffmpeg_runtime_problem() -> Option<String> {
+    if let Err(error) = ffmpeg_the_third::init() {
+        return Some(format!("the library refused to initialise: {error}"));
+    }
+    let license = ffmpeg_the_third::util::license();
+    if license == "LGPL version 2.1 or later" {
+        None
+    } else {
+        Some(format!(
+            "the library reports {license:?} instead of the approved LGPL build"
+        ))
+    }
 }
 
 #[cfg(test)]

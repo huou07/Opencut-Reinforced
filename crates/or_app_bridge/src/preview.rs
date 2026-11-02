@@ -117,6 +117,7 @@ mod desktop {
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
+    static FFMPEG_LICENSE_PROBLEM: OnceLock<String> = OnceLock::new();
 
     fn media_decoder(
         source: &MediaSourceRef,
@@ -247,9 +248,17 @@ mod desktop {
                         );
                     }
                     if !*FFMPEG_LICENSE_OK.get_or_init(or_media::verify_ffmpeg_runtime) {
+                        let reason = FFMPEG_LICENSE_PROBLEM
+                            .get_or_init(|| {
+                                or_media::ffmpeg_runtime_problem()
+                                    .unwrap_or_else(|| "the runtime check did not pass".to_owned())
+                            })
+                            .clone();
                         return ExportResponse::failure(
                             "FFMPEG_UNAVAILABLE",
-                            "the approved LGPL FFmpeg runtime could not be loaded",
+                            format!(
+                                "the approved LGPL FFmpeg runtime could not be loaded: {reason}"
+                            ),
                         );
                     }
                     let program = match load_program_from_session(session) {
