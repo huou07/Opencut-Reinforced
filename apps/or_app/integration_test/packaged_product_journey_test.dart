@@ -542,25 +542,41 @@ Future<void> _preserveProjectAcrossMissingProbe(
   );
 
   final importButton = find.byKey(const ValueKey('media-import'));
-  // This phase runs with the packaged inspector removed. The bridge deliberately
-  // falls back to the libavformat it links, so a readable file still imports and
-  // the project stays usable; that graceful degradation is what this phase
-  // protects. The unreadable-input copy is covered by the create phase.
+  // This phase runs with the packaged inspector removed, so the bridge falls
+  // back to the libavformat it links. The runner requires the saved project to
+  // stay byte-identical here, so the phase feeds a file neither backend can
+  // classify: the app must refuse it with a clear message and leave the project
+  // untouched instead of importing a broken item. The dedicated
+  // "packaged media inspector could not start" copy stays covered by the shell
+  // widget test, because this process always has a linked decoder to fall back
+  // to.
   final itemsBefore = _keySuffixes(tester, 'media-preview-').length;
-  picker.nextMediaPath = picker.mediaPaths[0];
+  final unprobeable = File(
+    '${Directory.systemTemp.path}/or-journey-unprobeable-'
+    '${DateTime.now().microsecondsSinceEpoch}.mp4',
+  );
+  await unprobeable.writeAsBytes(List<int>.filled(4096, 0x41));
+  addTearDown(() {
+    if (unprobeable.existsSync()) unprobeable.deleteSync();
+  });
+  picker.nextMediaPath = unprobeable.path;
   await _waitForImportButton(tester, importButton);
   await tester.tap(importButton);
   await _pumpUntil(
     tester,
-    () => _keySuffixes(tester, 'media-preview-').length > itemsBefore,
-    'fallback import of a readable file without the packaged inspector',
-    diagnostic: () => _importDiagnostic(tester, _visibleSnackBarMessage(tester)),
+    () => find
+        .textContaining('the media container is not in the import matrix')
+        .evaluate()
+        .isNotEmpty,
+    'missing packaged probe feedback',
+    diagnostic: () => 'unprobeable=${unprobeable.path} '
+        'exists=${unprobeable.existsSync()} '
+        '${_importDiagnostic(tester, _visibleSnackBarMessage(tester))}',
   );
-  await _pumpUntil(
-    tester,
-    () => _projectSaved(tester, find.byKey(const ValueKey('workspace-save'))),
-    'saved project after the fallback import',
-    diagnostic: () => _saveDiagnostic(tester, find.byKey(const ValueKey('workspace-save'))),
+  expect(
+    _keySuffixes(tester, 'media-preview-').length,
+    itemsBefore,
+    reason: 'a file neither backend can classify must not join the library',
   );
 
   expect(find.text('relinked-bunny.mp4'), findsWidgets);
