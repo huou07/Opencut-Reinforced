@@ -715,7 +715,7 @@ String _importDiagnostic(WidgetTester tester, [String? seenSnackBar]) {
       .map((element) => (element.widget as Text).data)
       .whereType<String>()
       .where((text) => text.trim().isNotEmpty)
-      .take(10)
+      .toSet()
       .join(' / ');
   return 'snackbar=${snack.evaluate().isNotEmpty} message="$message" '
       'seenSnackBar="${seenSnackBar ?? '<none>'}" '
