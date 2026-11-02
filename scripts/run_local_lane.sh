@@ -493,6 +493,13 @@ for step in "${step_list[@]}"; do
       # host with a codec or test build. Its four test-binary rows therefore need
       # prebuilt lanes, and a fresh checkout has none, so build them here once.
       # Without this every in-process row reported UNVERIFIED on a clean tree.
+      # Rust test binaries link the pinned FFmpeg libraries dynamically and
+      # carry no rpath, exactly like the hosted lane, which sets the same
+      # variable for its cargo steps. Without it every in-process row dies with
+      # a loader error (exit 127) instead of measuring anything.
+      lane_ld_path_previous="${LD_LIBRARY_PATH:-}"
+      lane_ld_path_present="${LD_LIBRARY_PATH+set}"
+      export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       bench_build_log="$LANE_DIR/linux-bench-build.log"
       : >"$bench_build_log"
       for bench_lane in \
@@ -512,6 +519,13 @@ for step in "${step_list[@]}"; do
         record_artifact bench "$BENCH_JSON" "$LAST_STEP_START_EPOCH"
       else
         lane_warn "$(step_command_text bench) printed no BENCH_JSON line"
+      fi
+      # Later packaged steps must see the ambient environment a user has, so put
+      # the loader path back exactly as it was found.
+      if [[ -n "$lane_ld_path_present" ]]; then
+        export LD_LIBRARY_PATH="$lane_ld_path_previous"
+      else
+        unset LD_LIBRARY_PATH
       fi
       ;;
     deb)
