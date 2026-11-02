@@ -498,8 +498,26 @@ for step in "${step_list[@]}"; do
         bash -c 'cd apps/or_app && exec flutter --no-version-check test --no-pub'
       ;;
     preflight)
+      # The bounded preflight builds its own debug bundle, and `flutter test`
+      # empties that bundle's runtime on every build. Stage the packaged helpers
+      # into a step-scoped directory so the CMake step can place them beside the
+      # bridge whatever build mode the lane is running: without this a release
+      # lane builds a debug bundle whose bridge cannot load libav* at all.
+      preflight_runtime="$LANE_DIR/preflight-media-runtime"
+      lane_runtime_previous="${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY:-}"
+      lane_runtime_present="${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY+set}"
+      rm -rf "$preflight_runtime"
+      mkdir -p "$preflight_runtime/lib"
+      cp "$FFMPEG_PREFIX/bin/ffmpeg" "$FFMPEG_PREFIX/bin/ffprobe" "$preflight_runtime/" &&
+        cp -P "$FFMPEG_PREFIX/lib/"libav*.so* "$FFMPEG_PREFIX/lib/"libsw*.so* "$preflight_runtime/lib/"
+      export OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY="$preflight_runtime"
       run_step preflight "$log" "$(step_command_text preflight)" \
         python3 scripts/run_linux_ui_preflight.py
+      if [[ "$lane_runtime_present" == "set" ]]; then
+        export OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY="$lane_runtime_previous"
+      else
+        unset OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY
+      fi
       record_artifact preflight "$PREFLIGHT_REPORT" "$LAST_STEP_START_EPOCH"
       ;;
     bench)
