@@ -51,9 +51,17 @@ archive="$temp/ffmpeg-8.1.3.tar.xz"
 source="$temp/ffmpeg-8.1.3"
 prefix="$temp/ffmpeg-8.1.3-install"
 prefix_win="$(cygpath -am "$prefix")"
-curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
-  https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
-echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
+ffmpeg_source_sha512=acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1
+if [[ -f "$archive" ]] &&
+  echo "$ffmpeg_source_sha512  $archive" | sha512sum --check --status 2>/dev/null; then
+  # A retry after a transient download failure should not re-fetch a tarball
+  # that is already here and already verified.
+  echo "Reusing the verified FFmpeg source archive at $archive"
+else
+  curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
+    https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
+  echo "$ffmpeg_source_sha512  $archive" | sha512sum --check
+fi
 xz --test "$archive"
 tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$temp/FFmpeg-COPYING.LGPLv2.1"
 tar -xJf "$archive" -C "$temp"
