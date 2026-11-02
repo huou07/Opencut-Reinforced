@@ -1279,10 +1279,6 @@ class _AppShellState extends State<AppShell> {
       }
       for (final item in page.items.reversed) {
         final sourcePath = _mediaSourcePath(item);
-        debugPrint(
-          'ILLUSTRATION_ADD compare expected=$expectedPath '
-          'source=$sourcePath canonical=${sourcePath == null ? null : canonicalSourcePath(sourcePath)}',
-        );
         if (sourcePath != null &&
             canonicalSourcePath(sourcePath) == expectedPath) {
           return item;
