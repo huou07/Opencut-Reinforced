@@ -120,11 +120,18 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   );
 
   await tester.tap(find.byKey(const ValueKey('media-import')));
+  // A refusal (busy project action, unreadable source) shows a snackbar for a
+  // few seconds; the ten-second progress tick would miss it entirely, so every
+  // attempt records the last message the app showed.
+  String? seenSnackBar;
   await _pumpUntil(
     tester,
     () => find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
     'packaged 1080p H.264/AAC MP4 import',
-    diagnostic: () => _importDiagnostic(tester),
+    eachAttempt: () {
+      seenSnackBar = _visibleSnackBarMessage(tester) ?? seenSnackBar;
+    },
+    diagnostic: () => _importDiagnostic(tester, seenSnackBar),
   );
   final mediaId = _singleKeySuffix(tester, 'media-preview-');
   await _pumpUntil(
@@ -620,9 +627,11 @@ Future<void> _pumpUntil(
   String operation, {
   int attempts = 600,
   String Function()? diagnostic,
+  void Function()? eachAttempt,
 }) async {
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (ready()) return;
+    eachAttempt?.call();
     if (diagnostic != null && (attempt + 1) % 100 == 0) {
       debugPrint(
         'OR_PACKAGED_JOURNEY_PROGRESS operation="$operation" '
@@ -639,7 +648,7 @@ Future<void> _pumpUntil(
 /// that taps a per-kind button is tapping a control this editor does not have.
 /// What the library was showing when an import did not arrive. A bare timeout
 /// says nothing about whether the picker, the probe or the UI was at fault.
-String _importDiagnostic(WidgetTester tester) {
+String _importDiagnostic(WidgetTester tester, [String? seenSnackBar]) {
   final snack = find.byType(SnackBar);
   final message = snack.evaluate().isEmpty
       ? '<none>'
@@ -650,8 +659,17 @@ String _importDiagnostic(WidgetTester tester) {
             .whereType<String>()
             .join(' | ');
   final previews = _keySuffixes(tester, 'media-preview-');
+  final visible = find
+      .byType(Text)
+      .evaluate()
+      .map((element) => (element.widget as Text).data)
+      .whereType<String>()
+      .where((text) => text.trim().isNotEmpty)
+      .take(10)
+      .join(' / ');
   return 'snackbar=${snack.evaluate().isNotEmpty} message="$message" '
-      'libraryItems=${previews.length}';
+      'seenSnackBar="${seenSnackBar ?? '<none>'}" '
+      'libraryItems=${previews.length} visible="$visible"';
 }
 
 Future<void> _createFromTimelineMenu(

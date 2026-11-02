@@ -49,7 +49,12 @@ BENCH_JSON="$LANE_DIR/bench.json"
 # wrong place there.
 FFMPEG_PREFIX="${OR_LANE_FFMPEG_PREFIX:-$ROOT/apps/or_app/build/local-deb/ffmpeg-install}"
 CODEC_PREFIX="${OR_LANE_CODEC_PREFIX:-$ROOT/apps/or_app/build/local-deb/codecs-install}"
-BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/debug/bundle}"
+BUILD_MODE="${OR_LANE_BUILD_MODE:-debug}"
+if [[ "$BUILD_MODE" != debug && "$BUILD_MODE" != release ]]; then
+  echo "OR_LANE_BUILD_MODE must be debug or release, not $BUILD_MODE" >&2
+  exit 2
+fi
+BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/$BUILD_MODE/bundle}"
 
 usage() {
   cat <<'USAGE'
@@ -353,7 +358,8 @@ packaged_build_deb() {
   cd "$root" || exit 1
   reset_bridge_hook_cache
   (cd apps/or_app && flutter --no-version-check pub get --offline --enforce-lockfile) || exit 1
-  (cd apps/or_app && flutter --no-version-check build linux --debug --no-pub) || exit 1
+  (cd apps/or_app && flutter --no-version-check build linux \
+    "--${OR_LANE_BUILD_MODE:-debug}" --no-pub) || exit 1
 
   local bridge
   bridge="$(find "$bundle" -name libor_app_bridge.so -print -quit)"
@@ -550,7 +556,8 @@ for step in "${step_list[@]}"; do
       else
         export OR_LANE_ROOT="$ROOT" OR_LANE_FFMPEG_PREFIX="$FFMPEG_PREFIX" \
           OR_LANE_CODEC_PREFIX="$CODEC_PREFIX" OR_LANE_BUNDLE="$BUNDLE" \
-          OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-debug.deb" \
+          OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-$BUILD_MODE.deb" \
+          OR_LANE_BUILD_MODE="$BUILD_MODE" \
           OR_LANE_HEAD="$head" OR_LANE_FFMPEG_COPYING="$copying" OR_LANE_CODEC_NOTICES="$notices"
         run_step deb "$log" "$(step_command_text deb)" \
           python3 scripts/run_linux_ui_preflight.py --exec \
