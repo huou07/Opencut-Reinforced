@@ -3853,8 +3853,15 @@ class _AppShellState extends State<AppShell> {
       );
       return;
     }
+    // TRACE: temporary diagnostic for the packaged journey import hang.
+    debugPrint(
+      'OR_IMPORT_TRACE picker=${sources.length} '
+      'first=${sources.isEmpty ? '<none>' : sources.first} '
+      'mounted=$mounted busy=$_busy',
+    );
     sources = sources.toSet().toList(growable: false);
     if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
+      debugPrint('OR_IMPORT_TRACE return-early-empty-or-closed');
       return;
     }
 
@@ -3892,7 +3899,9 @@ class _AppShellState extends State<AppShell> {
         final updated = await _runProjectAction((session, _) async {
           // Capture identity and revision immediately before Rust probes each
           // file.
+          debugPrint('OR_IMPORT_TRACE summary-start');
           final current = await widget.projectGateway.summary(session);
+          debugPrint('OR_IMPORT_TRACE summary-done rev=${current.revision}');
           if (!mounted || !identical(session, _activeSession)) {
             return const ProjectActionResult(
               succeeded: false,
@@ -3901,8 +3910,18 @@ class _AppShellState extends State<AppShell> {
             );
           }
           setState(() => _activeProject = current);
-          return widget.projectGateway.importMedia(session, current, source);
+          final imported = await widget.projectGateway.importMedia(
+            session,
+            current,
+            source,
+          );
+          debugPrint(
+            'OR_IMPORT_TRACE import-done ok=${imported.succeeded} '
+            'code=${imported.errorCode} msg=${imported.message}',
+          );
+          return imported;
         }, onFailure: (message) => failure = message);
+        debugPrint('OR_IMPORT_TRACE updated=${updated != null} failure=$failure');
         if (updated == null) {
           return (
             imported: false,
