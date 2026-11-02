@@ -598,8 +598,12 @@ void main() {
   testWidgets('native Flutter project lifecycle uses one Rust host', (
     tester,
   ) async {
+    // A fixed logical viewport: physicalSize alone depends on the host's
+    // device pixel ratio, and a 2x host would lay the workspace out compact.
     tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final directory = Directory.systemTemp.createTempSync('or-flutter-cli-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final projectPath = '${directory.path}/native-project.orproj';
@@ -738,8 +742,12 @@ void main() {
   testWidgets('native preview transport keeps exact time and explicit rate', (
     tester,
   ) async {
+    // A fixed logical viewport: physicalSize alone depends on the host's
+    // device pixel ratio, and a 2x host would lay the workspace out compact.
     tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final directory = Directory.systemTemp.createTempSync('or-preview-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final gateway = _ObservedRustProjectGateway();
@@ -765,6 +773,29 @@ void main() {
     final session = gateway.activeSession!;
     expect(await OrViewerTexture.textureId(), isNotNull);
     final project = await gateway.summary(session);
+    final createdPreview = await gateway.previewState(session);
+    expect(
+      createdPreview.sequenceFrameRate?.canonical,
+      '30/1',
+      reason: 'the create dialog starts a project at its default rate',
+    );
+
+    // Playback and stepping need a sequence rate. Clear the one the create
+    // dialog applied so the refusal this test protects is actually exercised.
+    final cleared = await gateway.setTimelineSequenceFrameRate(
+      session,
+      project,
+      null,
+    );
+    expect(cleared.succeeded, isTrue);
+    final clearedProject = await gateway.summary(session);
+    expect(clearedProject.revision, project.revision + BigInt.one);
+    expect(
+      (await gateway.previewState(session)).sequenceFrameRate,
+      isNull,
+      reason: 'clearing the rate leaves the project without one',
+    );
+
     final exactTime = ProjectRationalTime(BigInt.from(7), 15);
     final preview = await gateway.previewSeek(session, exactTime);
     expect(preview.position.canonical, '7/15');
@@ -772,7 +803,7 @@ void main() {
     expect(preview.frameSequence, greaterThan(BigInt.zero));
     expect(preview.width, greaterThan(0));
     expect(preview.height, greaterThan(0));
-    expect((await gateway.summary(session)).revision, project.revision);
+    expect((await gateway.summary(session)).revision, clearedProject.revision);
     await expectLater(
       gateway.previewPlay(session),
       throwsA(
@@ -786,11 +817,11 @@ void main() {
 
     final configured = await gateway.setTimelineSequenceFrameRate(
       session,
-      project,
+      clearedProject,
       const ProjectRationalRate(24, 1),
     );
     expect(configured.succeeded, isTrue);
-    expect(configured.view?.revision, project.revision + BigInt.one);
+    expect(configured.view?.revision, clearedProject.revision + BigInt.one);
     final configuredPreview = await gateway.previewState(session);
     expect(configuredPreview.sequenceFrameRate?.canonical, '24/1');
     expect(configuredPreview.contentEnd, isNull);
@@ -1629,7 +1660,16 @@ Future<void> _pumpUntilProjectPanelsLoaded(WidgetTester tester) async {
     }
     await tester.pump(const Duration(milliseconds: 100));
   }
-  fail('The native project workspace did not finish loading its empty panels.');
+  final visible = tester
+      .widgetList<Text>(find.byType(Text))
+      .map((text) => text.data)
+      .whereType<String>()
+      .toSet()
+      .join(' / ');
+  fail(
+    'The native project workspace did not finish loading its empty panels. '
+    'visible="$visible"',
+  );
 }
 
 class _NativeProjectPicker implements ProjectFilePicker {
