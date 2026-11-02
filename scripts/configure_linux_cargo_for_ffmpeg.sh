@@ -18,9 +18,14 @@ fi
 prefix="$(cd "$prefix" && pwd)"
 
 mkdir -p "$HOME/.cargo"
+# The link search order decides which libavutil wins. A dependency that links a
+# system library (libsqlite3-sys with pkg-config is one) emits its own
+# -L /usr/lib/... before any build-script search path, and the bridge then links
+# the host FFmpeg instead of the packaged one. Putting the prefix in rustflags
+# places it ahead of every build-script path.
 cat > "$HOME/.cargo/config.toml" <<CONFIG
 [build]
-rustflags = ["-C", "link-arg=-Wl,-rpath,\$ORIGIN"]
+rustflags = ["-C", "link-arg=-Wl,-rpath,\$ORIGIN", "-L", "native=$prefix/lib"]
 
 [env]
 FFMPEG_DIR = { value = "$prefix", force = true }
