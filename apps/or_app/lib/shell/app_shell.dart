@@ -1133,7 +1133,6 @@ class _AppShellState extends State<AppShell> {
 
     try {
       var media = await _findMaterializedMedia(session, project, path);
-      debugPrint('ILLUSTRATION_ADD media_found=${media != null}');
       if (media == null) {
         final imported = await _runProjectActionAtSnapshot(
           project,
@@ -1154,11 +1153,6 @@ class _AppShellState extends State<AppShell> {
       }
 
       var tracks = await widget.projectGateway.listTimelineTracks(session);
-      debugPrint(
-        'ILLUSTRATION_ADD tracks=${tracks.items.length} '
-        'matches=${_matchesTimelineProject(tracks, project)} '
-        'tracks_rev=${tracks.revision.canonical} project_rev=${project.revision.canonical}',
-      );
       if (!_matchesTimelineProject(tracks, project)) {
         await _refreshProjectState(session);
         _showUnavailable(
@@ -1167,7 +1161,6 @@ class _AppShellState extends State<AppShell> {
         return false;
       }
       var videoTrack = _firstUnlockedVideoTrack(tracks.items);
-      debugPrint('ILLUSTRATION_ADD video_track=${videoTrack?.trackId}');
       if (videoTrack == null) {
         final updated = await _runProjectActionAtSnapshot(
           project,
