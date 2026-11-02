@@ -1877,6 +1877,7 @@ class _AppShellState extends State<AppShell> {
       return null;
     }
     if (!_sameProjectIdentity(expected, current)) {
+      debugPrint('IA6 identity mismatch');
       _showUnavailable(
         'The project changed while this action was open. Refresh the project before trying again.',
       );
@@ -1885,6 +1886,7 @@ class _AppShellState extends State<AppShell> {
     setState(() => _busy = true);
     try {
       final result = await operation(session, expected);
+      debugPrint('IA7 result=${result.succeeded} code=${result.errorCode}');
       if (!mounted || !identical(session, _activeSession)) return null;
       if (!result.succeeded) {
         if (result.errorCode == 'REVISION_CONFLICT') {
