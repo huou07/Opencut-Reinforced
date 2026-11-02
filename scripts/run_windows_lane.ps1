@@ -14,6 +14,16 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows_lane_common.ps1')
 
+# A single token such as `-Steps stage,zip` arrives as one string when the
+# script is started through `pwsh -File`, which silently ran no steps at all
+# and still reported PASS. Split it, and refuse a name that is not a step.
+$Steps = @($Steps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+$known = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip')
+$unknown = @($Steps | Where-Object { $known -notcontains $_ })
+if ($Steps.Count -eq 0 -or $unknown.Count -gt 0) {
+  throw "unknown lane step(s): $($unknown -join ', '); expected some of $($known -join ', ')"
+}
+
 # The hosted job puts the pinned FFmpeg bin directory on PATH, so media-probe
 # tests find ffprobe.exe the same way they do in CI.
 if ($env:FFMPEG_INSTALL_PREFIX) {
