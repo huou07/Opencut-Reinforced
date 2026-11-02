@@ -940,29 +940,9 @@ jobs:
         shell: pwsh
         run: ./scripts/build_windows_zlib.ps1 -BuildRoot $env:RUNNER_TEMP
 
-      - name: Run project storage tests
-        run: cargo test -p or_core --test project_storage
-
-      - name: Run project recovery tests
-        run: cargo test -p or_core --test project_recovery
-
-      - name: Run persistent cache index tests
-        run: cargo test -p or_core cache::tests
-
-      - name: Run media artifact service tests with fake FFmpeg
-        run: cargo test -p or_core media_artifacts::tests
-
-      - name: Run real local IPC transport tests
-        run: cargo test -p or_ipc --test local_transport
-
-      - name: Run shared live-host transport tests
-        run: cargo test -p or_ipc --test live_host
-
-      - name: Run attached CLI shared-host parity tests
-        run: cargo test -p or_cli --test semantic_cli
-
-      - name: Verify Windows local endpoint access controls
-        run: cargo test -p or_ipc --lib
+      - name: Run the shared Windows lane tests
+        shell: pwsh
+        run: ./scripts/run_windows_lane.ps1 -Steps tests
 
       - name: Install Flutter 3.47.5
         shell: pwsh
@@ -1016,57 +996,15 @@ jobs:
           cargo test --locked -p or_core --test project_recovery
 
       - name: Build Windows app with Rust bridge and texture adapter
-        working-directory: apps/or_app
+        shell: pwsh
         env:
           FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
-        run: flutter build windows --debug --verbose
+        run: ./scripts/run_windows_lane.ps1 -Steps build
 
       - name: Package FFmpeg beside the desktop probe and verify runtime loading
         shell: pwsh
-        run: |
-          $bundle = Join-Path $env:GITHUB_WORKSPACE 'apps/or_app/build/windows/x64/runner/Debug'
-          if (-not (Test-Path $bundle -PathType Container)) { throw 'Windows app bundle directory not found' }
-          $bridge = Get-ChildItem -Path $env:GITHUB_WORKSPACE/apps/or_app/build/windows -Filter '*or_app_bridge*.dll' -Recurse | Select-Object -First 1
-          if ($null -eq $bridge) { throw 'Packaged or_app_bridge DLL not found' }
-          $runtimeDir = $bridge.Directory.FullName
-          Add-Content -Path $env:GITHUB_ENV -Value "OR_PACKAGED_BRIDGE_DIRECTORY=$runtimeDir"
-          $probeSource = Join-Path $env:GITHUB_WORKSPACE 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe'
-          if (-not (Test-Path $probeSource -PathType Leaf)) { throw 'Production or_media FFmpeg probe was not built' }
-          $probe = Join-Path $runtimeDir 'ffmpeg-link-probe.exe'
-          Copy-Item -Path $probeSource -Destination $probe -Force
-          $destinations = @($runtimeDir)
-          if ($bundle -ne $runtimeDir) { $destinations += $bundle }
-          foreach ($pattern in @('avcodec*.dll', 'avformat*.dll', 'avutil*.dll', 'swresample*.dll', 'swscale*.dll', 'avfilter*.dll')) {
-            $libraries = Get-ChildItem -Path "$env:FFMPEG_INSTALL_PREFIX/bin" -Filter $pattern -File
-            if ($libraries.Count -eq 0) { throw "FFmpeg runtime library missing: $pattern" }
-            foreach ($destination in $destinations) {
-              Copy-Item -Path $libraries.FullName -Destination $destination -Force
-            }
-          }
-          # 9B1 packaged media helpers live beside the app binary; zlib is
-          # statically linked into these helper executables.
-          foreach ($helper in @('ffmpeg.exe', 'ffprobe.exe')) {
-            $source = Join-Path "$env:FFMPEG_INSTALL_PREFIX/bin" $helper
-            if (-not (Test-Path $source -PathType Leaf)) { throw "FFmpeg helper missing: $helper" }
-            Copy-Item -Path $source -Destination $bundle -Force
-          }
-          $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
-          & $dumpbin /dependents $probe
-          $helperDependencies = & $dumpbin /dependents (Join-Path $bundle 'ffmpeg.exe') | Out-String
-          if ($helperDependencies -match '(?i)zlib.*\.dll') { throw 'ffmpeg.exe unexpectedly depends on a zlib DLL' }
-          $env:PATH = "$runtimeDir;$bundle;$env:SystemRoot\System32;$env:SystemRoot"
-          $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridge.FullName)
-          [System.Runtime.InteropServices.NativeLibrary]::Free($bridgeHandle)
-          & $probe
-          # The staged helpers must run on bundled libraries alone.
-          $env:PATH = "$bundle;$env:SystemRoot\System32;$env:SystemRoot"
-          & (Join-Path $bundle 'ffprobe.exe') -hide_banner -version
-          if ($LASTEXITCODE -ne 0) { throw 'staged ffprobe did not run on bundled libraries' }
-          $encoders = & (Join-Path $bundle 'ffmpeg.exe') -hide_banner -encoders
-          if ($LASTEXITCODE -ne 0) { throw 'staged ffmpeg did not run on bundled libraries' }
-          if (-not ($encoders | Select-String ' png ' -SimpleMatch)) { throw 'staged ffmpeg lacks the png encoder' }
-          if (-not ($encoders | Select-String ' mpeg4 ' -SimpleMatch)) { throw 'staged ffmpeg lacks the mpeg4 encoder' }
+        run: ./scripts/stage_windows_bundle.ps1
 
       - name: Verify packaged product journey in clean environment
         shell: pwsh
