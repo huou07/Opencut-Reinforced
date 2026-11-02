@@ -684,9 +684,9 @@ bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     .isNotEmpty;
 
 /// Presses a transport control until the transport reports the state the press
-/// should produce. The play control is disabled whenever a project action is in
-/// flight, so a single tap can land in a disabled window and be dropped; the
-/// loop presses again instead of sleeping and hoping.
+/// should produce. The transport bar hides itself when the pointer is idle, and
+/// the first press on a hidden bar only reveals it, so the loop presses again
+/// instead of sleeping and hoping.
 Future<void> _pressTransport(
   WidgetTester tester,
   Finder control, {
@@ -694,12 +694,12 @@ Future<void> _pressTransport(
   required String settleTooltip,
 }) async {
   for (var attempt = 0; attempt < 600; attempt++) {
-    final ready =
-        _controlIsEnabled(tester, control) &&
-        control.hitTestable().evaluate().isNotEmpty;
-    if (ready) {
-      await tester.tap(control, warnIfMissed: false);
-      await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(control, warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 150));
+    if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
+      // Confirm the state holds, so a press that is still in flight cannot be
+      // mistaken for the state the press was supposed to produce.
+      await tester.pump(const Duration(milliseconds: 150));
       if (find.byTooltip(settleTooltip).evaluate().isNotEmpty) {
         return;
       }
