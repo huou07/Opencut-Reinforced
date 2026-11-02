@@ -264,7 +264,12 @@ pub(crate) fn serve(
         if stopping.load(Ordering::SeqCst) {
             break;
         }
+        eprintln!("[or_ipc trace] waiting for a client");
         let connected = unsafe { ConnectNamedPipe(pipe.raw, null_mut()) };
+        eprintln!(
+            "[or_ipc trace] connect returned {connected} last_error {}",
+            unsafe { GetLastError() }
+        );
         if connected == 0 && unsafe { GetLastError() } != ERROR_PIPE_CONNECTED {
             if stopping.load(Ordering::SeqCst) {
                 break;
@@ -288,6 +293,7 @@ pub(crate) fn serve(
         // preview, queries or edits behind it; the project host state is still
         // serialised by its own mutex.
         std::thread::spawn(move || {
+            eprintln!("[or_ipc trace] handler started");
             let shutdown = match handle_request(&mut stream) {
                 Ok(shutdown) => {
                     unsafe {
@@ -297,6 +303,7 @@ pub(crate) fn serve(
                 }
                 Err(_) => false,
             };
+            eprintln!("[or_ipc trace] handler finished shutdown={shutdown}");
             unsafe {
                 DisconnectNamedPipe(stream.handle());
             }
