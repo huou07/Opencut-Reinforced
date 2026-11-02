@@ -106,12 +106,23 @@ if ($Steps -contains 'stage') {
 }
 
 if ($Steps -contains 'journey') {
-  $env:OR_PACKAGED_HELPERS_DIRECTORY = $bundle
-  # The hosted job exports this from the staging step; a local run has to point
-  # the journey at the same bundle so both paths load the packaged bridge.
-  if (-not $env:OR_PACKAGED_BRIDGE_DIRECTORY) {
-    $env:OR_PACKAGED_BRIDGE_DIRECTORY = $bundle
+  # `flutter test -d windows` runs the Debug build, so the journey has to use the
+  # Debug bundle even when the lane packages a release build: the app resolves
+  # its FFmpeg helpers beside its own executable, and a helper staged only into
+  # Release leaves the thumbnail job with nothing to spawn.
+  $journeyBundle = Join-Path $RepoRoot 'apps/or_app/build/windows/x64/runner/Debug'
+  Push-Location (Join-Path $RepoRoot 'apps/or_app')
+  try {
+    Invoke-Step 'flutter build windows debug' { flutter build windows --debug }
   }
+  finally {
+    Pop-Location
+  }
+  Invoke-Step 'stage journey runtime' {
+    & (Join-Path $PSScriptRoot 'stage_windows_bundle.ps1') -Bundle $journeyBundle -Mode debug -RepoRoot $RepoRoot
+  }
+  $env:OR_PACKAGED_HELPERS_DIRECTORY = $journeyBundle
+  $env:OR_PACKAGED_BRIDGE_DIRECTORY = $journeyBundle
   if (-not $env:FFMPEG_DIR -and $env:FFMPEG_INSTALL_PREFIX) {
     $env:FFMPEG_DIR = $env:FFMPEG_INSTALL_PREFIX
   }

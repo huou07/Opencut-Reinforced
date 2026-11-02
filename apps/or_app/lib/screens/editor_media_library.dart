@@ -328,7 +328,7 @@ class EditorMediaLibraryPanel extends StatelessWidget {
                       SizedBox(height: OrSpacing.x2),
                       Text(
                         'Import a video, image or audio file to start.',
-                        key: const ValueKey('media-library-empty'),
+                        key: ValueKey('media-library-empty'),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: OrColors.textMuted,
