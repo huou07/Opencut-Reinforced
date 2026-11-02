@@ -29,7 +29,16 @@ class LocalTtsEngine {
   final String startCommand;
   final String homepage;
 
-  bool get installable => installCommand.isNotEmpty;
+  /// Whether this engine can run on the host at all.
+  ///
+  /// The built-in installer and start commands are POSIX shell recipes, so
+  /// Windows offers the custom-server engine instead of pretending the
+  /// download works: the same engines run there once the user starts the
+  /// server themselves.
+  bool get supportedOnThisPlatform =>
+      installCommand.isEmpty || !Platform.isWindows;
+
+  bool get installable => installCommand.isNotEmpty && supportedOnThisPlatform;
 }
 
 const localTtsEngines = <LocalTtsEngine>[
@@ -189,9 +198,15 @@ class LocalTtsServerManager extends ChangeNotifier {
     notifyListeners();
     try {
       final directory = await _ensureEngineDirectory(engine.id);
+      // The recipes are written for a POSIX shell; Windows gets its own shell
+      // so a user-supplied start command still runs there.
+      final shell = Platform.isWindows ? 'cmd.exe' : 'bash';
+      final shellArguments = Platform.isWindows
+          ? ['/c', command]
+          : ['-lc', command];
       final process = await Process.start(
-        'bash',
-        ['-lc', command],
+        shell,
+        shellArguments,
         workingDirectory: directory.path,
         environment: {...Platform.environment, 'PYTHONUNBUFFERED': '1'},
         runInShell: false,

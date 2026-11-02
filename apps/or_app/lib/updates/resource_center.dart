@@ -28,6 +28,56 @@ class RuntimeSnapshot {
   bool get complete => ffmpeg && speechRuntime && orCli;
 }
 
+/// Describes what a desktop package actually carries beside its executable.
+///
+/// Every desktop package ships its runtime next to the application binary:
+/// macOS inside `Contents/MacOS`, Linux and Windows beside the executable in
+/// the install directory. Detection therefore reads one directory on every
+/// platform instead of assuming the macOS bundle shape, and a build that ships
+/// no speech runtime reports it as missing rather than optimistically claiming
+/// support the user cannot get.
+Future<RuntimeSnapshot> describeRuntime({
+  required Directory runtimeDirectory,
+  Directory? frameworks,
+  required String? bundlePath,
+  required String? assistantPath,
+}) async {
+  String binaryPath(String name) {
+    final binary = Platform.isWindows ? '$name.exe' : name;
+    return '${runtimeDirectory.path}${Platform.pathSeparator}$binary';
+  }
+
+  Future<bool> carries(String name) => File(binaryPath(name)).exists();
+
+  var ffmpegLibraries = frameworks == null;
+  if (frameworks != null) {
+    try {
+      await for (final entry in frameworks.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        final name = entry.uri.pathSegments.last;
+        if (name.startsWith('libavutil.') && name.endsWith('.dylib')) {
+          ffmpegLibraries = true;
+          break;
+        }
+      }
+    } on FileSystemException {
+      ffmpegLibraries = false;
+    }
+  }
+  return RuntimeSnapshot(
+    packaged: bundlePath != null,
+    ffmpeg:
+        ffmpegLibraries && await carries('ffmpeg') && await carries('ffprobe'),
+    speechRuntime:
+        await carries('whisper-cli') && await carries('or-whisper-provider'),
+    orCli: await carries('or'),
+    assistantPath: assistantPath,
+    bundlePath: bundlePath,
+  );
+}
+
 /// Small platform seam around the release API and the filesystem.
 ///
 /// The panel takes one of these so widget tests never touch GitHub or the
@@ -37,42 +87,17 @@ class ResourceCenterService {
 
   Future<RuntimeSnapshot> inspectRuntime() async {
     final contents = _bundleContents();
-    final macos = contents == null
+    final runtime = contents == null
         ? File(Platform.resolvedExecutable).parent
         : Directory('${contents.path}/MacOS');
-    final packaged = contents != null;
     final frameworks = Directory(
-      '${contents?.path ?? '${macos.path}/..'}/Frameworks',
+      '${contents?.path ?? '${runtime.path}/..'}/Frameworks',
     );
-    var ffmpegLibraries = false;
-    if (await frameworks.exists()) {
-      try {
-        await for (final entry in frameworks.list(
-          recursive: true,
-          followLinks: false,
-        )) {
-          final name = entry.uri.pathSegments.last;
-          if (name.startsWith('libavutil.') && name.endsWith('.dylib')) {
-            ffmpegLibraries = true;
-            break;
-          }
-        }
-      } on FileSystemException {
-        ffmpegLibraries = false;
-      }
-    }
-    return RuntimeSnapshot(
-      packaged: packaged,
-      ffmpeg:
-          ffmpegLibraries &&
-          await File('${macos.path}/ffmpeg').exists() &&
-          await File('${macos.path}/ffprobe').exists(),
-      speechRuntime:
-          await File('${macos.path}/whisper-cli').exists() &&
-          await File('${macos.path}/or-whisper-provider').exists(),
-      orCli: await File('${macos.path}/or').exists(),
-      assistantPath: await _findAssistant(),
+    return describeRuntime(
+      runtimeDirectory: runtime,
+      frameworks: await frameworks.exists() ? frameworks : null,
       bundlePath: contents?.parent.path,
+      assistantPath: await _findAssistant(),
     );
   }
 
