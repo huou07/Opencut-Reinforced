@@ -142,7 +142,7 @@ void main() {
             offset: 0,
             limit: 10,
           )).items.single;
-          await tap('timeline-add-audio-track');
+          await tap('timeline-empty-add-audio');
           final track = (await gateway.listTimelineTracks(session))
               .items
               .single;
@@ -180,13 +180,15 @@ void main() {
             find.byKey(ValueKey('timeline-clip-${clips.single.clipId}')),
           );
           await tester.pumpAndSettle();
-          await tester.tap(
-            find.descendant(
-              of: find.byType(AlertDialog),
-              matching: find.widgetWithText(TextButton, 'Close'),
-            ),
+          // Tapping a clip selects it and raises the selection surface; there
+          // is no inspector dialog to dismiss any more.
+          await waitFor(
+            () => find
+                .byKey(const ValueKey('timeline-selection-actions'))
+                .evaluate()
+                .isNotEmpty,
+            'clip selection actions',
           );
-          await tester.pumpAndSettle();
           await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
           await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
           await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
@@ -198,7 +200,7 @@ void main() {
             limit: 10,
           )).items;
           expect(clips, hasLength(2));
-          await tap('timeline-undo');
+          await tap('workspace-undo');
           clips = (await gateway.listTimelineClips(
             session,
             trackId: track.trackId,
