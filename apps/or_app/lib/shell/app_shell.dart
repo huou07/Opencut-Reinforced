@@ -1866,9 +1866,6 @@ class _AppShellState extends State<AppShell> {
   }) async {
     final session = _activeSession;
     final current = _activeProject;
-    debugPrint(
-      'IA6 enter s=${session != null} c=${current != null} busy=$_busy',
-    );
     if (session == null || current == null) return null;
     if (_busy) {
       // A silent no-op here read as a broken button: the owner clicked Import or
