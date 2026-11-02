@@ -506,6 +506,7 @@ for step in "${step_list[@]}"; do
         "-p or_media --test software_export" \
         "-p or_core --test command_latency" \
         "-p or_render --test render_frame_time" \
+        "-p or_render --test motion_raster_time" \
         "-p or_render --test queue_priority"; do
         # shellcheck disable=SC2086
         if ! cargo test $bench_lane --no-run --locked >>"$bench_build_log" 2>&1; then
