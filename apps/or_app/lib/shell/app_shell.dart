@@ -1123,8 +1123,13 @@ class _AppShellState extends State<AppShell> {
     final session = _activeSession;
     var project = _activeProject;
     if (session == null || project == null || _busy) {
+      debugPrint(
+        'ILLUSTRATION_ADD blocked session=${session != null} '
+        'project=${project != null} busy=$_busy',
+      );
       return false;
     }
+    debugPrint('ILLUSTRATION_ADD start path=$path');
 
     try {
       var media = await _findMaterializedMedia(session, project, path);
