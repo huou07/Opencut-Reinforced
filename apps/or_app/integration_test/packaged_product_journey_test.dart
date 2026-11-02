@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
         FilledButton,
@@ -228,12 +229,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   final titleClipIds = _timelineClipIds(tester)..removeAll(mediaClipIds);
   expect(titleClipIds, hasLength(1));
   final titleClipId = titleClipIds.single;
-  final titleClip = find.byKey(ValueKey('timeline-clip-$titleClipId'));
-  await tester.ensureVisible(titleClip);
-  await tester.tap(titleClip);
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(ValueKey('timeline-edit-text-$titleClipId')));
-  await tester.pumpAndSettle();
+  await _openTitleEditor(tester, titleClipId);
   await tester.enterText(
     find.byKey(const ValueKey('timeline-text-content')),
     'A real opening title',
@@ -820,4 +816,17 @@ class _JourneyPicker implements ProjectFilePicker {
   @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
       null;
+}
+
+/// Opens the title editor the way the editor exposes it: the clip's own menu,
+/// then the full dialog's Edit Title action.
+Future<void> _openTitleEditor(WidgetTester tester, String clipId) async {
+  final clip = find.byKey(ValueKey('timeline-clip-$clipId'));
+  await tester.ensureVisible(clip);
+  await tester.tap(clip, buttons: kSecondaryButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Advanced clip actions…'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('timeline-edit-text-$clipId')));
+  await tester.pumpAndSettle();
 }
