@@ -933,10 +933,6 @@ jobs:
         shell: pwsh
         run: ./scripts/build_windows_zlib.ps1 -BuildRoot $env:RUNNER_TEMP
 
-      - name: Run the shared Windows lane tests
-        shell: pwsh
-        run: ./scripts/run_windows_lane.ps1 -Steps tests
-
       - name: Install Flutter 3.47.5
         shell: pwsh
         run: |
@@ -954,6 +950,10 @@ jobs:
         shell: msys2 {0}
         timeout-minutes: 40
         run: bash scripts/build_windows_ffmpeg.sh
+
+      - name: Run the shared Windows lane tests
+        shell: pwsh
+        run: ./scripts/run_windows_lane.ps1 -Steps tests
 
       - name: Build the production media packaging probe
         shell: msys2 {0}
