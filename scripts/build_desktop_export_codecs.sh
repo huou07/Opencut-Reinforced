@@ -55,13 +55,26 @@ elif [[ "$platform" == windows ]]; then
     echo "Visual Studio install directory is unavailable" >&2
     exit 2
   fi
-  vs_major="$(basename "$(dirname "$(cygpath -u "$VSINSTALLDIR")")")"
+  # `VisualStudioVersion` is the authoritative major version and both vcvars and
+  # the CI MSVC action export it; the install path only carries the release year
+  # (…\2022\BuildTools), so deriving the major from the path shape is wrong.
+  if [[ -n "${VisualStudioVersion:-}" ]]; then
+    vs_major="${VisualStudioVersion%%.*}"
+  else
+    vs_major="$(basename "$(dirname "$(cygpath -u "${VSINSTALLDIR%/}")")")"
+  fi
+  case "$vs_major" in
+    2017) vs_major=15 ;;
+    2019) vs_major=16 ;;
+    2022) vs_major=17 ;;
+    2026) vs_major=18 ;;
+  esac
   case "$vs_major" in
     15) vs_year=2017 ;;
     16) vs_year=2019 ;;
     17) vs_year=2022 ;;
     18) vs_year=2026 ;;
-    *) echo "unsupported Visual Studio version: $vs_major" >&2; exit 2 ;;
+    *) echo "unsupported Visual Studio version: ${VisualStudioVersion:-$vs_major}" >&2; exit 2 ;;
   esac
   vpx_target="x86_64-win64-vs$vs_major"
   win_cmake_generator="Visual Studio $vs_major $vs_year"
