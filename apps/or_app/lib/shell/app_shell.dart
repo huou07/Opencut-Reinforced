@@ -1123,22 +1123,30 @@ class _AppShellState extends State<AppShell> {
     final session = _activeSession;
     var project = _activeProject;
     if (session == null || project == null || _busy) {
+      debugPrint(
+        'IA0 blocked s=${session != null} p=${project != null} b=$_busy',
+      );
       return false;
     }
 
     try {
       var media = await _findMaterializedMedia(session, project, path);
+      debugPrint('IA1 media=${media != null}');
       if (media == null) {
         final imported = await _runProjectActionAtSnapshot(
           project,
           (session, current) =>
               widget.projectGateway.importMedia(session, current, path),
         );
+        debugPrint(
+          'IA2 imported=${imported != null} same=${identical(session, _activeSession)}',
+        );
         if (imported == null || !identical(session, _activeSession)) {
           return false;
         }
         project = imported;
         media = await _findMaterializedMedia(session, project, path);
+        debugPrint('IA3 media=${media != null}');
       }
       if (media == null) {
         _showUnavailable(
@@ -1148,6 +1156,9 @@ class _AppShellState extends State<AppShell> {
       }
 
       var tracks = await widget.projectGateway.listTimelineTracks(session);
+      debugPrint(
+        'IA4 tracks=${tracks.items.length} matches=${_matchesTimelineProject(tracks, project)}',
+      );
       if (!_matchesTimelineProject(tracks, project)) {
         await _refreshProjectState(session);
         _showUnavailable(
@@ -1156,6 +1167,7 @@ class _AppShellState extends State<AppShell> {
         return false;
       }
       var videoTrack = _firstUnlockedVideoTrack(tracks.items);
+      debugPrint('IA5 video=${videoTrack?.trackId}');
       if (videoTrack == null) {
         final updated = await _runProjectActionAtSnapshot(
           project,
