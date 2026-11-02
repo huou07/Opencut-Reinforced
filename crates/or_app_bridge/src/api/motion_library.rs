@@ -1201,9 +1201,24 @@ mod tests {
         }
     }
 
+    /// A file URI for a native path. Windows needs the drive letter behind the
+    /// third slash and backslashes turned into separators; Unix already starts
+    /// with one. A project travels between platforms, so the same helper has to
+    /// produce a URI that both accept.
+    fn file_uri(path: &Path) -> String {
+        let path = path
+            .to_string_lossy()
+            .replace('\\', "/")
+            .replace(' ', "%20");
+        if path.starts_with('/') {
+            format!("file://{path}")
+        } else {
+            format!("file:///{path}")
+        }
+    }
+
     fn first_frame_pixels(path: &Path) -> Vec<u8> {
-        let source =
-            MediaSourceRef::local_file(format!("file://{}", path.to_string_lossy())).unwrap();
+        let source = MediaSourceRef::local_file(file_uri(path)).unwrap();
         let budgets = RuntimeBudgets::new(
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
@@ -1557,8 +1572,7 @@ mod tests {
             64,
         );
         assert!(view.succeeded, "{} {}", view.code, view.message);
-        let source =
-            MediaSourceRef::local_file(format!("file://{}", output.to_string_lossy())).unwrap();
+        let source = MediaSourceRef::local_file(file_uri(&output)).unwrap();
         let budgets = RuntimeBudgets::new(
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
             BudgetLimits::new(8, 32 * 1024 * 1024).unwrap(),
