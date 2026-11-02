@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -154,13 +155,13 @@ void main() {
       await File('${directory.path}/nested/music.wav').create();
 
       expect(await enumerateMediaFolderSources(directory), [
-        '${directory.path}/nested/music.wav',
-        '${directory.path}/nested/still-01.png',
-        '${directory.path}/nested/still-02.JPG',
-        '${directory.path}/nested/still-03.jpeg',
-        '${directory.path}/nested/still-04.webp',
-        '${directory.path}/take-01.MP4',
-        '${directory.path}/take-02.mkv',
+        p.join(directory.path, 'nested', 'music.wav'),
+        p.join(directory.path, 'nested', 'still-01.png'),
+        p.join(directory.path, 'nested', 'still-02.JPG'),
+        p.join(directory.path, 'nested', 'still-03.jpeg'),
+        p.join(directory.path, 'nested', 'still-04.webp'),
+        p.join(directory.path, 'take-01.MP4'),
+        p.join(directory.path, 'take-02.mkv'),
       ]);
     },
   );

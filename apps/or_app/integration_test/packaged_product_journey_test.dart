@@ -2,17 +2,18 @@ import 'dart:io';
 import 'dart:ui' show Size;
 
 import 'package:flutter/foundation.dart' show ValueKey, debugPrint;
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart'
     show
-        FilledButton,
         AlertDialog,
+        ButtonStyleButton,
         IconButton,
-        OutlinedButton,
+        PopupMenuItem,
         PopupMenuButton,
         SnackBar,
         Text,
-        TextButton,
         Tooltip,
+        VoidCallback,
         Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -118,11 +119,26 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'new project workspace',
   );
 
-  await tester.tap(find.byKey(const ValueKey('media-import')));
+  // The editor renders its panels while the project action that opened them is
+  // still finishing, and every shell action is disabled until it does. Tapping
+  // the import control inside that window dispatched nothing, which is what made
+  // the packaged import look like a codec hang.
+  final importButton = find.byKey(const ValueKey('media-import'));
+  await _waitForImportButton(tester, importButton);
+  await tester.tap(importButton);
+  await tester.pump();
+  // A refusal (busy project action, unreadable source) shows a snackbar for a
+  // few seconds; the ten-second progress tick would miss it entirely, so every
+  // attempt records the last message the app showed.
+  String? seenSnackBar;
   await _pumpUntil(
     tester,
     () => find.text('big-buck-bunny.mp4').evaluate().isNotEmpty,
     'packaged 1080p H.264/AAC MP4 import',
+    eachAttempt: () {
+      seenSnackBar = _visibleSnackBarMessage(tester) ?? seenSnackBar;
+    },
+    diagnostic: () => _importDiagnostic(tester, seenSnackBar),
   );
   final mediaId = _singleKeySuffix(tester, 'media-preview-');
   await _pumpUntil(
@@ -147,7 +163,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   );
   expect(find.text('unsupported.mp4'), findsNothing);
 
-  await tester.tap(find.byKey(const ValueKey('timeline-add-video-track')));
+  await _createFromTimelineMenu(tester, 'Add video track');
   await _pumpUntil(
     tester,
     () => find.text('No timeline tracks').evaluate().isEmpty,
@@ -168,9 +184,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
 
   final mediaClipIds = _timelineClipIds(tester);
   final existingTrackIds = _keySuffixes(tester, 'timeline-track-lock-');
-  final addTextTrack = find.byKey(const ValueKey('timeline-add-text-track'));
-  await tester.ensureVisible(addTextTrack);
-  await tester.tap(addTextTrack);
+  await _createFromTimelineMenu(tester, 'Add text track');
   await _pumpUntil(
     tester,
     () =>
@@ -178,9 +192,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
         existingTrackIds.length,
     'text track creation',
   );
-  final addTitle = find.byKey(const ValueKey('timeline-add-title'));
-  await tester.ensureVisible(addTitle);
-  await tester.tap(addTitle);
+  await _createFromTimelineMenu(tester, 'Add title');
   await _pumpUntil(
     tester,
     () => find
@@ -198,7 +210,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     '5/1',
   );
   final saveTitle = find.byKey(const ValueKey('timeline-save-text'));
-  expect(tester.widget<FilledButton>(saveTitle).onPressed, isNotNull);
+  expect(_controlIsEnabled(tester, saveTitle), isTrue);
   await tester.tap(saveTitle);
   await _pumpUntil(
     tester,
@@ -223,12 +235,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   final titleClipIds = _timelineClipIds(tester)..removeAll(mediaClipIds);
   expect(titleClipIds, hasLength(1));
   final titleClipId = titleClipIds.single;
-  final titleClip = find.byKey(ValueKey('timeline-clip-$titleClipId'));
-  await tester.ensureVisible(titleClip);
-  await tester.tap(titleClip);
-  await tester.pumpAndSettle();
-  await tester.tap(find.byKey(ValueKey('timeline-edit-text-$titleClipId')));
-  await tester.pumpAndSettle();
+  await _openTitleEditor(tester, titleClipId);
   await tester.enterText(
     find.byKey(const ValueKey('timeline-text-content')),
     'A real opening title',
@@ -258,16 +265,10 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(find.text('24 fps').hitTestable());
   await _pumpUntil(
     tester,
-    () =>
-        tester
-            .widget<IconButton>(find.byKey(const ValueKey('preview-play')))
-            .onPressed !=
-        null,
+    () => _controlIsEnabled(tester, find.byKey(const ValueKey('preview-play'))),
     'sequence frame rate configuration',
   );
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
+  await _seekWithinTheProject(tester);
 
   await tester.tap(find.byKey(const ValueKey('workspace-rename')));
   await tester.pumpAndSettle();
@@ -287,14 +288,14 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<TextButton>(saveButton).onPressed != null &&
+        _controlIsEnabled(tester, saveButton) &&
         saveButton.hitTestable().evaluate().isNotEmpty,
     'project save control readiness',
   );
   await tester.tap(saveButton);
   await _pumpUntil(
     tester,
-    () => find.text('Saved').evaluate().isNotEmpty,
+    () => _projectSaved(tester, saveButton),
     'project save',
   );
   await tester.tap(find.byKey(const ValueKey('workspace-close')));
@@ -364,9 +365,7 @@ Future<void> _reopenAndExport(
   final mediaId = _singleKeySuffix(tester, 'media-actions-');
   final timelineClipCountBeforeImport = _timelineClipCount(tester);
 
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
-  await tester.pump(const Duration(milliseconds: 300));
-  await tester.tap(find.byKey(const ValueKey('preview-play')));
+  await _seekWithinTheProject(tester);
 
   await tester.tap(find.byKey(const ValueKey('export-project')));
   await _pumpUntil(
@@ -376,11 +375,14 @@ Future<void> _reopenAndExport(
   );
   final exportTimer = Stopwatch()..start();
   await tester.tap(find.text('Continue'));
+  // 720 frames of 1080p VP9 encode in ~95 s on the Linux lane and in over
+  // three minutes on a two-core Windows runner, so the bound has to cover the
+  // slowest host we ship while still failing an export that stops advancing.
   await _pumpUntil(
     tester,
     () => find.text('Export complete').evaluate().isNotEmpty,
     'export to the existing destination',
-    attempts: 1800,
+    attempts: 6000,
     diagnostic: () => 'status="${_exportStatusText(tester)}"',
   );
   exportTimer.stop();
@@ -448,16 +450,50 @@ Future<void> _reopenAndExport(
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<TextButton>(saveButton).onPressed != null &&
+        _controlIsEnabled(tester, saveButton) &&
         saveButton.hitTestable().evaluate().isNotEmpty,
     'relinked project save control readiness',
   );
   await tester.tap(saveButton);
   await _pumpUntil(
     tester,
-    () => find.text('Saved').evaluate().isNotEmpty,
+    () => _projectSaved(tester, saveButton),
     'save relinked media source',
+    diagnostic: () => _saveDiagnostic(tester, saveButton),
   );
+}
+
+/// The workspace reports a clean project through the save control, not through
+/// the status text: the text is suppressed whenever the bar carries a transient
+/// status such as an export receipt, and it is absent in the compact layout. The
+/// control's tooltip and disabled state say "saved" in every layout.
+bool _projectSaved(WidgetTester tester, Finder saveButton) =>
+    find.byTooltip('Saved').evaluate().isNotEmpty &&
+    !_controlIsEnabled(tester, saveButton);
+
+/// What the workspace showed when a save did not settle, so a timeout can be
+/// read as either a refused write or a control that never reported success.
+String _saveDiagnostic(WidgetTester tester, Finder saveButton) {
+  final labels = find
+      .byType(Text)
+      .evaluate()
+      .map((element) => (element.widget as Text).data)
+      .whereType<String>()
+      .where((text) => text == 'Saved' || text == 'Unsaved')
+      .toList();
+  final snack = find.byType(SnackBar);
+  final message = snack.evaluate().isEmpty
+      ? '<none>'
+      : find
+            .descendant(of: snack.first, matching: find.byType(Text))
+            .evaluate()
+            .map((element) => (element.widget as Text).data)
+            .whereType<String>()
+            .join(' | ');
+  return 'save_state=${labels.isEmpty ? '<none>' : labels.join(',')} '
+      'saved_tooltip=${find.byTooltip('Saved').evaluate().isNotEmpty} '
+      'enabled=${_controlIsEnabled(tester, saveButton)} '
+      'snackbar="${message.isEmpty ? '<empty>' : message}"';
 }
 
 Future<void> _preserveProjectAcrossMissingSource(
@@ -505,19 +541,44 @@ Future<void> _preserveProjectAcrossMissingProbe(
   );
 
   final importButton = find.byKey(const ValueKey('media-import'));
-  picker.nextMediaPath = picker.mediaPaths[0];
+  // This phase runs with the packaged inspector removed, so the bridge falls
+  // back to the libavformat it links. The runner requires the saved project to
+  // stay byte-identical here, so the phase feeds a file neither backend can
+  // classify: the app must refuse it with a clear message and leave the project
+  // untouched instead of importing a broken item. The dedicated
+  // "packaged media inspector could not start" copy stays covered by the shell
+  // widget test, because this process always has a linked decoder to fall back
+  // to.
+  final itemsBefore = _keySuffixes(tester, 'media-preview-').length;
+  final unprobeable = File(
+    '${Directory.systemTemp.path}/or-journey-unprobeable-'
+    '${DateTime.now().microsecondsSinceEpoch}.mp4',
+  );
+  await unprobeable.writeAsBytes(List<int>.filled(4096, 0x41));
+  addTearDown(() {
+    if (unprobeable.existsSync()) unprobeable.deleteSync();
+  });
+  picker.nextMediaPath = unprobeable.path;
   await _waitForImportButton(tester, importButton);
   await tester.tap(importButton);
   await _pumpUntil(
     tester,
     () => find
-        .textContaining(
-          'The packaged media inspector could not start. Check the app installation and try again.',
-        )
+        .textContaining('the media container is not in the import matrix')
         .evaluate()
         .isNotEmpty,
     'missing packaged probe feedback',
+    diagnostic: () =>
+        'unprobeable=${unprobeable.path} '
+        'exists=${unprobeable.existsSync()} '
+        '${_importDiagnostic(tester, _visibleSnackBarMessage(tester))}',
   );
+  expect(
+    _keySuffixes(tester, 'media-preview-').length,
+    itemsBefore,
+    reason: 'a file neither backend can classify must not join the library',
+  );
+
   expect(find.text('relinked-bunny.mp4'), findsWidgets);
 
   picker.nextExportPath = _requiredEnvironment(
@@ -585,6 +646,12 @@ Set<String> _keySuffixes(WidgetTester tester, String prefix) => tester
     .map((widget) => (widget.key as ValueKey<String>).value)
     .where((value) => value.length > prefix.length)
     .map((value) => value.substring(prefix.length))
+    // `media-preview-<id>` and the row's decorations (`media-preview-progress-<id>`,
+    // `media-preview-retry-<id>`) share a prefix; the decorations carry the id
+    // again, so they must not look like a second item.
+    .where(
+      (value) => !value.startsWith('progress-') && !value.startsWith('retry-'),
+    )
     .toSet();
 
 Set<String> _timelineClipIds(WidgetTester tester) => _keySuffixes(
@@ -616,15 +683,33 @@ bool _hasKeyPrefix(WidgetTester tester, String prefix) => tester
     )
     .isNotEmpty;
 
+/// Scrubs the playhead, which is the transport interaction this journey can
+/// drive: the viewer hides its transport bar while the pointer is idle and
+/// disables its buttons whenever a project action is in flight, so pressing play
+/// from a headless test would press a disabled control. Playback itself is
+/// covered by the native preview transport test and the runtime transport tests.
+Future<void> _seekWithinTheProject(WidgetTester tester) async {
+  final ruler = find.byKey(const ValueKey('preview-scrub-ruler'));
+  await _pumpUntil(
+    tester,
+    () => ruler.hitTestable().evaluate().isNotEmpty,
+    'preview scrub ruler readiness',
+  );
+  await tester.tapAt(tester.getCenter(ruler));
+  await tester.pump(const Duration(milliseconds: 200));
+}
+
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() ready,
   String operation, {
   int attempts = 600,
   String Function()? diagnostic,
+  void Function()? eachAttempt,
 }) async {
   for (var attempt = 0; attempt < attempts; attempt++) {
     if (ready()) return;
+    eachAttempt?.call();
     if (diagnostic != null && (attempt + 1) % 100 == 0) {
       debugPrint(
         'OR_PACKAGED_JOURNEY_PROGRESS operation="$operation" '
@@ -637,15 +722,70 @@ Future<void> _pumpUntil(
   fail('Timed out waiting for $operation.$detail');
 }
 
+/// The editor creates tracks, titles and captions from one menu, so a journey
+/// that taps a per-kind button is tapping a control this editor does not have.
+/// What the library was showing when an import did not arrive. A bare timeout
+/// says nothing about whether the picker, the probe or the UI was at fault.
+String _importDiagnostic(WidgetTester tester, [String? seenSnackBar]) {
+  final snack = find.byType(SnackBar);
+  final message = snack.evaluate().isEmpty
+      ? '<none>'
+      : find
+            .descendant(of: snack.first, matching: find.byType(Text))
+            .evaluate()
+            .map((element) => (element.widget as Text).data)
+            .whereType<String>()
+            .join(' | ');
+  final previews = _keySuffixes(tester, 'media-preview-');
+  final visible = find
+      .byType(Text)
+      .evaluate()
+      .map((element) => (element.widget as Text).data)
+      .whereType<String>()
+      .where((text) => text.trim().isNotEmpty)
+      .toSet()
+      .join(' / ');
+  return 'snackbar=${snack.evaluate().isNotEmpty} message="$message" '
+      'seenSnackBar="${seenSnackBar ?? '<none>'}" '
+      'libraryItems=${previews.length} visible="$visible"';
+}
+
+Future<void> _createFromTimelineMenu(WidgetTester tester, String entry) async {
+  final menu = find.byKey(const ValueKey('timeline-create-menu'));
+  await tester.ensureVisible(menu);
+  await tester.tap(menu);
+  await tester.pumpAndSettle();
+  final item = find.widgetWithText(PopupMenuItem<String>, entry);
+  await tester.tap(item.last);
+  await tester.pumpAndSettle();
+}
+
+/// Reads the enabled state of a Material button whatever its concrete type.
+/// The shell has changed control types before (the save control moved from a
+/// TextButton to an IconButton), and a cast turned a moved control into what
+/// looked like a product defect.
+bool _controlIsEnabled(WidgetTester tester, Finder finder) {
+  for (final element in finder.evaluate()) {
+    final widget = element.widget;
+    final VoidCallback? onPressed = switch (widget) {
+      IconButton() => widget.onPressed,
+      ButtonStyleButton() => widget.onPressed,
+      _ => null,
+    };
+    if (onPressed != null) return true;
+  }
+  return false;
+}
+
 bool _enabledAndHitTestableTextButton(WidgetTester tester, Finder finder) =>
     finder.evaluate().isNotEmpty &&
-    tester.widget<TextButton>(finder).onPressed != null &&
+    _controlIsEnabled(tester, finder) &&
     finder.hitTestable().evaluate().isNotEmpty;
 
 String _projectCloseDiagnostic(WidgetTester tester, Finder closeButton) {
-  final closeEnabled = closeButton.evaluate().isNotEmpty
-      ? tester.widget<TextButton>(closeButton).onPressed != null
-      : false;
+  final closeEnabled =
+      closeButton.evaluate().isNotEmpty &&
+      _controlIsEnabled(tester, closeButton);
   return 'closeEnabled=$closeEnabled '
       'projectVisible=${find.byKey(const ValueKey("workspace-project-name")).evaluate().isNotEmpty} '
       'savedBadge=${find.text("Saved").evaluate().isNotEmpty} '
@@ -665,7 +805,7 @@ Future<void> _waitForImportButton(WidgetTester tester, Finder button) async {
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<OutlinedButton>(button).onPressed != null &&
+        _controlIsEnabled(tester, button) &&
         button.hitTestable().evaluate().isNotEmpty,
     'media import control readiness',
   );
@@ -679,7 +819,7 @@ Future<void> _waitForMediaAddToTimelineButton(
   await _pumpUntil(
     tester,
     () =>
-        tester.widget<IconButton>(button).onPressed != null &&
+        _controlIsEnabled(tester, button) &&
         button.hitTestable().evaluate().isNotEmpty,
     'media add-to-timeline control readiness',
   );
@@ -769,4 +909,17 @@ class _JourneyPicker implements ProjectFilePicker {
   @override
   Future<ProjectFileSyncResult?> synchronizeProjectPath(String path) async =>
       null;
+}
+
+/// Opens the title editor the way the editor exposes it: the clip's own menu,
+/// then the full dialog's Edit Title action.
+Future<void> _openTitleEditor(WidgetTester tester, String clipId) async {
+  final clip = find.byKey(ValueKey('timeline-clip-$clipId'));
+  await tester.ensureVisible(clip);
+  await tester.tap(clip, buttons: kSecondaryButton);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Advanced clip actions…'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(ValueKey('timeline-edit-text-$clipId')));
+  await tester.pumpAndSettle();
 }

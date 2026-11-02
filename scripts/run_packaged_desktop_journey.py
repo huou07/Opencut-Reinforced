@@ -278,9 +278,16 @@ def main() -> int:
     # app-relative runtime paths then resolve only packaged media libraries.
     env["FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR"] = str(bridge_directory)
     if sys.platform.startswith("linux"):
-        runtime_snapshot = Path(
-            os.environ.get("OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY", "")
-        ).resolve()
+        # This destination is deleted and rebuilt. An unset variable resolves to
+        # the current directory, which is the app source tree, so refuse to
+        # guess instead of erasing whatever the caller happened to be in.
+        configured_runtime = os.environ.get("OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY")
+        if not configured_runtime:
+            raise SystemExit(
+                "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY must name the staging "
+                "directory for the packaged Linux media runtime."
+            )
+        runtime_snapshot = Path(configured_runtime).resolve()
         if not runtime_snapshot.is_dir():
             raise SystemExit(
                 "The Linux packaged media runtime staging directory is missing: "

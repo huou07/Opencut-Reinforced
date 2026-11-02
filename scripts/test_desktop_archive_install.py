@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Exercise install, replacement, launch, and removal of desktop ZIP packages."""
+"""Exercise install, replacement, launch, and removal of desktop ZIP packages.
+
+The archive this script builds is exactly the archive a release ships. Pass
+``--archive <path>`` to keep a copy of the verified package; the path is then
+printed with its SHA-256 so a release can publish the tested bytes.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -12,11 +18,60 @@ import zipfile
 from pathlib import Path
 
 
+README_TEMPLATE = """# Opencut Reinforced {version}
+
+This folder is a self-contained Opencut Reinforced desktop build. It carries its
+own FFmpeg runtime, Rust bridge and viewer plugin, so it needs no Visual Studio,
+MSYS2, Flutter or system FFmpeg installation.
+
+## Start
+
+1. Keep the folder where it is; the app loads its libraries beside itself.
+2. Run `{executable}`.
+3. The build is unsigned. If the operating system cannot verify the publisher,
+   do not disable its security protections; report the message instead:
+   https://github.com/huou07/Opencut-Reinforced/issues
+
+## Projects and data
+
+Projects are `.orproj` files you choose where to keep. The app also stores its
+settings, recent-project list, caches and recovery data in the platform
+application-support directory, outside this folder, so replacing the folder with
+a newer build keeps your work.
+
+## Upgrade and removal
+
+Replace this folder with the newer build to upgrade. Delete the folder to
+remove the application; project files and platform data stay where they are.
+
+## What is inside
+
+- `or_app{extension}` — the editor.
+- `ffmpeg`/`ffprobe` (`.exe` on Windows) — the packaged media helpers.
+- The Rust bridge, the viewer texture plugin and the shared-library runtime.
+
+## Limits
+
+The local speech runtime (Whisper) and the `or` CLI are not part of this
+package. Video and audio codecs come from the bundled software FFmpeg build;
+no hardware encoder is advertised.
+"""
+
+
 def create_package(source: Path, work: Path, *, macos: bool) -> Path:
     package_dir = work / "opencut-reinforced-desktop"
     package_dir.mkdir()
-    readme = Path(__file__).resolve().parents[1] / "docs/reference/developer-preview-install.md"
-    shutil.copyfile(readme, package_dir / "README-FIRST.md")
+    repository = Path(__file__).resolve().parents[1]
+    pubspec = (repository / "apps/or_app/pubspec.yaml").read_text(encoding="utf-8")
+    version = pubspec.split("version:", 1)[1].split("+", 1)[0].strip()
+    (package_dir / "README-FIRST.md").write_text(
+        README_TEMPLATE.format(
+            version=version,
+            executable="OpenCut Reinforced.app" if macos else "or_app.exe",
+            extension="" if macos else ".exe",
+        ),
+        encoding="utf-8",
+    )
 
     if macos:
         app_name = "OpenCut Reinforced.app"
@@ -124,10 +179,21 @@ def launch_from_install(executable: Path, install_dir: Path, *, windows: bool) -
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: test_desktop_archive_install.py <built-app-directory>")
+    arguments = sys.argv[1:]
+    keep_archive: Path | None = None
+    if "--archive" in arguments:
+        index = arguments.index("--archive")
+        if index + 1 >= len(arguments):
+            raise SystemExit("--archive needs a destination path")
+        keep_archive = Path(arguments[index + 1]).resolve()
+        del arguments[index : index + 2]
+    if len(arguments) != 1:
+        raise SystemExit(
+            "usage: test_desktop_archive_install.py <built-app-directory> "
+            "[--archive <destination.zip>]"
+        )
 
-    source = Path(sys.argv[1]).resolve()
+    source = Path(arguments[0]).resolve()
     macos = sys.platform == "darwin"
     windows = sys.platform == "win32"
     if not macos and not windows:
@@ -156,6 +222,9 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="or-desktop-package-") as temporary:
             work = Path(temporary)
             archive = create_package(source, work, macos=macos)
+            if keep_archive is not None:
+                keep_archive.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(archive, keep_archive)
             initial_extract = work / "initial-extract"
             staged_app = extract_package(archive, initial_extract, macos=macos)
             install_parent.mkdir(parents=True, exist_ok=False)
@@ -187,6 +256,10 @@ def main() -> int:
         "Desktop ZIP install, launch from user install location, replacement, "
         "uninstall, and project-data preservation passed."
     )
+    if keep_archive is not None:
+        digest = hashlib.sha256(keep_archive.read_bytes()).hexdigest()
+        print(f"ARCHIVE={keep_archive}")
+        print(f"SHA256={digest}")
     return 0
 
 

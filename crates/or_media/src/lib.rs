@@ -19,6 +19,9 @@ pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 
 pub use probe::probe_media_path;
 
+/// Probes a seekable Android document through the file descriptor the SAF
+/// capability hands over. It is Unix-only because the capability itself is.
+#[cfg(unix)]
 pub fn probe_seekable_media(
     capability: &SeekableMediaIoCapability,
 ) -> Result<Vec<u8>, ffmpeg_the_third::Error> {
@@ -37,8 +40,42 @@ pub fn decoder_available(codec_name: &str) -> bool {
 
 /// Initializes the dynamically linked FFmpeg runtime and verifies its license.
 pub fn verify_ffmpeg_runtime() -> bool {
-    ffmpeg_the_third::init().is_ok()
-        && ffmpeg_the_third::util::license() == "LGPL version 2.1 or later"
+    ffmpeg_runtime_problem().is_none()
+}
+
+/// Explains why the linked runtime is not the approved LGPL build. A caller
+/// that refuses a request because of this returns the reason, so a packaged
+/// failure says what actually went wrong instead of only that it did.
+pub fn ffmpeg_runtime_problem() -> Option<String> {
+    if let Err(error) = ffmpeg_the_third::init() {
+        return Some(format!("the library refused to initialise: {error}"));
+    }
+    let license = ffmpeg_the_third::util::license();
+    if license == "LGPL version 2.1 or later" {
+        None
+    } else {
+        Some(format!(
+            "the library reports {license:?} instead of the approved LGPL build (loaded {})",
+            loaded_avutil_path().unwrap_or_else(|| "an unknown library".to_owned())
+        ))
+    }
+}
+
+/// The libavutil this process actually mapped, so a licence refusal names the
+/// file instead of only the verdict. Linux only; other targets report unknown.
+fn loaded_avutil_path() -> Option<String> {
+    #[cfg(target_os = "linux")]
+    {
+        let maps = std::fs::read_to_string("/proc/self/maps").ok()?;
+        maps.lines()
+            .find(|line| line.contains("libavutil.so"))
+            .and_then(|line| line.split_whitespace().last())
+            .map(std::string::ToString::to_string)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        None
+    }
 }
 
 #[cfg(test)]

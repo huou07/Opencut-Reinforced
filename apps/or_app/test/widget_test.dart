@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:or_app/core_gateway.dart';
 import 'package:or_app/design/or_colors.dart';
 import 'package:or_app/design/or_spacing.dart';
@@ -556,7 +557,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.cleanUpAudioCalls, 1);
-    expect(gateway.lastCleanUpSource, '/tmp/music.wav');
+    expect(gateway.lastCleanUpSource, p.normalize('/tmp/music.wav'));
     // The floor is not passed: the bridge measures the material's own.
     expect(gateway.lastCleanUpNoiseFloorDb, isNull);
     expect(gateway.lastCleanUpDestination, endsWith('music.wav.cleaned.wav'));
@@ -887,10 +888,17 @@ void main() {
             ),
           ],
         };
+      // Absolute on every host: the shell canonicalises this path to find the
+      // media it just imported, and a POSIX fixture path is not absolute on
+      // Windows, so the lookup missed the item it had added a moment earlier.
+      final illustrationPath = p.join(
+        Directory.systemTemp.path,
+        'illustration.mkv',
+      );
       final picker = _FakeProjectPicker()
-        ..savePath = '/tmp/motion-insert.orproj'
-        ..mediaPaths = ['/tmp/count_words.rs']
-        ..exportPath = '/tmp/illustration.mkv';
+        ..savePath = p.join(Directory.systemTemp.path, 'motion-insert.orproj')
+        ..mediaPaths = [p.join(Directory.systemTemp.path, 'count_words.rs')]
+        ..exportPath = illustrationPath;
       await _mount(tester, gateway: gateway, picker: picker);
       await _createProject(tester, 'Motion insertion');
 
@@ -918,7 +926,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gateway.illustrationRequests, hasLength(1));
-      expect(gateway.importMediaSources, ['/tmp/illustration.mkv']);
+      expect(gateway.importMediaSources, [illustrationPath]);
       expect(gateway.addTimelineTrackCalls, 1);
       expect(gateway.lastInsertTrackId, 'track-1');
       expect(gateway.lastInsertTimelineStart?.canonical, contentEnd.canonical);
@@ -6673,12 +6681,18 @@ void main() {
     // raised a bare default one, so the same confirmation changed identity
     // by screen. Only the shared component may build one now.
     final offenders = <String>[];
+    final shared = p.join('widgets', 'or_widgets.dart');
     for (final file in _dartFilesUnder('lib')) {
-      if (file.path.endsWith('widgets/or_widgets.dart')) continue;
+      // Relative and POSIX-joined so the scan reads the same on every host:
+      // Windows hands back backslashes, which used to hide the shared file
+      // from its own exemption and print unreadable offender paths.
+      final relative = p.relative(file.path, from: 'lib');
+      if (relative == shared) continue;
+      final label = p.posix.joinAll(p.split(relative));
       final lines = file.readAsLinesSync();
       for (var index = 0; index < lines.length; index++) {
         if (RegExp(r'\bSnackBar\(|showSnackBar').hasMatch(lines[index])) {
-          offenders.add('${file.path.split('lib/').last}:${index + 1}');
+          offenders.add('$label:${index + 1}');
         }
       }
     }

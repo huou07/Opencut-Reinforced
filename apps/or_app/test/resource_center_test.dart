@@ -190,4 +190,57 @@ void main() {
       findsOneWidget,
     );
   });
+
+  test(
+    'a desktop package reports the runtime it carries beside its binary',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('or-runtime-');
+      addTearDown(() => directory.delete(recursive: true));
+      final suffix = Platform.isWindows ? '.exe' : '';
+      for (final name in [
+        'ffmpeg',
+        'ffprobe',
+        'or',
+        'whisper-cli',
+        'or-whisper-provider',
+      ]) {
+        await File('${directory.path}/$name$suffix').writeAsBytes(const []);
+      }
+
+      final snapshot = await describeRuntime(
+        runtimeDirectory: directory,
+        bundlePath: '/opt/opencut-reinforced',
+        assistantPath: null,
+      );
+
+      expect(snapshot.packaged, isTrue);
+      expect(snapshot.ffmpeg, isTrue);
+      expect(snapshot.orCli, isTrue);
+      expect(snapshot.speechRuntime, isTrue);
+    },
+  );
+
+  test('a package without the speech runtime says so instead of claiming it', () async {
+    final directory = await Directory.systemTemp.createTemp('or-runtime-');
+    addTearDown(() => directory.delete(recursive: true));
+    final suffix = Platform.isWindows ? '.exe' : '';
+    for (final name in ['ffmpeg', 'ffprobe']) {
+      await File('${directory.path}/$name$suffix').writeAsBytes(const []);
+    }
+
+    final snapshot = await describeRuntime(
+      runtimeDirectory: directory,
+      bundlePath: '/opt/opencut-reinforced',
+      assistantPath: null,
+    );
+
+    expect(snapshot.ffmpeg, isTrue);
+    expect(
+      snapshot.speechRuntime,
+      isFalse,
+      reason:
+          'the package carries no whisper-cli, so the panel must not claim it',
+    );
+    expect(snapshot.orCli, isFalse, reason: 'the package carries no or CLI');
+  });
 }

@@ -1,14 +1,16 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-02
 
-Scope: what is published today, how the macOS release is built and verified, and
-what remains for a broader platform matrix.
+Scope: what is published today, how each desktop release is built and verified,
+and what remains for a broader platform matrix.
 
 ## Current status
 
-Stable releases: **macOS 13+ on Apple Silicon only**, published as a `.dmg` from
-`huou07/Opencut-Reinforced`. The image is ad-hoc signed, not notarised; the first
+Stable releases ship three desktop packages from one source tree:
+**macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` (Debian 13
+and Ubuntu 24.04, both amd64), and **Windows x86_64** as a `.zip`, all published
+from `huou07/Opencut-Reinforced`. The macOS image is ad-hoc signed, not notarised; the first
 launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
 Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
 self-contained: FFmpeg 8.1.3, the local speech runtime (`whisper-cli` and the
@@ -20,13 +22,21 @@ the workflow and tags are kept out of the current release line.
 
 Build locally with `scripts/stage_macos_ffmpeg.sh` followed by
 `scripts/build_macos_dmg.sh`; the DMG script refuses an image built anywhere except
-Apple Silicon and refuses a missing or non-LGPL FFmpeg prefix. The packaging gate
+Apple Silicon and refuses a missing or non-LGPL FFmpeg prefix. The Linux package
+comes from `scripts/run_local_lane.sh linux --packaged` (which drives
+`scripts/package_linux_deb.sh` and `scripts/test_linux_deb_install.sh`), and the
+Windows package from `scripts/run_windows_lane.ps1` (which drives
+`scripts/stage_windows_bundle.ps1` and `scripts/test_desktop_archive_install.py`).
+The CI desktop jobs call the same scripts, so a package verified on a real host
+and one built by CI are produced by one procedure. The packaging gate
 also rejects any Mach-O in the bundle whose deployment target is newer than
 macOS 13, so a build made on a newer Mac cannot silently raise the public minimum.
 `.github/workflows/macos-release.yml` runs the same build on a fresh `macos-15`
 runner, runs the Flutter and Rust tests, publishes the DMG and `SHA256SUMS.txt`
 for a `v*` tag or a manual dispatch with `publish` enabled, and writes install,
-requirement and limitation notes.
+requirement and limitation notes. The Linux `.deb` and Windows `.zip` are built
+and verified on the Platform Verification desktop jobs and attached to the same
+release, each with its SHA-256 in `SHA256SUMS.txt`.
 
 ## Updates and optional resources
 
@@ -60,14 +70,16 @@ manual check.
 
 A notarised build needs an Apple Developer Program identity and a hardened-runtime
 signing step; the local pipeline stops at ad-hoc signing because this mission has
-no account. Windows, Linux and Android packages are out of the current matrix.
-Dependency and licence inventory, notarisation and a broader platform matrix
-remain future work and must not be claimed now.
+no account. The Windows `.zip` and the Linux `.deb` are unsigned packages: they
+install by extraction and by `dpkg -i` respectively, and neither is notarised.
+Android is out of the desktop matrix and iOS and web are not targets.
 
 ## Platforms
 
-macOS Apple Silicon is the only current release target. Windows, Linux and
-Android are not built for release; iOS and web are not targets.
+Desktop release targets: macOS 13+ Apple Silicon (`.dmg`), Linux x86_64 Debian 13
+and Ubuntu 24.04 (`.deb`), Windows 11 x86_64 (`.zip`). The release gate fails
+unless the macOS, Linux and Windows native jobs all succeed on the same commit.
+Android is a separate diagnostic lane and is not part of the desktop gate.
 
 ## Related
 

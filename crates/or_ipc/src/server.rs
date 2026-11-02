@@ -379,11 +379,13 @@ fn serve(
     stopping: Arc<AtomicBool>,
 ) -> Result<(), IpcProtocolError> {
     let BoundEndpoint::Windows { pipe, pipe_name } = bound;
-    crate::windows::serve(pipe, &pipe_name, &stopping, |stream| {
-        if stopping.load(Ordering::SeqCst) {
+    let worker_token = auth_token;
+    let worker_stopping = Arc::clone(&stopping);
+    crate::windows::serve(pipe, &pipe_name, &stopping, move |stream| {
+        if worker_stopping.load(Ordering::SeqCst) {
             return Ok(true);
         }
-        handle_shared_connection(stream, &shared, &auth_token)
+        handle_shared_connection(stream, &shared, &worker_token)
     })
 }
 

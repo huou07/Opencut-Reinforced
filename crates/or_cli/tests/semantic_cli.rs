@@ -195,6 +195,16 @@ fn path_args(before: &[&str], flag: &str, path: &Path, after: &[&str]) -> Vec<Os
     args
 }
 
+fn paths_args(before: &[&str], paths: &[(&str, &Path)], after: &[&str]) -> Vec<OsString> {
+    let mut args = words(before);
+    for (flag, path) in paths {
+        args.push((*flag).into());
+        args.push(path.as_os_str().to_owned());
+    }
+    args.extend(words(after));
+    args
+}
+
 fn json_success(args: impl IntoIterator<Item = OsString>) -> (Value, Output) {
     let output = cli(args);
     assert!(
@@ -3855,27 +3865,28 @@ fn headless_captions_export_writes_default_srt() {
 
 #[test]
 fn export_verbs_reject_missing_or_malformed_arguments() {
+    // Absolute on every platform: a Unix-only literal makes the absolute-path
+    // check fire before the check the case is about, so the test asserted the
+    // wrong error on Windows.
+    let dir = std::env::temp_dir();
+    let attach = dir.join("never.json");
+    let video = dir.join("never.mp4");
+    let movie = dir.join("never.mov");
     assert_cli_error(
-        words(&[
-            "export",
-            "start",
-            "--destination",
-            "/tmp/never.mp4",
-            "--json",
-        ]),
+        paths_args(
+            &["export", "start"],
+            &[("--destination", &video)],
+            &["--json"],
+        ),
         2,
         "--attach requires a path",
     );
     assert_cli_error(
-        words(&[
-            "export",
-            "status",
-            "--attach",
-            "/tmp/never.json",
-            "--job",
-            "not-a-job",
-            "--json",
-        ]),
+        paths_args(
+            &["export", "status"],
+            &[("--attach", &attach)],
+            &["--job", "not-a-job", "--json"],
+        ),
         2,
         "canonical lowercase UUIDv4",
     );
@@ -3885,43 +3896,32 @@ fn export_verbs_reject_missing_or_malformed_arguments() {
         "unknown export action",
     );
     assert_cli_error(
-        words(&[
-            "export",
-            "start",
-            "--attach",
-            "/tmp/never.json",
-            "--destination",
-            "relative.mp4",
-            "--json",
-        ]),
+        paths_args(
+            &["export", "start"],
+            &[
+                ("--attach", &attach),
+                ("--destination", Path::new("relative.mp4")),
+            ],
+            &["--json"],
+        ),
         2,
         "absolute path",
     );
     assert_cli_error(
-        words(&[
-            "export",
-            "start",
-            "--attach",
-            "/tmp/never.json",
-            "--destination",
-            "/tmp/never.mov",
-            "--json",
-        ]),
+        paths_args(
+            &["export", "start"],
+            &[("--attach", &attach), ("--destination", &movie)],
+            &["--json"],
+        ),
         2,
         "extension selects the profile",
     );
     assert_cli_error(
-        words(&[
-            "export",
-            "start",
-            "--attach",
-            "/tmp/never.json",
-            "--destination",
-            "/tmp/never.mp4",
-            "--profile",
-            "webm",
-            "--json",
-        ]),
+        paths_args(
+            &["export", "start"],
+            &[("--attach", &attach), ("--destination", &video)],
+            &["--profile", "webm", "--json"],
+        ),
         2,
         "must match the destination extension",
     );

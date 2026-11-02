@@ -854,6 +854,15 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
           ),
         ],
         const SizedBox(height: 8),
+        if (!engine.supportedOnThisPlatform) ...[
+          Text(
+            'This engine needs a POSIX shell, so it cannot start here. Run an '
+            'OpenAI-compatible server yourself and choose the custom engine.',
+            key: const ValueKey('voiceover-tts-unsupported'),
+            style: TextStyle(color: OrColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+        ],
         Wrap(
           spacing: 8,
           runSpacing: 6,
@@ -876,7 +885,10 @@ class _VoiceoverDialogState extends State<VoiceoverDialog> {
             else
               FilledButton.icon(
                 key: const ValueKey('voiceover-tts-start'),
-                onPressed: busy || (engine.installable && !_ttsInstalled)
+                onPressed:
+                    busy ||
+                        !engine.supportedOnThisPlatform ||
+                        (engine.installable && !_ttsInstalled)
                     ? null
                     : _startTtsServer,
                 icon: const Icon(Icons.play_arrow, size: 16),

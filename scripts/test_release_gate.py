@@ -84,6 +84,31 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertEqual(code, 1, output)
         self.assertIn("not valid JSON", output)
 
+    def test_every_desktop_platform_job_is_required(self) -> None:
+        # A green gate must mean all three desktop platforms passed, so a job
+        # that silently disappears from REQUIRED_JOBS has to fail this test.
+        for job in ("macos", "linux", "windows"):
+            self.assertIn(job, release_gate.REQUIRED_JOBS)
+
+    def test_each_desktop_platform_failure_fails_the_gate(self) -> None:
+        for job in ("macos", "linux", "windows"):
+            with self.subTest(job=job):
+                code, output = run(
+                    ["--needs-json", json.dumps(all_success(**{job: "failure"}))]
+                )
+                self.assertEqual(code, 1, output)
+                self.assertIn(f"'{job}' reported 'failure'", output)
+
+    def test_desktop_platform_skipped_or_cancelled_is_not_success(self) -> None:
+        for job in ("macos", "linux", "windows"):
+            for outcome in ("skipped", "neutral", "cancelled"):
+                with self.subTest(job=job, outcome=outcome):
+                    code, output = run(
+                        ["--needs-json", json.dumps(all_success(**{job: outcome}))]
+                    )
+                    self.assertEqual(code, 1, output)
+                    self.assertIn(f"'{job}' reported '{outcome}'", output)
+
     def test_cli_requires_the_needs_argument(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as raised:

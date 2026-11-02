@@ -49,7 +49,20 @@ BENCH_JSON="$LANE_DIR/bench.json"
 # wrong place there.
 FFMPEG_PREFIX="${OR_LANE_FFMPEG_PREFIX:-$ROOT/apps/or_app/build/local-deb/ffmpeg-install}"
 CODEC_PREFIX="${OR_LANE_CODEC_PREFIX:-$ROOT/apps/or_app/build/local-deb/codecs-install}"
-BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/debug/bundle}"
+BUILD_MODE="${OR_LANE_BUILD_MODE:-debug}"
+if [[ "$BUILD_MODE" != debug && "$BUILD_MODE" != release ]]; then
+  echo "OR_LANE_BUILD_MODE must be debug or release, not $BUILD_MODE" >&2
+  exit 2
+fi
+# Rust builds inside the Flutter native-assets hook do not see the exported
+# FFMPEG_DIR, so pin the packaged prefix in the user cargo config the way CI does.
+if [[ -d "$FFMPEG_PREFIX/lib/pkgconfig" ]]; then
+  bash "$ROOT/scripts/configure_linux_cargo_for_ffmpeg.sh" "$FFMPEG_PREFIX" >/dev/null
+else
+  echo "warning: no FFmpeg prefix at $FFMPEG_PREFIX; leaving the cargo config alone" >&2
+fi
+
+BUNDLE="${OR_LANE_BUNDLE:-$ROOT/apps/or_app/build/linux/x64/$BUILD_MODE/bundle}"
 
 usage() {
   cat <<'USAGE'
@@ -353,7 +366,8 @@ packaged_build_deb() {
   cd "$root" || exit 1
   reset_bridge_hook_cache
   (cd apps/or_app && flutter --no-version-check pub get --offline --enforce-lockfile) || exit 1
-  (cd apps/or_app && flutter --no-version-check build linux --debug --no-pub) || exit 1
+  (cd apps/or_app && flutter --no-version-check build linux \
+    "--${OR_LANE_BUILD_MODE:-debug}" --no-pub) || exit 1
 
   local bridge
   bridge="$(find "$bundle" -name libor_app_bridge.so -print -quit)"
@@ -484,8 +498,26 @@ for step in "${step_list[@]}"; do
         bash -c 'cd apps/or_app && exec flutter --no-version-check test --no-pub'
       ;;
     preflight)
+      # The bounded preflight builds its own debug bundle, and `flutter test`
+      # empties that bundle's runtime on every build. Stage the packaged helpers
+      # into a step-scoped directory so the CMake step can place them beside the
+      # bridge whatever build mode the lane is running: without this a release
+      # lane builds a debug bundle whose bridge cannot load libav* at all.
+      preflight_runtime="$LANE_DIR/preflight-media-runtime"
+      lane_runtime_previous="${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY:-}"
+      lane_runtime_present="${OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY+set}"
+      rm -rf "$preflight_runtime"
+      mkdir -p "$preflight_runtime/lib"
+      cp "$FFMPEG_PREFIX/bin/ffmpeg" "$FFMPEG_PREFIX/bin/ffprobe" "$preflight_runtime/" &&
+        cp -P "$FFMPEG_PREFIX/lib/"libav*.so* "$FFMPEG_PREFIX/lib/"libsw*.so* "$preflight_runtime/lib/"
+      export OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY="$preflight_runtime"
       run_step preflight "$log" "$(step_command_text preflight)" \
         python3 scripts/run_linux_ui_preflight.py
+      if [[ "$lane_runtime_present" == "set" ]]; then
+        export OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY="$lane_runtime_previous"
+      else
+        unset OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY
+      fi
       record_artifact preflight "$PREFLIGHT_REPORT" "$LAST_STEP_START_EPOCH"
       ;;
     bench)
@@ -493,12 +525,20 @@ for step in "${step_list[@]}"; do
       # host with a codec or test build. Its four test-binary rows therefore need
       # prebuilt lanes, and a fresh checkout has none, so build them here once.
       # Without this every in-process row reported UNVERIFIED on a clean tree.
+      # Rust test binaries link the pinned FFmpeg libraries dynamically and
+      # carry no rpath, exactly like the hosted lane, which sets the same
+      # variable for its cargo steps. Without it every in-process row dies with
+      # a loader error (exit 127) instead of measuring anything.
+      lane_ld_path_previous="${LD_LIBRARY_PATH:-}"
+      lane_ld_path_present="${LD_LIBRARY_PATH+set}"
+      export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       bench_build_log="$LANE_DIR/linux-bench-build.log"
       : >"$bench_build_log"
       for bench_lane in \
         "-p or_media --test software_export" \
         "-p or_core --test command_latency" \
         "-p or_render --test render_frame_time" \
+        "-p or_render --test motion_raster_time" \
         "-p or_render --test queue_priority"; do
         # shellcheck disable=SC2086
         if ! cargo test $bench_lane --no-run --locked >>"$bench_build_log" 2>&1; then
@@ -512,6 +552,13 @@ for step in "${step_list[@]}"; do
         record_artifact bench "$BENCH_JSON" "$LAST_STEP_START_EPOCH"
       else
         lane_warn "$(step_command_text bench) printed no BENCH_JSON line"
+      fi
+      # Later packaged steps must see the ambient environment a user has, so put
+      # the loader path back exactly as it was found.
+      if [[ -n "$lane_ld_path_present" ]]; then
+        export LD_LIBRARY_PATH="$lane_ld_path_previous"
+      else
+        unset LD_LIBRARY_PATH
       fi
       ;;
     deb)
@@ -535,7 +582,8 @@ for step in "${step_list[@]}"; do
       else
         export OR_LANE_ROOT="$ROOT" OR_LANE_FFMPEG_PREFIX="$FFMPEG_PREFIX" \
           OR_LANE_CODEC_PREFIX="$CODEC_PREFIX" OR_LANE_BUNDLE="$BUNDLE" \
-          OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-debug.deb" \
+          OR_LANE_DEB="$LANE_DIR/opencut-reinforced-linux-x64-$BUILD_MODE.deb" \
+          OR_LANE_BUILD_MODE="$BUILD_MODE" \
           OR_LANE_HEAD="$head" OR_LANE_FFMPEG_COPYING="$copying" OR_LANE_CODEC_NOTICES="$notices"
         run_step deb "$log" "$(step_command_text deb)" \
           python3 scripts/run_linux_ui_preflight.py --exec \

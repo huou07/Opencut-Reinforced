@@ -116,10 +116,15 @@ test -n "$dependencies"
 # Flutter loads EGL at runtime, so dpkg-shlibdeps cannot discover this dependency.
 dependencies+=", libegl1, libgles2"
 
-run_number="${GITHUB_RUN_NUMBER:-0}"
-run_attempt="${GITHUB_RUN_ATTEMPT:-1}"
-[[ "$run_number" =~ ^[0-9]+$ && "$run_attempt" =~ ^[0-9]+$ ]] || { echo "GitHub run number and attempt must be integers" >&2; exit 2; }
-version="0.0.0~preview.$run_number.$run_attempt+$(cut -c1-12 <<< "$source_sha")"
+# A package has to carry the release it belongs to: a 0.1.4 download must
+# install as 0.1.4 so users can match what `dpkg -l` reports to the release
+# notes. The source suffix keeps two builds of one version distinguishable.
+app_version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' "$repo_root/apps/or_app/pubspec.yaml" | head -1)"
+[[ "$app_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  echo "apps/or_app/pubspec.yaml does not start with a release version: '$app_version'" >&2
+  exit 2
+}
+version="$app_version+$(cut -c1-12 <<< "$source_sha")"
 {
   printf 'Package: %s\n' "$package_name"
   printf 'Version: %s\n' "$version"

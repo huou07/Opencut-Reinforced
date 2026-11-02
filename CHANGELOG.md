@@ -13,6 +13,74 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.4 — 2026-11-02
+
+### Added
+- **Linux x86_64 `.deb` and Windows x86_64 `.zip` release packages** next to
+  the macOS Apple Silicon `.dmg`. All three ship the same Flutter app, the same
+  Rust core and the same command surface; only the native adapter and packaging
+  layer differ. Each package carries its own FFmpeg 8.1.3 runtime, codec licence
+  notices, the `or` CLI and the assistant workspace, so no developer toolchain is
+  needed to run it.
+
+### Changed
+- The Windows build is produced by `scripts/run_windows_lane.ps1` and
+  `scripts/stage_windows_bundle.ps1`, which the hosted Windows job now runs
+  unchanged. The real-machine lane and CI therefore share one build and one
+  staging procedure instead of two copies of the same steps.
+
+### Fixed
+- **Windows IPC served one client at a time.** The named-pipe accept loop ran
+  every request on the accepting thread, so a query arriving while a motion
+  scene rendered waited for the render; a shutdown request also left the loop
+  parked in `ConnectNamedPipe`. Each connection now gets its own handler thread
+  and a shutdown wakes the loop with a connection. This is what made
+  `a_motion_render_does_not_block_queries` fail on Windows only.
+- **The release gate could pass on a red platform.** `release-gate` now requires
+  the macOS, Linux and Windows jobs (plus the Rust, Flutter static and descriptor
+  boundary jobs) and rejects `skipped`, `cancelled` and `neutral` results, so a
+  missing native platform can no longer leave the gate green.
+- **The packaged journey and the Linux UI preflight drove controls the editor no
+  longer has.** They tapped `timeline-add-audio-track`, `timeline-undo` and
+  `timeline-add-video-track`, dismissed a clip dialog that is now a selection
+  surface, and read the save control as a `TextButton`. The import step also
+  tapped a disabled button while the shell was still opening the project, which
+  looked like a 1080p H.264/AAC import timeout on Linux CI. The tests now use the
+  create menu, the current save/undo controls and a key-based readiness wait.
+- The local lane gives benchmark binaries the pinned FFmpeg library path and
+  builds the motion raster test, so the performance budget reports measured rows
+  instead of `UNVERIFIED`. The packaged journey refuses to run when
+  `OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY` is unset rather than staging into the
+  current directory.
+- The CLI export argument test used Unix-only paths, so on Windows it asserted
+  the absolute-path error instead of the error under test.
+- **The Linux build linked the host FFmpeg.** `libor_app_bridge.so` came out
+  with `NEEDED libavutil.so.59` because another dependency's pkg-config search
+  path preceded the packaged prefix, so the editor refused to export with the
+  approved-runtime message. `scripts/configure_linux_cargo_for_ffmpeg.sh` now
+  writes the pinned prefix into rustflags ahead of every build-script search
+  path, and both the lane and the hosted Linux job call that one script.
+- **`or_media` did not compile for the desktop Windows target.** The SAF
+  seekable-media probe was declared unconditionally while the capability it
+  takes is Unix-only; the helper is now gated to the platforms that have it.
+- **Windows could not build the bridge through the Flutter hook.** The hook
+  runs cargo with an empty environment, so the FFmpeg build script fell through
+  to pkg-config; `scripts/configure_windows_cargo_for_ffmpeg.ps1` pins the
+  prefix in the cargo config the hook reads. Staging also needs PowerShell 7 and
+  the Debug bundle the journey actually runs, both of which the lane now
+  guarantees.
+- **The close-project control was enabled while a project action was in
+  flight** and silently ignored the click, which is what stalled the Windows
+  journey after reopening a recent project. The control is disabled while the
+  shell is busy, matching the save control.
+- The packaged journey's missing-inspector phase asserted a message the app
+  cannot show while the in-process decode fallback exists; it now asserts the
+  refusal the reader actually sees and that no media joins the library.
+- The bounded Linux preflight builds its own bundle, so the lane now stages the
+  packaged runtime for it instead of relying on whatever an earlier step left
+  behind; the release lane can therefore build a release package and still run
+  the preflight.
+
 ## 0.1.3 — 2026-11-02
 
 ### Added
