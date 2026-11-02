@@ -725,12 +725,25 @@ Future<void> _pressTransport(
       .where((message) => message.isNotEmpty)
       .toSet()
       .join(',');
+  final tracePath = Platform.environment['OR_IMPORT_TRACE_FILE'];
+  if (tracePath != null && tracePath.isNotEmpty) {
+    File(tracePath).writeAsStringSync(
+      'transport expectation=$expectation '
+      'settleTooltip=$settleTooltip '
+      'hitTestable=${control.hitTestable().evaluate().length} '
+      'enabled=${_controlIsEnabled(tester, control)} '
+      'tooltips="$tooltips" visible="$visible" '
+      'snackbar="${_visibleSnackBarMessage(tester)}"\n',
+      mode: FileMode.append,
+    );
+  }
   debugPrint(
-    'OR_PACKAGED_TRANSPORT_DIAGNOSTIC expectation=$expectation '
+    'transport expectation=$expectation '
     'settleTooltip=$settleTooltip '
     'hitTestable=${control.hitTestable().evaluate().length} '
     'enabled=${_controlIsEnabled(tester, control)} '
-    'tooltips="$tooltips" visible="$visible"',
+    'tooltips="$tooltips" visible="$visible" '
+    'snackbar="${_visibleSnackBarMessage(tester)}"',
   );
   fail('Timed out waiting for $expectation.');
 }
