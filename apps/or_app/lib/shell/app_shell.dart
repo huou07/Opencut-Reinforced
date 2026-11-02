@@ -1157,7 +1157,7 @@ class _AppShellState extends State<AppShell> {
       debugPrint(
         'ILLUSTRATION_ADD tracks=${tracks.items.length} '
         'matches=${_matchesTimelineProject(tracks, project)} '
-        'tracks_rev=${tracks.revision.canonical} project_rev=${project.revision.canonical}',
+        'kinds=${tracks.items.map((track) => track.kind).toList()}',
       );
       if (!_matchesTimelineProject(tracks, project)) {
         await _refreshProjectState(session);
