@@ -297,7 +297,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
   await tester.tap(saveButton);
   await _pumpUntil(
     tester,
-    () => find.text('Saved').evaluate().isNotEmpty,
+    () => _projectSaved(tester, saveButton),
     'project save',
   );
   await tester.tap(find.byKey(const ValueKey('workspace-close')));
@@ -458,11 +458,19 @@ Future<void> _reopenAndExport(
   await tester.tap(saveButton);
   await _pumpUntil(
     tester,
-    () => find.text('Saved').evaluate().isNotEmpty,
+    () => _projectSaved(tester, saveButton),
     'save relinked media source',
     diagnostic: () => _saveDiagnostic(tester, saveButton),
   );
 }
+
+/// The workspace reports a clean project through the save control, not through
+/// the status text: the text is suppressed whenever the bar carries a transient
+/// status such as an export receipt, and it is absent in the compact layout. The
+/// control's tooltip and disabled state say "saved" in every layout.
+bool _projectSaved(WidgetTester tester, Finder saveButton) =>
+    find.byTooltip('Saved').evaluate().isNotEmpty &&
+    !_controlIsEnabled(tester, saveButton);
 
 /// What the workspace showed when a save did not settle, so a timeout can be
 /// read as either a refused write or a control that never reported success.
@@ -484,6 +492,7 @@ String _saveDiagnostic(WidgetTester tester, Finder saveButton) {
             .whereType<String>()
             .join(' | ');
   return 'save_state=${labels.isEmpty ? '<none>' : labels.join(',')} '
+      'saved_tooltip=${find.byTooltip('Saved').evaluate().isNotEmpty} '
       'enabled=${_controlIsEnabled(tester, saveButton)} '
       'snackbar="${message.isEmpty ? '<empty>' : message}"';
 }
