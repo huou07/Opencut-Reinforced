@@ -18,11 +18,60 @@ import zipfile
 from pathlib import Path
 
 
+README_TEMPLATE = """# Opencut Reinforced {version}
+
+This folder is a self-contained Opencut Reinforced desktop build. It carries its
+own FFmpeg runtime, Rust bridge and viewer plugin, so it needs no Visual Studio,
+MSYS2, Flutter or system FFmpeg installation.
+
+## Start
+
+1. Keep the folder where it is; the app loads its libraries beside itself.
+2. Run `{executable}`.
+3. The build is unsigned. If the operating system cannot verify the publisher,
+   do not disable its security protections; report the message instead:
+   https://github.com/huou07/Opencut-Reinforced/issues
+
+## Projects and data
+
+Projects are `.orproj` files you choose where to keep. The app also stores its
+settings, recent-project list, caches and recovery data in the platform
+application-support directory, outside this folder, so replacing the folder with
+a newer build keeps your work.
+
+## Upgrade and removal
+
+Replace this folder with the newer build to upgrade. Delete the folder to
+remove the application; project files and platform data stay where they are.
+
+## What is inside
+
+- `or_app{extension}` — the editor.
+- `ffmpeg`/`ffprobe` (`.exe` on Windows) — the packaged media helpers.
+- The Rust bridge, the viewer texture plugin and the shared-library runtime.
+
+## Limits
+
+The local speech runtime (Whisper) and the `or` CLI are not part of this
+package. Video and audio codecs come from the bundled software FFmpeg build;
+no hardware encoder is advertised.
+"""
+
+
 def create_package(source: Path, work: Path, *, macos: bool) -> Path:
     package_dir = work / "opencut-reinforced-desktop"
     package_dir.mkdir()
-    readme = Path(__file__).resolve().parents[1] / "docs/reference/developer-preview-install.md"
-    shutil.copyfile(readme, package_dir / "README-FIRST.md")
+    repository = Path(__file__).resolve().parents[1]
+    pubspec = (repository / "apps/or_app/pubspec.yaml").read_text(encoding="utf-8")
+    version = pubspec.split("version:", 1)[1].split("+", 1)[0].strip()
+    (package_dir / "README-FIRST.md").write_text(
+        README_TEMPLATE.format(
+            version=version,
+            executable="OpenCut Reinforced.app" if macos else "or_app.exe",
+            extension="" if macos else ".exe",
+        ),
+        encoding="utf-8",
+    )
 
     if macos:
         app_name = "OpenCut Reinforced.app"
