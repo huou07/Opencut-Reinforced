@@ -555,9 +555,12 @@ jobs:
             echo "- Linux: \`sudo apt install ./Opencut-Reinforced-${version}-linux-x64.deb\`."
             echo
             echo "## What is included"
-            echo "FFmpeg 8.1.3 (LGPL), the local speech runtime (Whisper), the or CLI and"
-            echo "the app workspace are bundled on every platform. Speech models and an"
-            echo "assistant harness stay optional downloads."
+            echo "FFmpeg 8.1.3, the local speech runtime (Whisper), the or CLI and the app"
+            echo "workspace are bundled on every platform. macOS and Windows ship the LGPL"
+            echo "FFmpeg; the Linux build links x264 (GPL-2.0-or-later) so MP4 delivery"
+            echo "encodes there too, and its licence ships in \`licenses/x264\`."
+            echo "MP4 (H.264 + AAC) and WebM export work on all three platforms. Speech"
+            echo "models and an assistant harness stay optional downloads."
             echo
             echo "## Optional tools"
             echo "Settings -> External tools installs the speech runtime, finds or links"
