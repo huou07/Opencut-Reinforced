@@ -75,7 +75,9 @@ permissions:
 
 concurrency:
   group: desktop-release-${{ github.ref }}
-  cancel-in-progress: false
+  # A tag run must finish once it starts; a rehearsal for a superseded pull
+  # request commit has nothing to protect.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
