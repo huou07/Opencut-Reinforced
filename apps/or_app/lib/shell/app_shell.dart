@@ -15,6 +15,7 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../core_gateway.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
+import '../support/host_platform.dart';
 import '../project/project_file_picker.dart';
 import '../project/recent_projects.dart';
 import '../project/project_gateway.dart';
@@ -2033,21 +2034,19 @@ class _AppShellState extends State<AppShell> {
   Future<void> _cancelExport() => _export.cancel();
 
   /// A finished export is a file, not a message: name it, size it, and let the
-  /// owner take the path without hunting through Finder.
-  /// Ask the host to reveal a published file. Desktop-only by construction:
-  /// the channel is registered by the macOS runner, and other hosts fall back
-  /// to the copy-path action the receipt already offers.
-  static const MethodChannel _revealChannel = MethodChannel(
-    'or_macos_file_access',
-  );
-
-  Future<void> _revealInFinder(String path) async {
+  /// owner take the path without hunting through a file manager.
+  ///
+  /// The reveal itself belongs to the platform seam, so Finder, Explorer and a
+  /// freedesktop file manager all answer to the same call.
+  Future<void> _revealExport(String path) async {
     try {
-      await _revealChannel.invokeMethod<bool>('revealExport', {'path': path});
-    } on PlatformException catch (error) {
-      _showUnavailable(error.message ?? 'The file could not be revealed.');
-    } on MissingPluginException {
-      _showUnavailable('This build cannot open a Finder window.');
+      await HostPlatform.current().revealFile(path);
+    } on ProcessException catch (error) {
+      _showUnavailable(
+        error.message.isEmpty
+            ? 'The file could not be revealed.'
+            : error.message,
+      );
     }
   }
 
@@ -2065,18 +2064,13 @@ class _AppShellState extends State<AppShell> {
       size = '';
     }
     if (!mounted) return;
+    final host = HostPlatform.current();
     OrSnackBar.show(
       context,
       'Exported $name$size',
       duration: const Duration(seconds: 8),
-      // One action, the one this host can actually do: macOS can reveal the
-      // file, other hosts can only hand the path to the clipboard.
-      actionLabel: Platform.isMacOS ? 'Show in Finder' : 'Copy path',
-      onAction: () => unawaited(
-        Platform.isMacOS
-            ? _revealInFinder(destination)
-            : Clipboard.setData(ClipboardData(text: destination)),
-      ),
+      actionLabel: host.revealLabel,
+      onAction: () => unawaited(_revealExport(destination)),
     );
   }
 
@@ -2705,7 +2699,9 @@ class _AppShellState extends State<AppShell> {
                 onPressed: choice.providerAvailable
                     ? () => Navigator.of(dialogContext).pop(choice)
                     : null,
-                child: const Text('Use model'),
+                // The primary action names the work it will start: picking a
+                // model that is not on disk downloads it, it does not use it.
+                child: Text(choice.installed ? 'Use model' : 'Download model'),
               ),
             ],
           );

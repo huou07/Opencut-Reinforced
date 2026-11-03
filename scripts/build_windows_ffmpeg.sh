@@ -70,6 +70,14 @@ read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
 read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
 read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
 configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch=x86_64 "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
+# Media Foundation is Windows' own H.264 encoder. It needs no extra library and
+# no extra licence, so the MP4 export profile uses it here instead of the Apple
+# VideoToolbox encoder that only exists in the macOS package.
+# The Media Foundation encoder keeps its D3D11 device context in `MFContext`,
+# and that field only exists when the D3D11 hwaccel is configured; without it
+# mfenc.c does not compile under MSVC. D3D11 comes with the Windows SDK, so the
+# hwaccel is enabled next to the encoder rather than left to autodetect.
+configure_args+=("--enable-mediafoundation" "--enable-d3d11va" "--enable-encoder=h264_mf")
 # MSVC lacks the C23 stdbit.h header. Expose FFmpeg's own compatible
 # implementation during configure so compiler feature checks can use it.
 stdbit_compat="$(cygpath -am "$source/compat/stdbit")"
@@ -117,6 +125,12 @@ cp "$build_root/ZLIB-LICENSE.txt" "$prefix/ZLIB-LICENSE.txt"
 ./configure "${configure_args[@]}"
 # Codec component selections are emitted in config_components.h;
 # config.h contains FFmpeg's build/platform configuration instead.
+if ! grep -Eq '^#define CONFIG_H264_MF_ENCODER 1$' config_components.h; then
+  echo "FFmpeg did not configure the Media Foundation H.264 encoder, so the"
+  echo "Windows package could not export MP4. Configure probe output:"
+  grep -n -B 8 -A 16 -i -E 'h264_mf|mfenc|mediafoundation|mfapi' ffbuild/config.log | tail -n 160 || true
+  exit 1
+fi
 if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config_components.h; then
   echo "FFmpeg did not configure the required libvpx VP9 encoder."
   echo "FFmpeg libvpx configure probes:"

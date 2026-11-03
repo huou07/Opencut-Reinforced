@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-03
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -11,12 +11,20 @@ semantics, and how an export is validated.
 |---|---|---|---|---|
 | Lossless | Matroska | FFV1 | PCM S16LE, 48 kHz stereo | desktop, Android |
 | Delivery | WebM | VP9 | Opus, 48 kHz stereo | desktop, Android (verified on emulator) |
-| Hardware H.264 | MP4 | H.264 (VideoToolbox) | AAC, 48 kHz stereo | macOS desktop |
+| H.264 delivery | MP4 | H.264 (host encoder) | AAC, 48 kHz stereo | desktop |
 
-MP4 with hardware H.264/AAC is enabled on macOS. MOV, H.265/AV1 delivery and
-other hardware encoders remain future work gated on licence, platform and
-build-configuration review. The package build enables only the selected
-profile's muxer and encoders.
+MP4 is offered on every desktop. The core does not name one encoder: it walks a
+preference list (`h264_videotoolbox`, `h264_mf`, `h264_nvenc`, `h264_qsv`,
+`h264_amf`, `h264_vaapi`, `h264_open`, `libx264`) and uses the first encoder the
+linked FFmpeg actually carries. The macOS package carries VideoToolbox, the
+Windows package carries Media Foundation (`h264_mf`), and both carry AAC, so
+MP4 export works on both without a platform branch in the profile code. When a
+build carries no H.264 encoder the format is still listed and the export fails
+with a message that names the gap and points at WebM.
+
+MOV, H.265/AV1 delivery and other hardware encoders remain future work gated on
+licence, platform and build-configuration review. The package build enables only
+the selected profile's muxer and encoders.
 
 ## Behaviour
 
@@ -25,9 +33,13 @@ profile's muxer and encoders.
 - Preview and export share the same timeline evaluation, renderer, text
   rasteriser and transform/effect path; resolution, quality and scheduling may
   differ.
-- The hardware H.264 profile is fed NV12 planes: the composited frame is
+- The H.264 profile is fed NV12 planes: the composited frame is
   converted on the GPU and read back as two planes, so no CPU colour conversion
   runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
+- The VP9 profile runs with its own row threading: the encoder is told how many
+  threads the host can feed (capped at sixteen) and `row-mt` is on, because
+  libvpx otherwise encodes on a single thread and an eight or sixteen core host
+  waited on one core.
 - Rendering and writing are pipelined: a render thread keeps at most two frames
   ahead of the writer, so decode, GPU composite and readback overlap colour
   conversion and encoding instead of alternating with them. Frames still reach

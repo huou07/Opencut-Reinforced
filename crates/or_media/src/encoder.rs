@@ -19,6 +19,44 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+/// H.264 encoders to try, best first.
+///
+/// The desktop packages enable a different subset on each platform — Apple
+/// VideoToolbox on macOS, Media Foundation on Windows — so an export profile
+/// must never name one encoder and hope every build carries it. The list is a
+/// preference order over what is actually compiled in, which keeps the MP4
+/// profile working on every platform the product ships.
+/// The most encoder threads a WebM export asks libvpx for. The encoder is
+/// memory hungry, so a wide host is served by row threading rather than by
+/// spinning up every core.
+const VP9_MAX_THREADS: usize = 16;
+
+const H264_ENCODER_CANDIDATES: &[&str] = &[
+    "h264_videotoolbox",
+    "h264_mf",
+    "h264_nvenc",
+    "h264_qsv",
+    "h264_amf",
+    "h264_vaapi",
+    "h264_open",
+    "libx264",
+];
+
+/// The first H.264 encoder this build carries, or a failure naming the gap.
+fn pick_h264_encoder() -> Result<codec::Codec, ExportEncodeError> {
+    for name in H264_ENCODER_CANDIDATES {
+        if let Some(encoder) = codec::encoder::find_by_name(name) {
+            return Ok(encoder);
+        }
+    }
+    Err(ExportEncodeError(format!(
+        "this FFmpeg build carries no H.264 encoder (looked for {}), so MP4 \
+         cannot be encoded here. Export WebM instead, or install a package that \
+         links a hardware H.264 encoder for this platform.",
+        H264_ENCODER_CANDIDATES.join(", ")
+    )))
+}
+
 const AUDIO_RATE: u32 = 48_000;
 const COMPRESSED_AUDIO_QUEUE_FRAMES: usize = 4_096;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -48,7 +86,9 @@ pub enum FfmpegExportProfile {
     MatroskaFfv1PcmS16le,
     /// WebM with VP9 video and stereo Opus audio.
     WebmVp9Opus,
-    /// MP4 with Apple VideoToolbox H.264 video and AAC audio.
+    /// MP4 with H.264 video and AAC audio, encoded by the best encoder this
+    /// build carries on this host (VideoToolbox on macOS, Media Foundation on
+    /// Windows, a vendor encoder when one is linked).
     Mp4H264Aac,
 }
 
@@ -189,11 +229,7 @@ impl FfmpegExportWriter {
                 FfmpegExportProfile::Mp4H264Aac => (
                     "mov",
                     "output.mp4",
-                    codec::encoder::find_by_name("h264_videotoolbox").ok_or_else(|| {
-                        ExportEncodeError(
-                            "linked FFmpeg has no VideoToolbox H.264 encoder".to_owned(),
-                        )
-                    })?,
+                    pick_h264_encoder()?,
                     codec::encoder::find(codec::Id::AAC).ok_or_else(|| {
                         ExportEncodeError("linked FFmpeg has no AAC encoder".to_owned())
                     })?,
@@ -247,6 +283,13 @@ impl FfmpegExportWriter {
                 options.set("cpu-used", cpu_used);
                 options.set("crf", crf);
                 options.set("b", "0");
+                // libvpx defaults to one thread; row-mt only pays off once the
+                // encoder is told how many rows may run at once, so a WebM export
+                // was leaving every other core idle.
+                let threads = std::thread::available_parallelism()
+                    .map_or(1, |count| count.get())
+                    .clamp(1, VP9_MAX_THREADS);
+                options.set("threads", threads.to_string());
                 options.set("row-mt", "1");
             } else {
                 options.set("b", video_bitrate(width, height, quality).to_string());

@@ -27,8 +27,10 @@ use std::sync::mpsc;
 pub const MAX_MOTION_CANVAS_PIXELS: u32 = 16_384 * 16_384;
 
 /// The most worker threads one sequence uses, however many cores the host reports.
-/// Leaving headroom keeps the visiting thread — the encoder — and the UI responsive.
-const MAX_RASTER_WORKERS: usize = 8;
+/// Leaving headroom keeps the visiting thread — the encoder — and the UI responsive,
+/// while a wide host is allowed to fill more than a narrow eight-core budget; the
+/// in-flight byte budget still bounds how much work may run ahead of the encoder.
+const MAX_RASTER_WORKERS: usize = 16;
 
 /// The most finished-canvas bytes that may wait ahead of the visitor. Bounded so a
 /// large canvas cannot stack gigabytes of frames between the workers and the encode.

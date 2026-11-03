@@ -8,6 +8,7 @@ import 'package:or_app/assistant/assistant_panel.dart';
 import 'package:or_app/design/or_theme.dart';
 import 'package:or_app/shell/app_shell.dart';
 import 'package:or_app/shell/or_shortcuts.dart';
+import 'package:or_app/support/host_platform.dart';
 import 'package:flutter/services.dart';
 
 void main() {
@@ -175,6 +176,10 @@ void main() {
       find.byKey(const ValueKey('assistant-image-tool-image-0')),
       findsOneWidget,
     );
-    expect(find.text('Show in Finder'), findsOneWidget);
+    expect(
+      find.text(HostPlatform.current().revealLabel),
+      findsOneWidget,
+      reason: 'the reveal action names the host file manager, not Finder',
+    );
   });
 }

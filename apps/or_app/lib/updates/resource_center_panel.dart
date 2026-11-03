@@ -8,6 +8,7 @@ import '../design/or_typography.dart';
 import '../widgets/or_widgets.dart';
 import 'github_release.dart';
 import 'resource_center.dart';
+import 'update_installer.dart';
 
 /// Settings surface for clean-machine setup, optional downloads and updates.
 class ResourceCenterPanel extends StatefulWidget {
@@ -38,6 +39,8 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
   int _received = 0;
   int _total = 0;
   File? _downloaded;
+  GithubReleaseAsset? _asset;
+  UpdateInstallResult? _installResult;
   String? _actionError;
 
   @override
@@ -65,8 +68,14 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
       final release = await widget.service.checkForUpdate(
         widget.currentVersion,
       );
+      final asset = release == null
+          ? null
+          : await widget.service.updateAsset(release);
       if (!mounted) return;
-      setState(() => _release = release);
+      setState(() {
+        _release = release;
+        _asset = asset;
+      });
     } on GithubReleaseException catch (error) {
       if (!mounted) return;
       setState(() => _updateError = error.message);
@@ -84,9 +93,10 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
     setState(() {
       _downloading = true;
       _received = 0;
-      _total = release.macDmg?.sizeBytes ?? 0;
+      _total = _asset?.sizeBytes ?? 0;
       _actionError = null;
       _downloaded = null;
+      _installResult = null;
     });
     try {
       final directory = await widget.service.downloadDirectory();
@@ -112,6 +122,26 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
+  }
+
+  Future<void> _installDownloaded() async {
+    final file = _downloaded;
+    if (file == null) return;
+    try {
+      final result = await widget.service.installUpdate(file);
+      if (!mounted) return;
+      setState(() => _installResult = result);
+    } on GithubReleaseException catch (error) {
+      if (mounted) setState(() => _actionError = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _actionError = 'The update could not be installed.');
+      }
+    }
+  }
+
+  Future<void> _restart() async {
+    await widget.service.restartForUpdate();
   }
 
   Future<void> _openDownloaded() async {
@@ -328,21 +358,51 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
             Align(
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
-                key: const ValueKey('resource-update-open'),
-                onPressed: _openDownloaded,
-                icon: const Icon(Icons.open_in_new_outlined, size: 16),
-                label: const Text('Open downloaded image'),
+                key: const ValueKey('resource-update-install'),
+                onPressed: _installDownloaded,
+                icon: const Icon(Icons.system_update_alt_outlined, size: 16),
+                label: const Text('Install and restart'),
               ),
             ),
-          if (_downloaded != null) ...[
+          if (_installResult != null) ...[
             const SizedBox(height: OrSpacing.x2),
             Text(
-              'Saved to ${_downloaded!.path}. Open it, then drag '
-              'Opencut Reinforced into Applications to replace this build.',
+              _installResult!.message,
+              key: const ValueKey('resource-update-installed'),
+              style: const TextStyle(fontSize: OrType.metadataSize),
+            ),
+            if (_installResult!.restartRequired) ...[
+              const SizedBox(height: OrSpacing.x2),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  key: const ValueKey('resource-update-restart'),
+                  onPressed: _restart,
+                  icon: const Icon(Icons.restart_alt_outlined, size: 16),
+                  label: const Text('Restart now'),
+                ),
+              ),
+            ],
+          ],
+          if (_downloaded != null && _installResult == null) ...[
+            const SizedBox(height: OrSpacing.x2),
+            Text(
+              'Downloaded to ${_downloaded!.path}. Installing replaces this '
+              'build in place; nothing is deleted until the new version is in '
+              'place.',
               key: const ValueKey('resource-update-downloaded'),
               style: const TextStyle(
                 color: OrColors.textSecondary,
                 fontSize: OrType.metadataCompactSize,
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('resource-update-open'),
+                onPressed: _openDownloaded,
+                icon: const Icon(Icons.open_in_new_outlined, size: 16),
+                label: const Text('Show the downloaded file'),
               ),
             ),
           ],

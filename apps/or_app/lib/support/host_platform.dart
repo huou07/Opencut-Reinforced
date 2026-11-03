@@ -223,6 +223,48 @@ class HostPlatform {
     }
   }
 
+  /// How this host names the action that reveals a file in its file manager.
+  String get revealLabel {
+    if (isMacOS) return 'Show in Finder';
+    if (isWindows) return 'Show in Explorer';
+    return 'Show in Files';
+  }
+
+  /// Reveals [path] in the host's file manager.
+  ///
+  /// Every desktop has this; only the program differs. Windows selects the file
+  /// itself, macOS selects it in Finder, and the freedesktop hosts can only open
+  /// the containing folder, which is why the caller keeps a clipboard fallback.
+  Future<void> revealFile(String path) async {
+    if (isWindows) {
+      // explorer.exe reports 1 even when it opened the window.
+      await Process.run('explorer.exe', ['/select,$path']);
+      return;
+    }
+    if (isMacOS) {
+      final result = await Process.run('open', ['-R', path]);
+      if (result.exitCode != 0) {
+        throw ProcessException(
+          'open',
+          ['-R', path],
+          'the host could not reveal the file',
+          result.exitCode,
+        );
+      }
+      return;
+    }
+    final parent = File(path).parent.path;
+    final result = await Process.run('xdg-open', [parent]);
+    if (result.exitCode != 0) {
+      throw ProcessException(
+        'xdg-open',
+        [parent],
+        'the host could not open the containing folder',
+        result.exitCode,
+      );
+    }
+  }
+
   bool _hasSuffix(String path) {
     final slash = path.lastIndexOf(RegExp(r'[\\/]'));
     final name = slash == -1 ? path : path.substring(slash + 1);

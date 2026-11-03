@@ -56,8 +56,9 @@ ordinary video clip. Rasterising scenes on the GPU is a separate, measured chang
 not something the current path claims.
 
 A frame sequence is produced by a bounded worker pool rather than one thread per
-sequence: one core is left to the visiting writer, the pool is capped at eight
-threads, and the finished canvases waiting ahead of the writer are bounded at
+sequence: one core is left to the visiting writer, the pool is capped at sixteen
+threads so a wide host can fill more than an eight-core budget, and the finished
+canvases waiting ahead of the writer are bounded at
 192 MiB, so a long scene is limited by the encoder rather than by memory. Frames
 still reach the writer in index order and are byte-identical to a one-thread
 sweep; parallelising only changes wall time.

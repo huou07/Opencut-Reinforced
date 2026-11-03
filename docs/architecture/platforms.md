@@ -73,19 +73,21 @@ Platform rules live in `apps/or_app/lib/support/host_platform.dart`, not in the
 callers. It owns the home directory (`USERPROFILE` on Windows, `HOME` elsewhere),
 the `PATH` list separator, path joining, executable suffixes (`.exe`, `.cmd`,
 `.bat`, `.com` on Windows), the app data folder, external-link opening and
-executable discovery. Callers pass an optional `HostPlatform` so the Windows
-rules are testable on macOS. Adding a platform means adding a branch to that file
+executable discovery, revealing a file in the host file manager (Finder,
+Explorer, the freedesktop default) and the system speech voice (`say` on macOS,
+SpeechSynthesis through PowerShell on Windows, `espeak-ng` on Linux). Callers
+pass an optional `HostPlatform` so the Windows rules are testable on macOS. Adding a platform means adding a branch to that file
 once, not to the assistant, the voiceover dialog and the packaging scripts
 separately; a feature that uses it works on every desktop at once.
 
 ## Native capability matrix
 
-| Platform | Decode | Viewer presentation | Hardware path |
-|---|---|---|---|
-| macOS | FFmpeg 8.1.3 software, app-local `.dylib` | bounded BGRA8888 premultiplied pixel-buffer texture | none approved |
-| Windows | FFmpeg 8.1.3 software, app-local `.dll` | same | none approved |
-| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | none approved |
-| Android | in-process FFmpeg via SAF descriptors | software preview only, no audio | none approved |
+| Platform | Decode | Viewer presentation | MP4 H.264 encoder | System voice |
+|---|---|---|---|---|
+| macOS | FFmpeg 8.1.3 software, app-local `.dylib` | bounded BGRA8888 premultiplied pixel-buffer texture | VideoToolbox (`h264_videotoolbox`) | `say` |
+| Windows | FFmpeg 8.1.3 software, app-local `.dll` | same | Media Foundation (`h264_mf`) | SpeechSynthesis |
+| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | none shipped; export WebM | `espeak-ng` |
+| Android | in-process FFmpeg via SAF descriptors | software preview only, no audio | not a desktop profile | n/a |
 
 Platform-specific interop stays behind narrow runtime adapters. Project and
 timeline semantics stay platform-independent; only pickers, permissions,

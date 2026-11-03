@@ -6,7 +6,7 @@
 [CmdletBinding()]
 param(
   [ValidateSet('debug', 'release')][string]$Mode = 'debug',
-  [string[]]$Steps = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip'),
+  [string[]]$Steps = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip', 'installer'),
   [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
   [string]$Archive = ''
 )
@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 # script is started through `pwsh -File`, which silently ran no steps at all
 # and still reported PASS. Split it, and refuse a name that is not a step.
 $Steps = @($Steps | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-$known = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip')
+$known = @('tests', 'flutter-static', 'probe', 'build', 'stage', 'journey', 'zip', 'installer')
 $unknown = @($Steps | Where-Object { $known -notcontains $_ })
 if ($Steps.Count -eq 0 -or $unknown.Count -gt 0) {
   throw "unknown lane step(s): $($unknown -join ', '); expected some of $($known -join ', ')"
@@ -137,6 +137,34 @@ if ($Steps -contains 'journey') {
     $env:FFMPEG_DIR = $env:FFMPEG_INSTALL_PREFIX
   }
   Invoke-Step 'packaged product journey' { python (Join-Path $RepoRoot 'scripts/run_packaged_desktop_journey.py') }
+}
+
+if ($Steps -contains 'installer') {
+  $versionLine = Get-Content (Join-Path $RepoRoot 'apps/or_app/pubspec.yaml') |
+    Where-Object { $_ -match '^version:' } | Select-Object -First 1
+  $version = (($versionLine -split '\s+')[1] -split '\+')[0]
+  $candidates = @()
+  $command = Get-Command iscc.exe -ErrorAction SilentlyContinue
+  if ($command) { $candidates += $command.Source }
+  foreach ($root in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
+    if ($root) { $candidates += (Join-Path $root 'Inno Setup 6\ISCC.exe') }
+  }
+  # winget installs Inno Setup per user, where neither Program Files path sees it.
+  if ($env:LOCALAPPDATA) {
+    $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+  }
+  $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+  if (-not $iscc) {
+    throw "Inno Setup 6 is not installed; install it with 'choco install innosetup -y' or set ISCC."
+  }
+  $installerOut = Join-Path $RepoRoot 'apps/or_app/build/windows'
+  New-Item -ItemType Directory -Force -Path $installerOut | Out-Null
+  $setup = Join-Path $installerOut "Opencut-Reinforced-$version-windows-x64-setup.exe"
+  & $iscc "/DAppVersion=$version" "/DSourceDir=$Bundle" "/DOutputDir=$installerOut" "/DOutputBaseFilename=$([System.IO.Path]::GetFileNameWithoutExtension($setup))" (Join-Path $RepoRoot 'scripts/windows_installer.iss')
+  if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE" }
+  if (-not (Test-Path $setup)) { throw "Inno Setup did not produce $setup" }
+  Write-Output "WINDOWS_INSTALLER=$setup"
+  Write-Output 'STEP_DONE=installer'
 }
 
 if ($Steps -contains 'zip') {

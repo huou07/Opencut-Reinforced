@@ -70,7 +70,7 @@ env:
     --enable-libvpx
     --enable-libopus
     --enable-muxer=webm
-    --enable-encoder=libvpx_vp9,libopus
+    --enable-encoder=libvpx_vp9,libopus,aac
 
 jobs:
   rust:

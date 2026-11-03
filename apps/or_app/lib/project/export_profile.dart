@@ -42,12 +42,22 @@ enum ExportProfile {
   /// Whether the profile has a rate control the quality preference can trade.
   bool get hasQualityChoice => this != ExportProfile.matroskaFfv1PcmS16le;
 
-  static List<ExportProfile> get available => Platform.isMacOS
-      ? values
-      : values.where((profile) => profile != mp4H264Aac).toList();
+  /// Every profile is offered on every desktop platform.
+  ///
+  /// MP4 used to disappear outside macOS because the encoder named the Apple
+  /// VideoToolbox encoder directly. The core now picks whichever H.264 encoder
+  /// the build carries on this host (VideoToolbox on macOS, Media Foundation on
+  /// Windows), so hiding the format would remove a feature the product can
+  /// deliver.
+  static List<ExportProfile> get available => values;
 
+  /// The profile a new export starts on.
+  ///
+  /// MP4 is the format people expect from a video editor. Linux keeps WebM as
+  /// the default until that package carries a system H.264 encoder, so the
+  /// first export there does not fail on a machine with no vendor encoder.
   static ExportProfile get defaultForPlatform =>
-      Platform.isMacOS ? mp4H264Aac : webmVp9Opus;
+      Platform.isLinux ? webmVp9Opus : mp4H264Aac;
 
   String suggestedName(String projectName) {
     final base = projectName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
