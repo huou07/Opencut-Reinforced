@@ -21,6 +21,7 @@ import os
 import platform
 import shutil
 import stat
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -115,13 +116,23 @@ def download(url: str, destination: Path, size: int, digest: str) -> Path:
     return destination
 
 
+def extract(bundle, destination: Path) -> None:
+    # `filter="data"` refuses absolute paths and links escaping the destination;
+    # Python 3.12+ supports it, older interpreters predate the parameter and only
+    # ever see the pinned archives above.
+    try:
+        bundle.extractall(destination, filter="data")
+    except TypeError:
+        bundle.extractall(destination)
+
+
 def unpack(archive: Path, destination: Path) -> None:
     if archive.suffix == ".zip":
         with zipfile.ZipFile(archive) as bundle:
-            bundle.extractall(destination)
+            extract(bundle, destination)
         return
     with tarfile.open(archive, "r:gz") as bundle:
-        bundle.extractall(destination)
+        extract(bundle, destination)
 
 
 def find_file(root: Path, name: str) -> Path | None:
@@ -242,6 +253,61 @@ def resolve_or_cli(args: argparse.Namespace, root: Path, target_os: str) -> Path
     return path if path.is_file() else None
 
 
+def smoke_staged_runtime(
+    runtime_dir: Path, target_os: str, staged: set[str], skip: bool
+) -> None:
+    """Run the staged binaries the way the app runs them.
+
+    A package that merely contains `whisper-cli` can still be broken: a missing
+    shared library or a mistyped verb only shows up when the binary starts. Run
+    the checks on the host that can execute the target binaries; a cross-target
+    stage only gets the structural checks above.
+    """
+    if skip:
+        print("smoke checks skipped by request")
+        return
+    if target_os != host_os():
+        print(f"smoke checks skipped: {target_os} binaries cannot run on {host_os()}")
+        return
+
+    suffix = suffix_for(target_os)
+    environment = dict(os.environ)
+    # Linux resolves the engine's neighbouring libraries through the loader
+    # path; Windows already searches the executable directory, and macOS uses
+    # its own install names.
+    if target_os == "linux":
+        previous = environment.get("LD_LIBRARY_PATH", "")
+        beside = str(runtime_dir)
+        environment["LD_LIBRARY_PATH"] = f"{beside}:{previous}" if previous else beside
+
+    checks = {
+        "whisper": (f"whisper-cli{suffix}", ["--help"]),
+        "or": (f"or{suffix}", ["version"]),
+    }
+    for component, (name, arguments) in checks.items():
+        binary = runtime_dir / name
+        if not binary.is_file():
+            if component in staged:
+                fail(f"the staged runtime is missing {name}")
+            continue
+        try:
+            completed = subprocess.run(
+                [str(binary), *arguments],
+                cwd=runtime_dir,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            fail(f"{name} did not start: {error}")
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "").strip()
+            detail = detail.splitlines()[-1] if detail else "no output"
+            fail(f"{name} {' '.join(arguments)} exited {completed.returncode}: {detail}")
+        print(f"smoke checked {name} {' '.join(arguments)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -267,6 +333,11 @@ def main() -> int:
         "--require",
         default="whisper,provider",
         help="comma list of whisper,provider,or that must be staged",
+    )
+    parser.add_argument(
+        "--no-smoke",
+        action="store_true",
+        help="skip starting the staged binaries (they only run on their own OS)",
     )
     args = parser.parse_args()
 
@@ -300,6 +371,8 @@ def main() -> int:
     for component, name in staged.items():
         if component in required and not (runtime_dir / name).is_file():
             fail(f"the staged runtime is missing {name}")
+    present = {component for component in staged if (runtime_dir / staged[component]).is_file()}
+    smoke_staged_runtime(runtime_dir, target_os, present, args.no_smoke)
     print(f"runtime staged in {runtime_dir}")
     return 0
 

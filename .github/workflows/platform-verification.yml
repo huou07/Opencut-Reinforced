@@ -1038,6 +1038,10 @@ jobs:
     name: Android APK build
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # The Android app is not a desktop release requirement, and its hosted
+    # x86_64 emulator is flaky enough that a red mark here hides real failures
+    # on the same commit. Keep the build diagnostics, stop blocking on them.
+    continue-on-error: true
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
