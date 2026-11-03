@@ -61,20 +61,17 @@ class AndroidSafRecoveryReportTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "app-private SAF working copy"):
             verify(self.process, self.prepared, self.recovered)
 
-    def test_workflow_reads_process_report_from_recovery_artifact_directory(self):
+    def test_runner_reads_process_report_from_recovery_artifact_directory(self):
+        # Android is not a release target and no longer runs in CI, so this
+        # guards the local runner that still records the two reports.
         root = Path(__file__).resolve().parents[1]
         runner = (root / "scripts/run-android-preview-check.sh").read_text()
-        workflow = (root / ".github/workflows/platform-verification.yml").read_text()
 
         self.assertIn(
             'process_relaunch_report="$recovery_output/process-relaunch.json"',
             runner,
         )
         self.assertIn('python3 - "$process_relaunch_report"', runner)
-        self.assertIn(
-            '--process "$OR_ANDROID_RECOVERY_ACCEPTANCE_OUTPUT/process-relaunch.json"',
-            workflow,
-        )
 
     def test_missing_force_stop_disappearance_is_rejected(self):
         self.process["emptyAfterForceStop"] = False

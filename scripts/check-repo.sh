@@ -249,6 +249,11 @@ if ! python3 scripts/test_android_preview_runner.py; then
   fail "the Android preview runner control-flow checks failed"
 fi
 
+# The licence stager decides whether the Linux package carries the x264 text.
+if ! python3 scripts/test_stage_codec_licences.py; then
+  fail "the codec licence stager checks failed"
+fi
+
 # The local Android lane must keep reporting BLOCKED for a host precondition and
 # DIRTY for a dirty tree, and must never claim acceptance. Those rules are what
 # stop a local guest run from being mistaken for Android acceptance, so they are

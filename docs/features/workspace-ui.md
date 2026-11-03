@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-03
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -84,7 +84,10 @@ justification and review.
   commands. Hiding a control never forks or removes project data.
 - Mobile/compact layout exposes the same semantics as the desktop rail, with
   selection carried by fill and border, not colour alone.
-- Native macOS menu bar mirrors the same verbs (File/Edit/View/OR).
+- The menu bar renders from one description of the verbs: macOS draws the
+  native bar, Windows and Linux draw an in-window bar in the same shell. Both
+  disable the same entries under the same conditions, so a verb added once
+  appears on every platform.
 
 ## Rules
 

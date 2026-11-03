@@ -7,8 +7,9 @@ proven versus assumed per platform.
 
 ## Targets
 
-Release targets: **macOS, Windows, Linux, Android** (Android floor API 26,
-Android 8.0, matching CPAL's AAudio backend). iOS and web are not targets.
+Release targets: **macOS, Windows, Linux**. iOS and web are not targets.
+Android code remains in the tree (floor API 26, matching CPAL's AAudio backend)
+but it is not a release target and it is not built in CI.
 
 For the current mission only the owner's macOS machine is a required runtime
 target; other platforms are maintained but not acceptance targets.
@@ -86,7 +87,7 @@ separately; a feature that uses it works on every desktop at once.
 |---|---|---|---|---|
 | macOS | FFmpeg 8.1.3 software, app-local `.dylib` | bounded BGRA8888 premultiplied pixel-buffer texture | VideoToolbox (`h264_videotoolbox`) | `say` |
 | Windows | FFmpeg 8.1.3 software, app-local `.dll` | same | Media Foundation (`h264_mf`) | SpeechSynthesis |
-| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | none shipped; export WebM | `espeak-ng` |
+| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | x264 (`libx264`, GPL build) | `espeak-ng` |
 | Android | in-process FFmpeg via SAF descriptors | software preview only, no audio | not a desktop profile | n/a |
 
 Platform-specific interop stays behind narrow runtime adapters. Project and

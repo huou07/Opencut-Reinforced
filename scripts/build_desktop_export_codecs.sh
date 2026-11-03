@@ -19,6 +19,9 @@ opus_sha256=6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1
 opus_upstream_url="https://downloads.xiph.org/releases/opus/opus-$opus_version.tar.gz"
 opus_mirror_url="https://ftp.osuosl.org/pub/xiph/releases/opus/opus-$opus_version.tar.gz"
 vpx_commit=6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
+x264_commit=b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+x264_sha256=6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224
+x264_url="https://code.videolan.org/videolan/x264/-/archive/$x264_commit/x264-$x264_commit.tar.bz2"
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -239,6 +242,43 @@ Cflags: -I\${includedir}
 EOF
 fi
 
+# Linux has no operating-system H.264 encoder: VideoToolbox and Media
+# Foundation do not exist there. x264 is the software encoder Linux delivery
+# needs, and it is GPL-2.0, so it is linked into the Linux FFmpeg only and its
+# licence ships beside the package notices. See
+# docs/adr/0011-linux-delivery-encoder.md.
+if [[ "$platform" == linux ]]; then
+  x264_archive="$work/x264-$x264_commit.tar.bz2"
+  if [[ ! -f "$x264_archive" ]]; then
+    curl --fail --location --silent --show-error --retry 5 --retry-all-errors \
+      "$x264_url" --output "$x264_archive"
+  fi
+  actual_x264_sha256="$(sha256_file "$x264_archive")"
+  if [[ "$actual_x264_sha256" != "$x264_sha256" ]]; then
+    echo "x264 source SHA-256 mismatch: $actual_x264_sha256" >&2
+    exit 1
+  fi
+  if [[ ! -d "$work/x264-$x264_commit" ]]; then
+    tar -xjf "$x264_archive" -C "$work"
+  fi
+  x264_source="$work/x264-$x264_commit"
+  x264_build="$work/x264-build"
+  rm -rf "$x264_build"
+  mkdir -p "$x264_build"
+  cd "$x264_build"
+  "$x264_source/configure" \
+    --prefix="$prefix" \
+    --enable-static \
+    --enable-pic \
+    --disable-cli \
+    --disable-opencl
+  make -j2
+  make install
+  test -f "$prefix/lib/libx264.a"
+  test -f "$prefix/lib/pkgconfig/x264.pc"
+  cp "$x264_source/COPYING" "$work/X264-COPYING"
+fi
+
 pkgconfig="$prefix/lib/pkgconfig"
 mkdir -p "$pkgconfig"
 cat > "$pkgconfig/opus.pc" <<EOF
@@ -291,6 +331,10 @@ libvpx source: https://chromium.googlesource.com/webm/libvpx
 libvpx commit: $vpx_commit
 libvpx source archive SHA-256: $vpx_archive_sha256
 Build profile: static libraries linked into LGPL FFmpeg shared libraries
+x264 commit: $x264_commit
+x264 source: https://code.videolan.org/videolan/x264
+x264 source archive SHA-256: $x264_sha256
+x264 licence: GPL-2.0-or-later, linked into the Linux FFmpeg only
 EOF
 inherited_pkg_config_path="${PKG_CONFIG_PATH:-}"
 export PKG_CONFIG_PATH="$pkgconfig${inherited_pkg_config_path:+:$inherited_pkg_config_path}"

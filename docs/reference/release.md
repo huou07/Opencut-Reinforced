@@ -32,6 +32,11 @@ comes from `scripts/run_local_lane.sh linux --packaged` (which drives
 Windows packages from `scripts/run_windows_lane.ps1` (which drives
 `scripts/stage_windows_bundle.ps1`, `scripts/test_desktop_archive_install.py`
 and, for the installer, `scripts/windows_installer.iss` through Inno Setup 6).
+
+The Linux codec build also links x264, so MP4 delivery works without a GPU. That
+makes the Linux FFmpeg build GPL-2.0-or-later and ships `licenses/x264/COPYING`
+beside the FFmpeg notice; macOS and Windows stay LGPL. See
+[ADR 0011](../adr/0011-linux-delivery-encoder.md).
 The CI desktop jobs call the same scripts, so a package verified on a real host
 and one built by CI are produced by one procedure. All three platform scripts
 stage the optional runtime by calling `scripts/stage_desktop_runtime.py`, which
@@ -48,14 +53,18 @@ release for a `v*` tag or a manual dispatch with `publish` enabled. A release is
 therefore either complete on all three platforms or it does not publish; there is
 no path that attaches one platform's package by hand.
 
-The same file runs on every pull request that can change a package, minus
-publishing: the rehearsal builds the release artifacts with the release mode,
-the release staging script and its smoke checks. A green rehearsal means the tag
-run has nothing left to discover, so a release failure is a defect caught before
-the merge rather than a second full pipeline after it. Staging runs
-`whisper-cli --help` and `or version` against the binaries it just copied when
-the target matches the host, so a package that contains the engine but cannot
-start it fails the build instead of the download page.
+That workflow runs only for a release. Packaging is proven on the owner's
+machines first — this Mac, a Windows host and a Debian host — because a hosted
+run costs about half an hour per platform and only answers questions a local run
+answers sooner. Staging runs `whisper-cli --help` and `or version` against the
+binaries it just copied when the target matches the host, so a package that
+contains the engine but cannot start it fails locally, before a tag exists.
+
+A release therefore makes two CI calls and no more: one pull request through
+`platform-verification.yml` (the `release-gate` check the `main` ruleset
+requires) and one tag run of this workflow. Do not push a commit to that pull
+request to test something; run the lane locally, fix it there, and only then
+push.
 
 ## Version numbers
 
@@ -88,13 +97,13 @@ manual check.
 - Publication requires a successful Platform Verification push run for the exact
   source commit; the `dev-<12-char-sha>` tag resolves to that commit, the release
   is a prerelease, and every required asset is non-empty and checksummed.
-- Five app packages come from four build jobs (Linux produces two): macOS,
-  Windows, Linux tarball, Debian/Ubuntu amd64 `.deb`, Android APK. Count packages,
-  not jobs.
+- Four app packages come from three build jobs (Linux produces a `.deb` from the
+  same staged bundle): macOS `.dmg`, Windows `.zip` and `.setup.exe`, Linux
+  `.deb`. Count packages, not jobs.
 - Three desktop CLI packages plus build/provenance files and the FFmpeg, Opus and
   libvpx source archives complete the asset set.
-- macOS is ad-hoc debug-signed and not notarised; Android uses the debug signing
-  key. No package has production signing.
+- macOS is ad-hoc debug-signed and not notarised. No package has production
+  signing.
 - A validation-only dispatch on a non-main branch has no release/tag permission;
   its artifacts are seven-day Actions artifacts.
 
@@ -112,7 +121,9 @@ Android is out of the desktop matrix and iOS and web are not targets.
 Desktop release targets: macOS 13+ Apple Silicon (`.dmg`), Linux x86_64 Debian 13
 and Ubuntu 24.04 (`.deb`), Windows 11 x86_64 (`.setup.exe` and `.zip`). The release gate fails
 unless the macOS, Linux and Windows native jobs all succeed on the same commit.
-Android is a separate diagnostic lane and is not part of the desktop gate.
+Android is not a release target and is no longer built in CI: the cost of a
+hosted emulator that failed on unrelated commits outweighed its value, and the
+source stays in the tree for the day it returns to scope.
 
 ## Related
 

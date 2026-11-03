@@ -11,16 +11,22 @@ semantics, and how an export is validated.
 |---|---|---|---|---|
 | Lossless | Matroska | FFV1 | PCM S16LE, 48 kHz stereo | desktop, Android |
 | Delivery | WebM | VP9 | Opus, 48 kHz stereo | desktop, Android (verified on emulator) |
-| H.264 delivery | MP4 | H.264 (host encoder) | AAC, 48 kHz stereo | desktop |
+| H.264 delivery | MP4 | H.264 (host encoder; x264 on Linux) | AAC, 48 kHz stereo | desktop |
 
 MP4 is offered on every desktop. The core does not name one encoder: it walks a
 preference list (`h264_videotoolbox`, `h264_mf`, `h264_nvenc`, `h264_qsv`,
 `h264_amf`, `h264_vaapi`, `h264_open`, `libx264`) and uses the first encoder the
 linked FFmpeg actually carries. The macOS package carries VideoToolbox, the
-Windows package carries Media Foundation (`h264_mf`), and both carry AAC, so
-MP4 export works on both without a platform branch in the profile code. When a
-build carries no H.264 encoder the format is still listed and the export fails
-with a message that names the gap and points at WebM.
+Windows package carries Media Foundation (`h264_mf`), and the Linux package
+carries x264 (`libx264`), so MP4 export works on all three without a platform
+branch in the profile code. Every package also carries AAC. When a build carries
+no H.264 encoder the format is still listed and the export fails with a message
+that names the gap and points at WebM.
+
+The Linux build links x264 because Linux has no operating-system H.264 encoder;
+x264 is GPL-2.0-or-later, ships as `licenses/x264/COPYING` in the package, and
+applies to that FFmpeg build only. See
+[ADR 0011](../adr/0011-linux-delivery-encoder.md).
 
 MOV, H.265/AV1 delivery and other hardware encoders remain future work gated on
 licence, platform and build-configuration review. The package build enables only
