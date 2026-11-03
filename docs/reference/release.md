@@ -64,8 +64,11 @@ One release carries two versions and they must agree: `apps/or_app/pubspec.yaml`
 `[workspace.package] version`, which is what `or version` prints and what the
 packaged helpers report. `scripts/check-repo.sh` fails when the two differ, so a
 release cannot publish a build whose command line names a different version from
-the one on the download page. Bump both, then refresh `Cargo.lock` with
-`cargo update --workspace`.
+the one on the download page. Bump both, then refresh the root `Cargo.lock`
+with `cargo update --workspace` and the probe's own lock with
+`cargo update --workspace --manifest-path tools/ffmpeg-link-probe/Cargo.toml`,
+because `tools/ffmpeg-link-probe` is a separate package that depends on the
+workspace crates.
 
 ## Updates and optional resources
 
