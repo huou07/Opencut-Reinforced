@@ -22,6 +22,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/run_local_lane.sh`, `scripts/run_android_lane.sh` | platform lanes for future/other-platform work |
 | `scripts/stage_desktop_runtime.py` | stage the pinned Whisper engine, the speech adapter and the `or` CLI into any desktop bundle, then start the staged binaries when the target matches the host; the one copy rule for macOS, Linux and Windows |
 | `scripts/test_stage_desktop_runtime.py` | checks that the stager produces the same payload for Linux and Windows bundles and that its smoke check reports a binary that cannot start |
+| `scripts/stage_codec_licences.sh` / `scripts/test_stage_codec_licences.py` | stage the third-party licence tree into a package and check that the x264 text is present only when the Linux build linked it |
 | `scripts/windows_installer.iss` | Inno Setup 6 definition for the per-user Windows installer: `{localappdata}\Programs\Opencut Reinforced`, no administrator prompt, close-and-restart support for in-place updates |
 | `scripts/record-hosted-evidence.sh` | record a hosted run for the current commit |
 | `tooling/or-agent-workspace/build.mjs` | pack the installed assistant workspace into its Flutter asset; `node --test` beside it guards drift |

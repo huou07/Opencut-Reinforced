@@ -1,7 +1,7 @@
 fn main() {
     assert!(
         or_media::verify_ffmpeg_runtime(),
-        "production or_media FFmpeg initialization or LGPL check failed"
+        "production or_media FFmpeg initialization or license check failed"
     );
 
     let versions = unsafe {
@@ -27,7 +27,11 @@ fn main() {
         println!("{name}_abi_major={expected_major}");
     }
 
+    // The Linux delivery build links x264, so it reports GPL-2 there
+    // (ADR 0011). Every other target must stay LGPL.
     let license = ffmpeg_the_third::util::license();
-    assert_eq!(license, "LGPL version 2.1 or later");
+    let approved = license == "LGPL version 2.1 or later"
+        || (cfg!(target_os = "linux") && license == "GPL version 2 or later");
+    assert!(approved, "unexpected FFmpeg license: {license}");
     println!("ffmpeg_license={license}");
 }

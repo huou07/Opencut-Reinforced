@@ -51,7 +51,7 @@ pub fn ffmpeg_runtime_problem() -> Option<String> {
         return Some(format!("the library refused to initialise: {error}"));
     }
     let license = ffmpeg_the_third::util::license();
-    if license == "LGPL version 2.1 or later" {
+    if approved_license(license) {
         None
     } else {
         Some(format!(
@@ -59,6 +59,17 @@ pub fn ffmpeg_runtime_problem() -> Option<String> {
             loaded_avutil_path().unwrap_or_else(|| "an unknown library".to_owned())
         ))
     }
+}
+
+/// Whether the runtime reports a licence this build may ship. Every platform
+/// ships LGPL; the Linux delivery build links x264, so a GPL-2 build is the
+/// approved runtime there (ADR 0011). Version 3 and nonfree stay refused
+/// everywhere, because they report a different string.
+fn approved_license(license: &str) -> bool {
+    if license == "LGPL version 2.1 or later" {
+        return true;
+    }
+    cfg!(target_os = "linux") && license == "GPL version 2 or later"
 }
 
 /// The libavutil this process actually mapped, so a licence refusal names the
@@ -81,10 +92,11 @@ fn loaded_avutil_path() -> Option<String> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn the_linked_ffmpeg_runtime_is_the_approved_lgpl_build() {
+    fn the_linked_ffmpeg_runtime_is_an_approved_build() {
         assert!(
             super::verify_ffmpeg_runtime(),
-            "the linked FFmpeg runtime must report LGPL version 2.1 or later"
+            "the linked FFmpeg runtime must report an approved licence: {:?}",
+            ffmpeg_the_third::util::license()
         );
     }
 }

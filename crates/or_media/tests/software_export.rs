@@ -1,5 +1,5 @@
 use ffmpeg_the_third as ffmpeg;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use or_media::{FfmpegExportProfile, FfmpegExportWriter};
 use or_media::{FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter, SoftwareExportProfile};
 use std::{
@@ -36,7 +36,7 @@ impl TestDirectory {
         self.0.join("profile.webm")
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
     fn mp4_file(&self) -> PathBuf {
         self.0.join("profile.mp4")
     }
@@ -191,21 +191,35 @@ fn writer_publishes_webm_with_vp9_and_opus_streams() {
     assert!(fs::metadata(&path).unwrap().len() < 1_000_000);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 #[test]
-fn writer_publishes_mp4_with_videotoolbox_h264_and_aac_streams() {
+fn writer_publishes_mp4_with_the_host_h264_encoder_and_aac_streams() {
     ffmpeg::init().unwrap();
     let directory = TestDirectory::new();
     let path = directory.mp4_file();
-    let mut writer = FfmpegExportWriter::create_with_profile(
+    let writer = FfmpegExportWriter::create_with_profile(
         &path,
         FfmpegExportProfile::Mp4H264Aac,
         64,
         48,
         30,
         1,
-    )
-    .expect("the macOS FFmpeg profile must include VideoToolbox H.264 and AAC");
+    );
+    let mut writer = match writer {
+        Ok(writer) => writer,
+        // The shipping packages always carry an encoder: VideoToolbox on macOS,
+        // Media Foundation on Windows and x264 on Linux.
+        Err(error) if cfg!(any(target_os = "macos", target_os = "windows")) => panic!(
+            "the {} FFmpeg build must carry an H.264 encoder: {error:?}",
+            std::env::consts::OS
+        ),
+        // A Linux build without the x264 link has no encoder at all; the
+        // profile reports that instead of pretending to encode.
+        Err(_) => {
+            eprintln!("skipping: this FFmpeg build carries no H.264 encoder");
+            return;
+        }
+    };
     let mut rgba = vec![0; 64 * 48 * 4];
     for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
         *pixel = [80, 140, 210, 255];

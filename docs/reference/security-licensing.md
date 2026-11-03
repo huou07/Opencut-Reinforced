@@ -19,7 +19,10 @@ artifacts keep their own terms and need individual review.
 Before adding a dependency or asset, inspect its source, maintenance, integration
 cost and licence. Do not introduce GPL, AGPL, SSPL, non-commercial or
 source-available-only components into the distributed product without explicit
-owner approval and a recorded licensing decision.
+owner approval and a recorded licensing decision. One such decision is recorded:
+the Linux FFmpeg build links x264 (GPL-2.0-or-later) so MP4 delivery works there,
+and no other platform links it — see
+[ADR 0011](../adr/0011-linux-delivery-encoder.md).
 
 Do not bundle model weights by default; any future inclusion needs a size,
 licence and distribution strategy. Keep secrets, model weights, generated media,
@@ -49,7 +52,9 @@ before distribution.
 ## FFmpeg and codecs
 
 FFmpeg is built from the official source archive under an LGPL-only profile and
-ships with the app bundles together with its notices. H.264/AAC and VP9/Opus
+ships with the app bundles together with its notices. The Linux build is the one
+exception: it links the pinned x264 static library and is therefore GPL-2.0-or-
+later, with `licenses/x264/COPYING` staged beside the FFmpeg notice. H.264/AAC and VP9/Opus
 carry separate patent and distribution obligations that must be reviewed for each
 market before relying on a delivery profile. Bundled FFmpeg is a
 media-interchange build (limited muxers and filters); do not depend on

@@ -55,6 +55,13 @@ LICENCE_PATHS=(
   "licenses/libvpx/PATENTS"
 )
 
+# Present only in packages whose FFmpeg links x264 (the Linux delivery build).
+# A package without it is still complete; a package with the directory must
+# carry the text.
+OPTIONAL_LICENCE_PATHS=(
+  "licenses/x264/COPYING"
+)
+
 # The FFmpeg notice is generated rather than copied, because it describes how
 # this build links FFmpeg and where the corresponding source is published. Keep
 # it identical in every artifact: a reader comparing two packages must not find
@@ -71,6 +78,9 @@ from the same source and configuration for import, media previews,
 and WebM export. FFmpeg's WebM export statically links libvpx and
 libopus; their licenses and the libvpx patent notice are included in
 the adjacent Opus and libvpx directories.
+A package that contains a licenses/x264 directory additionally links
+libx264 (GPL-2.0-or-later) for H.264 delivery; that directory carries the
+x264 licence text and the source offer recorded in the release assets.
 EOF
 }
 
@@ -78,6 +88,13 @@ verify_layout() {  # target-dir
   local target="$1" path failures=()
   for path in "${LICENCE_PATHS[@]}"; do
     if [[ ! -s "$target/$path" ]]; then
+      failures+=("missing or empty: $target/$path")
+    fi
+  done
+  for path in "${OPTIONAL_LICENCE_PATHS[@]}"; do
+    local directory
+    directory="$(dirname "$target/$path")"
+    if [[ -d "$directory" && ! -s "$target/$path" ]]; then
       failures+=("missing or empty: $target/$path")
     fi
   done
@@ -142,6 +159,10 @@ case "${1:-}" in
     install -m 644 "$notices_dir/OPUS-COPYING" "$target/licenses/Opus/COPYING"
     install -m 644 "$notices_dir/LIBVPX-LICENSE" "$target/licenses/libvpx/LICENSE"
     install -m 644 "$notices_dir/LIBVPX-PATENTS" "$target/licenses/libvpx/PATENTS"
+    if [[ -s "$notices_dir/X264-COPYING" ]]; then
+      mkdir -p "$target/licenses/x264"
+      install -m 644 "$notices_dir/X264-COPYING" "$target/licenses/x264/COPYING"
+    fi
     write_ffmpeg_notice "$target"
 
     # Verify what was just written, using the same list the packagers check
