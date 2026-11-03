@@ -4,17 +4,26 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../support/host_platform.dart';
 import 'local_tts_service.dart';
 
 /// One local speech server the app can install and run without a terminal.
+///
+/// An engine is a *recipe*, not a shell script: a repository to clone plus the
+/// argument list that installs and starts it. The manager turns those steps
+/// into a real process on every host, so a Windows, Linux or macOS user gets the
+/// same feature from the same declaration instead of a per-platform command
+/// string that only one shell understands.
 class LocalTtsEngine {
   const LocalTtsEngine({
     required this.id,
     required this.label,
     required this.description,
     required this.baseUrl,
-    required this.installCommand,
-    required this.startCommand,
+    this.repository = '',
+    this.repositoryRef = '',
+    this.installArguments = const ['sync'],
+    this.startArguments = const [],
     this.homepage = '',
   });
 
@@ -23,22 +32,28 @@ class LocalTtsEngine {
   final String description;
   final String baseUrl;
 
-  /// A shell command run in the engine directory. Empty means the engine is
-  /// already installed and only [startCommand] is needed.
-  final String installCommand;
-  final String startCommand;
+  /// Git URL of the engine. Empty means the engine is already installed and
+  /// only [startArguments] are needed, which is the custom-server case.
+  final String repository;
+
+  /// Optional branch or tag, cloned shallowly.
+  final String repositoryRef;
+
+  /// Arguments for `uv` that prepare the checkout, e.g. `sync`.
+  final List<String> installArguments;
+
+  /// Arguments for `uv` that start the server, e.g.
+  /// `['run', 'python', 'apps/openai_speech.py']`.
+  final List<String> startArguments;
+
   final String homepage;
 
-  /// Whether this engine can run on the host at all.
-  ///
-  /// The built-in installer and start commands are POSIX shell recipes, so
-  /// Windows offers the custom-server engine instead of pretending the
-  /// download works: the same engines run there once the user starts the
-  /// server themselves.
-  bool get supportedOnThisPlatform =>
-      installCommand.isEmpty || !Platform.isWindows;
+  /// Whether the app can install this engine. A custom server cannot be
+  /// downloaded but can still be started from a command the user provides.
+  bool get installable => repository.isNotEmpty;
 
-  bool get installable => installCommand.isNotEmpty && supportedOnThisPlatform;
+  /// Whether the engine has a built-in start command.
+  bool get startable => startArguments.isNotEmpty;
 }
 
 const localTtsEngines = <LocalTtsEngine>[
@@ -50,12 +65,9 @@ const localTtsEngines = <LocalTtsEngine>[
         'engine on first use; no account or key.',
     baseUrl: LocalTtsService.defaultBaseUrl,
     homepage: 'https://github.com/pnnbao97/VieNeu-TTS',
-    installCommand:
-        'set -e; command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh; '
-        'export PATH="\$HOME/.local/bin:\$PATH"; '
-        'if [ ! -d .git ]; then git clone --depth 1 https://github.com/pnnbao97/VieNeu-TTS.git .; fi; '
-        'uv sync',
-    startCommand: 'export PATH="\$HOME/.local/bin:\$PATH"; exec uv run python apps/openai_speech.py',
+    repository: 'https://github.com/pnnbao97/VieNeu-TTS.git',
+    installArguments: ['sync'],
+    startArguments: ['run', 'python', 'apps/openai_speech.py'],
   ),
   LocalTtsEngine(
     id: 'custom',
@@ -64,8 +76,6 @@ const localTtsEngines = <LocalTtsEngine>[
         'Any loopback server that answers GET /health and POST /v1/audio/speech. '
         'Choose this for Kokoro, Chatterbox, Piper wrappers or your own engine.',
     baseUrl: LocalTtsService.defaultBaseUrl,
-    installCommand: '',
-    startCommand: '',
   ),
 ];
 
@@ -73,7 +83,7 @@ const localTtsEngines = <LocalTtsEngine>[
 ///
 /// The engine remains a separate process on loopback, exactly like a server the
 /// user started by hand. The manager only removes the terminal step: it runs
-/// the engine's documented commands, streams their output into the settings
+/// the engine's documented steps, streams their output into the settings
 /// surface, and keeps the child process so Stop really stops it.
 class LocalTtsServerManager extends ChangeNotifier {
   /// One server per app session: closing the voiceover dialog must not kill a
@@ -82,18 +92,14 @@ class LocalTtsServerManager extends ChangeNotifier {
 
   LocalTtsServerManager({
     Future<Directory> Function()? supportDirectory,
+    HostPlatform? platform,
     this.logLimit = 120,
-  }) : _supportDirectory = supportDirectory ?? _defaultSupportDirectory;
+  }) : _host = platform ?? HostPlatform.current(),
+       // ignore: prefer_initializing_formals
+       _supportDirectory = supportDirectory;
 
-  static Future<Directory> _defaultSupportDirectory() async {
-    final home = Platform.environment['HOME'];
-    final base = home == null || home.isEmpty
-        ? Directory.systemTemp
-        : Directory('$home/Library/Application Support/io.github.huou07.orApp');
-    return Directory('${base.path}${Platform.pathSeparator}tts');
-  }
-
-  final Future<Directory> Function() _supportDirectory;
+  final Future<Directory> Function()? _supportDirectory;
+  final HostPlatform _host;
   final int logLimit;
 
   Process? _process;
@@ -120,9 +126,16 @@ class LocalTtsServerManager extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The app-data folder for one engine.
+  ///
+  /// The default follows the same per-platform application data rule the rest
+  /// of the app uses, so Windows and Linux no longer inherit a macOS path.
   Future<Directory> engineDirectory(String id) async {
-    final support = await _supportDirectory();
-    return Directory('${support.path}${Platform.pathSeparator}$id');
+    final custom = _supportDirectory;
+    final support = custom != null
+        ? await custom()
+        : Directory(_host.appDataDirectory);
+    return Directory(_host.join(support.path, 'tts', id));
   }
 
   Future<Directory> _ensureEngineDirectory(String id) async {
@@ -137,28 +150,129 @@ class LocalTtsServerManager extends ChangeNotifier {
     return Directory('${directory.path}${Platform.pathSeparator}.git').exists();
   }
 
+  /// Clones and prepares the engine, streaming every step into the log.
   Future<void> install(LocalTtsEngine engine) async {
-    if (_busy || engine.installCommand.isEmpty) return;
-    await _run(
-      engine,
-      engine.installCommand,
-      markRunning: false,
-      timeout: const Duration(minutes: 30),
-    );
+    if (_busy || !engine.installable) return;
+    _begin();
+    try {
+      final directory = await _ensureEngineDirectory(engine.id);
+      final git = _host.findExecutable('git');
+      if (git == null) {
+        throw LocalTtsException(
+          'git-missing',
+          'Git is required to install ${engine.label}. Install Git for '
+              '${_host.name}, then try again.',
+        );
+      }
+      if (!Directory('${directory.path}${Platform.pathSeparator}.git')
+          .existsSync()) {
+        await _runStep(
+          _step(git, [
+            'clone',
+            '--depth',
+            '1',
+            if (engine.repositoryRef.isNotEmpty) ...[
+              '--branch',
+              engine.repositoryRef,
+            ],
+            engine.repository,
+            '.',
+          ]),
+          workingDirectory: directory,
+          timeout: const Duration(minutes: 20),
+        );
+      }
+      final uv = await _ensureUv();
+      if (engine.installArguments.isNotEmpty) {
+        await _runStep(
+          _step(uv, engine.installArguments),
+          workingDirectory: directory,
+          timeout: const Duration(minutes: 30),
+        );
+      }
+    } on LocalTtsException catch (error) {
+      _error = error.message;
+    } on ProcessException catch (error) {
+      _error = error.message;
+    } on TimeoutException {
+      _error = 'The install did not finish in time.';
+    } on Object catch (error) {
+      _error = '$error';
+    } finally {
+      _finish();
+    }
   }
 
+  /// Starts the engine, or a shell command the user typed for a custom server.
   Future<void> start(LocalTtsEngine engine, {String command = ''}) async {
     if (_busy || _running) return;
-    final effective = command.trim().isEmpty
-        ? engine.startCommand
-        : command.trim();
-    if (effective.isEmpty) {
-      _error = 'Enter the command that starts this server.';
-      notifyListeners();
-      return;
-    }
+    final custom = command.trim();
     _engineId = engine.id;
-    await _run(engine, effective, markRunning: true);
+    _begin();
+    try {
+      final directory = await _ensureEngineDirectory(engine.id);
+      final Process process;
+      if (custom.isNotEmpty) {
+        // A user-supplied command is theirs to write, so it keeps the host's
+        // own shell. Everything the app generates never needs a shell.
+        _append(r'$ $custom');
+        final (shell, arguments) = _host.isWindows
+            ? ('cmd.exe', ['/c', custom])
+            : ('/bin/sh', ['-lc', custom]);
+        process = await Process.start(
+          shell,
+          arguments,
+          workingDirectory: directory.path,
+          environment: _childEnvironment,
+        );
+      } else {
+        if (engine.startArguments.isEmpty) {
+          throw const LocalTtsException(
+            'start-command',
+            'Enter the command that starts this server.',
+          );
+        }
+        final uv = await _ensureUv();
+        _append('\$ ${_format(_step(uv, engine.startArguments))}');
+        process = await Process.start(
+          uv,
+          engine.startArguments,
+          workingDirectory: directory.path,
+          environment: _childEnvironment,
+        );
+      }
+      _process = process;
+      _running = true;
+      _stdout = process.stdout
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(_append);
+      _stderr = process.stderr
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen(_append);
+      _busy = false;
+      notifyListeners();
+      unawaited(
+        process.exitCode.then((code) {
+          if (_process == process) {
+            _process = null;
+            _running = false;
+            _append('[server exited with code $code]');
+            notifyListeners();
+          }
+        }),
+      );
+    } on LocalTtsException catch (error) {
+      _error = error.message;
+      _finish();
+    } on ProcessException catch (error) {
+      _error = error.message;
+      _finish();
+    } on Object catch (error) {
+      _error = '$error';
+      _finish();
+    }
   }
 
   Future<void> stop() async {
@@ -185,72 +299,121 @@ class LocalTtsServerManager extends ChangeNotifier {
     }
   }
 
-  Future<void> _run(
-    LocalTtsEngine engine,
-    String command, {
-    required bool markRunning,
-    Duration timeout = const Duration(minutes: 2),
-  }) async {
+  void _begin() {
     _busy = true;
     _error = null;
     _log.clear();
-    _append('\$ $command');
     notifyListeners();
-    try {
-      final directory = await _ensureEngineDirectory(engine.id);
-      // The recipes are written for a POSIX shell; Windows gets its own shell
-      // so a user-supplied start command still runs there.
-      final shell = Platform.isWindows ? 'cmd.exe' : 'bash';
-      final shellArguments = Platform.isWindows
-          ? ['/c', command]
-          : ['-lc', command];
-      final process = await Process.start(
-        shell,
-        shellArguments,
-        workingDirectory: directory.path,
-        environment: {...Platform.environment, 'PYTHONUNBUFFERED': '1'},
-        runInShell: false,
-      );
-      if (markRunning) {
-        _process = process;
-        _running = true;
-      }
-      _stdout = process.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(_append);
-      _stderr = process.stderr
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(_append);
-      if (markRunning) {
-        _busy = false;
-        notifyListeners();
-        unawaited(
-          process.exitCode.then((code) {
-            if (_process == process) {
-              _process = null;
-              _running = false;
-              _append('[server exited with code $code]');
-              notifyListeners();
-            }
-          }),
+  }
+
+  void _finish() {
+    _busy = false;
+    notifyListeners();
+  }
+
+  Map<String, String> get _childEnvironment => {
+    ..._host.environment,
+    'PYTHONUNBUFFERED': '1',
+  };
+
+  /// Resolves `uv`, bootstrapping it through its own installer when the user's
+  /// machine has never run it. Both installers place the binary in
+  /// `~/.local/bin`, which [HostPlatform] already searches.
+  Future<String> _ensureUv() async {
+    final existing = _host.findExecutable('uv');
+    if (existing != null) return existing;
+    _append('uv was not found; installing it for ${_host.name}.');
+    if (_host.isWindows) {
+      final powershell =
+          _host.findExecutable('powershell') ?? _host.findExecutable('pwsh');
+      if (powershell == null) {
+        throw const LocalTtsException(
+          'uv-bootstrap',
+          'PowerShell is required to install the speech engine automatically. '
+              'Install uv from https://docs.astral.sh/uv and try again.',
         );
-        return;
       }
-      final code = await process.exitCode.timeout(timeout);
-      if (code != 0) _error = 'The install command exited with code $code.';
+      await _runStep(
+        _step(powershell, [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          'irm https://astral.sh/uv/install.ps1 | iex',
+        ]),
+        workingDirectory: await _ensureEngineDirectory(_engineId),
+        timeout: const Duration(minutes: 10),
+      );
+    } else {
+      final shell = File('/bin/sh');
+      if (!shell.existsSync()) {
+        throw const LocalTtsException(
+          'uv-bootstrap',
+          'Installing the speech engine needs a POSIX shell at /bin/sh.',
+        );
+      }
+      await _runStep(
+        _step('/bin/sh', [
+          '-c',
+          'curl -LsSf https://astral.sh/uv/install.sh | sh',
+        ]),
+        workingDirectory: await _ensureEngineDirectory(_engineId),
+        timeout: const Duration(minutes: 10),
+      );
+    }
+    final installed = _host.findExecutable('uv');
+    if (installed == null) {
+      throw const LocalTtsException(
+        'uv-missing',
+        'uv was installed but could not be found. Restart the app and try '
+            'again, or install uv manually from https://docs.astral.sh/uv.',
+      );
+    }
+    return installed;
+  }
+
+  Future<void> _runStep(
+    _Step step, {
+    required Directory workingDirectory,
+    required Duration timeout,
+  }) async {
+    await _cancelStreams();
+    _append('\$ ${_format(step)}');
+    final process = await Process.start(
+      step.program,
+      step.arguments,
+      workingDirectory: workingDirectory.path,
+      environment: _childEnvironment,
+    );
+    _stdout = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(_append);
+    _stderr = process.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(_append);
+    final int code;
+    try {
+      code = await process.exitCode.timeout(timeout);
     } on TimeoutException {
-      _error = 'The command did not finish in time.';
-    } on ProcessException catch (error) {
-      _error = error.message;
-    } on Object catch (error) {
-      _error = '$error';
-    } finally {
-      _busy = false;
-      notifyListeners();
+      process.kill(ProcessSignal.sigkill);
+      rethrow;
+    }
+    if (code != 0) {
+      throw LocalTtsException(
+        'install-failed',
+        'The install step exited with code $code.',
+      );
     }
   }
+
+  _Step _step(String program, List<String> arguments) =>
+      _Step(program, arguments);
+
+  String _format(_Step step) => step.arguments.isEmpty
+      ? step.program
+      : '${step.program} ${step.arguments.join(' ')}';
 
   void _append(String line) {
     if (line.isEmpty) return;
@@ -274,4 +437,11 @@ class LocalTtsServerManager extends ChangeNotifier {
     _process?.kill(ProcessSignal.sigterm);
     super.dispose();
   }
+}
+
+class _Step {
+  const _Step(this.program, this.arguments);
+
+  final String program;
+  final List<String> arguments;
 }

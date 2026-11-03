@@ -923,21 +923,25 @@ fn install_download(
         .map_err(|_| TranscriptionServiceError::StorageUnavailable)
 }
 
-fn model_store_root() -> Option<PathBuf> {
+/// The per-user folder this application owns on every desktop platform.
+///
+/// The Flutter setup surface writes a repaired speech runtime here and this
+/// core reads it from here, so both sides share one rule instead of each
+/// spelling its own platform path.
+fn app_data_root() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         return env::var_os("HOME").map(PathBuf::from).map(|home| {
             home.join("Library")
                 .join("Application Support")
                 .join("Opencut Reinforced")
-                .join("Models")
         });
     }
     #[cfg(target_os = "windows")]
     {
         return env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
-            .map(|root| root.join("Opencut Reinforced").join("Models"));
+            .map(|root| root.join("Opencut Reinforced"));
     }
     #[cfg(target_os = "linux")]
     {
@@ -948,10 +952,14 @@ fn model_store_root() -> Option<PathBuf> {
                     .map(PathBuf::from)
                     .map(|home| home.join(".local/share"))
             })
-            .map(|root| root.join("opencut-reinforced").join("models"));
+            .map(|root| root.join("opencut-reinforced"));
     }
     #[allow(unreachable_code)]
     None
+}
+
+fn model_store_root() -> Option<PathBuf> {
+    app_data_root().map(|root| root.join("Models"))
 }
 
 fn helper_path(environment_name: &str, binary_name: &str) -> PathBuf {
@@ -980,6 +988,15 @@ fn helper_path(environment_name: &str, binary_name: &str) -> PathBuf {
                 return packaged;
             }
         }
+    }
+    // A runtime the setup surface installed for this user, outside the
+    // application package. A packaged runtime wins, so an installation keeps
+    // using what it shipped with.
+    if let Some(installed) = app_data_root()
+        .map(|root| root.join("speech-runtime").join(&file_name))
+        .filter(|candidate| candidate.is_file())
+    {
+        return installed;
     }
     if let Some(found) = env::var_os("PATH").and_then(|path| helper_on_path(&file_name, &path)) {
         return found;

@@ -423,6 +423,17 @@ packaged_build_deb() {
   fi
   bash scripts/stage_codec_licences.sh verify "$bundle" || exit 1
 
+  local required="" download=()
+  if [[ "${OR_REQUIRE_RUNTIME:-0}" == "1" ]]; then
+    required="whisper,provider,or"
+    download=(--download-whisper)
+  fi
+  # Beside the app binary, where the bridge looks first; the bridge itself stays
+  # in lib/ with its own $ORIGIN RUNPATH.
+  python3 "$ROOT/scripts/stage_desktop_runtime.py" --os linux \
+    --runtime-dir "$bundle" --repo-root "$ROOT" --require "$required" \
+    "${download[@]}" || exit 1
+
   mkdir -p "$(dirname "$deb")"
   bash scripts/package_linux_deb.sh "$bundle" "$deb" "$OR_LANE_HEAD" || exit 1
   echo "packaged: $deb"

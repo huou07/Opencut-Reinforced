@@ -12,6 +12,7 @@ import '../production/narration_settings.dart';
 import '../production/narration_settings_dialog.dart';
 import '../project/project_gateway.dart';
 import '../updates/resource_center_panel.dart';
+import '../updates/runtime_setup_panel.dart';
 import '../widgets/or_widgets.dart';
 
 enum SettingsSection { resources, appearance, general, advanced }
@@ -216,9 +217,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
         final version = snapshot.data?.appInfo.version ?? 'unknown';
-        return ResourceCenterPanel(
-          currentVersion: version,
-          onManageSpeechModels: widget.onManageSpeechModels,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ResourceCenterPanel(
+              currentVersion: version,
+              onManageSpeechModels: widget.onManageSpeechModels,
+            ),
+            const SizedBox(height: OrSpacing.x3),
+            const RuntimeSetupPanel(),
+          ],
         );
       },
     );

@@ -1,6 +1,6 @@
 # Tooling Inventory
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-03
 
 Scope: the scripts and machine-local tools an agent uses, and what each is for.
 Host-specific commands are in [operations/local-macos.md](../operations/local-macos.md).
@@ -20,6 +20,8 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/check_doc_links.py`, `scripts/check_doc_freshness.sh`, `scripts/check_claims.py` | documentation and claim gates |
 | `scripts/check_or_core_deps.py` | keeps `or_core` free of GPU/media/audio/text/AI dependencies |
 | `scripts/run_local_lane.sh`, `scripts/run_android_lane.sh` | platform lanes for future/other-platform work |
+| `scripts/stage_desktop_runtime.py` | stage the pinned Whisper engine, the speech adapter and the `or` CLI into any desktop bundle; the one copy rule for macOS, Linux and Windows |
+| `scripts/test_stage_desktop_runtime.py` | checks that the stager produces the same payload for Linux and Windows bundles |
 | `scripts/record-hosted-evidence.sh` | record a hosted run for the current commit |
 | `tooling/or-agent-workspace/build.mjs` | pack the installed assistant workspace into its Flutter asset; `node --test` beside it guards drift |
 

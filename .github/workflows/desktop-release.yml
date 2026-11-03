@@ -1,0 +1,434 @@
+name: Desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the built DMG as a GitHub release
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and verify on a fresh Apple Silicon runner
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Install Flutter 3.47.5
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+
+      - name: Install FFmpeg build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install cmake nasm pkg-config xz
+
+      - name: Build pinned LGPL FFmpeg 8.1.3 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/ffmpeg-install"
+          scripts/stage_macos_ffmpeg.sh --prefix "$prefix" --work "$RUNNER_TEMP/ffmpeg-build"
+          mkdir -p apps/or_app/.dart_tool
+          ln -sfn "$prefix" apps/or_app/.dart_tool/macos-ffmpeg-install
+          echo "OR_FFMPEG_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "FFMPEG_DIR=$prefix" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$prefix/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Analyze and test the app
+        working-directory: apps/or_app
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+
+      - name: Test the IPC and bridge contracts
+        shell: bash
+        env:
+          DYLD_LIBRARY_PATH: ${{ env.FFMPEG_DIR }}/lib
+        run: |
+          cargo test -p or_ipc
+          cargo test -p or_app_bridge --lib
+          cargo test -p or_media --lib
+
+      - name: Build pinned local transcription runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          source="$RUNNER_TEMP/whisper.cpp-1.9.4"
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git "$source"
+          test "$(git -C "$source" rev-parse HEAD)" = 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S "$source" -B "$source/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DGGML_NATIVE=OFF
+          cmake --build "$source/build" --config Release --target whisper-cli -j 2
+          cargo build --locked --release -p or_whisper_provider
+          "$source/build/bin/whisper-cli" --version
+          echo "OR_WHISPER_CLI_PATH=$source/build/bin/whisper-cli" >> "$GITHUB_ENV"
+          echo "OR_WHISPER_PROVIDER_PATH=$GITHUB_WORKSPACE/target/release/or-whisper-provider" >> "$GITHUB_ENV"
+          echo "OR_WHISPER_LICENSE_PATH=$source/LICENSE" >> "$GITHUB_ENV"
+
+      - name: Build the Apple Silicon disk image
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/build_macos_dmg.sh
+          (cd dist && shasum -a 256 *.dmg > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+          ls -lh dist/*.dmg dist/SHA256SUMS.txt
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: opencut-reinforced-macos-arm64
+          path: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
+          retention-days: 14
+
+  linux:
+    name: Build and verify on a fresh Ubuntu runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Flutter Linux build packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang cmake desktop-file-utils dpkg-dev \
+            libclang-dev libasound2-dev nasm ninja-build pkg-config patchelf xz-utils \
+            libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth python3
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Install Flutter 3.47.5
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build pinned VP9 and Opus codec sources
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          bash scripts/build_desktop_export_codecs.sh linux \
+            "$RUNNER_TEMP/ffmpeg-codecs-install" \
+            "$RUNNER_TEMP/desktop-export-codecs"
+
+      - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
+          source="$RUNNER_TEMP/ffmpeg-8.1.3"
+          prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors \
+            --retry-delay 5 --max-time 600 \
+            https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
+          echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
+          xz --test "$archive"
+          tar -xJOf "$archive" ffmpeg-8.1.3/COPYING.LGPLv2.1 > "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1"
+          tar -xJf "$archive" -C "$RUNNER_TEMP"
+          cd "$source"
+          read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
+          read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
+          read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
+          ./configure --prefix="$prefix" "${common_configure_args[@]}" \
+            "${helper_configure_args[@]}" "${export_configure_args[@]}"
+          make -j2
+          make install
+          echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
+
+      - name: Build the or CLI and the speech adapter
+        env:
+          FFMPEG_DIR: ${{ runner.temp }}/ffmpeg-8.1.3-install
+          LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+          PKG_CONFIG_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib/pkgconfig
+        run: |
+          set -euo pipefail
+          cargo build --locked --release -p or_cli
+          cargo build --locked --release -p or_whisper_provider
+
+      - name: Build the production media probe
+        env:
+          FFMPEG_DIR: ${{ runner.temp }}/ffmpeg-8.1.3-install
+          LD_LIBRARY_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib
+          PKG_CONFIG_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib/pkgconfig
+        run: cargo build --locked --release --manifest-path tools/ffmpeg-link-probe/Cargo.toml
+
+      - name: Seed the packaged media runtime
+        run: |
+          set -euo pipefail
+          prefix="$FFMPEG_INSTALL_PREFIX"
+          runtime="$RUNNER_TEMP/or-packaged-media-runtime"
+          mkdir -p "$runtime/lib"
+          install -m 755 "$prefix/bin/ffmpeg" "$runtime/ffmpeg"
+          install -m 755 "$prefix/bin/ffprobe" "$runtime/ffprobe"
+          for pattern in libavcodec.so* libavfilter.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
+            cp -a "$prefix/lib/"$pattern "$runtime/lib/"
+          done
+          echo "OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY=$runtime" >> "$GITHUB_ENV"
+
+      - name: Build the release Linux bundle
+        working-directory: apps/or_app
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          LD_LIBRARY_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+          OR_PACKAGED_MEDIA_RUNTIME_DIRECTORY: ${{ runner.temp }}/or-packaged-media-runtime
+        run: flutter build linux --release --no-pub
+
+      - name: Stage FFmpeg, the speech runtime and the or CLI beside the app
+        env:
+          OR_REQUIRE_RUNTIME: '1'
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/release/bundle"
+          bridge="$(find "$bundle" -type f -name '*or_app_bridge*.so' -print -quit)"
+          test -n "$bridge"
+          runtime_dir="$(dirname "$bridge")"
+          probe_source="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe"
+          install -m 755 "$probe_source" "$runtime_dir/ffmpeg-link-probe"
+          for pattern in libavcodec.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so* libavfilter.so*; do
+            cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
+          done
+          for library in "$runtime_dir"/libav*.so* "$runtime_dir"/libsw*.so*; do
+            if [ -L "$library" ]; then continue; fi
+            patchelf --set-rpath '$ORIGIN' "$library"
+          done
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffmpeg" "$bundle/ffmpeg"
+          install -m 755 "$FFMPEG_INSTALL_PREFIX/bin/ffprobe" "$bundle/ffprobe"
+          helper_rpath='$ORIGIN/'"$(realpath --relative-to="$bundle" "$runtime_dir")"
+          patchelf --set-rpath "$helper_rpath" "$bundle/ffmpeg" "$bundle/ffprobe"
+          env -u LD_LIBRARY_PATH "$bundle/ffprobe" -hide_banner -version
+          env -u LD_LIBRARY_PATH "$bundle/ffmpeg" -hide_banner -encoders | grep -q " png "
+          # One stager stages the optional runtime on every platform.
+          python3 scripts/stage_desktop_runtime.py --os linux \
+            --runtime-dir "$bundle" --repo-root "$GITHUB_WORKSPACE" \
+            --require whisper,provider,or --download-whisper
+          env -u LD_LIBRARY_PATH "$bundle/whisper-cli" --help >/dev/null
+          env -u LD_LIBRARY_PATH "$bundle/or" --version
+          echo "OR_PACKAGED_BRIDGE_DIRECTORY=$runtime_dir" >> "$GITHUB_ENV"
+
+      - name: Stage the third-party notices
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/release/bundle"
+          bash scripts/stage_codec_licences.sh stage "$bundle" \
+            "$RUNNER_TEMP/FFmpeg-COPYING.LGPLv2.1" "$RUNNER_TEMP/desktop-export-codecs"
+          bash scripts/stage_codec_licences.sh verify "$bundle"
+
+      - name: Build the Debian package
+        run: |
+          set -euo pipefail
+          bundle="$GITHUB_WORKSPACE/apps/or_app/build/linux/x64/release/bundle"
+          bash scripts/package_linux_deb.sh "$bundle" \
+            "$RUNNER_TEMP/Opencut-Reinforced-linux-x64.deb" "$GITHUB_SHA"
+          bash scripts/test_linux_deb_install.sh "$RUNNER_TEMP/Opencut-Reinforced-linux-x64.deb"
+
+      - name: Upload the Debian package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: opencut-reinforced-linux-x64
+          path: ${{ runner.temp }}/Opencut-Reinforced-linux-x64.deb
+          retention-days: 14
+
+  windows:
+    name: Build and verify on a fresh Windows runner
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
+        with:
+          toolchain: 1.98.0
+
+      - name: Set up MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Set up MSYS2 FFmpeg build tools
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: CLANG64
+          path-type: inherit
+          update: true
+          cache: false
+          install: make pkgconf
+          pacboy: clang:p nasm:p
+
+      - name: Build pinned VP9 and Opus codec sources
+        shell: msys2 {0}
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          temp="$(cygpath -u "$RUNNER_TEMP")"
+          bash scripts/build_desktop_export_codecs.sh windows \
+            "$temp/ffmpeg-codecs-install" \
+            "$temp/desktop-export-codecs"
+
+      - name: Build pinned static zlib for Windows FFmpeg helpers
+        shell: pwsh
+        run: ./scripts/build_windows_zlib.ps1 -BuildRoot $env:RUNNER_TEMP
+
+      - name: Install Flutter 3.47.5
+        shell: pwsh
+        run: |
+          git -c core.longpaths=true clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP/flutter"
+          if ((git -C "$env:RUNNER_TEMP/flutter" rev-parse HEAD).Trim() -ne "6a19cca56475dbfba1478ee68d7bd0c2ef891da1") { throw "Flutter revision mismatch" }
+          "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
+
+      - name: Resolve Flutter dependencies
+        working-directory: apps/or_app
+        run: flutter pub get
+
+      - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
+        shell: msys2 {0}
+        timeout-minutes: 40
+        run: bash scripts/build_windows_ffmpeg.sh
+
+      - name: Build the or CLI and the speech adapter
+        shell: msys2 {0}
+        env:
+          FFMPEG_DIR: ${{ env.FFMPEG_INSTALL_PREFIX }}
+          PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
+        run: |
+          set -euo pipefail
+          cargo build --locked --release -p or_cli
+          cargo build --locked --release -p or_whisper_provider
+
+      - name: Build, stage and archive the release bundle
+        shell: pwsh
+        env:
+          OR_REQUIRE_RUNTIME: '1'
+        run: ./scripts/run_windows_lane.ps1 -Mode release -Steps probe,build,stage,zip
+
+      - name: Upload the Windows archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: opencut-reinforced-windows-x64
+          path: apps/or_app/build/windows/or-windows-x64-release.zip
+          retention-days: 14
+
+  publish:
+    name: Publish every desktop asset
+    needs: [build, linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish == true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Collect the built assets
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Normalize names and checksum every asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' apps/or_app/pubspec.yaml | head -1)"
+          cd dist
+          rm -f SHA256SUMS.txt
+          for file in *.deb; do mv "$file" "Opencut-Reinforced-${version}-linux-x64.deb"; done
+          for file in *.zip; do mv "$file" "Opencut-Reinforced-${version}-windows-x64.zip"; done
+          ls -l
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' apps/or_app/pubspec.yaml | head -1)"
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" != v* ]]; then tag="v${version}"; fi
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "Opencut Reinforced $version ships the same feature set on macOS, Linux and Windows."
+            echo
+            echo "## Install"
+            echo "- macOS (Apple Silicon): open the DMG, drag **Opencut Reinforced** into"
+            echo "  Applications, then right-click the app once and choose **Open**."
+            echo "- Windows: unzip the archive and run \`or_app.exe\`."
+            echo "- Linux: \`sudo apt install ./Opencut-Reinforced-${version}-linux-x64.deb\`."
+            echo
+            echo "## What is included"
+            echo "FFmpeg 8.1.3 (LGPL), the local speech runtime (Whisper), the or CLI and"
+            echo "the app workspace are bundled on every platform. Speech models and an"
+            echo "assistant harness stay optional downloads."
+            echo
+            echo "## Optional tools"
+            echo "Settings -> External tools installs the speech runtime, finds or links"
+            echo "an assistant harness, and runs a local TTS server without a terminal."
+            echo
+            echo "## Verify the download"
+            echo "SHA256SUMS.txt covers every asset in this release."
+          } > "$notes"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* \
+              --title "Opencut Reinforced $version" \
+              --notes-file "$notes"
+          fi

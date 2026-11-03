@@ -1,6 +1,6 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-03
 
 Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
@@ -28,15 +28,20 @@ comes from `scripts/run_local_lane.sh linux --packaged` (which drives
 Windows package from `scripts/run_windows_lane.ps1` (which drives
 `scripts/stage_windows_bundle.ps1` and `scripts/test_desktop_archive_install.py`).
 The CI desktop jobs call the same scripts, so a package verified on a real host
-and one built by CI are produced by one procedure. The packaging gate
+and one built by CI are produced by one procedure. All three platform scripts
+stage the optional runtime by calling `scripts/stage_desktop_runtime.py`, which
+carries the pinned Whisper archive table once; adding a helper is a change in
+that file plus its call sites, not three separate packaging paths. The packaging gate
 also rejects any Mach-O in the bundle whose deployment target is newer than
 macOS 13, so a build made on a newer Mac cannot silently raise the public minimum.
-`.github/workflows/macos-release.yml` runs the same build on a fresh `macos-15`
-runner, runs the Flutter and Rust tests, publishes the DMG and `SHA256SUMS.txt`
-for a `v*` tag or a manual dispatch with `publish` enabled, and writes install,
-requirement and limitation notes. The Linux `.deb` and Windows `.zip` are built
-and verified on the Platform Verification desktop jobs and attached to the same
-release, each with its SHA-256 in `SHA256SUMS.txt`.
+`.github/workflows/desktop-release.yml` builds all three packages from the same
+tag: a `macos-15` job produces the DMG, an `ubuntu-24.04` job produces the `.deb`,
+and a `windows-latest` job produces the `.zip`, each through the documented
+scripts. A `publish` job downloads those artifacts, normalizes their names,
+writes one `SHA256SUMS.txt` covering every asset, and creates or updates the
+release for a `v*` tag or a manual dispatch with `publish` enabled. A release is
+therefore either complete on all three platforms or it does not publish; there is
+no path that attaches one platform's package by hand.
 
 ## Updates and optional resources
 

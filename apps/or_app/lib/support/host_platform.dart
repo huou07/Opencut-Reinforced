@@ -1,0 +1,232 @@
+import 'dart:io';
+
+/// The one platform seam.
+///
+/// Every operating-system rule the product needs — where a user's home is, how
+/// a `PATH` is split, which suffix makes a file executable, which program opens
+/// a folder — lives here instead of being re-derived at each call site. A new
+/// platform, or a fix for one, therefore lands in one file and every feature
+/// inherits it: the assistant, the local speech runtime, the voice servers and
+/// the resources panel all ask the same object.
+///
+/// The fields are injectable so a test can describe a Windows host while it runs
+/// on macOS, which is what keeps "works on Windows" from being a claim nobody
+/// can check. Filesystem answers still come from the real filesystem; only the
+/// *rules* are simulated.
+class HostPlatform {
+  const HostPlatform({
+    required this.isWindows,
+    required this.isMacOS,
+    required this.isLinux,
+    required this.environment,
+    required this.executablePath,
+  });
+
+  /// The host the app is actually running on.
+  factory HostPlatform.current({
+    Map<String, String>? environment,
+    String? executablePath,
+  }) {
+    return HostPlatform(
+      isWindows: Platform.isWindows,
+      isMacOS: Platform.isMacOS,
+      isLinux: Platform.isLinux,
+      environment: environment ?? Platform.environment,
+      executablePath: executablePath ?? Platform.resolvedExecutable,
+    );
+  }
+
+  final bool isWindows;
+  final bool isMacOS;
+  final bool isLinux;
+  final Map<String, String> environment;
+
+  /// The running application binary, used to find the runtime staged beside it.
+  final String executablePath;
+
+  String get name {
+    if (isWindows) return 'Windows';
+    if (isMacOS) return 'macOS';
+    if (isLinux) return 'Linux';
+    return Platform.operatingSystem;
+  }
+
+  /// The user's home directory. Windows publishes `USERPROFILE`; POSIX systems
+  /// publish `HOME`. No caller should have to know that.
+  String get homeDirectory {
+    final home = isWindows
+        ? (environment['USERPROFILE'] ?? environment['HOME'])
+        : (environment['HOME'] ?? environment['USERPROFILE']);
+    return home ?? '';
+  }
+
+  /// `PATH` uses `;` on Windows and `:` everywhere else.
+  String get pathListSeparator => isWindows ? ';' : ':';
+
+  String get pathSeparator => isWindows ? '\\' : '/';
+
+  /// Suffix that makes a file executable in this host's convention.
+  String get executableSuffix => isWindows ? '.exe' : '';
+
+  /// Suffixes tried for a bare program name, in preference order. Windows also
+  /// runs `.cmd` and `.bat` shims, which is how npm-installed CLIs appear.
+  List<String> get executableSuffixes =>
+      isWindows ? const ['', '.exe', '.cmd', '.bat', '.com'] : const [''];
+
+  /// Directories added to `PATH` by common per-user installers: `uv` and
+  /// `pip --user` both use `~/.local/bin`, including on Windows.
+  /// The per-user folder the app keeps its own data in.
+  ///
+  /// One rule for every platform, and the same rule the Rust bridge uses to
+  /// find a repaired speech runtime, so a folder the setup surface fills is a
+  /// folder the editing core reads without either side guessing.
+  String get appDataDirectory {
+    final home = homeDirectory;
+    if (isWindows) {
+      final local = environment['LOCALAPPDATA'];
+      if (local != null && local.isNotEmpty) {
+        return join(local, 'Opencut Reinforced');
+      }
+      return home.isEmpty
+          ? ''
+          : join(home, 'AppData', 'Local', 'Opencut Reinforced');
+    }
+    if (isMacOS) {
+      if (home.isEmpty) return '';
+      return join(home, 'Library', 'Application Support', 'Opencut Reinforced');
+    }
+    final data = environment['XDG_DATA_HOME'];
+    final root = data != null && data.isNotEmpty
+        ? data
+        : (home.isEmpty ? '' : join(home, '.local', 'share'));
+    return root.isEmpty ? '' : join(root, 'opencut-reinforced');
+  }
+
+  /// Where a speech runtime installed outside the application package lives.
+  String get speechRuntimeDirectory {
+    final data = appDataDirectory;
+    return data.isEmpty ? '' : join(data, 'speech-runtime');
+  }
+
+  List<String> get userBinDirectories {
+    final home = homeDirectory;
+    if (home.isEmpty) return const [];
+    return [join(home, '.local', 'bin')];
+  }
+
+  /// The directories this host searches for a bare program name, in order:
+  /// the inherited `PATH`, then the per-user installer directories.
+  List<String> get searchDirectories {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final entry in pathDirectories) {
+      if (entry.isEmpty || !seen.add(entry)) continue;
+      result.add(entry);
+    }
+    for (final entry in userBinDirectories) {
+      if (!seen.add(entry)) continue;
+      result.add(entry);
+    }
+    return result;
+  }
+
+  List<String> get pathDirectories {
+    final raw = environment['PATH'] ?? environment['Path'] ?? '';
+    return raw
+        .split(RegExp('[${RegExp.escape(pathListSeparator)}]'))
+        .toList(growable: false);
+  }
+
+  String join(String first, [String? second, String? third, String? fourth]) {
+    final parts = <String>[first, ?second, ?third, ?fourth];
+    final buffer = StringBuffer(parts.first);
+    for (final part in parts.skip(1)) {
+      final current = buffer.toString();
+      if (current.isEmpty) {
+        buffer.write(part);
+      } else if (current.endsWith('/') || current.endsWith('\\')) {
+        buffer.write(part);
+      } else {
+        buffer.write(pathSeparator);
+        buffer.write(part);
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// Splits a `/`-separated relative path into host separators.
+  String fromPosix(String relative) => relative.replaceAll('/', pathSeparator);
+
+  /// Resolves a configured executable path.
+  ///
+  /// A settings field may name a file the user picked (absolute, with its
+  /// suffix) or a bare program (typed by hand). Both must work without the
+  /// caller knowing which platform it is on.
+  String? resolveExecutable(String configured) {
+    final value = configured.trim();
+    if (value.isEmpty) return null;
+    final direct = File(value);
+    if (direct.existsSync()) return direct.path;
+    if (isWindows && !_hasSuffix(value)) {
+      for (final suffix in executableSuffixes) {
+        if (suffix.isEmpty) continue;
+        final candidate = File('$value$suffix');
+        if (candidate.existsSync()) return candidate.path;
+      }
+    }
+    if (!value.contains('/') && !value.contains('\\')) {
+      return findExecutable(value);
+    }
+    return null;
+  }
+
+  /// Finds [name] as a program the host can actually execute.
+  ///
+  /// [extraDirectories] are searched before `PATH`, so a packaged runtime that
+  /// sits beside the application wins over an unrelated copy on `PATH`.
+  String? findExecutable(
+    String name, {
+    Iterable<String> extraDirectories = const [],
+  }) {
+    final directories = <String>[...extraDirectories, ...searchDirectories];
+    for (final directory in directories) {
+      if (directory.isEmpty) continue;
+      for (final suffix in executableSuffixes) {
+        final candidate = File(join(directory, '$name$suffix'));
+        if (candidate.existsSync()) return candidate.path;
+      }
+    }
+    return null;
+  }
+
+  /// The directory holding the running application binary.
+  Directory get executableDirectory => File(executablePath).parent;
+
+  /// Opens a file, folder or HTTPS link with the host's default handler.
+  ///
+  /// Windows has no `xdg-open`: `start` is a shell builtin, so it runs through
+  /// `cmd`, and the empty first argument is the window title `start` insists on.
+  Future<void> openExternal(String target) async {
+    final (program, arguments) = isMacOS
+        ? ('open', <String>[target])
+        : isWindows
+        ? ('cmd', <String>['/c', 'start', '', target])
+        : ('xdg-open', <String>[target]);
+    final result = await Process.run(program, arguments);
+    if (result.exitCode != 0) {
+      throw ProcessException(
+        program,
+        arguments,
+        'the host could not open the item',
+        result.exitCode,
+      );
+    }
+  }
+
+  bool _hasSuffix(String path) {
+    final slash = path.lastIndexOf(RegExp(r'[\\/]'));
+    final name = slash == -1 ? path : path.substring(slash + 1);
+    final dot = name.lastIndexOf('.');
+    return dot > 0;
+  }
+}

@@ -1,6 +1,6 @@
 # Platform Targets and Packaging
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-03
 
 Scope: which platforms exist, how each stores projects and media, and what is
 proven versus assumed per platform.
@@ -56,6 +56,27 @@ Android rules that must hold:
   owner-only DACLs; the pipe rejects remote clients.
 - Linux: Unix-domain socket with owner-only permissions; desktop package formats
   are maintained by the release lane.
+- All three desktops ship the same optional stack: the pinned Whisper engine and
+  the provider adapter, the `or` CLI next to the app binary, and the agent
+  workspace bundle. `scripts/stage_desktop_runtime.py` owns that copy for every
+  platform, so a new helper is added once.
+- The app writes the per-user speech runtime to the same folder the Rust bridge
+  searches: `~/Library/Application Support/Opencut Reinforced/speech-runtime` on
+  macOS, `%LOCALAPPDATA%\Opencut Reinforced\speech-runtime` on Windows and
+  `$XDG_DATA_HOME|~/.local/share/opencut-reinforced/speech-runtime` on Linux.
+  An engine installed by **Settings → External tools** is therefore found by
+  the app, the CLI and agents without environment variables.
+
+## Platform seam
+
+Platform rules live in `apps/or_app/lib/support/host_platform.dart`, not in the
+callers. It owns the home directory (`USERPROFILE` on Windows, `HOME` elsewhere),
+the `PATH` list separator, path joining, executable suffixes (`.exe`, `.cmd`,
+`.bat`, `.com` on Windows), the app data folder, external-link opening and
+executable discovery. Callers pass an optional `HostPlatform` so the Windows
+rules are testable on macOS. Adding a platform means adding a branch to that file
+once, not to the assistant, the voiceover dialog and the packaging scripts
+separately; a feature that uses it works on every desktop at once.
 
 ## Native capability matrix
 
