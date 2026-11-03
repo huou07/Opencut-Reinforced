@@ -101,6 +101,18 @@ if ! grep -Fq 'MIT License' LICENSE 2>/dev/null; then
   fail 'LICENSE does not contain the expected MIT License text'
 fi
 
+# The app and the crates ship as one product, and `or version` prints the
+# crate version, so a release that bumps only the pubspec would report a
+# different version from the one on the download page.
+app_version="$(sed -n 's/^version: *\([\.0-9]*\)+.*/\1/p' apps/or_app/pubspec.yaml | head -n 1)"
+crate_version="$(grep -A 6 '^\[workspace.package\]' Cargo.toml | sed -n 's/^version *= *"\([^"]*\)"/\1/p' | head -n 1)"
+if [[ -z "$app_version" || -z "$crate_version" ]]; then
+  fail 'could not read the app version from apps/or_app/pubspec.yaml or Cargo.toml'
+fi
+if [[ "$app_version" != "$crate_version" ]]; then
+  fail "apps/or_app/pubspec.yaml is $app_version but Cargo.toml [workspace.package] is $crate_version; bump both"
+fi
+
 check_whitespace() {
   local revision="$1"
   local label="$2"
