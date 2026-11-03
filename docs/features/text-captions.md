@@ -74,11 +74,14 @@ update. The same fields are available without the GUI through
   model does not have to be hashed on every dialog open. The picker shows the
   total installed size and can remove one downloaded model to free space; the
   service falls back to the catalog default when the active model is removed.
-- A plain local debug build does not ship the whisper runtime. `scripts/
-  install_local_transcription_helpers.sh` copies a pinned `whisper-cli` and the
-  rebuilt provider into the app bundle, re-signs it ad hoc, and can install a
-  verified small model; packaged macOS builds include both binaries, and the
-  packaging script refuses an image that asks for them without them.
+- Every packaged desktop build carries the pinned `whisper-cli` and the provider
+  adapter; `scripts/stage_desktop_runtime.py` stages them for macOS, Linux and
+  Windows from one pinned table, so the three packages cannot drift. A plain
+  local debug build does not ship the runtime: **Settings → External tools** can
+  download the same pinned archive, and `scripts/install_local_transcription_helpers.sh`
+  still copies helpers into a local macOS bundle. The bridge looks beside the
+  app binary, in `Contents/Resources` or `Frameworks`, then in the per-user
+  `speech-runtime` folder, then on `PATH`.
 - The picker says when a build has no local speech runtime and disables **Use
   model** instead of offering a download that cannot run. With the runtime
   present, every not-installed row carries a **Download** action; the dialog

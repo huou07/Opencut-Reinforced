@@ -35,8 +35,18 @@ states the panel must show. Architecture rationale is
 - **Model** and **reasoning effort** come from the session's advertised ACP
   configuration options. The choice is persisted and applied to the next
   connection and the live session.
+- Discovery is one platform seam, so Windows, Linux and macOS follow the same
+  rules. A configured path wins; otherwise the app looks for `dsh`, `claude-code-acp`,
+  `codex-acp` or `opencode` on `PATH` (split on `;` on Windows), in the
+  per-platform install folders (on Windows `%LOCALAPPDATA%\Programs\DeepSeek
+  Harness`), and in `~/.local/bin`. Windows names are probed with `.exe`, `.cmd`,
+  `.bat` and `.com`, and the overlay is read from `$DSH_HOME/profiles`,
+  `~/.dsh/profiles` or `%APPDATA%\dsh\profiles`, whichever exists.
 - If the harness or the `or` CLI cannot be found, the panel shows a setup error
   with the concrete fix; it never sends a prompt into a session without tools.
+  **Settings → External tools** repeats detection, opens the harness download
+  page and lets the user point at an executable instead of editing settings by
+  hand.
 
 ## Editing
 
@@ -45,9 +55,11 @@ The agent's default editing surface is the `or` CLI bound to this build
 the workspace `project.json` pointer; the CLI follows its `descriptor_path` on
 each call, so the app, the CLI and the assistant share one session, one project
 and one history. The persona and the workspace guides route reads and mutations
-through the CLI and treat the MCP tools as a fallback. A packaged local bundle
-ships the CLI in `Contents/MacOS/or`, so the assistant does not depend on the
-checkout's `target/` after the app is installed.
+through the CLI and treat the MCP tools as a fallback. A packaged bundle ships the
+CLI beside the app binary (`Contents/MacOS/or`, or `or.exe` next to
+`or_app.exe`), so the assistant does not depend on the checkout's `target/` after
+the app is installed. The workspace wrapper matches the host: a POSIX `tools/or`
+shell script or a `tools/or.cmd` batch file, both invoking the same CLI.
 
 The harness still receives one MCP server named `or`; its tools appear to the
 model as `mcp__or__<tool>` and attach over the same local IPC. It mirrors the CLI

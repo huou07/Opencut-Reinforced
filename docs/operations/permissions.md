@@ -14,9 +14,9 @@ replace OS or session security controls.
   verification.
 - Make coherent local commits after a change and its relevant checks are complete.
 - Publish the GitHub patch release the owner asked for on 2026-11-02: push the
-  release commit to `main`, push a `v*` tag, and let the existing macOS release
-  workflow build and publish the DMG, its checksum file and the release notes.
-  Verify the published assets with `gh`.
+  release commit to `main`, push a `v*` tag, and let the desktop release workflow
+  build and publish the macOS DMG, the Linux `.deb`, the Windows `.zip`, one
+  checksum file and the release notes. Verify the published assets with `gh`.
 - Inspect public source and documentation for the open-source editor references
   named in the mission.
 

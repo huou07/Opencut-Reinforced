@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/assistant/agent_workspace.dart';
+import 'package:or_app/support/host_platform.dart';
 
 void main() {
   AgentWorkspaceBundle bundle(int version, Map<String, String> files) =>
@@ -152,6 +153,30 @@ void main() {
     await workspace.writeOrCli("/tmp/vibecode projects/it's or");
     final wrapper = File('${root.path}/tools/or').readAsStringSync();
     expect(wrapper, contains(r"'/tmp/vibecode projects/it'\''s or'"));
+  });
+
+  test('a Windows workspace gets a batch wrapper the agent can run', () async {
+    final root = await Directory.systemTemp.createTemp('or-agent-workspace-');
+    addTearDown(() => root.delete(recursive: true));
+    final workspace = await AgentWorkspace.install(
+      directory: root,
+      bundle: bundle(1, {'AGENTS.md': '# index\n'}),
+    );
+
+    const windows = HostPlatform(
+      isWindows: true,
+      isMacOS: false,
+      isLinux: false,
+      environment: {'USERPROFILE': r'C:\Users\ana'},
+      executablePath: r'C:\Program Files\Opencut Reinforced\or_app.exe',
+    );
+    await workspace.writeOrCli(r'C:\Tools\or.exe', platform: windows);
+
+    expect(File('${root.path}/tools/or').existsSync(), isFalse);
+    final wrapper = File('${root.path}/tools/or.cmd').readAsStringSync();
+    expect(wrapper, startsWith('@echo off'));
+    expect(wrapper, contains(r'C:\Tools\or.exe'));
+    expect(wrapper, contains(r'%*'));
   });
 
   test('the bundled asset carries the index, guides and skills', () async {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:or_app/assistant/assistant_settings.dart';
+import 'package:or_app/support/host_platform.dart';
 
 void main() {
   test('settings round-trip and reject malformed fields', () {
@@ -98,6 +99,71 @@ void main() {
       expect(patch, isNot(contains('searchProvider')));
     },
   );
+
+  test('a Windows harness path resolves with its .exe suffix', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-win-');
+    addTearDown(() => root.delete(recursive: true));
+    final harness = File('${root.path}/dsh.exe')..writeAsStringSync('');
+    const windows = HostPlatform(
+      isWindows: true,
+      isMacOS: false,
+      isLinux: false,
+      environment: {'USERPROFILE': r'C:\Users\ana', 'PATH': ''},
+      executablePath: r'C:\or\or_app.exe',
+    );
+
+    final launch = await resolveHarnessLaunch(
+      settings: AssistantSettings(harnessPath: '${root.path}/dsh'),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: windows.environment,
+      platform: windows,
+    );
+    expect(launch, isNotNull);
+    expect(launch!.executable, harness.path);
+    expect(launch.kind, AssistantHarnessKind.dsh);
+  });
+
+  test('a harness on PATH is found without a configured path', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-path-');
+    addTearDown(() => root.delete(recursive: true));
+    final bin = Directory('${root.path}/bin')..createSync();
+    final harness = File('${bin.path}/dsh')..writeAsStringSync('');
+    final host = HostPlatform(
+      isWindows: false,
+      isMacOS: false,
+      isLinux: true,
+      environment: {'HOME': root.path, 'PATH': bin.path},
+      executablePath: '${root.path}/or_app',
+    );
+
+    final launch = await resolveHarnessLaunch(
+      settings: const AssistantSettings(),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNotNull);
+    expect(launch!.executable, harness.path);
+  });
+
+  test('no harness anywhere resolves to no launch', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-none-');
+    addTearDown(() => root.delete(recursive: true));
+    final host = HostPlatform(
+      isWindows: false,
+      isMacOS: false,
+      isLinux: true,
+      environment: {'HOME': root.path, 'PATH': ''},
+      executablePath: '${root.path}/or_app',
+    );
+    final launch = await resolveHarnessLaunch(
+      settings: const AssistantSettings(),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNull);
+  });
 
   test('a packaged app finds the CLI beside its executable', () async {
     final root = await Directory.systemTemp.createTemp('or-cli-bundle-');

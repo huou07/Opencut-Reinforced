@@ -1,6 +1,6 @@
 # Git and External Actions
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-03
 
 Scope: repository history rules and the actions that are out of bounds for the
 current mission.

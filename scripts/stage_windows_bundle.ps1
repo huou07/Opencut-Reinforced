@@ -56,6 +56,22 @@ foreach ($helper in @('ffmpeg.exe', 'ffprobe.exe')) {
   Copy-Item -Path $source -Destination $Bundle -Force
 }
 
+# Speech runtime and the `or` CLI come from the shared stager, so the Windows
+# package carries the same helpers as macOS and Linux.
+$stager = Join-Path $RepoRoot 'scripts/stage_desktop_runtime.py'
+$python = Get-Command python3 -ErrorAction SilentlyContinue
+if ($null -eq $python) { $python = Get-Command python -ErrorAction Stop }
+$arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'amd64' }
+$required = ''
+$download = @()
+if ($env:OR_REQUIRE_RUNTIME -eq '1') {
+  $required = 'whisper,provider,or'
+  $download = @('--download-whisper')
+}
+& $python.Source $stager --os windows --arch $arch --runtime-dir $runtimeDir `
+  --repo-root $RepoRoot --require $required @download
+if ($LASTEXITCODE -ne 0) { throw 'the shared runtime stager failed' }
+
 $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
 & $dumpbin /dependents (Join-Path $runtimeDir 'ffmpeg-link-probe.exe')
 $helperDependencies = & $dumpbin /dependents (Join-Path $Bundle 'ffmpeg.exe') | Out-String

@@ -213,8 +213,12 @@ if [[ -n "$whisper_cli" || -n "$whisper_provider" ]]; then
     fail "set both OR_WHISPER_CLI_PATH and OR_WHISPER_PROVIDER_PATH"
   [[ -x "$whisper_cli" ]] || fail "whisper CLI is missing or not executable: $whisper_cli"
   [[ -x "$whisper_provider" ]] || fail "whisper provider is missing or not executable: $whisper_provider"
-  install -m 755 "$whisper_cli" "$helpers/whisper-cli"
-  install -m 755 "$whisper_provider" "$helpers/or-whisper-provider"
+  # One stager owns the copy on every desktop platform, so a new helper is
+  # added once instead of three times.
+  python3 "$repo_root/scripts/stage_desktop_runtime.py" --os macos \
+    --runtime-dir "$helpers" --whisper-cli "$whisper_cli" \
+    --provider "$whisper_provider" --or-cli "${OR_CLI_PATH:-}" \
+    --require whisper,provider || fail "staging the transcription helpers failed"
   notices="$app/Contents/Resources/ThirdPartyNotices/whisper.cpp"
   mkdir -p "$notices"
   if [[ -n "$whisper_license" && -f "$whisper_license" ]]; then

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../support/host_platform.dart';
+
 /// Which ACP harness the assistant starts. `auto` prefers DSH and falls back
 /// to any other installed ACP-capable command; the others are explicit.
 enum AssistantHarnessKind { auto, dsh, claudeCode, codex, opencode, custom }
@@ -218,27 +220,30 @@ class HarnessLaunch {
 }
 
 /// Candidate harness executables, resolved without trusting the GUI PATH.
+///
+/// Discovery is one code path on every desktop host: [HostPlatform] supplies
+/// the home directory, the `PATH` separator and the executable suffixes, so a
+/// Windows install is found exactly where a macOS one is.
 Future<HarnessLaunch?> resolveHarnessLaunch({
   required AssistantSettings settings,
   required String patchPath,
   Map<String, String>? environment,
+  HostPlatform? platform,
 }) async {
-  final env = environment ?? Platform.environment;
-  if (settings.harnessPath.isNotEmpty &&
-      await File(settings.harnessPath).exists()) {
-    return _launchFor(
-      settings.harnessPath,
-      settings.harnessKind == AssistantHarnessKind.auto
-          ? AssistantHarnessKind.dsh
-          : settings.harnessKind,
-      patchPath,
-    );
+  final host = platform ?? HostPlatform.current(environment: environment);
+  if (settings.harnessPath.isNotEmpty) {
+    final resolved = host.resolveExecutable(settings.harnessPath);
+    if (resolved != null) {
+      return _launchFor(
+        resolved,
+        settings.harnessKind == AssistantHarnessKind.auto
+            ? AssistantHarnessKind.dsh
+            : settings.harnessKind,
+        patchPath,
+      );
+    }
   }
-  final home = env['HOME'];
-  final dshCandidates = <String>[
-    '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh',
-    if (home != null) '$home/.local/bin/dsh',
-  ];
+  final directories = _harnessDirectories(host);
   final wanted = settings.harnessKind == AssistantHarnessKind.auto
       ? <AssistantHarnessKind>[
           AssistantHarnessKind.dsh,
@@ -249,19 +254,22 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
       : <AssistantHarnessKind>[settings.harnessKind];
   for (final kind in wanted) {
     final path = switch (kind) {
-      AssistantHarnessKind.dsh =>
-        await _firstExisting(dshCandidates) ?? await _findOnPath('dsh', env),
-      AssistantHarnessKind.claudeCode =>
-        await _findOnPath('claude-code-acp', env) ??
-            await _firstExisting([
-              if (home != null) '$home/.local/bin/claude-code-acp',
-            ]),
-      AssistantHarnessKind.codex =>
-        await _findOnPath('codex-acp', env) ??
-            await _firstExisting([
-              if (home != null) '$home/.local/bin/codex-acp',
-            ]),
-      AssistantHarnessKind.opencode => await _findOnPath('opencode', env),
+      AssistantHarnessKind.dsh => host.findExecutable(
+        'dsh',
+        extraDirectories: directories,
+      ),
+      AssistantHarnessKind.claudeCode => host.findExecutable(
+        'claude-code-acp',
+        extraDirectories: directories,
+      ),
+      AssistantHarnessKind.codex => host.findExecutable(
+        'codex-acp',
+        extraDirectories: directories,
+      ),
+      AssistantHarnessKind.opencode => host.findExecutable(
+        'opencode',
+        extraDirectories: directories,
+      ),
       AssistantHarnessKind.auto || AssistantHarnessKind.custom => null,
     };
     if (path != null) return _launchFor(path, kind, patchPath);
@@ -269,11 +277,31 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
   return null;
 }
 
-Future<String?> _firstExisting(List<String> candidates) async {
-  for (final candidate in candidates) {
-    if (await File(candidate).exists()) return candidate;
-  }
-  return null;
+/// Install locations a harness can occupy that a GUI launch never puts on
+/// `PATH`: the macOS app bundle, per-user CLI directories and the Windows
+/// per-user programs folder.
+List<String> _harnessDirectories(HostPlatform host) {
+  final home = host.homeDirectory;
+  return [
+    if (host.isMacOS)
+      '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin',
+    if (host.isMacOS) '/opt/homebrew/bin',
+    if (host.isMacOS) '/usr/local/bin',
+    if (host.isLinux) '/usr/local/bin',
+    if (host.isLinux) '/opt/deepseek-harness/bin',
+    if (home.isNotEmpty) host.join(home, '.dsh', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.dsh', 'bin', 'runtime'),
+    if (host.isWindows && (host.environment['LOCALAPPDATA'] ?? '').isNotEmpty)
+      host.join(
+        host.environment['LOCALAPPDATA']!,
+        'Programs',
+        'DeepSeek Harness',
+      ),
+    if (host.isWindows && (host.environment['LOCALAPPDATA'] ?? '').isNotEmpty)
+      host.join(host.environment['LOCALAPPDATA']!, 'Programs', 'dsh'),
+    if (host.isWindows && (host.environment['APPDATA'] ?? '').isNotEmpty)
+      host.join(host.environment['APPDATA']!, 'dsh', 'bin'),
+  ];
 }
 
 HarnessLaunch _launchFor(
@@ -297,11 +325,13 @@ HarnessLaunch _launchFor(
 Future<String?> resolveHarnessPath({
   required AssistantSettings settings,
   Map<String, String>? environment,
+  HostPlatform? platform,
 }) async {
   final launch = await resolveHarnessLaunch(
     settings: settings,
     patchPath: '',
     environment: environment,
+    platform: platform,
   );
   return launch?.executable;
 }
@@ -312,28 +342,33 @@ Future<String?> resolveOrCliPath({
   Map<String, String>? environment,
   Directory? currentDirectory,
   String? executablePath,
+  HostPlatform? platform,
 }) async {
-  final env = environment ?? Platform.environment;
+  final host =
+      platform ??
+      HostPlatform.current(
+        environment: environment,
+        executablePath: executablePath,
+      );
   if (settings.orCliPath.isNotEmpty) {
-    return await File(settings.orCliPath).exists() ? settings.orCliPath : null;
+    return host.resolveExecutable(settings.orCliPath);
   }
-  final resolvedExecutable = executablePath ?? Platform.resolvedExecutable;
+  final executable = executablePath ?? host.executablePath;
   final starts = <Directory>[
     (currentDirectory ?? Directory.current).absolute,
     // A packaged or `open`-launched app has `/` as its working directory, but
     // a development build still sits inside the checkout, so walk from the
     // executable too.
-    Directory(resolvedExecutable).parent.absolute,
+    File(executable).parent.absolute,
   ];
   for (final start in starts) {
     var directory = start;
     for (var depth = 0; depth < 12; depth += 1) {
       for (final relative in const ['target/debug/or', 'target/release/or']) {
-        final candidate = File(
-          '${directory.path}${Platform.pathSeparator}'
-          '${relative.replaceAll('/', Platform.pathSeparator)}',
+        final resolved = host.resolveExecutable(
+          host.join(directory.path, host.fromPosix(relative)),
         );
-        if (await candidate.exists()) return candidate.path;
+        if (resolved != null) return resolved;
       }
       final parent = directory.parent;
       if (parent.path == directory.path) break;
@@ -342,26 +377,17 @@ Future<String?> resolveOrCliPath({
   }
   // A packaged OR bundle ships the CLI beside its executable, so the assistant
   // keeps working after the app is moved out of the checkout.
-  final bundled = File(
-    '${Directory(resolvedExecutable).parent.path}'
-    '${Platform.pathSeparator}or',
+  final bundled = host.resolveExecutable(
+    host.join(host.executableDirectory.path, 'or'),
   );
-  if (await bundled.exists()) return bundled.path;
-  const applicationCandidate =
-      '/Applications/Opencut Reinforced.app/Contents/MacOS/or';
-  if (await File(applicationCandidate).exists()) return applicationCandidate;
-  return _findOnPath('or', env);
-}
-
-Future<String?> _findOnPath(String name, Map<String, String> env) async {
-  final path = env['PATH'];
-  if (path == null) return null;
-  for (final directory in path.split(':')) {
-    if (directory.isEmpty) continue;
-    final candidate = File('$directory/$name');
-    if (await candidate.exists()) return candidate.path;
+  if (bundled != null) return bundled;
+  if (host.isMacOS) {
+    final application = host.resolveExecutable(
+      '/Applications/Opencut Reinforced.app/Contents/MacOS/or',
+    );
+    if (application != null) return application;
   }
-  return null;
+  return host.findExecutable('or');
 }
 
 /// Finds the user's active dsh profile overlay (desktop first) and copies the
@@ -369,13 +395,27 @@ Future<String?> _findOnPath(String name, Map<String, String> env) async {
 Future<HarnessOverlay?> findHarnessOverlay({
   Map<String, String>? environment,
   Directory? profilesDirectory,
+  HostPlatform? platform,
 }) async {
-  final env = environment ?? Platform.environment;
-  final home = env['HOME'];
-  final root =
-      profilesDirectory ??
-      (home == null ? null : Directory('$home/.dsh/profiles'));
-  if (root == null || !await root.exists()) return null;
+  final host = platform ?? HostPlatform.current(environment: environment);
+  final home = host.homeDirectory;
+  final configuredHome = host.environment['DSH_HOME'];
+  final roots = <Directory>[
+    ?profilesDirectory,
+    if (configuredHome != null && configuredHome.isNotEmpty)
+      Directory(host.join(configuredHome, 'profiles')),
+    if (home.isNotEmpty) Directory(host.join(home, '.dsh', 'profiles')),
+    if (host.isWindows && (host.environment['APPDATA'] ?? '').isNotEmpty)
+      Directory(host.join(host.environment['APPDATA']!, 'dsh', 'profiles')),
+  ];
+  Directory? root;
+  for (final candidate in roots) {
+    if (await candidate.exists()) {
+      root = candidate;
+      break;
+    }
+  }
+  if (root == null) return null;
   final candidates = await root
       .list()
       .where((entity) => entity is Directory)
