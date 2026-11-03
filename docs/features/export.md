@@ -36,6 +36,10 @@ the selected profile's muxer and encoders.
 - The H.264 profile is fed NV12 planes: the composited frame is
   converted on the GPU and read back as two planes, so no CPU colour conversion
   runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
+- The VP9 profile runs with its own row threading: the encoder is told how many
+  threads the host can feed (capped at sixteen) and `row-mt` is on, because
+  libvpx otherwise encodes on a single thread and an eight or sixteen core host
+  waited on one core.
 - Rendering and writing are pipelined: a render thread keeps at most two frames
   ahead of the writer, so decode, GPU composite and readback overlap colour
   conversion and encoding instead of alternating with them. Frames still reach

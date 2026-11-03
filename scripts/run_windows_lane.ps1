@@ -149,6 +149,10 @@ if ($Steps -contains 'installer') {
   foreach ($root in @(${env:ProgramFiles(x86)}, $env:ProgramFiles)) {
     if ($root) { $candidates += (Join-Path $root 'Inno Setup 6\ISCC.exe') }
   }
+  # winget installs Inno Setup per user, where neither Program Files path sees it.
+  if ($env:LOCALAPPDATA) {
+    $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+  }
   $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
   if (-not $iscc) {
     throw "Inno Setup 6 is not installed; install it with 'choco install innosetup -y' or set ISCC."

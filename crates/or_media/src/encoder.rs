@@ -26,6 +26,11 @@ use std::{
 /// must never name one encoder and hope every build carries it. The list is a
 /// preference order over what is actually compiled in, which keeps the MP4
 /// profile working on every platform the product ships.
+/// The most encoder threads a WebM export asks libvpx for. The encoder is
+/// memory hungry, so a wide host is served by row threading rather than by
+/// spinning up every core.
+const VP9_MAX_THREADS: usize = 16;
+
 const H264_ENCODER_CANDIDATES: &[&str] = &[
     "h264_videotoolbox",
     "h264_mf",
@@ -278,6 +283,13 @@ impl FfmpegExportWriter {
                 options.set("cpu-used", cpu_used);
                 options.set("crf", crf);
                 options.set("b", "0");
+                // libvpx defaults to one thread; row-mt only pays off once the
+                // encoder is told how many rows may run at once, so a WebM export
+                // was leaving every other core idle.
+                let threads = std::thread::available_parallelism()
+                    .map_or(1, |count| count.get())
+                    .clamp(1, VP9_MAX_THREADS);
+                options.set("threads", threads.to_string());
                 options.set("row-mt", "1");
             } else {
                 options.set("b", video_bitrate(width, height, quality).to_string());

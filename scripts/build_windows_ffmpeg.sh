@@ -73,7 +73,11 @@ configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch
 # Media Foundation is Windows' own H.264 encoder. It needs no extra library and
 # no extra licence, so the MP4 export profile uses it here instead of the Apple
 # VideoToolbox encoder that only exists in the macOS package.
-configure_args+=("--enable-mediafoundation" "--enable-encoder=h264_mf")
+# The Media Foundation encoder keeps its D3D11 device context in `MFContext`,
+# and that field only exists when the D3D11 hwaccel is configured; without it
+# mfenc.c does not compile under MSVC. D3D11 comes with the Windows SDK, so the
+# hwaccel is enabled next to the encoder rather than left to autodetect.
+configure_args+=("--enable-mediafoundation" "--enable-d3d11va" "--enable-encoder=h264_mf")
 # MSVC lacks the C23 stdbit.h header. Expose FFmpeg's own compatible
 # implementation during configure so compiler feature checks can use it.
 stdbit_compat="$(cygpath -am "$source/compat/stdbit")"
