@@ -466,6 +466,12 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('editor-tool-audio')));
       await tester.pumpAndSettle();
+      // The tool panel scrolls: a window with a menu bar has room for one
+      // fewer row, so bring the button into view before tapping it.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tool-speech-model')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('tool-speech-model')));
       await tester.pumpAndSettle();
 
@@ -504,6 +510,12 @@ void main() {
       await _createProject(tester, 'Speech model present');
 
       await tester.tap(find.byKey(const ValueKey('editor-tool-audio')));
+      await tester.pumpAndSettle();
+      // The tool panel scrolls: a window with a menu bar has room for one
+      // fewer row, so bring the button into view before tapping it.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('tool-speech-model')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('tool-speech-model')));
       await tester.pumpAndSettle();
@@ -1501,9 +1513,17 @@ void main() {
       // rebuild: the shell setStates only for previews a clip can show.
       expect(mediaLibraryPanelBuilds, greaterThan(paneBuilds));
       expect(timelinePanelBuilds, timelineBuilds);
+      // Which rows are laid out depends on the panel height, so the claim is
+      // that the off-timeline previews painted at all, not which index showed.
       expect(
-        find.byKey(const ValueKey('media-preview-image-quiet-3')),
-        findsOneWidget,
+        find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'media-preview-image-quiet-',
+              ),
+        ),
+        findsWidgets,
       );
       expect(tester.takeException(), isNull);
     },
