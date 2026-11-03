@@ -90,4 +90,33 @@ void main() {
       throwsA(isA<GithubReleaseException>()),
     );
   });
+
+  test('quitting after a disk image install opens the new bundle', () async {
+    final started = <String>[];
+    var exited = -1;
+    final installer = UpdateInstaller(
+      platform: _host(macos: true),
+      runner: (program, arguments) async {
+        if (program == 'hdiutil' && arguments.first == 'attach') {
+          final mount = arguments[arguments.indexOf('-mountpoint') + 1];
+          Directory('$mount/Opencut Reinforced.app').createSync();
+        }
+        return ProcessResult(0, 0, '', '');
+      },
+      startDetached: (program, arguments) async {
+        started.add('$program ${arguments.join(' ')}');
+      },
+      exitApp: (code) => exited = code,
+    );
+    final result = await installer.install(
+      File('${Directory.systemTemp.path}/Opencut.dmg'),
+    );
+    expect(result.installed, isTrue);
+    expect(result.restartRequired, isTrue);
+    await installer.quit();
+    expect(exited, 0);
+    expect(started, hasLength(1));
+    expect(started.single, startsWith('open '));
+    expect(started.single, endsWith('Opencut Reinforced.app'));
+  });
 }

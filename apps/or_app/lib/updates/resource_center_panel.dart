@@ -140,8 +140,8 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
     }
   }
 
-  void _restart() {
-    widget.service.restartForUpdate();
+  Future<void> _restart() async {
+    await widget.service.restartForUpdate();
   }
 
   Future<void> _openDownloaded() async {

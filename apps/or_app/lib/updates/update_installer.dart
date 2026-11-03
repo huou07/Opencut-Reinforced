@@ -63,8 +63,23 @@ class UpdateInstaller {
   final DetachedStarter _start;
   final void Function(int code) _exit;
 
-  /// Quits this process so the new build can start.
-  void quit() => _exit(0);
+  /// The bundle the update just installed, so quitting can open it again.
+  String? _relaunchPath;
+
+  /// Quits this process and, where the platform needs a hand, opens the new
+  /// build. Windows is handled by the installer's own restart flag; macOS has
+  /// no such flag, so the bundle just copied into place is opened here.
+  Future<void> quit() async {
+    final relaunch = _relaunchPath;
+    if (relaunch != null) {
+      try {
+        await _start('open', [relaunch]);
+      } on Object {
+        // The new build is on disk either way; the user can open it.
+      }
+    }
+    _exit(0);
+  }
 
   /// Installs [artifact], returning what the user still has to do.
   Future<UpdateInstallResult> install(File artifact) async {
@@ -120,6 +135,7 @@ class UpdateInstaller {
           'Move the app there yourself, then reopen it.',
         );
       }
+      _relaunchPath = destination.path;
       return UpdateInstallResult(
         message: 'Version installed. Restart to finish.',
         installed: true,

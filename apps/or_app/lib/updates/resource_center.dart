@@ -379,7 +379,7 @@ class ResourceCenterService {
       UpdateInstaller().install(artifact);
 
   /// Quits the app so the freshly installed build starts.
-  void restartForUpdate() => UpdateInstaller().quit();
+  Future<void> restartForUpdate() => UpdateInstaller().quit();
 
   /// Downloads and checksums this host's installer, returning the file.
   Future<File> downloadUpdate(
