@@ -69,7 +69,15 @@ def main() -> int:
         [str(ffmpeg), "-hide_banner", "-buildconf"],
         env,
     ).decode("utf-8", errors="replace")
-    restricted_options = ("--enable-gpl", "--enable-version3", "--enable-nonfree")
+    # The Linux delivery build links x264 (GPL-2.0-or-later) so MP4 export works
+    # there without a GPU; ADR 0011 records that decision. Every other platform
+    # build stays LGPL, and version3/nonfree are forbidden everywhere.
+    allowed_options = ("--enable-gpl",) if sys.platform.startswith("linux") else ()
+    restricted_options = tuple(
+        option
+        for option in ("--enable-gpl", "--enable-version3", "--enable-nonfree")
+        if option not in allowed_options
+    )
     if any(option in build_configuration for option in restricted_options):
         raise SystemExit("The packaged helper build enables a restricted FFmpeg license mode.")
     encoders = _run(

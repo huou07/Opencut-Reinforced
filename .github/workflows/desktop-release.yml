@@ -214,7 +214,7 @@ jobs:
             "$RUNNER_TEMP/ffmpeg-codecs-install" \
             "$RUNNER_TEMP/desktop-export-codecs"
 
-      - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
+      - name: Build and stage the FFmpeg 8.1.3 delivery libraries
         id: ffmpeg-build
         timeout-minutes: 30
         run: |
