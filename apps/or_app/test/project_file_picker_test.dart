@@ -18,20 +18,20 @@ void main() {
         .setMockMethodCallHandler(macFileAccessChannel, null);
   });
 
-  test('available export profiles match the platform encoder set', () {
+  test('every platform offers every export profile', () {
+    // MP4 is offered everywhere because the core now selects the H.264 encoder
+    // the build carries on the host instead of naming the macOS one.
+    expect(ExportProfile.available, ExportProfile.values);
     expect(
       ExportProfile.defaultForPlatform,
-      Platform.isMacOS ? ExportProfile.mp4H264Aac : ExportProfile.webmVp9Opus,
+      Platform.isLinux ? ExportProfile.webmVp9Opus : ExportProfile.mp4H264Aac,
     );
     expect(ExportProfile.available, contains(ExportProfile.webmVp9Opus));
     expect(
       ExportProfile.available,
       contains(ExportProfile.matroskaFfv1PcmS16le),
     );
-    expect(
-      ExportProfile.available.contains(ExportProfile.mp4H264Aac),
-      Platform.isMacOS,
-    );
+    expect(ExportProfile.available, contains(ExportProfile.mp4H264Aac));
   });
 
   test('macOS export selection uses the scoped folder picker', () async {

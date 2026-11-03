@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../support/host_platform.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
@@ -1261,7 +1262,7 @@ class _ToolEntryState extends State<_ToolEntry> {
   Future<void> _revealImage(AssistantImage image, int index) async {
     final file = await _writeImage(image, index);
     if (file == null) return;
-    await Process.run('open', ['-R', file.path]);
+    await HostPlatform.current().revealFile(file.path);
   }
 
   Widget _imageTile(AssistantImage image, int index) {
@@ -1291,11 +1292,11 @@ class _ToolEntryState extends State<_ToolEntry> {
         ),
         InkWell(
           onTap: () => unawaited(_revealImage(image, index)),
-          child: const Padding(
-            padding: EdgeInsets.only(top: 2),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2),
             child: Text(
-              'Show in Finder',
-              style: TextStyle(
+              HostPlatform.current().revealLabel,
+              style: const TextStyle(
                 color: OrColors.textMuted,
                 fontSize: OrType.tinySize,
               ),

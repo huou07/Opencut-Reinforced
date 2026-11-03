@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../assistant/assistant_settings.dart';
 import '../support/host_platform.dart';
 import 'github_release.dart';
+import 'update_installer.dart';
 
 /// What the packaged application actually carries on disk.
 class RuntimeSnapshot {
@@ -362,16 +363,35 @@ class ResourceCenterService {
     return getApplicationSupportDirectory();
   }
 
-  /// Downloads and checksums the release DMG, returning the completed file.
+  /// The artifact this host installs for [release].
+  Future<GithubReleaseAsset?> updateAsset(GithubRelease release) async {
+    final host = HostPlatform.current();
+    return release.assetFor(
+      isWindows: host.isWindows,
+      isMacOS: host.isMacOS,
+      isLinux: host.isLinux,
+      architecture: await hostArchitecture(),
+    );
+  }
+
+  /// Installs a downloaded update, returning what the user still has to do.
+  Future<UpdateInstallResult> installUpdate(File artifact) =>
+      UpdateInstaller().install(artifact);
+
+  /// Quits the app so the freshly installed build starts.
+  void restartForUpdate() => UpdateInstaller().quit();
+
+  /// Downloads and checksums this host's installer, returning the file.
   Future<File> downloadUpdate(
     GithubRelease release, {
     required Directory directory,
     void Function(int received, int total)? onProgress,
   }) async {
-    final asset = release.macDmg;
+    final asset = await updateAsset(release);
     if (asset == null) {
-      throw const GithubReleaseException(
-        'This release does not contain a macOS disk image.',
+      final host = HostPlatform.current();
+      throw GithubReleaseException(
+        'This release does not contain an installer for ${host.name}.',
       );
     }
     if (asset.sizeBytes <= 0) {

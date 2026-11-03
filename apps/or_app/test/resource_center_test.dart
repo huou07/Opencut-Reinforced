@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/updates/github_release.dart';
 import 'package:or_app/updates/resource_center.dart';
+import 'package:or_app/updates/update_installer.dart';
 import 'package:or_app/updates/resource_center_panel.dart';
 
 class _FakeResourceService extends ResourceCenterService {
@@ -30,6 +31,14 @@ class _FakeResourceService extends ResourceCenterService {
     checks++;
     return release;
   }
+
+  @override
+  Future<GithubReleaseAsset?> updateAsset(GithubRelease release) async =>
+      release.macDmg;
+
+  @override
+  Future<UpdateInstallResult> installUpdate(File artifact) async =>
+      const UpdateInstallResult(message: 'installed', installed: true);
 
   @override
   Future<Directory> downloadDirectory() async => Directory.systemTemp;

@@ -518,6 +518,8 @@ void main() {
         find.byKey(const ValueKey('speech-model-use')),
       );
       expect(use.onPressed, isNotNull);
+      expect(find.text('Download model'), findsOneWidget);
+      expect(find.text('Use model'), findsNothing);
       expect(
         find.byKey(const ValueKey('speech-model-runtime-missing')),
         findsNothing,

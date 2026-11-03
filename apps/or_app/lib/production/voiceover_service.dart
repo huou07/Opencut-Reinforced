@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../project/project_gateway.dart';
+import '../support/host_platform.dart';
 
 /// One installed macOS voice as `say -v ?` reports it.
 class VoiceOption {
@@ -76,9 +77,15 @@ class VoiceoverService {
     // the system binaries are addressed absolutely instead of through `say`.
     this.sayExecutable = '/usr/bin/say',
     this.processTimeout = const Duration(minutes: 2),
-  });
+    HostPlatform? platform,
+  }) : _host = platform ?? HostPlatform.current();
 
   final String sayExecutable;
+
+  /// The host whose system voice this instance speaks through. macOS has
+  /// `say`, Windows has SpeechSynthesis in .NET, and the freedesktop hosts
+  /// have `espeak-ng`; a caller should never have to know that.
+  final HostPlatform _host;
 
   /// A wedged audio device or a hung `say` must surface as an error instead of
   /// a spinner that never stops.
@@ -87,6 +94,8 @@ class VoiceoverService {
   /// Lists the installed voices. A missing `say` is reported as a setup error,
   /// never as an empty picker.
   Future<List<VoiceOption>> listVoices() async {
+    if (_host.isWindows) return _listWindowsVoices();
+    if (!_host.isMacOS) return _listEspeakVoices();
     final ProcessResult result;
     try {
       result = await Process.run(sayExecutable, [
@@ -168,36 +177,13 @@ class VoiceoverService {
       final text = lines[index].trim();
       if (text.isEmpty) continue;
       final file = File('${directory.path}/line-${index + 1}.wav');
-      final arguments = <String>[
-        if (voice != 'default') ...['-v', voice],
-        '-r',
-        '$rate',
-        '-o',
-        file.path,
-        '--data-format=LEI16@44100',
-        text.startsWith('-') ? ' $text' : text,
-      ];
-      final ProcessResult result;
-      try {
-        result = await Process.run(
-          sayExecutable,
-          arguments,
-        ).timeout(processTimeout);
-      } on TimeoutException {
-        throw VoiceoverException(
-          'The macOS voice did not finish line ${index + 1} in time.',
-        );
-      } on ProcessException catch (error) {
-        throw VoiceoverException(
-          'The macOS say command is unavailable (${error.message}).',
-        );
-      }
-      if (result.exitCode != 0) {
-        final detail = result.stderr.toString().trim();
-        throw VoiceoverException(
-          'say failed for line ${index + 1}: ${detail.isEmpty ? 'exit ${result.exitCode}' : detail}',
-        );
-      }
+      await _speakToWav(
+        text: text,
+        voice: voice,
+        rate: rate,
+        file: file,
+        context: 'line ${index + 1}',
+      );
       final durationMs = await wavDurationMs(file);
       final startMs = cursor;
       final endMs = startMs + durationMs;
@@ -234,42 +220,242 @@ class VoiceoverService {
     }
     await directory.create(recursive: true);
     final file = File('${directory.path}/voice-preview.wav');
-    final arguments = voiceoverPreviewArguments(
+    await _speakToWav(
+      text: text,
       voice: voice,
       rate: rate,
-      text: text,
-      outputPath: file.path,
+      file: file,
+      context: 'the preview',
     );
+    // Playback is best-effort: a host with no player still returns the sample,
+    // which the caller can inspect or play itself.
+    await _playAudio(file);
+    return file;
+  }
+
+  /// Writes [text] to [file] as a 16-bit PCM WAV with the host's own voice.
+  ///
+  /// One call, three programs: `say` on macOS, SpeechSynthesis inside
+  /// PowerShell on Windows, `espeak-ng` on the freedesktop hosts. The file
+  /// format is the same so the timeline, the captions and the WAV reader do not
+  /// branch per platform.
+  Future<void> _speakToWav({
+    required String text,
+    required String voice,
+    required int rate,
+    required File file,
+    required String context,
+  }) async {
+    final boundedRate = rate.clamp(90, 400);
+    if (_host.isMacOS) {
+      await _runVoice(
+        sayExecutable,
+        [
+          if (voice != 'default') ...['-v', voice],
+          '-r',
+          '$boundedRate',
+          '-o',
+          file.path,
+          '--data-format=LEI16@44100',
+          text.startsWith('-') ? ' $text' : text,
+        ],
+        context,
+        'say',
+      );
+      return;
+    }
+    if (_host.isWindows) {
+      final textFile = File(
+        '${file.parent.path}/voice-text-${DateTime.now().microsecondsSinceEpoch}.txt',
+      );
+      await textFile.writeAsString(text);
+      final script =
+          "Add-Type -AssemblyName System.Speech\n"
+          "\$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer\n"
+          "\$synth.Rate = ${_sapiRate(boundedRate)}\n"
+          "${voice == 'default' ? '' : "\$synth.SelectVoice('${_powershellQuote(voice)}')\n"}"
+          "\$synth.SetOutputToWaveFile('${_powershellQuote(file.path)}')\n"
+          "\$synth.Speak([IO.File]::ReadAllText('${_powershellQuote(textFile.path)}'))\n"
+          "\$synth.Dispose()\n";
+      try {
+        await _runVoice(
+          'powershell',
+          ['-NoProfile', '-NonInteractive', '-Command', script],
+          context,
+          'Windows speech',
+        );
+      } finally {
+        if (await textFile.exists()) await textFile.delete();
+      }
+      return;
+    }
+    final program = await _espeakProgram();
+    await _runVoice(
+      program,
+      [
+        '-v',
+        voice == 'default' ? 'en' : voice,
+        '-s',
+        '$boundedRate',
+        '-w',
+        file.path,
+        text,
+      ],
+      context,
+      'espeak-ng',
+    );
+  }
+
+  /// Plays [file] through the host's audio output when one is available.
+  ///
+  /// A missing player is not a synthesis failure: the caller keeps the sample.
+  Future<void> _playAudio(File file) async {
+    if (_host.isMacOS) {
+      try {
+        await Process.run('/usr/bin/afplay', [file.path]);
+      } on ProcessException {
+        // The sample was written; the caller can still inspect or play it.
+      }
+      return;
+    }
+    if (_host.isWindows) {
+      final script =
+          "(New-Object Media.SoundPlayer '${_powershellQuote(file.path)}').PlaySync()";
+      try {
+        await Process.run('powershell', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          script,
+        ]);
+      } on ProcessException {
+        // No player, no problem: the WAV is on disk.
+      }
+      return;
+    }
+    for (final candidate in const ['paplay', 'aplay', 'ffplay']) {
+      final extra = candidate == 'ffplay'
+          ? const ['-nodisp', '-autoexit']
+          : const [];
+      try {
+        final result = await Process.run(candidate, [...extra, file.path]);
+        if (result.exitCode == 0) return;
+      } on ProcessException {
+        continue;
+      }
+    }
+  }
+
+  Future<ProcessResult> _runVoice(
+    String program,
+    List<String> arguments,
+    String context,
+    String label,
+  ) async {
     final ProcessResult result;
     try {
-      result = await Process.run(
-        sayExecutable,
-        arguments,
-      ).timeout(processTimeout);
+      result = await Process.run(program, arguments).timeout(processTimeout);
     } on TimeoutException {
-      throw const VoiceoverException(
-        'The macOS voice did not speak the preview in time.',
-      );
+      throw VoiceoverException('$label did not finish $context in time.');
     } on ProcessException catch (error) {
-      throw VoiceoverException(
-        'The macOS say command is unavailable (${error.message}).',
-      );
+      throw VoiceoverException(_unavailableMessage(error, label));
     }
     if (result.exitCode != 0) {
       final detail = result.stderr.toString().trim();
       throw VoiceoverException(
-        'say could not speak the preview: ${detail.isEmpty ? 'exit ${result.exitCode}' : detail}',
+        '$label failed for $context: '
+        '${detail.isEmpty ? 'exit ${result.exitCode}' : detail}',
       );
     }
-    // `afplay` is the system player; a missing player is not a synthesis
-    // failure, so the preview file still returns.
-    try {
-      await Process.run('/usr/bin/afplay', [file.path]);
-    } on ProcessException {
-      // The sample was written; the caller can still inspect or play it.
-    }
-    return file;
+    return result;
   }
+
+  String _unavailableMessage(ProcessException error, String label) {
+    if (_host.isLinux) {
+      return 'The system voice is unavailable (${error.message}). Install '
+          'espeak-ng with your package manager, for example '
+          '`sudo apt install espeak-ng`, or use a local voice server instead.';
+    }
+    return '$label is unavailable (${error.message}).';
+  }
+
+  /// The `espeak-ng` binary, or the older `espeak` when only that is installed.
+  Future<String> _espeakProgram() async {
+    for (final name in const ['espeak-ng', 'espeak']) {
+      final found = _host.findExecutable(
+        name,
+        extraDirectories: const ['/usr/bin', '/usr/local/bin', '/bin'],
+      );
+      if (found != null) return found;
+    }
+    throw const VoiceoverException(
+      'The system voice needs espeak-ng on Linux. Install it with your package '
+      'manager, for example `sudo apt install espeak-ng`, or use a local voice '
+      'server instead.',
+    );
+  }
+
+  Future<List<VoiceOption>> _listWindowsVoices() async {
+    const script =
+        "Add-Type -AssemblyName System.Speech\n"
+        "\$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer\n"
+        "\$synth.GetInstalledVoices() | ForEach-Object { \$info = \$_.VoiceInfo; "
+        "\"\$(\$info.Name)|\$(\$info.Culture.Name)\" }\n";
+    final result = await _runVoice(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      'the voice list',
+      'Windows speech',
+    );
+    final voices = <VoiceOption>[];
+    for (final raw in result.stdout.toString().split('\n')) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      final parts = line.split('|');
+      if (parts.length < 2) continue;
+      voices.add(VoiceOption(name: parts[0], locale: parts[1]));
+    }
+    if (voices.isEmpty) {
+      throw const VoiceoverException(
+        'Windows reported no installed speech voices.',
+      );
+    }
+    return voices;
+  }
+
+  Future<List<VoiceOption>> _listEspeakVoices() async {
+    final program = await _espeakProgram();
+    final result = await _runVoice(
+      program,
+      ['--voices'],
+      'the voice list',
+      'espeak-ng',
+    );
+    final voices = <VoiceOption>[];
+    final seen = <String>{};
+    for (final raw in result.stdout.toString().split('\n')) {
+      final line = raw.trimRight();
+      if (line.isEmpty) continue;
+      final columns = line.trim().split(RegExp(r'\s+'));
+      if (columns.length < 4 || columns.first == 'Pty') continue;
+      final language = columns[1];
+      final name = columns[3];
+      if (!seen.add('$name\u0000$language')) continue;
+      voices.add(VoiceOption(name: name, locale: language));
+    }
+    if (voices.isEmpty) {
+      throw const VoiceoverException(
+        'espeak-ng listed no voices; check its installation.',
+      );
+    }
+    return voices;
+  }
+
+  /// SAPI's rate is -10..10, and the narration picker's is words per minute.
+  int _sapiRate(int wordsPerMinute) =>
+      ((wordsPerMinute - 175) / 22.5).round().clamp(-10, 10);
+
+  String _powershellQuote(String value) => value.replaceAll("'", "''");
 
   /// Reads the exact duration of the PCM WAV that `say` wrote.
   Future<int> wavDurationMs(File file) async {

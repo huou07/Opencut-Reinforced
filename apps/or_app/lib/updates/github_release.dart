@@ -55,11 +55,52 @@ class GithubRelease {
   final List<GithubReleaseAsset> assets;
 
   /// The Apple Silicon disk image, when the release carries one.
-  GithubReleaseAsset? get macDmg {
+  GithubReleaseAsset? get macDmg =>
+      assetFor(isMacOS: true, architecture: 'arm64');
+
+  /// The asset this host can install, or `null` when the release has none.
+  ///
+  /// One release carries one artifact per platform, so the updater must pick by
+  /// host instead of assuming the disk image: a Windows build that downloaded
+  /// the DMG could never install it. Extensions are ranked by how directly the
+  /// platform can run them, and a name that states this machine's architecture
+  /// wins over a generic or foreign-architecture artifact.
+  GithubReleaseAsset? assetFor({
+    bool isWindows = false,
+    bool isMacOS = false,
+    bool isLinux = false,
+    required String architecture,
+  }) {
+    final ranks = isMacOS
+        ? const ['.dmg']
+        : isWindows
+        ? const ['.exe', '.msi', '.zip']
+        : isLinux
+        ? const ['.deb', '.appimage', '.tar.gz', '.zip']
+        : const <String>[];
+    if (ranks.isEmpty) return null;
+    final arm = architecture.toLowerCase().contains('arm');
+    final wanted = arm ? 'arm64' : 'x64';
+    final foreign = arm ? 'x64' : 'arm64';
+    GithubReleaseAsset? best;
+    var bestScore = -1;
     for (final asset in assets) {
-      if (asset.name.toLowerCase().endsWith('.dmg')) return asset;
+      final name = asset.name.toLowerCase();
+      final rank = ranks.indexWhere(name.endsWith);
+      if (rank < 0) continue;
+      var score = (ranks.length - rank) * 10;
+      if (name.contains(wanted) ||
+          (wanted == 'x64' && name.contains('amd64'))) {
+        score += 2;
+      } else if (name.contains(foreign)) {
+        score -= 2;
+      }
+      if (score > bestScore) {
+        best = asset;
+        bestScore = score;
+      }
     }
-    return null;
+    return best;
   }
 
   factory GithubRelease.fromJson(Map<String, Object?> json) {

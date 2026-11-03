@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/production/voiceover_service.dart';
+import 'package:or_app/support/host_platform.dart';
 
 Uint8List pcmWav({
   required int sampleRate,
@@ -122,7 +123,7 @@ void main() {
           isA<VoiceoverException>().having(
             (error) => error.message,
             'message',
-            contains('did not speak the preview in time'),
+            contains('did not finish the preview in time'),
           ),
         ),
       );
@@ -162,4 +163,29 @@ void main() {
     },
     skip: !Platform.isMacOS,
   );
+
+  test('a Linux host without espeak-ng explains the install step', () async {
+    final service = VoiceoverService(
+      platform: HostPlatform(
+        isWindows: false,
+        isMacOS: false,
+        isLinux: true,
+        environment: {
+          'HOME': Directory.systemTemp.path,
+          'PATH': '/nonexistent',
+        },
+        executablePath: '/usr/bin/or_app',
+      ),
+    );
+    await expectLater(
+      service.listVoices(),
+      throwsA(
+        isA<VoiceoverException>().having(
+          (error) => error.message,
+          'message',
+          contains('espeak-ng'),
+        ),
+      ),
+    );
+  });
 }

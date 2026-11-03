@@ -9,8 +9,12 @@ and what remains for a broader platform matrix.
 
 Stable releases ship three desktop packages from one source tree:
 **macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` (Debian 13
-and Ubuntu 24.04, both amd64), and **Windows x86_64** as a `.zip`, all published
-from `huou07/Opencut-Reinforced`. The macOS image is ad-hoc signed, not notarised; the first
+and Ubuntu 24.04, both amd64), and **Windows x86_64** as an Inno Setup
+`.setup.exe` plus the portable `.zip`, all published from
+`huou07/Opencut-Reinforced`. The Windows installer is per-user
+(`{localappdata}\Programs\Opencut Reinforced`, `PrivilegesRequired=lowest`), so
+it needs no administrator prompt and an in-place update never asks for one
+either. The macOS image is ad-hoc signed, not notarised; the first
 launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
 Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
 self-contained: FFmpeg 8.1.3, the local speech runtime (`whisper-cli` and the
@@ -25,8 +29,9 @@ Build locally with `scripts/stage_macos_ffmpeg.sh` followed by
 Apple Silicon and refuses a missing or non-LGPL FFmpeg prefix. The Linux package
 comes from `scripts/run_local_lane.sh linux --packaged` (which drives
 `scripts/package_linux_deb.sh` and `scripts/test_linux_deb_install.sh`), and the
-Windows package from `scripts/run_windows_lane.ps1` (which drives
-`scripts/stage_windows_bundle.ps1` and `scripts/test_desktop_archive_install.py`).
+Windows packages from `scripts/run_windows_lane.ps1` (which drives
+`scripts/stage_windows_bundle.ps1`, `scripts/test_desktop_archive_install.py`
+and, for the installer, `scripts/windows_installer.iss` through Inno Setup 6).
 The CI desktop jobs call the same scripts, so a package verified on a real host
 and one built by CI are produced by one procedure. All three platform scripts
 stage the optional runtime by calling `scripts/stage_desktop_runtime.py`, which
@@ -36,8 +41,8 @@ also rejects any Mach-O in the bundle whose deployment target is newer than
 macOS 13, so a build made on a newer Mac cannot silently raise the public minimum.
 `.github/workflows/desktop-release.yml` builds all three packages from the same
 tag: a `macos-15` job produces the DMG, an `ubuntu-24.04` job produces the `.deb`,
-and a `windows-latest` job produces the `.zip`, each through the documented
-scripts. A `publish` job downloads those artifacts, normalizes their names,
+and a `windows-latest` job produces the `.zip` and the `.setup.exe`, each through
+the documented scripts. A `publish` job downloads those artifacts, normalizes their names,
 writes one `SHA256SUMS.txt` covering every asset, and creates or updates the
 release for a `v*` tag or a manual dispatch with `publish` enabled. A release is
 therefore either complete on all three platforms or it does not publish; there is
@@ -84,14 +89,15 @@ manual check.
 
 A notarised build needs an Apple Developer Program identity and a hardened-runtime
 signing step; the local pipeline stops at ad-hoc signing because this mission has
-no account. The Windows `.zip` and the Linux `.deb` are unsigned packages: they
-install by extraction and by `dpkg -i` respectively, and neither is notarised.
+no account. The Windows `.zip`, the Windows `.setup.exe` and the Linux `.deb` are unsigned
+packages: they install by extraction, by the per-user installer and by `dpkg -i`
+respectively, and none of them is notarised.
 Android is out of the desktop matrix and iOS and web are not targets.
 
 ## Platforms
 
 Desktop release targets: macOS 13+ Apple Silicon (`.dmg`), Linux x86_64 Debian 13
-and Ubuntu 24.04 (`.deb`), Windows 11 x86_64 (`.zip`). The release gate fails
+and Ubuntu 24.04 (`.deb`), Windows 11 x86_64 (`.setup.exe` and `.zip`). The release gate fails
 unless the macOS, Linux and Windows native jobs all succeed on the same commit.
 Android is a separate diagnostic lane and is not part of the desktop gate.
 
