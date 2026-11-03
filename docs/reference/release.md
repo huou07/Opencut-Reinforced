@@ -43,6 +43,15 @@ release for a `v*` tag or a manual dispatch with `publish` enabled. A release is
 therefore either complete on all three platforms or it does not publish; there is
 no path that attaches one platform's package by hand.
 
+The same file runs on every pull request that can change a package, minus
+publishing: the rehearsal builds the release artifacts with the release mode,
+the release staging script and its smoke checks. A green rehearsal means the tag
+run has nothing left to discover, so a release failure is a defect caught before
+the merge rather than a second full pipeline after it. Staging runs
+`whisper-cli --help` and `or version` against the binaries it just copied when
+the target matches the host, so a package that contains the engine but cannot
+start it fails the build instead of the download page.
+
 ## Updates and optional resources
 
 The app is not self-updating in the background. **Settings → Resources &

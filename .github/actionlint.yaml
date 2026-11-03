@@ -1,0 +1,5 @@
+# actionlint cannot know a runner image label newer than its own release, so it
+# is told about the image this repository verifies on.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

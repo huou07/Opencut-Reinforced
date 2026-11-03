@@ -32,6 +32,24 @@ jobs:
       - name: Run repository checks
         run: bash scripts/check-repo.sh
 
+      - name: Lint the workflows and their shell
+        run: |
+          set -euo pipefail
+          version=1.7.7
+          # Pinned release, verified by SHA-256 before it is executed. It
+          # type-checks expressions, needs and matrix references and lints every
+          # `run:` block, so an undefined variable or a missing script fails here
+          # instead of in a 30-minute native build. The single-quoted '$ORIGIN'
+          # rpath literals are deliberate and SC2129 is style only, so both stay
+          # out of the gate.
+          sha256=023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+          curl -sSfL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz"
+          echo "${sha256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          rm -f actionlint.tar.gz
+          ./actionlint -color -ignore 'SC2016|SC2129'
+
       - name: Scan history for secrets with a pinned gitleaks
         run: |
           set -euo pipefail

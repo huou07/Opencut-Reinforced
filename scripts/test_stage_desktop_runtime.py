@@ -21,6 +21,20 @@ def write(path: Path, text: str = "#!/bin/sh\n") -> Path:
     path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return path
 
+def host_os() -> str:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, {str(ROOT / 'scripts')!r}); "
+            "import stage_desktop_runtime as stager; print(stager.host_os())",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout.strip()
+
 
 class StageDesktopRuntimeTest(unittest.TestCase):
     def run_stager(self, *arguments: str) -> subprocess.CompletedProcess:
@@ -138,6 +152,65 @@ class StageDesktopRuntimeTest(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((bundle / "or").is_file())
+
+    def smoke(self, *arguments: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(STAGER), *arguments],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_smoke_starts_the_staged_binaries_on_their_own_host(self) -> None:
+        # A package can contain the engine and still be broken; the smoke check
+        # is what keeps that from reaching a download page unrecognised.
+        host = host_os()
+        suffix = ".exe" if host == "windows" else ""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = root / "sources"
+            bundle = root / "bundle"
+            engine = write(sources / f"whisper-cli{suffix}", "#!/bin/sh\nexit 0\n")
+            cli = write(sources / f"or{suffix}", "#!/bin/sh\nexit 0\n")
+            result = self.smoke(
+                "--os",
+                host,
+                "--runtime-dir",
+                str(bundle),
+                "--whisper-cli",
+                str(engine),
+                "--or-cli",
+                str(cli),
+                "--require",
+                "whisper,or",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("smoke checked whisper-cli", result.stdout)
+            self.assertIn("smoke checked or version", result.stdout)
+
+    def test_smoke_fails_when_a_staged_binary_cannot_start(self) -> None:
+        host = host_os()
+        suffix = ".exe" if host == "windows" else ""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = root / "sources"
+            bundle = root / "bundle"
+            broken = write(
+                sources / f"whisper-cli{suffix}",
+                "#!/bin/sh\necho 'error while loading shared libraries' >&2\nexit 3\n",
+            )
+            result = self.smoke(
+                "--os",
+                host,
+                "--runtime-dir",
+                str(bundle),
+                "--whisper-cli",
+                str(broken),
+                "--require",
+                "whisper",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exited 3", result.stderr)
+            self.assertIn("error while loading shared libraries", result.stderr)
 
 
 if __name__ == "__main__":
