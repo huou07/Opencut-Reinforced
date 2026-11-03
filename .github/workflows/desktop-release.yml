@@ -360,7 +360,9 @@ jobs:
             --runtime-dir "$bundle" --repo-root "$GITHUB_WORKSPACE" \
             --require whisper,provider,or --download-whisper
           env -u LD_LIBRARY_PATH "$bundle/whisper-cli" --help >/dev/null
-          env -u LD_LIBRARY_PATH "$bundle/or" --version
+          # `or version` is the bootstrap verb; `--version` is not a verb and
+          # exits 2, so it would report a staged runtime as broken.
+          env -u LD_LIBRARY_PATH "$bundle/or" version
           echo "OR_PACKAGED_BRIDGE_DIRECTORY=$runtime_dir" >> "$GITHUB_ENV"
 
       - name: Stage the third-party notices

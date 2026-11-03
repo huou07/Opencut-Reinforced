@@ -72,6 +72,15 @@ if ($env:OR_REQUIRE_RUNTIME -eq '1') {
   --repo-root $RepoRoot --require $required @download
 if ($LASTEXITCODE -ne 0) { throw 'the shared runtime stager failed' }
 
+# A staged engine that cannot start is a broken package, so prove it runs on
+# the libraries that travel with it. Verification builds without the optional
+# runtime skip this because there is nothing to run.
+$stagedWhisper = Join-Path $runtimeDir 'whisper-cli.exe'
+if (Test-Path $stagedWhisper -PathType Leaf) {
+  & $stagedWhisper --help | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "the staged speech engine failed to start (exit $LASTEXITCODE)" }
+}
+
 $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
 & $dumpbin /dependents (Join-Path $runtimeDir 'ffmpeg-link-probe.exe')
 $helperDependencies = & $dumpbin /dependents (Join-Path $Bundle 'ffmpeg.exe') | Out-String
