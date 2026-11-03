@@ -209,14 +209,14 @@ jobs:
             "$RUNNER_TEMP/desktop-export-codecs"
 
       - name: Build and stage LGPL-only FFmpeg 8.1.3 shared libraries
+        id: ffmpeg-build
         timeout-minutes: 30
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/ffmpeg-8.1.3.tar.xz"
           source="$RUNNER_TEMP/ffmpeg-8.1.3"
           prefix="$RUNNER_TEMP/ffmpeg-8.1.3-install"
-          curl --fail --location --silent --show-error --retry 10 --retry-all-errors \
-            --retry-delay 5 --max-time 600 \
+          curl --fail --location --silent --show-error --retry 10 --retry-all-errors --retry-delay 5 --max-time 600 \
             https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz --output "$archive"
           echo "acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1  $archive" | sha512sum --check
           xz --test "$archive"
@@ -226,11 +226,71 @@ jobs:
           read -r -a common_configure_args <<< "$FFMPEG_COMMON_CONFIGURE_ARGS"
           read -r -a helper_configure_args <<< "$FFMPEG_HELPER_CONFIGURE_ARGS"
           read -r -a export_configure_args <<< "$FFMPEG_EXPORT_CONFIGURE_ARGS"
-          ./configure --prefix="$prefix" "${common_configure_args[@]}" \
-            "${helper_configure_args[@]}" "${export_configure_args[@]}"
+          configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
+          ./configure "${configure_args[@]}"
           make -j2
           make install
+          # Exercise helper operations against a generated fixture; textual
+          # capability listings alone do not prove the tools work.
+          test -x "$prefix/bin/ffmpeg"
+          test -x "$prefix/bin/ffprobe"
+          python3 "$GITHUB_WORKSPACE/scripts/verify_ffmpeg_helpers.py" \
+            --bin "$prefix/bin" \
+            --lib "$prefix/lib" \
+            --media "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny.mkv" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.png" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.jpg" \
+            --image "$GITHUB_WORKSPACE/crates/or_media/tests/fixtures/tiny_still.webp" \
+            --work "$RUNNER_TEMP/ffmpeg-helper-capability-check"
+          # Phase 4's noise filter is verified by measuring the floor it removes,
+          # not by finding its name in a listing.
+          python3 "$GITHUB_WORKSPACE/scripts/measure_denoise.py" \
+            --bin "$prefix/bin" \
+            --work "$RUNNER_TEMP/ffmpeg-denoise-measurement"
+          export PKG_CONFIG_PATH="$prefix/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          # Cargo config reaches Rust build scripts through Flutter's isolated
+          # native-assets hook, so the lane and CI share one writer.
+          bash "$GITHUB_WORKSPACE/scripts/configure_linux_cargo_for_ffmpeg.sh" "$prefix"
+          for library in avcodec avformat avutil swresample swscale; do
+            test -f "$prefix/lib/pkgconfig/lib$library.pc"
+          done
           echo "FFMPEG_INSTALL_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo 'RUSTFLAGS=-C link-arg=-Wl,-rpath,$ORIGIN' >> "$GITHUB_ENV"
+          for library in avcodec avformat avutil swresample swscale; do
+            pkg-config --modversion "lib$library"
+            test "$(pkg-config --variable=prefix "lib$library")" = "$prefix"
+          done
+          {
+            echo "Target: Linux $(uname -m)"
+            echo "FFmpeg release: 8.1.3"
+            echo "Rust binding: ffmpeg-the-third 6.0.0"
+            echo "Official source URL: https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz"
+            echo "Official upstream tag commit: 1041abdc962f4cc4f394aa8de9dc5236c0c3b9e7"
+            echo "Source archive SHA-512: acc7dbacde58c91bbc4a86fa589d317515d40bc9bc1ca5f9c020034bb54bf3c8cd61ed70ce437b962bd50332ea8378b3ad52da1942cfdb29e380c33a90d2f0c1"
+            echo "Patch status: unpatched upstream release archive"
+            echo 'Packaging modifications: copied shared libraries have ELF RUNPATH set to $ORIGIN; preserved install prefix remains unchanged'
+            echo "Configure arguments: ${configure_args[*]}"
+            echo "Enabled libraries: libavcodec, libavformat, libavutil, libswresample, libswscale"
+            echo "Enabled programs: ffmpeg, ffprobe (9B1 packaged media helpers)"
+            echo "Enabled protocols: file, pipe"
+            echo "Enabled demuxers: matroska, mov, image2, image2pipe, png_pipe, jpeg_pipe, webp_pipe"
+            echo "Enabled decoders: ffv1, pcm_s16le, h264, aac, mp3, vp9, opus, png, mjpeg, webp"
+            echo "Enabled parsers: h264, aac"
+            echo "Enabled encoders: ffv1, pcm_s16le, png, mpeg4"
+            echo "Delivery encoders: libvpx-vp9 and libopus, statically linked from pinned upstream sources"
+            echo "libvpx configure target: $LIBVPX_CONFIGURE_TARGET"
+            echo "Enabled muxers: matroska, webm, image2, image2pipe"
+            echo "Enabled filters: setpts, scale, format, aformat, aresample, showwavespic"
+            echo "License posture: LGPL 2.1-or-later configure default; GPL, version3, and nonfree were not enabled"
+            cat "$RUNNER_TEMP/desktop-export-codecs/EXPORT-CODEC-SOURCES.txt"
+            echo "Compiler: $(cc --version | head -n 1)"
+            echo "Build tools: $(make --version | head -n 1); $(pkg-config --version)"
+            echo "Rust toolchain: $(rustc --version)"
+            echo "Runtime library names:"
+            find "$prefix/lib" -maxdepth 1 \( -type f -o -type l \) \( -name 'libav*.so*' -o -name 'libsw*.so*' \) -exec basename {} \; | sort
+          } > "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
+          cat "$RUNNER_TEMP/FFMPEG-BUILD-INFO.txt"
+          tar -czf "$RUNNER_TEMP/ffmpeg-8.1.3-install.tar.gz" -C "$RUNNER_TEMP" ffmpeg-8.1.3-install
 
       - name: Build the or CLI and the speech adapter
         env:
@@ -239,12 +299,6 @@ jobs:
           PKG_CONFIG_PATH: ${{ runner.temp }}/ffmpeg-8.1.3-install/lib/pkgconfig
         run: |
           set -euo pipefail
-          # MSYS2 prepends its own /usr/bin/link, which is not the MSVC linker;
-          # put the MSVC bin directory first so rustc links the Windows targets.
-          msvc_linker_dir="$(cygpath -u "$VCToolsInstallDir")"
-          msvc_linker_dir="${msvc_linker_dir%/}/bin/Hostx64/x64"
-          export PATH="$msvc_linker_dir:$PATH"
-          test "$(command -v link.exe)" = "$msvc_linker_dir/link.exe"
           cargo build --locked --release -p or_cli
           cargo build --locked --release -p or_whisper_provider
 
@@ -400,6 +454,12 @@ jobs:
           PKG_CONFIG_PATH: ${{ env.FFMPEG_INSTALL_PREFIX }}/lib/pkgconfig
         run: |
           set -euo pipefail
+          # MSYS2 prepends its own /usr/bin/link, which is not the MSVC linker;
+          # put the MSVC bin directory first so rustc links the Windows targets.
+          msvc_linker_dir="$(cygpath -u "$VCToolsInstallDir")"
+          msvc_linker_dir="${msvc_linker_dir%/}/bin/Hostx64/x64"
+          export PATH="$msvc_linker_dir:$PATH"
+          test "$(command -v link.exe)" = "$msvc_linker_dir/link.exe"
           cargo build --locked --release -p or_cli
           cargo build --locked --release -p or_whisper_provider
 
