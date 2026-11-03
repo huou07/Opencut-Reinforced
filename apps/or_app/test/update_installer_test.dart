@@ -9,11 +9,12 @@ HostPlatform _host({
   bool windows = false,
   bool macos = false,
   bool linux = false,
+  String home = '/Users/test',
 }) => HostPlatform(
   isWindows: windows,
   isMacOS: macos,
   isLinux: linux,
-  environment: const {'HOME': '/Users/test'},
+  environment: {'HOME': home},
   executablePath: '/tmp/or_app',
 );
 
@@ -94,8 +95,10 @@ void main() {
   test('quitting after a disk image install opens the new bundle', () async {
     final started = <String>[];
     var exited = -1;
+    final home = await Directory.systemTemp.createTemp('or-home-');
+    addTearDown(() => home.delete(recursive: true));
     final installer = UpdateInstaller(
-      platform: _host(macos: true),
+      platform: _host(macos: true, home: home.path),
       runner: (program, arguments) async {
         if (program == 'hdiutil' && arguments.first == 'attach') {
           final mount = arguments[arguments.indexOf('-mountpoint') + 1];
