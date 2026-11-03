@@ -122,8 +122,8 @@ and default to no code execution.
 Accessibility MVP: keyboard navigation, visible focus, usable touch targets,
 status not conveyed by colour alone; planned: shortcut editor, screen readers,
 text scaling, reduced motion. English is the source language; Vietnamese is an
-intended UI language. Release targets: macOS, Windows, Linux, Android; iOS and web
-are not targets.
+intended UI language. Release targets: macOS, Windows and Linux; Android is out of
+scope for now and is not built, and iOS and web are not targets.
 
 ## Related
 
