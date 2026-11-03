@@ -169,7 +169,7 @@ jobs:
         run: |
           set -euo pipefail
           scripts/build_macos_dmg.sh
-          (cd dist && shasum -a 256 *.dmg > SHA256SUMS.txt)
+          (cd dist && shasum -a 256 ./*.dmg > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
           ls -lh dist/*.dmg dist/SHA256SUMS.txt
 
@@ -332,6 +332,8 @@ jobs:
           mkdir -p "$runtime/lib"
           install -m 755 "$prefix/bin/ffmpeg" "$runtime/ffmpeg"
           install -m 755 "$prefix/bin/ffprobe" "$runtime/ffprobe"
+          # The suffix is a glob by design: it must expand to the matching files.
+          # shellcheck disable=SC2086
           for pattern in libavcodec.so* libavfilter.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so*; do
             cp -a "$prefix/lib/"$pattern "$runtime/lib/"
           done
@@ -357,6 +359,8 @@ jobs:
           runtime_dir="$(dirname "$bridge")"
           probe_source="$GITHUB_WORKSPACE/tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe"
           install -m 755 "$probe_source" "$runtime_dir/ffmpeg-link-probe"
+          # The suffix is a glob by design: it must expand to the matching files.
+          # shellcheck disable=SC2086
           for pattern in libavcodec.so* libavformat.so* libavutil.so* libswresample.so* libswscale.so* libavfilter.so*; do
             cp -a "$FFMPEG_INSTALL_PREFIX/lib/"$pattern "$runtime_dir/"
           done
@@ -524,7 +528,7 @@ jobs:
           for file in *.deb; do mv "$file" "Opencut-Reinforced-${version}-linux-x64.deb"; done
           for file in *.zip; do mv "$file" "Opencut-Reinforced-${version}-windows-x64.zip"; done
           ls -l
-          sha256sum * > SHA256SUMS.txt
+          sha256sum ./* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create or update the release
