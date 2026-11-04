@@ -60,6 +60,13 @@ if (( run_rc == 0 )); then
   covered_gates+=("source-integrity")
 fi
 
+# Every committed lock file must resolve without a write, because a hosted job
+# runs the link probe with `--locked`. A version bump in one workspace that is
+# not carried into `tools/ffmpeg-link-probe/Cargo.lock` fails there and nowhere
+# else, so the gate resolves each lock here instead.
+run 'Lock files resolve without a write' \
+  bash scripts/check-locks.sh
+
 # The documented local Rust lanes.
 run 'Rust core and CLI tests' \
   cargo test -p or_core -p or_cli --locked

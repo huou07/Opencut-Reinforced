@@ -11,6 +11,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 |---|---|
 | `scripts/check-repo.sh` | source gate: required files, whitespace, licence, link/freshness/claim checks, `or_core` dependency boundary, shellcheck |
 | `scripts/acceptance.sh` | source gate plus documented Rust/Flutter lanes and the local performance budget |
+| `scripts/check-locks.sh` | resolve every committed `Cargo.lock` with `cargo metadata --locked --offline`, so a workspace version bump that was not carried into `tools/ffmpeg-link-probe/Cargo.lock` fails here instead of in the hosted Rust lane |
 | `scripts/or_ui.py` | drive the real app by semantics and record a transcript |
 | `scripts/or_tree_outline.py` | one line per semantics node with rect and actions |
 | `scripts/packaged_drive.py` | CoreGraphics mouse/keyboard driving of the packaged app |
