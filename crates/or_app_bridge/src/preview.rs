@@ -72,14 +72,14 @@ mod desktop {
     use or_ipc::{
         ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
     };
-    use or_media::{SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
+    use or_media::{DecodeOutput, SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
         RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
         process_visual_rgba,
     };
     use or_runtime::{
-        BudgetLimits, CancellationToken, PreviewFrameRequest, PreviewFrameStep, PreviewTransport,
-        RenderSnapshot, RuntimeBudgets,
+        BudgetLimits, CancellationToken, FramePixelFormat, PreviewFrameRequest, PreviewFrameStep,
+        PreviewTransport, RenderSnapshot, RuntimeBudgets,
     };
     use std::{
         collections::{HashMap, VecDeque},
@@ -1151,6 +1151,7 @@ mod desktop {
         program: ProgramKey,
         generation: Option<u64>,
         source: String,
+        output: DecodeOutput,
     }
 
     struct VideoSessionEntry {
@@ -1167,10 +1168,55 @@ mod desktop {
             source_time: RationalTime,
             cancellation: &CancellationToken,
         ) -> Result<Option<or_media::VideoFrame>, or_media::DecodeError> {
+            self.decode_video_frame_for(
+                program,
+                generation,
+                source,
+                source_time,
+                DecodeOutput::Rgba,
+                cancellation,
+            )
+        }
+
+        /// Decodes one frame as NV12 already scaled to `size`, which skips the
+        /// RGBA conversion, the GPU upload and the readback entirely.
+        fn decode_video_frame_nv12(
+            &self,
+            program: ProgramKey,
+            generation: Option<u64>,
+            source: &MediaSourceRef,
+            source_time: RationalTime,
+            size: (u32, u32),
+            cancellation: &CancellationToken,
+        ) -> Result<Option<or_media::VideoFrame>, or_media::DecodeError> {
+            self.decode_video_frame_for(
+                program,
+                generation,
+                source,
+                source_time,
+                DecodeOutput::Nv12 {
+                    width: size.0,
+                    height: size.1,
+                },
+                cancellation,
+            )
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        fn decode_video_frame_for(
+            &self,
+            program: ProgramKey,
+            generation: Option<u64>,
+            source: &MediaSourceRef,
+            source_time: RationalTime,
+            output: DecodeOutput,
+            cancellation: &CancellationToken,
+        ) -> Result<Option<or_media::VideoFrame>, or_media::DecodeError> {
             let key = VideoSessionKey {
                 program,
                 generation,
                 source: source.uri().to_owned(),
+                output,
             };
             let entry = {
                 let mut sessions = lock(&self.video_sessions);
@@ -1187,7 +1233,7 @@ mod desktop {
                 None => VideoSessionEntry {
                     key,
                     session: media_decoder(source, self.budgets.clone())?
-                        .open_video_session(cancellation)?,
+                        .open_video_session_with_output(output, cancellation)?,
                 },
             };
             let result = entry.session.frame_at(source_time, cancellation);
@@ -1240,7 +1286,12 @@ mod desktop {
                 ));
             }
             if let Some((width, height)) = fixed_size
-                && let Some(clip) = direct_video_clip_at(program, time, (width, height))
+                && let Some(clip) =
+                    direct_video_clip_at(program, time, (width, height)).or_else(|| {
+                        matches!(output, RenderOutput::Nv12)
+                            .then(|| covers_canvas_clip_at(program, time))
+                            .flatten()
+                    })
             {
                 let offset = time.checked_sub(clip.timeline_start).map_err(|error| {
                     PreviewError::new("INVALID_TIMELINE_TIME", error.to_string())
@@ -1250,78 +1301,135 @@ mod desktop {
                 // clip walks that same span backwards.
                 let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
-                match self.decode_video_frame(
-                    program.key,
-                    runtime_generation,
-                    &clip.source,
-                    source_time,
-                    cancellation,
-                ) {
-                    Ok(Some(frame))
-                        if frame.descriptor().width() == width
-                            && frame.descriptor().height() == height
-                            && frame
-                                .pixels()
-                                .as_chunks::<4>()
-                                .0
-                                .iter()
-                                .all(|pixel| pixel[3] == u8::MAX) =>
-                    {
-                        if cancellation.is_cancelled()
-                            || expected_generation.is_some_and(|(generation, current)| {
-                                current.load(Ordering::SeqCst) != generation
-                            })
-                        {
-                            return Err(PreviewError::new(
-                                "PREVIEW_CANCELLED",
-                                "preview request was superseded",
-                            ));
-                        }
-                        if matches!(output, RenderOutput::Nv12) {
-                            // The direct path has a full-frame opaque picture and no
-                            // layers to composite. When the caller wants NV12 (the
-                            // hardware H.264 export), convert it on the GPU and read
-                            // back the two planes instead of paying a CPU YUV->NV12
-                            // swscale on the writer thread for every frame.
-                            let gpu_planes = RenderSize::new(width, height).ok().and_then(|size| {
-                                let layer =
-                                    RgbaVideoLayer::new(width, height, frame.pixels()).ok()?;
-                                renderer().ok().and_then(|renderer| {
-                                    renderer
-                                        .render_rgba_layers_nv12(snapshot, size, &[layer])
-                                        .ok()
-                                })
-                            });
-                            if let Some(planes) = gpu_planes {
-                                return Ok(Presentation {
+                if matches!(output, RenderOutput::Nv12) {
+                    let decoded = self.decode_video_frame_nv12(
+                        program.key,
+                        runtime_generation,
+                        &clip.source,
+                        source_time,
+                        (width, height),
+                        cancellation,
+                    );
+                    match decoded {
+                        Ok(Some(frame))
+                            if frame.descriptor().pixel_format() == FramePixelFormat::Nv12
+                                && frame.descriptor().width() == width
+                                && frame.descriptor().height() == height
+                                && let Some(planes) = or_render::Nv12Planes::from_contiguous(
                                     width,
                                     height,
-                                    pixels: Vec::new(),
-                                    planes: Some(planes),
-                                    error_code: None,
-                                    error_message: None,
-                                });
+                                    frame.bytes(),
+                                ) =>
+                        {
+                            if cancellation.is_cancelled()
+                                || expected_generation.is_some_and(|(generation, current)| {
+                                    current.load(Ordering::SeqCst) != generation
+                                })
+                            {
+                                return Err(PreviewError::new(
+                                    "PREVIEW_CANCELLED",
+                                    "preview request was superseded",
+                                ));
                             }
+                            return Ok(Presentation {
+                                width,
+                                height,
+                                pixels: Vec::new(),
+                                planes: Some(planes),
+                                error_code: None,
+                                error_message: None,
+                            });
                         }
-                        return Ok(Presentation {
-                            width,
-                            height,
-                            pixels: frame.pixels().to_vec(),
-                            planes: None,
-                            error_code: None,
-                            error_message: None,
-                        });
+                        Err(error) if matches!(error, or_media::DecodeError::Cancelled) => {
+                            return Err(PreviewError::new("PREVIEW_CANCELLED", error.to_string()));
+                        }
+                        Err(error) if fail_on_decode_error => {
+                            return Err(PreviewError::new(
+                                "EXPORT_MEDIA_DECODE_FAILED",
+                                error.to_string(),
+                            ));
+                        }
+                        Ok(Some(_)) | Ok(None) | Err(_) => {}
                     }
-                    Err(error) if matches!(error, or_media::DecodeError::Cancelled) => {
-                        return Err(PreviewError::new("PREVIEW_CANCELLED", error.to_string()));
+                }
+                // A rotated source refuses the NV12 decode above; the rgba path
+                // still turns it into a frame.
+                if clip.source_dimensions == Some((width, height)) {
+                    match self.decode_video_frame(
+                        program.key,
+                        runtime_generation,
+                        &clip.source,
+                        source_time,
+                        cancellation,
+                    ) {
+                        Ok(Some(frame))
+                            if frame.descriptor().width() == width
+                                && frame.descriptor().height() == height
+                                && frame
+                                    .pixels()
+                                    .as_chunks::<4>()
+                                    .0
+                                    .iter()
+                                    .all(|pixel| pixel[3] == u8::MAX) =>
+                        {
+                            if cancellation.is_cancelled()
+                                || expected_generation.is_some_and(|(generation, current)| {
+                                    current.load(Ordering::SeqCst) != generation
+                                })
+                            {
+                                return Err(PreviewError::new(
+                                    "PREVIEW_CANCELLED",
+                                    "preview request was superseded",
+                                ));
+                            }
+                            if matches!(output, RenderOutput::Nv12) {
+                                // The direct path has a full-frame opaque picture and no
+                                // layers to composite. When the caller wants NV12 (the
+                                // hardware H.264 export), convert it on the GPU and read
+                                // back the two planes instead of paying a CPU YUV->NV12
+                                // swscale on the writer thread for every frame.
+                                let gpu_planes =
+                                    RenderSize::new(width, height).ok().and_then(|size| {
+                                        let layer =
+                                            RgbaVideoLayer::new(width, height, frame.pixels())
+                                                .ok()?;
+                                        renderer().ok().and_then(|renderer| {
+                                            renderer
+                                                .render_rgba_layers_nv12(snapshot, size, &[layer])
+                                                .ok()
+                                        })
+                                    });
+                                if let Some(planes) = gpu_planes {
+                                    return Ok(Presentation {
+                                        width,
+                                        height,
+                                        pixels: Vec::new(),
+                                        planes: Some(planes),
+                                        error_code: None,
+                                        error_message: None,
+                                    });
+                                }
+                            }
+                            return Ok(Presentation {
+                                width,
+                                height,
+                                pixels: frame.pixels().to_vec(),
+                                planes: None,
+                                error_code: None,
+                                error_message: None,
+                            });
+                        }
+                        Err(error) if matches!(error, or_media::DecodeError::Cancelled) => {
+                            return Err(PreviewError::new("PREVIEW_CANCELLED", error.to_string()));
+                        }
+                        Err(error) if fail_on_decode_error => {
+                            return Err(PreviewError::new(
+                                "EXPORT_MEDIA_DECODE_FAILED",
+                                error.to_string(),
+                            ));
+                        }
+                        Ok(Some(_)) | Ok(None) | Err(_) => {}
                     }
-                    Err(error) if fail_on_decode_error => {
-                        return Err(PreviewError::new(
-                            "EXPORT_MEDIA_DECODE_FAILED",
-                            error.to_string(),
-                        ));
-                    }
-                    Ok(Some(_)) | Ok(None) | Err(_) => {}
                 }
             }
             for clip in &program.video_clips {
@@ -1467,10 +1575,11 @@ mod desktop {
                         "active text layers exceed the preview memory limit",
                     )
                 })?;
-            let mut text_pixels = Vec::with_capacity(active_text_clips.len());
+            let mut text_pixels: Vec<std::sync::Arc<[u8]>> =
+                Vec::with_capacity(active_text_clips.len());
             for clip in &active_text_clips {
                 let pixels = lock(&self.text_rasterizer)
-                    .rasterize(&clip.text, clip.formatting, width, height)
+                    .rasterize_cached(&clip.text, clip.formatting, width, height)
                     .map_err(|error| PreviewError::new("TEXT_RENDER_FAILED", error.to_string()))?;
                 let transitions = clip_transitions(
                     time,
@@ -1496,11 +1605,13 @@ mod desktop {
                                 "active video and text effects exceed the preview memory limit",
                             )
                         })?;
-                    processed
+                    Arc::from(processed)
                 };
                 text_pixels.push(processed);
             }
-            debug_assert!(text_pixels.iter().map(Vec::len).sum::<usize>() <= text_bytes);
+            debug_assert!(
+                text_pixels.iter().map(|pixels| pixels.len()).sum::<usize>() <= text_bytes
+            );
             for (clip, pixels) in active_text_clips.iter().zip(&text_pixels) {
                 layers.push(
                     RgbaVideoLayer::new(width, height, pixels)
@@ -1807,6 +1918,17 @@ mod desktop {
         time: RationalTime,
         output_size: (u32, u32),
     ) -> Option<&VideoClip> {
+        let clip = covers_canvas_clip_at(program, time)?;
+        if clip.source_dimensions != Some(output_size) {
+            return None;
+        }
+        Some(clip)
+    }
+
+    /// The clip that fills the whole canvas with no compositing work, ignoring
+    /// whether its source pixels already match the output size. The NV12 direct
+    /// path scales while decoding, so it can serve any source size.
+    fn covers_canvas_clip_at(program: &PreviewProgram, time: RationalTime) -> Option<&VideoClip> {
         let active = |start: RationalTime, duration: RationalTime| {
             start
                 .checked_add(duration)
@@ -1825,7 +1947,6 @@ mod desktop {
             .filter(|clip| active(clip.timeline_start, clip.duration));
         let clip = video_clips.next()?;
         if video_clips.next().is_some()
-            || clip.source_dimensions != Some(output_size)
             || clip.transform != Transform::IDENTITY
             || clip.crop != Crop::NONE
             || clip.opacity != Opacity::OPAQUE
@@ -2610,31 +2731,30 @@ mod desktop {
         let mut audio_cursor = 0_u64;
         job.report_progress(0, frame_count);
 
-        // Rendering a frame — decode, GPU composite, readback — and writing one —
-        // colour conversion, encode, mux — share no state, so the renderer runs a
-        // bounded number of frames ahead of the writer. The GPU and the decoder work
-        // while the CPU converts and encodes, instead of each waiting out the other.
-        // Frames still reach the writer in order, and audio blocks are still written
-        // by this thread between them, so the file is the one a frame-at-a-time loop
-        // produces.
-        let channel = std::sync::mpsc::sync_channel(EXPORT_RENDER_AHEAD);
+        // Rendering a frame and writing one share no state, so the renderer runs
+        // a bounded number of frames ahead of the writer: the encoder turns frame
+        // N into packets while the renderer decodes and composites N+1, instead of
+        // the two halves taking turns. Frames still reach the writer in index
+        // order, and audio blocks are still written by this thread between them,
+        // so the file is the one a frame-at-a-time loop produces.
+        let render_output = if media_profile == or_media::FfmpegExportProfile::Mp4H264Aac {
+            RenderOutput::Nv12
+        } else {
+            RenderOutput::Packed
+        };
         let written = std::thread::scope(|scope| -> Result<(), String> {
-            let (sender, receiver) = channel;
+            let (sender, receiver) = std::sync::mpsc::sync_channel::<(
+                u64,
+                Result<ExportFrame, String>,
+            )>(EXPORT_RENDER_AHEAD);
             let render_program = Arc::clone(&program);
             let render_resources_for_render = Arc::clone(&render_resources);
-            let render_rate = frame_rate;
-            let render_sender = sender.clone();
-            let render_output = if media_profile == or_media::FfmpegExportProfile::Mp4H264Aac {
-                RenderOutput::Nv12
-            } else {
-                RenderOutput::Packed
-            };
             scope.spawn(move || {
                 for frame_index in 0..frame_count {
                     if job.is_cancelled() || cancellation.is_cancelled() {
                         return;
                     }
-                    let produced = render_rate
+                    let produced = frame_rate
                         .frame_time(frame_index)
                         .map_err(|error| error.to_string())
                         .and_then(|time| {
@@ -2651,25 +2771,25 @@ mod desktop {
                                 .map(ExportFrame::from)
                                 .map_err(|error| error.to_string())
                         });
-                    // A closed channel means the writer stopped; there is no one left
-                    // to hand this frame to.
-                    if render_sender.send(produced).is_err() {
+                    // A closed channel means the writer stopped; there is no one
+                    // left to hand this frame to.
+                    if sender.send((frame_index, produced)).is_err() {
                         return;
                     }
                 }
             });
-            drop(sender);
 
             for frame_index in 0..frame_count {
                 if job.is_cancelled() || cancellation.is_cancelled() {
                     return Err("export was cancelled".to_owned());
                 }
-                let frame = match receiver.recv() {
-                    Ok(produced) => produced?,
-                    Err(_) => {
-                        return Err("the renderer stopped before the last frame".to_owned());
-                    }
-                };
+                let (rendered_index, frame) = receiver
+                    .recv()
+                    .map_err(|_| "the renderer stopped before the last frame".to_owned())?;
+                if rendered_index != frame_index {
+                    return Err("the renderer produced frames out of order".to_owned());
+                }
+                let frame = frame?;
                 match &frame.planes {
                     Some(planes) => writer.write_video_frame_nv12(
                         planes.luma(),
@@ -4326,6 +4446,278 @@ mod desktop {
                 "OR_EXPORT_PIPELINE path={} bytes={bytes} frames={FRAMES} size=1920x1080 rate=30/1 seconds={elapsed:.3} fps={:.1}",
                 destination.display(),
                 FRAMES as f64 / elapsed.max(f64::EPSILON)
+            );
+        }
+
+        /// Local export benchmark: decodes a real file through the same program
+        /// shape the editor builds. Env knobs let one ignored test measure the
+        /// direct path, the scaled path and the text path on the same machine.
+        #[test]
+        #[ignore = "benchmark; run explicitly with OR_BENCH_* set"]
+        fn export_media_benchmark() {
+            fn env_number(name: &str, fallback: u32) -> u32 {
+                std::env::var(name)
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(fallback)
+            }
+            let source = std::env::var("OR_BENCH_SOURCE")
+                .unwrap_or_else(|_| "/tmp/or-bench/bench1080.mp4".to_owned());
+            if !std::path::Path::new(&source).exists() {
+                println!(
+                    "OR_EXPORT_BENCH skipped: fixture {source} is missing (set OR_BENCH_SOURCE)"
+                );
+                return;
+            }
+            let width = env_number("OR_BENCH_OUT_W", 1920);
+            let height = env_number("OR_BENCH_OUT_H", 1080);
+            let source_width = env_number("OR_BENCH_SRC_W", width);
+            let source_height = env_number("OR_BENCH_SRC_H", height);
+            let frames = u64::from(env_number("OR_BENCH_FRAMES", 300));
+            let with_text = std::env::var("OR_BENCH_TEXT").is_ok_and(|value| value == "1");
+            let profile = std::env::var("OR_BENCH_PROFILE").unwrap_or_else(|_| "mp4".to_owned());
+            let rate = RationalRate::new(30, 1).expect("rate");
+            let duration =
+                RationalTime::new(i64::try_from(frames).expect("frames"), 30).expect("duration");
+
+            let project = or_core::ProjectDocument::new("export benchmark");
+            let program = Arc::new(PreviewProgram {
+                canvas: None,
+                key: ProgramKey {
+                    project_id: project.id(),
+                    project_instance_id: ProjectInstanceId::generate(),
+                    revision: project.revision(),
+                },
+                frame_rate: Some(rate),
+                content_end: Some(duration),
+                video_clips: vec![VideoClip {
+                    source: MediaSourceRef::from_file_path(&source).expect("source path"),
+                    source_dimensions: Some((source_width, source_height)),
+                    timeline_start: RationalTime::ZERO,
+                    source_start: RationalTime::ZERO,
+                    duration,
+                    playback_rate: RationalRate::new(1, 1).expect("playback rate"),
+                    reversed: false,
+                    frozen: false,
+                    transform: Transform::IDENTITY,
+                    crop: Crop::NONE,
+                    opacity: Opacity::OPAQUE,
+                    effects: Vec::new(),
+                    transition_in: None,
+                    transition_out: None,
+                }],
+                text_clips: if with_text {
+                    vec![TextClip {
+                        text: "Export benchmark".to_owned(),
+                        formatting: TextFormatting::DEFAULT,
+                        timeline_start: RationalTime::ZERO,
+                        duration,
+                        transform: Transform::IDENTITY,
+                        crop: Crop::NONE,
+                        opacity: Opacity::OPAQUE,
+                        effects: Vec::new(),
+                        transition_in: None,
+                        transition_out: None,
+                    }]
+                } else {
+                    Vec::new()
+                },
+                audio_clips: Vec::new(),
+            });
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+            let directory = std::env::temp_dir().join("or-export-bench");
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            let extension = match profile.as_str() {
+                "webm" => "webm",
+                "mkv" => "mkv",
+                _ => "mp4",
+            };
+            let destination = directory.join(format!("bench.{extension}"));
+            let _ = std::fs::remove_file(&destination);
+            let export_profile = match profile.as_str() {
+                "webm" => ExportProfile::WebmVp9Opus,
+                "mkv" => ExportProfile::MatroskaFfv1PcmS16le,
+                _ => ExportProfile::Mp4H264Aac,
+            };
+
+            if std::env::var("OR_BENCH_MODE").is_ok_and(|value| value == "decode") {
+                let nv12 = std::env::var("OR_BENCH_NV12").is_ok_and(|value| value == "1");
+                let cancellation = CancellationToken::new();
+                let clip = &program.video_clips[0];
+                let started = Instant::now();
+                for frame_index in 0..frames {
+                    let time = rate.frame_time(frame_index).expect("frame time");
+                    let frame = if nv12 {
+                        render_resources
+                            .decode_video_frame_nv12(
+                                program.key,
+                                None,
+                                &clip.source,
+                                time,
+                                (width, height),
+                                &cancellation,
+                            )
+                            .expect("decode succeeds")
+                    } else {
+                        render_resources
+                            .decode_video_frame(
+                                program.key,
+                                None,
+                                &clip.source,
+                                time,
+                                &cancellation,
+                            )
+                            .expect("decode succeeds")
+                    };
+                    assert!(frame.is_some(), "the fixture has no frame at {time:?}");
+                }
+                let elapsed = started.elapsed().as_secs_f64();
+                println!(
+                    "OR_EXPORT_BENCH_DECODE source={source} frames={frames} seconds={elapsed:.3} fps={:.1}",
+                    frames as f64 / elapsed.max(f64::EPSILON)
+                );
+                return;
+            }
+
+            if std::env::var("OR_BENCH_MODE").is_ok_and(|value| value == "render") {
+                let output = if export_profile == ExportProfile::Mp4H264Aac {
+                    RenderOutput::Nv12
+                } else {
+                    RenderOutput::Packed
+                };
+                let lanes = usize::try_from(env_number("OR_BENCH_LANES", 1)).expect("lanes");
+                let started = Instant::now();
+                std::thread::scope(|scope| {
+                    for lane in 0..lanes {
+                        let program = Arc::clone(&program);
+                        let rate = rate;
+                        scope.spawn(move || {
+                            let resources = Arc::new(RenderResources {
+                                budgets: RuntimeBudgets::new(
+                                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                                    BudgetLimits::new(
+                                        AUDIO_DECODE_QUEUE_CAPACITY,
+                                        32 * 1024 * 1024,
+                                    )
+                                    .expect("audio budget"),
+                                    BudgetLimits::new(16, 256 * 1024 * 1024)
+                                        .expect("decode budget"),
+                                ),
+                                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                                video_sessions: Mutex::new(VecDeque::new()),
+                            });
+                            let cancellation = CancellationToken::new();
+                            let mut frame_index = lane as u64;
+                            while frame_index < frames {
+                                let time = rate.frame_time(frame_index).expect("frame time");
+                                resources
+                                    .render_with_size(
+                                        &program,
+                                        time,
+                                        Some((width, height)),
+                                        None,
+                                        true,
+                                        output,
+                                        &cancellation,
+                                    )
+                                    .expect("render succeeds");
+                                frame_index += lanes as u64;
+                            }
+                        });
+                    }
+                });
+                let elapsed = started.elapsed().as_secs_f64();
+                println!(
+                    "OR_EXPORT_BENCH_RENDER source={source} out={width}x{height} frames={frames} text={with_text} seconds={elapsed:.3} fps={:.1}",
+                    frames as f64 / elapsed.max(f64::EPSILON)
+                );
+                return;
+            }
+
+            if std::env::var("OR_BENCH_MODE").is_ok_and(|value| value == "encode") {
+                let media_profile = match export_profile {
+                    ExportProfile::MatroskaFfv1PcmS16le => {
+                        or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le
+                    }
+                    ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
+                    ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
+                };
+                let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
+                    &destination,
+                    media_profile,
+                    ExportQuality::Quality,
+                    width,
+                    height,
+                    rate.numerator(),
+                    rate.denominator(),
+                )
+                .expect("writer opens");
+                let luma = vec![16_u8; width as usize * height as usize];
+                let chroma = vec![128_u8; width as usize * height as usize / 2];
+                let started = Instant::now();
+                for frame_index in 0..frames {
+                    writer
+                        .write_video_frame_nv12(&luma, &chroma, width, height, frame_index)
+                        .expect("frame writes");
+                }
+                writer.finish().expect("writer finishes");
+                let elapsed = started.elapsed().as_secs_f64();
+                println!(
+                    "OR_EXPORT_BENCH_ENCODE profile={profile} out={width}x{height} frames={frames} seconds={elapsed:.3} fps={:.1}",
+                    frames as f64 / elapsed.max(f64::EPSILON)
+                );
+                return;
+            }
+
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 32).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    export_profile,
+                    ExportQuality::Quality,
+                    (width, height),
+                    frames,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+            let deadline = Instant::now() + Duration::from_secs(1800);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(20));
+            }
+            lock(&outcome)
+                .take()
+                .expect("the export ran")
+                .expect("the export succeeded");
+            jobs.shutdown();
+            let elapsed = started.elapsed().as_secs_f64();
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            println!(
+                "OR_EXPORT_BENCH profile={profile} source={source} out={width}x{height} frames={frames} text={with_text} bytes={bytes} seconds={elapsed:.3} fps={:.1}",
+                frames as f64 / elapsed.max(f64::EPSILON)
             );
         }
     }

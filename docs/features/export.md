@@ -111,6 +111,27 @@ decoded video were bit-identical to the pre-NV12 export. Exporting with the
 preview playing completed in 129 s; the pre-fix build failed immediately with
 `runtime media budget exceeded`.
 
+On 2026-11-04 the same 1080p NV12 path was measured on an Apple M5 (10 logical
+cores, 8 GPU cores) with the export fixtures in `preview::desktop::export_pipeline_tests`
+(`OR_BENCH_SOURCE`, `OR_BENCH_FRAMES`, `OR_BENCH_TEXT`, release build,
+`DYLD_FALLBACK_LIBRARY_PATH` set to the pinned FFmpeg prefix):
+
+- 1080p source → 1080p MP4, 300 frames: **1.3 s, 227–231 fps** across repeated runs.
+- 4K source → 1080p MP4, 150 frames: **2.7 s, 54.9 fps**.
+- 1080p source + one text clip → 1080p MP4, 300 frames: **4.0–4.2 s, 72–75 fps**.
+- Ceiling rows on the same host: VideoToolbox H.264 blank frames 3.55 ms/frame
+  (279.8 fps), NV12 decode 1.48 ms/frame (674.8 fps).
+
+These are synthetic fixtures, not a full project export, and they describe this
+host only. What they establish is where the pipeline is bound: a single-video
+export is limited by the hardware encoder, so adding render threads or extra
+cores does not move it, while a composited export is limited by the per-frame
+GPU upload and readback. Two measured dead ends are recorded here so they are
+not retried: concurrent render lanes do not scale (one shared `wgpu` device
+serialises every frame at `poll(PollType::Wait)`; 2 and 4 lanes measured slower
+than one), and the VideoToolbox `prio_speed`/`realtime` options leave throughput
+unchanged or halve it.
+
 `scripts/ui_scenarios/export-encode.json` drives the dialog + a real encode and
 waits for `Export complete`; the produced file lands in
 `apps/or_app/build/ui-harness/artifacts/replacements/export.mp4`. On 2026-10-29

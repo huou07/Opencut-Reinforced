@@ -8,8 +8,8 @@ mod snapshot_queue;
 #[cfg(unix)]
 pub use decoder::SeekableMediaIoCapability;
 pub use decoder::{
-    AudioChunk, DecodeError, SoftwareMediaDecoder, VideoDecodeSession, VideoDecodeSessionMetrics,
-    VideoFrame,
+    AudioChunk, DecodeError, DecodeOutput, SoftwareMediaDecoder, VideoDecodeSession,
+    VideoDecodeSessionMetrics, VideoFrame,
 };
 pub use encoder::{
     ExportEncodeError, FfmpegExportProfile, FfmpegExportWriter, FfmpegSoftwareExportWriter,

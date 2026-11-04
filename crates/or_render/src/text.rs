@@ -23,10 +23,30 @@ const BE_VIETNAM_PRO_SEMIBOLD: &[u8] =
 const BE_VIETNAM_PRO_BOLD: &[u8] =
     include_bytes!("../assets/fonts/bevietnampro/BeVietnamPro-Bold.ttf");
 
+/// How many rasterised text canvases stay warm. A title or a caption block is
+/// usually identical for many consecutive frames, so re-shaping and redrawing
+/// it every frame was pure waste in preview and export.
+const TEXT_CACHE_CAPACITY: usize = 8;
+
+#[derive(Clone, PartialEq, Eq)]
+struct TextCacheKey {
+    text: String,
+    spans: Vec<(usize, usize, TextColor)>,
+    formatting: TextFormatting,
+    width: u32,
+    height: u32,
+}
+
+struct CachedTextLayer {
+    key: TextCacheKey,
+    pixels: Arc<[u8]>,
+}
+
 /// CPU text shaping and rasterization using only the bundled Inter faces.
 pub struct TextRasterizer {
     font_system: FontSystem,
     swash_cache: SwashCache,
+    cache: Vec<CachedTextLayer>,
 }
 
 impl TextRasterizer {
@@ -50,6 +70,7 @@ impl TextRasterizer {
         Self {
             font_system: FontSystem::new_with_locale_and_db("en-US".to_owned(), font_db),
             swash_cache: SwashCache::new(),
+            cache: Vec::new(),
         }
     }
 
@@ -62,6 +83,53 @@ impl TextRasterizer {
         height: u32,
     ) -> Result<Vec<u8>, TextRasterError> {
         self.rasterize_spans(text, &[], formatting, width, height)
+    }
+
+    /// Rasterizes one text layer, reusing the pixels when the same layer was
+    /// drawn before. The canvas is only drawn once per distinct appearance, so
+    /// a held title or caption costs a lookup instead of a full glyph pass.
+    pub fn rasterize_cached(
+        &mut self,
+        text: &str,
+        formatting: TextFormatting,
+        width: u32,
+        height: u32,
+    ) -> Result<Arc<[u8]>, TextRasterError> {
+        self.rasterize_spans_cached(text, &[], formatting, width, height)
+    }
+
+    /// The multi-colour form of [`Self::rasterize_cached`].
+    pub fn rasterize_spans_cached(
+        &mut self,
+        text: &str,
+        spans: &[(usize, usize, TextColor)],
+        formatting: TextFormatting,
+        width: u32,
+        height: u32,
+    ) -> Result<Arc<[u8]>, TextRasterError> {
+        let key = TextCacheKey {
+            text: text.to_owned(),
+            spans: spans.to_vec(),
+            formatting,
+            width,
+            height,
+        };
+        if let Some(index) = self.cache.iter().position(|entry| entry.key == key) {
+            let entry = self.cache.remove(index);
+            let pixels = Arc::clone(&entry.pixels);
+            self.cache.push(entry);
+            return Ok(pixels);
+        }
+        let pixels: Arc<[u8]> =
+            self.rasterize_spans_uncached(text, spans, formatting, width, height)?.into();
+        self.cache.push(CachedTextLayer {
+            key,
+            pixels: Arc::clone(&pixels),
+        });
+        while self.cache.len() > TEXT_CACHE_CAPACITY {
+            self.cache.remove(0);
+        }
+        Ok(pixels)
     }
 
     /// Measures shaped text without rasterising it.
@@ -117,6 +185,17 @@ impl TextRasterizer {
     /// identical to [`Self::rasterize`] — this is the same engine with more than one
     /// colour, not a second text path.
     pub fn rasterize_spans(
+        &mut self,
+        text: &str,
+        spans: &[(usize, usize, TextColor)],
+        formatting: TextFormatting,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>, TextRasterError> {
+        self.rasterize_spans_uncached(text, spans, formatting, width, height)
+    }
+
+    fn rasterize_spans_uncached(
         &mut self,
         text: &str,
         spans: &[(usize, usize, TextColor)],
