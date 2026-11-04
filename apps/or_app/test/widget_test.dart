@@ -7076,6 +7076,79 @@ void main() {
     expect(gateway.lastPreviewSpeed, 2);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the first-run panel explains the product and can be dismissed', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    await _mount(tester);
+    // The dismissal flag is read asynchronously, and a failed read (there is no
+    // support directory in a widget test) still resolves to "show the panel".
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    // Nothing has been stored for this user, so the one explanation of how the
+    // app treats their files is on screen.
+    expect(find.byKey(const ValueKey('home-welcome')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-welcome-new')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-welcome-library')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-welcome-dismiss')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-welcome')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the library is reachable from Home and opens its tabs', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    await _mount(tester);
+
+    await tester.tap(find.byKey(const ValueKey('home-library')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('library-tabs')), findsOneWidget);
+    expect(find.byKey(const ValueKey('nav-library')), findsOneWidget);
+    for (final tab in ['templates', 'text', 'sound', 'guide']) {
+      expect(find.byKey(ValueKey('library-tab-$tab')), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a template creates a project with its canvas and starter text', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-template-demo';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    await tester.tap(find.byKey(const ValueKey('home-library')));
+    await tester.pumpAndSettle();
+    final card = find.byKey(
+      const ValueKey('library-template-use-vertical-short'),
+    );
+    await tester.scrollUntilVisible(
+      card,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    // A template already knows its frame rate, so the dialog asks for a name
+    // only: a fresh user is not asked to answer a question the template can.
+    expect(find.byKey(const ValueKey('new-project-name')), findsOneWidget);
+    expect(find.byKey(const ValueKey('new-project-frame-rate')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastCreateName, 'Vertical short');
+    expect(gateway.lastSequenceCanvas, const ProjectSequenceCanvas(1080, 1920));
+    expect(gateway.insertTimelineTextClipCalls, greaterThan(0));
+    expect(gateway.lastTextContent?.kind, ProjectTimelineClipContentKind.text);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {

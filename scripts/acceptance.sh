@@ -60,6 +60,20 @@ if (( run_rc == 0 )); then
   covered_gates+=("source-integrity")
 fi
 
+# Every committed lock file must resolve without a write, because a hosted job
+# runs the link probe with `--locked`. A version bump in one workspace that is
+# not carried into `tools/ffmpeg-link-probe/Cargo.lock` fails there and nowhere
+# else, so the gate resolves each lock here instead.
+run 'Lock files resolve without a write' \
+  bash scripts/check-locks.sh
+
+# The hosted Rust lane runs rustfmt and clippy with `-D warnings` before the
+# tests; running neither locally is how a duplicated attribute reached CI.
+run 'Rust formatting' \
+  cargo fmt --all -- --check
+run 'Rust clippy' \
+  cargo clippy --workspace --all-targets --locked -- -D warnings
+
 # The documented local Rust lanes.
 run 'Rust core and CLI tests' \
   cargo test -p or_core -p or_cli --locked
@@ -132,6 +146,11 @@ if command -v flutter >/dev/null 2>&1; then
   # UNVERIFIED with the reason instead of leaving a permanently red gate. The
   # classification is deliberately narrow. It applies only when the run produced
   # no test progress at all, so a suite that starts and then fails is still FAIL.
+  # The hosted Flutter lane fails on a formatting diff before it runs a single
+  # test, and an editor that reformats on save hides that locally.
+  run 'Dart formatting' \
+    bash -c 'cd apps/or_app && dart format --output=none --set-exit-if-changed .'
+
   printf '\n== Flutter widget tests (fake gateway) ==\n'
   out=$(mktemp)
   rc=0

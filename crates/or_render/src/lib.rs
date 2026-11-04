@@ -11,7 +11,11 @@ use or_runtime::{
     FrameAccess, FrameColorInfo, FrameDescriptor, FrameMemoryDomain, FramePixelFormat, FrameTiming,
     RenderSnapshot,
 };
-use std::{error::Error, fmt, sync::mpsc};
+use std::{
+    error::Error,
+    fmt,
+    sync::{Mutex, mpsc},
+};
 use wgpu::util::DeviceExt;
 
 /// The exact upstream wgpu version used by this render foundation.
@@ -287,6 +291,14 @@ pub struct RenderDevice {
     nv12_bind_group_layout: wgpu::BindGroupLayout,
     nv12_luma_pipeline: wgpu::RenderPipeline,
     nv12_chroma_pipeline: wgpu::RenderPipeline,
+    /// Reusable NV12 targets and readback buffer for the last picture size.
+    ///
+    /// An export renders hundreds of frames at one size. Creating two textures
+    /// and one staging buffer per frame, then waiting on the GPU twice to read
+    /// them back, spent more time in bookkeeping than in the colour conversion.
+    /// One entry keyed by size keeps a delivery export's steady state to a
+    /// single submit and a single wait per frame.
+    nv12_scratch: Mutex<Option<Nv12Scratch>>,
     adapter_info: RenderAdapterInfo,
     limits: wgpu::Limits,
 }
@@ -617,6 +629,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             nv12_bind_group_layout,
             nv12_luma_pipeline,
             nv12_chroma_pipeline,
+            nv12_scratch: Mutex::new(None),
             adapter_info: RenderAdapterInfo {
                 name: adapter_info.name,
                 driver: adapter_info.driver,
@@ -773,35 +786,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
         let (chroma_width, chroma_height) = (width / 2, height / 2);
 
-        let luma_target = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("or_render.nv12_luma"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let chroma_target = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("or_render.nv12_chroma"),
-            size: wgpu::Extent3d {
-                width: chroma_width,
-                height: chroma_height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rg8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-
         let source_view = frame
             .target
             .texture
@@ -834,91 +818,59 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             ],
         });
 
-        for (pipeline, view) in [
-            (
-                &self.nv12_luma_pipeline,
-                &luma_target.create_view(&wgpu::TextureViewDescriptor::default()),
-            ),
-            (
-                &self.nv12_chroma_pipeline,
-                &chroma_target.create_view(&wgpu::TextureViewDescriptor::default()),
-            ),
-        ] {
-            let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("or_render.nv12_encoder"),
-                });
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("or_render.nv12_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-                pass.set_pipeline(pipeline);
-                pass.set_bind_group(0, &bind_group, &[]);
-                pass.draw(0..3, 0..1);
-            }
-            self.queue.submit(Some(encoder.finish()));
+        let mut slot = self
+            .nv12_scratch
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot.as_ref().is_none_or(|scratch| scratch.size != size) {
+            // A size change is a new picture, not a new export: replacing the
+            // entry is cheaper than carrying a pool nobody asked for.
+            *slot = Some(Nv12Scratch::new(&self.device, size)?);
         }
+        let scratch = slot.as_ref().expect("the NV12 scratch was just built");
 
-        let luma = self.read_plane(&luma_target, width, height, 1)?;
-        let chroma = self.read_plane(&chroma_target, chroma_width, chroma_height, 2)?;
-        Ok(Nv12Planes {
-            width,
-            height,
-            luma,
-            chroma,
-        })
-    }
-
-    /// Copies one plane texture into a tightly-packed CPU buffer.
-    fn read_plane(
-        &self,
-        texture: &wgpu::Texture,
-        width: u32,
-        height: u32,
-        bytes_per_pixel: u32,
-    ) -> Result<Vec<u8>, RenderError> {
-        let unpadded_bytes_per_row = width
-            .checked_mul(bytes_per_pixel)
-            .ok_or(RenderError::ReadbackSizeOverflow)?;
-        let padded_bytes_per_row = align_to_copy_row(unpadded_bytes_per_row)?;
-        let buffer_size = u64::from(padded_bytes_per_row)
-            .checked_mul(u64::from(height))
-            .ok_or(RenderError::ReadbackSizeOverflow)?;
-        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("or_render.nv12_readback"),
-            size: buffer_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        // One encoder, one submit, one wait. Each of the two planes used to cost
+        // its own submit and its own device poll, which put the render thread to
+        // sleep twice per frame for work the GPU had already finished.
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("or_render.nv12_readback_encoder"),
+                label: Some("or_render.nv12_encoder"),
             });
+        for (pipeline, view) in [
+            (&self.nv12_luma_pipeline, &scratch.luma_view),
+            (&self.nv12_chroma_pipeline, &scratch.chroma_view),
+        ] {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("or_render.nv12_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture,
+                texture: &scratch.luma,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &staging_buffer,
+                buffer: &scratch.buffer,
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(padded_bytes_per_row),
+                    bytes_per_row: Some(scratch.luma_row_bytes),
                     rows_per_image: Some(height),
                 },
             },
@@ -928,9 +880,30 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 depth_or_array_layers: 1,
             },
         );
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &scratch.chroma,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &scratch.buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: scratch.chroma_offset,
+                    bytes_per_row: Some(scratch.chroma_row_bytes),
+                    rows_per_image: Some(chroma_height),
+                },
+            },
+            wgpu::Extent3d {
+                width: chroma_width,
+                height: chroma_height,
+                depth_or_array_layers: 1,
+            },
+        );
         self.queue.submit(Some(encoder.finish()));
 
-        let slice = staging_buffer.slice(..);
+        let slice = scratch.buffer.slice(..);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result.map_err(|error| error.to_string()));
@@ -947,19 +920,152 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             })?
             .map_err(|message| RenderError::ReadbackMap { message })?;
 
-        let mapped = slice.get_mapped_range();
-        let row_bytes = usize::try_from(unpadded_bytes_per_row)
-            .map_err(|_| RenderError::ReadbackSizeOverflow)?;
-        let padded_row_bytes =
-            usize::try_from(padded_bytes_per_row).map_err(|_| RenderError::ReadbackSizeOverflow)?;
-        let mut pixels = Vec::with_capacity(row_bytes * height as usize);
-        for row in mapped.chunks_exact(padded_row_bytes) {
-            pixels.extend_from_slice(&row[..row_bytes]);
-        }
-        drop(mapped);
-        staging_buffer.unmap();
-        Ok(pixels)
+        let (luma, chroma) = {
+            let mapped = slice.get_mapped_range();
+            let luma = repack_plane(
+                &mapped,
+                scratch.luma_row_bytes,
+                usize::try_from(width).map_err(|_| RenderError::ReadbackSizeOverflow)?,
+                usize::try_from(height).map_err(|_| RenderError::ReadbackSizeOverflow)?,
+            )?;
+            let chroma = repack_plane(
+                &mapped[usize::try_from(scratch.chroma_offset)
+                    .map_err(|_| RenderError::ReadbackSizeOverflow)?..],
+                scratch.chroma_row_bytes,
+                usize::try_from(chroma_width).map_err(|_| RenderError::ReadbackSizeOverflow)? * 2,
+                usize::try_from(chroma_height).map_err(|_| RenderError::ReadbackSizeOverflow)?,
+            )?;
+            (luma, chroma)
+        };
+        // Unmapping is a property of the buffer, not of this frame's slice, and
+        // the next readback maps the same range again.
+        scratch.buffer.unmap();
+        Ok(Nv12Planes {
+            width,
+            height,
+            luma,
+            chroma,
+        })
     }
+}
+
+/// The reusable NV12 render targets and readback buffer for one picture size.
+///
+/// Textures and the staging buffer outlive a frame: an export renders hundreds
+/// of frames at one size, and re-creating three GPU allocations per frame cost
+/// more than the colour conversion they served.
+struct Nv12Scratch {
+    size: RenderSize,
+    luma: wgpu::Texture,
+    luma_view: wgpu::TextureView,
+    chroma: wgpu::Texture,
+    chroma_view: wgpu::TextureView,
+    /// Luma rows, padded to the copy row alignment the backend requires.
+    luma_row_bytes: u32,
+    /// Chroma rows, padded the same way.
+    chroma_row_bytes: u32,
+    /// Where the chroma plane starts in `buffer`; copy offsets must be aligned.
+    chroma_offset: u64,
+    buffer: wgpu::Buffer,
+}
+
+impl Nv12Scratch {
+    fn new(device: &wgpu::Device, size: RenderSize) -> Result<Self, RenderError> {
+        let width = size.width();
+        let height = size.height();
+        let (chroma_width, chroma_height) = (width / 2, height / 2);
+        let luma_row_bytes = align_to_copy_row(
+            width
+                .checked_mul(1)
+                .ok_or(RenderError::ReadbackSizeOverflow)?,
+        )?;
+        let chroma_row_bytes = align_to_copy_row(
+            chroma_width
+                .checked_mul(2)
+                .ok_or(RenderError::ReadbackSizeOverflow)?,
+        )?;
+        let luma_bytes = u64::from(luma_row_bytes)
+            .checked_mul(u64::from(height))
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+        let chroma_bytes = u64::from(chroma_row_bytes)
+            .checked_mul(u64::from(chroma_height))
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+        // A texture-to-buffer copy may only start at a 256-byte boundary, so the
+        // chroma plane begins on the next one after the luma plane.
+        let chroma_offset = luma_bytes.div_ceil(256) * 256;
+        let buffer_size = chroma_offset
+            .checked_add(chroma_bytes)
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+
+        let luma = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.nv12_luma"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let chroma = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.nv12_chroma"),
+            size: wgpu::Extent3d {
+                width: chroma_width,
+                height: chroma_height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let luma_view = luma.create_view(&wgpu::TextureViewDescriptor::default());
+        let chroma_view = chroma.create_view(&wgpu::TextureViewDescriptor::default());
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("or_render.nv12_readback"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        Ok(Self {
+            size,
+            luma,
+            luma_view,
+            chroma,
+            chroma_view,
+            luma_row_bytes,
+            chroma_row_bytes,
+            chroma_offset,
+            buffer,
+        })
+    }
+}
+
+/// Copies one padded plane out of a mapped readback buffer.
+///
+/// The backend aligns every copy row, so a tight plane is the leading
+/// `usable_row_bytes` of each `row_bytes`-wide row.
+fn repack_plane(
+    mapped: &[u8],
+    row_bytes: u32,
+    usable_row_bytes: usize,
+    rows: usize,
+) -> Result<Vec<u8>, RenderError> {
+    let row_bytes = usize::try_from(row_bytes).map_err(|_| RenderError::ReadbackSizeOverflow)?;
+    let plane_bytes = usable_row_bytes
+        .checked_mul(rows)
+        .ok_or(RenderError::ReadbackSizeOverflow)?;
+    let mut pixels = Vec::with_capacity(plane_bytes);
+    for row in mapped.chunks_exact(row_bytes).take(rows) {
+        pixels.extend_from_slice(&row[..usable_row_bytes]);
+    }
+    Ok(pixels)
 }
 
 /// One NV12 picture: tightly packed luma at full resolution and interleaved

@@ -13,6 +13,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
+import '../library/project_templates.dart';
+import '../library/sound_library.dart';
+import '../library/text_presets.dart';
 import '../design/or_spacing.dart';
 import '../project/export_profile.dart';
 import '../support/host_platform.dart';
@@ -29,7 +32,9 @@ import '../production/media_preview_plan.dart';
 import '../production/media_preview_queue.dart';
 import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
+import '../production/welcome_store.dart';
 import '../screens/editor_shell_preview_screen.dart';
+import '../screens/library_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
 import '../screens/settings_screen.dart';
@@ -100,6 +105,8 @@ class AppShell extends StatefulWidget {
     required this.projectFilePicker,
     required this.recentProjectStore,
     this.audioCleanupDirectory,
+    this.soundLibraryDirectory,
+    this.welcomeStore,
     this.assistantController,
   });
 
@@ -110,6 +117,13 @@ class AppShell extends StatefulWidget {
 
   /// Where cleaned audio is written. Injectable so a test does not need a plugin.
   final Future<Directory> Function()? audioCleanupDirectory;
+
+  /// Where generated library sounds are written before import. Injectable for
+  /// the same reason as [audioCleanupDirectory].
+  final Future<Directory> Function()? soundLibraryDirectory;
+
+  /// Remembers that the first-run panel was dismissed.
+  final WelcomeStore? welcomeStore;
 
   /// Injectable so widget tests never spawn a harness process.
   final AssistantController? assistantController;
@@ -207,6 +221,11 @@ class _AppShellState extends State<AppShell> {
   bool _assistantSyncScheduled = false;
   AppDestination _destination = AppDestination.home;
   SettingsSection _settingsInitialSection = SettingsSection.appearance;
+  LibraryTab _libraryInitialTab = LibraryTab.templates;
+  bool _welcomeLoaded = false;
+  bool _welcomeDismissed = false;
+  Timer? _welcomeDeadline;
+  late final WelcomeStore _welcomeStore = widget.welcomeStore ?? WelcomeStore();
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
@@ -297,6 +316,7 @@ class _AppShellState extends State<AppShell> {
       onExitRequested: _onExitRequested,
     );
     unawaited(_loadRecentProjects());
+    unawaited(_loadWelcome());
   }
 
   /// The last motion clip the Motion panel put on the timeline. Owned here so
@@ -305,6 +325,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _welcomeDeadline?.cancel();
     _motionInsertLog.dispose();
     _mediaPreviewUpdates.dispose();
     FocusManager.instance.removeListener(_handleFocusChange);
@@ -721,6 +742,10 @@ class _AppShellState extends State<AppShell> {
       onOpenRecentProject: _openRecentProject,
       onOpenProjects: () => _select(AppDestination.projects),
       onOpenResources: _openResources,
+      onOpenLibrary: _openLibrary,
+      onOpenGuide: _openGuide,
+      showWelcome: _welcomeLoaded && !_welcomeDismissed,
+      onDismissWelcome: _dismissWelcome,
     ),
     AppDestination.projects => ProjectsScreen(
       project: _activeProject,
@@ -735,6 +760,15 @@ class _AppShellState extends State<AppShell> {
       onRenameProject: _renameProject,
       onSaveProject: _saveProject,
       onCloseProject: _closeProject,
+    ),
+    AppDestination.library => LibraryScreen(
+      canPickProjects: widget.projectFilePicker.isSupported,
+      projectOpen: _activeSession != null,
+      onUseTemplate: _createProjectFromTemplate,
+      onAddTextPreset: _addTextPresetFromLibrary,
+      onAddSoundEffect: _addSoundEffectFromLibrary,
+      onOpenEditor: _openWorkspace,
+      initialTab: _libraryInitialTab,
     ),
     AppDestination.settings => SettingsScreen(
       gateway: widget.gateway,
@@ -879,12 +913,69 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  void _openLibrary() {
+    setState(() {
+      _libraryInitialTab = LibraryTab.templates;
+      _destination = AppDestination.library;
+    });
+  }
+
+  void _openGuide() {
+    setState(() {
+      _libraryInitialTab = LibraryTab.guide;
+      _destination = AppDestination.library;
+    });
+  }
+
+  /// Reads the dismissal flag. A failure here shows the panel: a preference
+  /// file that cannot be read must not hide the only explanation a first-run
+  /// user gets.
+  Future<void> _loadWelcome() async {
+    var dismissed = false;
+    // A read that stalls must not swallow the panel: a first-run user would be
+    // left with a bare home screen and no explanation. After this window the
+    // panel shows anyway, and a resolved dismissal still hides it.
+    _welcomeDeadline = Timer(const Duration(milliseconds: 600), () {
+      if (!mounted || _welcomeLoaded) return;
+      setState(() => _welcomeLoaded = true);
+    });
+    try {
+      dismissed = (await _welcomeStore.load()).dismissed;
+    } catch (_) {
+      dismissed = false;
+    }
+    _welcomeDeadline?.cancel();
+    _welcomeDeadline = null;
+    if (!mounted) return;
+    setState(() {
+      _welcomeDismissed = dismissed;
+      _welcomeLoaded = true;
+    });
+  }
+
+  /// Hides the first-run panel and remembers it. A failed write is ignored on
+  /// purpose: the panel has already closed, and asking the user to deal with a
+  /// preference file to see the app would be a worse outcome than showing the
+  /// panel once more on the next start.
+  Future<void> _dismissWelcome() async {
+    if (!mounted) return;
+    setState(() => _welcomeDismissed = true);
+    try {
+      await _welcomeStore.save(const WelcomeState(dismissed: true));
+    } catch (_) {
+      // Ignored on purpose: the panel has already closed and the next start
+      // shows it once more, which costs less than an error about a pref.
+    }
+  }
+
   Future<void> _openCommandPalette() => showOrCommandPalette(
     context,
     _select,
     actions: [
       CommandPaletteAction(label: 'New Project', onSelected: _createProject),
       CommandPaletteAction(label: 'Open Project', onSelected: _openProject),
+      CommandPaletteAction(label: 'Open Library', onSelected: _openLibrary),
+      CommandPaletteAction(label: 'Open Guide', onSelected: _openGuide),
       if (_activeSession != null) ...[
         CommandPaletteAction(label: 'Save Project', onSelected: _saveProject),
         CommandPaletteAction(
@@ -1345,12 +1436,19 @@ class _AppShellState extends State<AppShell> {
     if (_activeSession != null) _select(AppDestination.editorPreview);
   }
 
-  Future<void> _createProject() async {
+  Future<void> _createProject({ProjectTemplate? template}) async {
     if (!_checkFileLifecycleAvailable()) return;
     if (_busy) return;
     setState(() => _busy = true);
+    // Starter text is placed after this action releases `_busy`: the timeline
+    // commands refuse to run while another action owns the project, so placing
+    // them inside the try would silently drop every template overlay.
+    var startingOverlays = false;
     try {
-      final request = await _askProjectName();
+      final request = await _askProjectName(
+        initialName: template?.suggestedName ?? '',
+        showFrameRate: template == null,
+      );
       if (request == null || !mounted) return;
       final name = request.name;
       final selectedPath = await widget.projectFilePicker.saveProjectPath(
@@ -1377,14 +1475,20 @@ class _AppShellState extends State<AppShell> {
       final session = await widget.projectGateway.createProject(path, name);
       // Set the chosen rate before the workspace loads so the first summary,
       // timeline fetch and preview already agree on it, and creation does not
-      // trigger a second refresh cycle.
-      await _applyInitialFrameRate(session, request.frameRate);
+      // trigger a second refresh cycle. A template carries its own rate, so a
+      // template project never asks for one.
+      await _applyInitialFrameRate(
+        session,
+        request.frameRate ?? template?.frameRate,
+      );
+      if (template != null) await _applyTemplateCanvas(session, template);
       final syncNotice = await _syncNotice(path);
       await _startProject(
         session,
         path,
         notice: combineNotices(resolvedRecovery.notice, syncNotice),
       );
+      startingOverlays = template != null;
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
     } on ProjectSafStorageException catch (error) {
@@ -1393,6 +1497,9 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('The new project could not be created.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+    if (startingOverlays && template != null) {
+      await _insertTemplateOverlays(template);
     }
   }
 
@@ -1418,6 +1525,189 @@ class _AppShellState extends State<AppShell> {
     } on ProjectGatewayException catch (error) {
       _showProjectError(error);
     }
+  }
+
+  Future<void> _createProjectFromTemplate(ProjectTemplate template) =>
+      _createProject(template: template);
+
+  /// Applies the template's canvas through the same validated command the
+  /// Viewer uses, so a project's canvas is set exactly once, before the
+  /// workspace reads it.
+  Future<void> _applyTemplateCanvas(
+    ProjectSessionHandle session,
+    ProjectTemplate template,
+  ) async {
+    try {
+      final current = await widget.projectGateway.summary(session);
+      final result = await widget.projectGateway.setTimelineSequenceCanvas(
+        session,
+        current,
+        template.canvas,
+      );
+      if (!result.succeeded && result.message.isNotEmpty && mounted) {
+        _showUnavailable(result.message);
+      }
+    } on ProjectGatewayException catch (error) {
+      _showProjectError(error);
+    }
+  }
+
+  /// Places a template's starter text on the timeline.
+  ///
+  /// The template contributes layout and words, never a second editing path:
+  /// every clip goes through the ordinary insert command, so undo, overlap
+  /// checks and the timeline refresh behave as they do for hand-placed text.
+  Future<void> _insertTemplateOverlays(ProjectTemplate template) async {
+    var pair = await _ensureTextTrack();
+    var placed = 0;
+    for (final overlay in template.overlays) {
+      if (pair == null) break;
+      final preset = textPresetById(overlay.presetId);
+      if (preset == null) continue;
+      final updated = await _insertTimelineTextClip(
+        pair.$1,
+        pair.$2,
+        overlay.start,
+        overlay.duration,
+        ProjectTimelineTextContent(
+          kind: ProjectTimelineClipContentKind.text,
+          text: overlay.text,
+          formatting: preset.formatting,
+        ),
+      );
+      if (updated == null) break;
+      placed++;
+      final track = _firstTextTrack(_timelineTracks?.items ?? const []);
+      pair = track == null ? null : (updated, track);
+    }
+    if (!mounted || placed == 0) return;
+    setState(
+      () => _projectNotice =
+          '${template.name}: $placed starter '
+          '${placed == 1 ? 'text clip' : 'text clips'} placed. '
+          'Drag them where you want, or retype the words.',
+    );
+  }
+
+  ProjectTimelineTrack? _firstTextTrack(Iterable<ProjectTimelineTrack> tracks) {
+    for (final track in tracks) {
+      if (track.kind == ProjectTimelineTrackKind.text && !track.state.locked) {
+        return track;
+      }
+    }
+    return null;
+  }
+
+  /// Finds a text track, adding one only when the project has none that can
+  /// accept a clip.
+  Future<(ProjectReadModel, ProjectTimelineTrack)?> _ensureTextTrack() async {
+    final current = _activeProject;
+    if (current == null) return null;
+    final existing = _firstTextTrack(_timelineTracks?.items ?? const []);
+    if (existing != null) return (current, existing);
+    final added = await _ensureTimelineTrack(ProjectTimelineTrackKind.text);
+    if (added == null) return null;
+    final track = _firstTextTrack(added.$2.items);
+    return track == null ? null : (added.$1, track);
+  }
+
+  /// Adds one library text look at the end of the timeline.
+  Future<void> _addTextPresetFromLibrary(TextPreset preset) async {
+    final session = _activeSession;
+    if (session == null || _activeProject == null) return;
+    if (_busy) {
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then try again.',
+      );
+      return;
+    }
+    final pair = await _ensureTextTrack();
+    if (pair == null) return;
+    final tracks = _timelineTracks;
+    final start = tracks == null
+        ? ProjectRationalTime(BigInt.zero, 1)
+        : await _projectContentEnd(session, pair.$1, tracks);
+    final updated = await _insertTimelineTextClip(
+      pair.$1,
+      pair.$2,
+      start,
+      ProjectRationalTime(BigInt.from(3), 1),
+      ProjectTimelineTextContent(
+        kind: ProjectTimelineClipContentKind.text,
+        text: preset.sample,
+        formatting: preset.formatting,
+      ),
+    );
+    if (updated == null || !mounted) return;
+    setState(
+      () => _projectNotice =
+          '"${preset.name}" added as a 3 s text clip at the end of the '
+          'timeline. Retype the sample words in the Text panel.',
+    );
+    _select(AppDestination.editorPreview);
+  }
+
+  /// Generates one library sound, writes it beside the app's own data and
+  /// imports it as ordinary media.
+  ///
+  /// The project therefore holds a real file, like any imported audio: export,
+  /// relink, removal and undo all keep working without a special case.
+  Future<void> _addSoundEffectFromLibrary(SoundEffect effect) async {
+    final session = _activeSession;
+    if (session == null || _activeProject == null) return;
+    if (_busy) {
+      _showUnavailable(
+        'Another project action is still running. Wait for it to finish, then try again.',
+      );
+      return;
+    }
+    File file;
+    try {
+      final directory = await _soundLibraryDirectory();
+      await directory.create(recursive: true);
+      file = File(
+        '${directory.path}${Platform.pathSeparator}${effect.fileName}',
+      );
+      if (!await file.exists() || await file.length() == 0) {
+        await file.writeAsBytes(renderSoundWav(effect), flush: true);
+      }
+    } catch (_) {
+      _showUnavailable('The sound could not be generated on this machine.');
+      return;
+    }
+    if (!mounted) return;
+    String? failure;
+    final updated = await _runProjectAction((session, _) async {
+      // Probe the file through the same command an imported file takes, with
+      // the revision read immediately before it.
+      final current = await widget.projectGateway.summary(session);
+      if (!mounted || !identical(session, _activeSession)) {
+        return const ProjectActionResult(
+          succeeded: false,
+          errorCode: 'PROJECT_CLOSING',
+          message: 'The project is closing.',
+        );
+      }
+      setState(() => _activeProject = current);
+      return widget.projectGateway.importMedia(session, current, file.path);
+    }, onFailure: (message) => failure = message);
+    if (updated == null) {
+      if (failure != null) _showUnavailable(failure!);
+      return;
+    }
+    setState(
+      () => _projectNotice =
+          '${effect.name} added to the media library. Drag it onto an audio '
+          'track.',
+    );
+    _select(AppDestination.editorPreview);
+  }
+
+  Future<Directory> _soundLibraryDirectory() async {
+    final override = widget.soundLibraryDirectory;
+    if (override != null) return override();
+    final support = await getApplicationSupportDirectory();
+    return Directory('${support.path}${Platform.pathSeparator}library-sounds');
   }
 
   Future<void> _openProject() => _openProjectLocation();
@@ -1472,16 +1762,19 @@ class _AppShellState extends State<AppShell> {
     return false;
   }
 
-  Future<_NewProjectRequest?> _askProjectName() async {
+  Future<_NewProjectRequest?> _askProjectName({
+    String initialName = '',
+    bool showFrameRate = true,
+  }) async {
     return showDialog<_NewProjectRequest>(
       context: context,
-      builder: (_) => const _ProjectNameDialog(
+      builder: (_) => _ProjectNameDialog(
         title: 'New Project',
-        initialName: '',
+        initialName: initialName,
         fieldKey: 'new-project-name',
         confirmKey: 'confirm-new-project',
         confirmLabel: 'Continue',
-        showFrameRate: true,
+        showFrameRate: showFrameRate,
       ),
     );
   }
@@ -3207,14 +3500,14 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<void> _insertTimelineTextClip(
+  Future<ProjectReadModel?> _insertTimelineTextClip(
     ProjectReadModel expected,
     ProjectTimelineTrack track,
     ProjectRationalTime timelineStart,
     ProjectRationalTime timelineDuration,
     ProjectTimelineTextContent content,
   ) async {
-    await _runProjectActionAtSnapshot(
+    return _runProjectActionAtSnapshot(
       expected,
       (session, current) => widget.projectGateway.insertTimelineTextClip(
         session,

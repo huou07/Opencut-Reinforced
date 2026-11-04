@@ -365,10 +365,16 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
     let Some(action) = args.first().and_then(|value| value.to_str()) else {
         return Err(CliError::usage(
             json,
-            "expected project summary, rename, or save",
+            "expected project create, summary, rename, or save",
         ));
     };
     match action {
+        "create" => {
+            let options = Options::parse(&args[1..], &["--file", "--name"], &[], json)?;
+            let path = required_path(&options, "--file", json)?;
+            let name = required_name(&options, "--name", json)?;
+            headless_create(&path, name, json)
+        }
         "summary" => {
             let options = Options::parse(&args[1..], &["--file", "--attach"], &[], json)?;
             let (path, attached) = project_path(&options, json)?;
@@ -401,7 +407,7 @@ fn run_project(args: &[OsString], json: bool) -> Result<String, CliError> {
         }
         _ => Err(CliError::usage(
             json,
-            "unknown project action; expected summary, rename, or save",
+            "unknown project action; expected create, summary, rename, or save",
         )),
     }
 }
@@ -5431,6 +5437,17 @@ fn run_session(args: &[OsString], json: bool) -> Result<CommandOutput, CliError>
             "unknown session action; expected serve, describe, or shutdown",
         )),
     }
+}
+
+/// Creates a project file without replacing an existing destination.
+///
+/// The same refusal the app applies: a path that already holds a project is a
+/// mistake to report, never a file to overwrite. Frame rate and canvas are set
+/// with the ordinary timeline verbs, so a script composes commands instead of
+/// learning a second creation syntax.
+fn headless_create(path: &Path, name: String, json: bool) -> Result<String, CliError> {
+    ProjectFileSession::create_new(path, name).map_err(|error| CliError::file(error, json))?;
+    headless_summary(path, json)
 }
 
 fn headless_summary(path: &Path, json: bool) -> Result<String, CliError> {

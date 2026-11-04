@@ -5,12 +5,13 @@ import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../widgets/or_widgets.dart';
 
-enum AppDestination { home, projects, settings, editorPreview }
+enum AppDestination { home, projects, library, settings, editorPreview }
 
 extension AppDestinationPresentation on AppDestination {
   String get label => switch (this) {
     AppDestination.home => 'Home',
     AppDestination.projects => 'Projects',
+    AppDestination.library => 'Library',
     AppDestination.settings => 'Settings',
     AppDestination.editorPreview => 'Editor Shell Preview',
   };
@@ -22,6 +23,7 @@ extension AppDestinationPresentation on AppDestination {
   IconData get icon => switch (this) {
     AppDestination.home => Icons.home_outlined,
     AppDestination.projects => Icons.folder_outlined,
+    AppDestination.library => Icons.dashboard_customize_outlined,
     AppDestination.settings => Icons.settings_outlined,
     AppDestination.editorPreview => Icons.view_quilt_outlined,
   };
@@ -31,7 +33,15 @@ extension AppDestinationPresentation on AppDestination {
   static const primary = [
     AppDestination.home,
     AppDestination.projects,
+    AppDestination.library,
     AppDestination.settings,
+  ];
+
+  /// Rail entries that belong to the workspace, in the order they are shown.
+  static const workspace = [
+    AppDestination.home,
+    AppDestination.projects,
+    AppDestination.library,
   ];
 }
 
@@ -67,9 +77,7 @@ class DesktopNavigation extends StatelessWidget {
               ),
               child: _NavigationHeading('WORKSPACE'),
             ),
-            for (final destination in AppDestinationPresentation.primary.where(
-              (destination) => destination != AppDestination.settings,
-            ))
+            for (final destination in AppDestinationPresentation.workspace)
               _DesktopDestination(
                 destination: destination,
                 selected: current == destination,

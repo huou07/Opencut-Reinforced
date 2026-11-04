@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-11-03
+Last reviewed: 2026-11-05
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -12,6 +12,47 @@ Stable regions: App Bar, Editor Tool Rail, Left Tool Panel, Viewer, Inspector,
 Timeline Toolbar, Timeline, Task/Status Area, Command Palette, Dialog or Mobile
 Sheet. New work integrates into an existing slot; a permanent new region needs
 justification and review.
+
+## Workspace destinations
+
+Four project-independent destinations, in one rail on every desktop: **Home**,
+**Projects**, **Library** and **Settings**; the editor replaces the workspace
+once a project is open. Home is the first-run surface, Projects lists recent
+work, Library is the creative catalogue, Settings owns machine configuration.
+
+## First run
+
+Home carries an explanation panel until the person either starts a project or
+dismisses it: media stays where it is, a project is one `.orproj` file saved
+atomically, and export runs locally with the hardware encoder when the machine
+has one. The panel is three sentences and three actions (New Project, Open
+Library, Read Guide) — no tour, no overlay, no modal. Dismissal is stored in
+`welcome.json` beside the other preferences, and a preference file that cannot
+be read shows the panel rather than hiding the only explanation a beginner gets.
+
+## Library
+
+`AppDestination.library` is the project-independent catalogue, so a template or
+a sound can be browsed before a project exists. Four tabs:
+
+- **Templates** — canvas and frame rate per template, with starter text overlays
+  placed through the ordinary `timeline.insertText` command after the create
+  action releases the shell's busy flag. A template never asks for a frame rate;
+  its own rate is applied and the create dialog's rate row disappears.
+- **Text** — seven text looks shown with their real font, size, weight,
+  alignment and anchor, so the sample is the result rather than a promise.
+- **Sound** — generated sound effects (tick, click, pop, whoosh, riser, impact,
+  chime) written as real 16-bit PCM WAV into the app support folder, then
+  imported through the ordinary media command; the music generator stays one
+  action away.
+- **Guide** — the in-app manual: start, import, edit, text, audio, export,
+  shortcuts, files and troubleshooting. Shortcut rows render `Cmd` on macOS and
+  `Ctrl` elsewhere from the platform seam, and the list matches the shell's real
+  shortcut map.
+
+An action that needs a project is visibly unavailable with its reason, never a
+silent no-op: adding a text look or a sound without an open project states what
+is missing.
 
 ## Editor layout
 
@@ -105,6 +146,14 @@ justification and review.
 
 - `apps/or_app/lib/` — shell, panels, inspector, timeline widgets, palette, menus
 - `apps/or_app/test/` — widget guards for the invariants above
+
+## Where — library data
+
+- `apps/or_app/lib/library/` — `project_templates.dart`, `text_presets.dart`,
+  `sound_library.dart` (deterministic WAV synthesis), `usage_guide.dart`
+- `apps/or_app/lib/screens/library_screen.dart` — the four tabs and their
+  unavailable states
+- `apps/or_app/lib/production/welcome_store.dart` — the first-run preference
 
 ## Related
 

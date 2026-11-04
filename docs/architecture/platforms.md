@@ -1,6 +1,6 @@
 # Platform Targets and Packaging
 
-Last reviewed: 2026-11-03
+Last reviewed: 2026-11-05
 
 Scope: which platforms exist, how each stores projects and media, and what is
 proven versus assumed per platform.
@@ -11,8 +11,11 @@ Release targets: **macOS, Windows, Linux**. iOS and web are not targets.
 Android code remains in the tree (floor API 26, matching CPAL's AAudio backend)
 but it is not a release target and it is not built in CI.
 
-For the current mission only the owner's macOS machine is a required runtime
-target; other platforms are maintained but not acceptance targets.
+All three desktops are acceptance targets with the same feature set. A feature
+is added once — in shared Dart presentation plus the Rust core — and either
+lands on macOS, Windows and Linux together or does not land. Only pickers,
+permissions, packaging and hardware APIs may differ, and they differ inside the
+platform seam below rather than in three forks of the product.
 
 ## Storage and permissions
 
@@ -96,6 +99,14 @@ software tail on a box without the hardware. Platform-specific interop stays
 behind narrow runtime adapters. Project and
 timeline semantics stay platform-independent; only pickers, permissions,
 packaging, window integration and hardware APIs may differ.
+
+MP4 depends on the encoder a package and a machine can actually offer:
+VideoToolbox answers on every Mac, the Windows package falls back to Media
+Foundation or NVENC, and the Linux package links x264 as its software tail (GPL,
+disclosed in the package licences). A build or a machine with no H.264 encoder
+fails the MP4 job with a sentence that names the missing encoder and points at
+WebM or Matroska, rather than a bare FFmpeg string; WebM remains the Linux
+default because it never depends on the driver.
 
 ## Evidence per platform
 
