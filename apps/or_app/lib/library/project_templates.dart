@@ -76,7 +76,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'landscape-1080p',
     name: 'Landscape 1080p',
-    summary: '16:9 at 30 fps. The default for a video you will watch on a '
+    summary:
+        '16:9 at 30 fps. The default for a video you will watch on a '
         'laptop or television.',
     suggestedName: 'Landscape project',
     canvas: ProjectSequenceCanvas(1920, 1080),
@@ -106,7 +107,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'vertical-short',
     name: 'Vertical short',
-    summary: '9:16 at 30 fps for a phone screen. Titles and captions are '
+    summary:
+        '9:16 at 30 fps for a phone screen. Titles and captions are '
         'already placed where they stay readable.',
     suggestedName: 'Vertical short',
     canvas: ProjectSequenceCanvas(1080, 1920),
@@ -136,7 +138,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'square-social',
     name: 'Square',
-    summary: '1:1 at 30 fps for a feed post. One centred composition, no '
+    summary:
+        '1:1 at 30 fps for a feed post. One centred composition, no '
         'safe-area guesswork.',
     suggestedName: 'Square post',
     canvas: ProjectSequenceCanvas(1080, 1080),
@@ -159,7 +162,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'tutorial',
     name: 'Tutorial',
-    summary: '16:9 with a chapter label and a lower third, ready for a screen '
+    summary:
+        '16:9 with a chapter label and a lower third, ready for a screen '
         'recording.',
     suggestedName: 'Tutorial',
     canvas: ProjectSequenceCanvas(1920, 1080),
@@ -189,7 +193,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'interview',
     name: 'Interview',
-    summary: '16:9 with a lower third and a caption line, for a seated '
+    summary:
+        '16:9 with a lower third and a caption line, for a seated '
         'conversation.',
     suggestedName: 'Interview',
     canvas: ProjectSequenceCanvas(1920, 1080),
@@ -219,7 +224,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'title-card',
     name: 'Title card',
-    summary: 'Three seconds of nothing but a title and a subtitle. Import it '
+    summary:
+        'Three seconds of nothing but a title and a subtitle. Import it '
         'into a longer edit as an opening.',
     suggestedName: 'Title card',
     canvas: ProjectSequenceCanvas(1920, 1080),
@@ -276,7 +282,8 @@ const List<ProjectTemplate> projectTemplates = [
   ProjectTemplate(
     id: 'podcast-clip',
     name: 'Podcast clip',
-    summary: 'Vertical 9:16 with a caption block, for cutting one answer out of '
+    summary:
+        'Vertical 9:16 with a caption block, for cutting one answer out of '
         'a longer conversation.',
     suggestedName: 'Podcast clip',
     canvas: ProjectSequenceCanvas(1080, 1920),

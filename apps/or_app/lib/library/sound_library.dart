@@ -104,7 +104,10 @@ const double _ceiling = 0.891;
 /// the media pipeline probes it like any other source. Generation is
 /// deterministic, so two machines produce identical files and a test can assert
 /// on the header instead of on a golden binary.
-Uint8List renderSoundWav(SoundEffect effect, {int sampleRate = _defaultSampleRate}) {
+Uint8List renderSoundWav(
+  SoundEffect effect, {
+  int sampleRate = _defaultSampleRate,
+}) {
   final samples = _renderSamples(effect, sampleRate);
   const bytesPerSample = 2;
   final dataLength = samples.length * bytesPerSample;
@@ -179,12 +182,12 @@ Float64List _renderSamples(SoundEffect effect, int sampleRate) {
       }(),
       SoundShape.impact =>
         (math.sin(2 * math.pi * (72 - 30 * progress) * t) * 0.8 +
-            noise.next() * 0.35 * _decay(progress, curve: 22)) *
+                noise.next() * 0.35 * _decay(progress, curve: 22)) *
             _decay(progress, curve: 5) *
             _fadeIn(t, 0.003),
       SoundShape.chime =>
         (math.sin(2 * math.pi * 880 * t) * 0.6 +
-            math.sin(2 * math.pi * 1320 * t) * 0.35) *
+                math.sin(2 * math.pi * 1320 * t) * 0.35) *
             _decay(progress, curve: 4) *
             _fadeIn(t, 0.006),
     };

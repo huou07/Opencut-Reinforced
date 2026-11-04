@@ -7144,10 +7144,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.lastCreateName, 'Vertical short');
-    expect(
-      gateway.lastSequenceCanvas,
-      const ProjectSequenceCanvas(1080, 1920),
-    );
+    expect(gateway.lastSequenceCanvas, const ProjectSequenceCanvas(1080, 1920));
     expect(gateway.insertTimelineTextClipCalls, greaterThan(0));
     expect(gateway.lastTextContent?.kind, ProjectTimelineClipContentKind.text);
     expect(tester.takeException(), isNull);

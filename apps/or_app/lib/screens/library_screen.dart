@@ -242,9 +242,7 @@ class _TemplateCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return OrPanel(
       title: template.name,
-      trailing: OrBadge(
-        '${template.canvasLabel} · ${template.frameRateLabel}',
-      ),
+      trailing: OrBadge('${template.canvasLabel} · ${template.frameRateLabel}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

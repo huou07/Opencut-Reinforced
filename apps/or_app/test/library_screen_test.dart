@@ -100,13 +100,12 @@ void main() {
     }
     // No project: the reason is attached to the control instead of the control
     // being silently inert.
-    expect(
-      find.byTooltip('Open a project to add a text clip.'),
-      findsWidgets,
-    );
+    expect(find.byTooltip('Open a project to add a text clip.'), findsWidgets);
   });
 
-  testWidgets('the text tab adds a clip when a project is open', (tester) async {
+  testWidgets('the text tab adds a clip when a project is open', (
+    tester,
+  ) async {
     var added = 0;
     tester.view.physicalSize = const Size(1600, 1400);
     tester.view.devicePixelRatio = 1;
@@ -182,7 +181,10 @@ void main() {
         300,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.byKey(ValueKey('library-guide-${section.id}')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('library-guide-${section.id}')),
+        findsOneWidget,
+      );
     }
   });
 }

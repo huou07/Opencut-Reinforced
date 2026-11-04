@@ -139,6 +139,11 @@ if command -v flutter >/dev/null 2>&1; then
   # UNVERIFIED with the reason instead of leaving a permanently red gate. The
   # classification is deliberately narrow. It applies only when the run produced
   # no test progress at all, so a suite that starts and then fails is still FAIL.
+  # The hosted Flutter lane fails on a formatting diff before it runs a single
+  # test, and an editor that reformats on save hides that locally.
+  run 'Dart formatting' \
+    bash -c 'cd apps/or_app && dart format --output=none --set-exit-if-changed .'
+
   printf '\n== Flutter widget tests (fake gateway) ==\n'
   out=$(mktemp)
   rc=0

@@ -263,7 +263,9 @@ class _WelcomeFact extends StatelessWidget {
                 const SizedBox(height: OrSpacing.x1),
                 Text(
                   detail,
-                  style: OrType.metadata.copyWith(color: OrColors.textSecondary),
+                  style: OrType.metadata.copyWith(
+                    color: OrColors.textSecondary,
+                  ),
                 ),
               ],
             ),

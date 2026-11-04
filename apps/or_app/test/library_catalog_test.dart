@@ -13,7 +13,11 @@ void main() {
     test('every template has a unique id and a usable canvas', () {
       final ids = <String>{};
       for (final template in projectTemplates) {
-        expect(ids.add(template.id), isTrue, reason: 'duplicate ${template.id}');
+        expect(
+          ids.add(template.id),
+          isTrue,
+          reason: 'duplicate ${template.id}',
+        );
         expect(template.name.trim(), isNotEmpty);
         expect(template.summary.trim(), isNotEmpty);
         expect(template.suggestedName.trim(), isNotEmpty);

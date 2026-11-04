@@ -1707,9 +1707,7 @@ class _AppShellState extends State<AppShell> {
     final override = widget.soundLibraryDirectory;
     if (override != null) return override();
     final support = await getApplicationSupportDirectory();
-    return Directory(
-      '${support.path}${Platform.pathSeparator}library-sounds',
-    );
+    return Directory('${support.path}${Platform.pathSeparator}library-sounds');
   }
 
   Future<void> _openProject() => _openProjectLocation();
