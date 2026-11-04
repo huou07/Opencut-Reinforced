@@ -27,7 +27,7 @@ String narrationSettingsIntroText(String provider) {
     _ => '',
   };
   if (source.isEmpty) {
-    return 'Voices installed on this Mac. The assistant and the Audio tool use '
+    return 'Voices installed on this device. The assistant and the Audio tool use '
         'the saved default; nothing is uploaded.';
   }
   return 'Narration currently uses $source, chosen in Generate voiceover. This '

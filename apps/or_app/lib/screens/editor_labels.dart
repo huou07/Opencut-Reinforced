@@ -25,9 +25,13 @@ String clockLabel(double seconds) {
 }
 
 /// Platform-correct shortcut label for tooltips and menus. macOS uses the
-/// command glyph; every other target keeps the explicit Ctrl prefix.
-String shortcutLabel(String key) =>
-    defaultTargetPlatform == TargetPlatform.macOS ? '⌘$key' : 'Ctrl+$key';
+/// command glyph; every other target keeps the explicit Ctrl prefix, and the
+/// Shift key is spelled out where the mac glyph would be unreadable.
+String shortcutLabel(String key, {bool shift = false}) {
+  final mac = defaultTargetPlatform == TargetPlatform.macOS;
+  if (mac) return shift ? '⇧⌘$key' : '⌘$key';
+  return shift ? 'Ctrl+Shift+$key' : 'Ctrl+$key';
+}
 
 double rationalSeconds(ProjectRationalTime time) =>
     time.numerator.toInt() / time.denominator;
@@ -36,5 +40,6 @@ double rationalSeconds(ProjectRationalTime time) =>
 String deleteShortcutLabel({bool shift = false}) {
   final mac = defaultTargetPlatform == TargetPlatform.macOS;
   final key = mac ? '⌫' : 'Del';
-  return shift ? '⇧$key' : key;
+  if (!shift) return key;
+  return mac ? '⇧$key' : 'Shift+$key';
 }

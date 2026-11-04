@@ -780,7 +780,7 @@ class _WaitingState extends StatelessWidget {
             const SizedBox(height: OrSpacing.x3),
             Text(
               controller.state == AssistantConnectionState.connecting
-                  ? 'Starting DeepSeek Harness…'
+                  ? controller.connectingLabel
                   : 'Preparing the assistant…',
               textAlign: TextAlign.center,
               style: const TextStyle(

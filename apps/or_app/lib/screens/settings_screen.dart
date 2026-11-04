@@ -10,12 +10,15 @@ import '../production/cloud_voice_settings_panel.dart';
 import '../production/editor_settings.dart';
 import '../production/narration_settings.dart';
 import '../production/narration_settings_dialog.dart';
+import '../assistant/assistant_controller.dart';
+import '../assistant/assistant_settings_dialog.dart';
+import '../assistant/assistant_settings.dart';
 import '../project/project_gateway.dart';
 import '../updates/resource_center_panel.dart';
 import '../updates/runtime_setup_panel.dart';
 import '../widgets/or_widgets.dart';
 
-enum SettingsSection { resources, appearance, general, advanced }
+enum SettingsSection { resources, assistant, appearance, general, advanced }
 
 typedef _Diagnostics = ({
   AppInfo appInfo,
@@ -32,6 +35,7 @@ class SettingsScreen extends StatefulWidget {
     required this.onOpenEditorPreview,
     this.initialSection = SettingsSection.appearance,
     this.onManageSpeechModels,
+    this.assistant,
   });
 
   final CoreGateway gateway;
@@ -40,6 +44,10 @@ class SettingsScreen extends StatefulWidget {
   final VoidCallback onOpenEditorPreview;
   final SettingsSection initialSection;
   final VoidCallback? onManageSpeechModels;
+
+  /// The live assistant controller, so Settings can open its dialog instead of
+  /// making the user find the panel first.
+  final AssistantController? assistant;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -191,6 +199,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _sectionContent() => switch (_selected) {
     SettingsSection.resources => _resourcesSection(),
+    SettingsSection.assistant => _assistantSection(),
     SettingsSection.appearance => _appearanceSection(),
     SettingsSection.general => _generalSection(),
     SettingsSection.advanced => _advancedSection(),
@@ -229,6 +238,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _assistantSection() {
+    final assistant = widget.assistant;
+    return OrPanel(
+      key: const ValueKey('settings-assistant'),
+      title: 'Assistant',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'The AI panel starts an ACP harness installed on this computer: '
+            'DeepSeek Harness, Claude Code, Codex, OpenCode or a custom '
+            'command. Harness choice, detection and the workspace live in the '
+            'panel settings.',
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          if (assistant == null)
+            const Text(
+              'Open a project to change the assistant harness.',
+              key: ValueKey('settings-assistant-unavailable'),
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            )
+          else
+            ListenableBuilder(
+              listenable: assistant,
+              builder: (context, _) {
+                final label = assistant.harnessLabel.isEmpty
+                    ? assistant.settings.harnessKind.label
+                    : assistant.harnessLabel;
+                final path = assistant.harnessPath ?? 'Not started yet';
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      key: const ValueKey('settings-assistant-harness'),
+                      style: const TextStyle(
+                        color: OrColors.text,
+                        fontSize: OrType.metadataSize,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: OrSpacing.x1),
+                    Text(
+                      path,
+                      style: const TextStyle(
+                        color: OrColors.textMuted,
+                        fontSize: OrType.tinySize,
+                      ),
+                    ),
+                    const SizedBox(height: OrSpacing.x3),
+                    OutlinedButton(
+                      key: const ValueKey('settings-assistant-open'),
+                      onPressed: () => showAssistantSettingsDialog(
+                        context: context,
+                        controller: assistant,
+                      ),
+                      child: const Text('Assistant settings…'),
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 
@@ -292,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _generalSection() {
     final narration = _narration;
     final voice = narration == null || narration.voice.isEmpty
-        ? 'Automatic: the first installed Vietnamese voice on this Mac'
+        ? 'Automatic: the first installed Vietnamese voice on this device'
         : '${narration.voice} (${narration.locale}) · ${narration.rate} wpm · ${narration.gapMs} ms gap';
     return OrPanel(
       key: const ValueKey('settings-general'),
@@ -302,7 +385,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           const Text(
             'The voice the Audio tool and the assistant use for offline '
-            'narration. The choice is saved for this Mac; no audio or text '
+            'narration. The choice is saved for this device; no audio or text '
             'leaves the machine.',
             style: TextStyle(
               color: OrColors.textSecondary,
@@ -493,6 +576,7 @@ class _SectionButton extends StatelessWidget {
 
   String get _label => switch (section) {
     SettingsSection.resources => 'Resources & updates',
+    SettingsSection.assistant => 'Assistant',
     SettingsSection.appearance => 'Appearance',
     SettingsSection.general => 'General',
     SettingsSection.advanced => 'Advanced / Developer',

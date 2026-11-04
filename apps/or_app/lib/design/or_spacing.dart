@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart';
+
 abstract final class OrSpacing {
   static const x1 = 4.0;
   static const x2 = 8.0;
@@ -20,6 +22,17 @@ abstract final class OrRadii {
   static const card = 10.0;
   static const panel = 12.0;
   static const sheet = 14.0;
+}
+
+/// Dialog content width.
+///
+/// A fixed width overflows on a small window or a 125% Windows display scale,
+/// so the preferred width is capped by the host window.
+abstract final class OrDialogSizes {
+  static double width(BuildContext context, double preferred) {
+    final available = MediaQuery.sizeOf(context).width - 64;
+    return preferred < available ? preferred : (available < 280 ? 280 : available);
+  }
 }
 
 abstract final class OrBreakpoints {

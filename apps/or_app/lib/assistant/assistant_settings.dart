@@ -231,16 +231,24 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
   HostPlatform? platform,
 }) async {
   final host = platform ?? HostPlatform.current(environment: environment);
+  // A stored path is only honoured when it plausibly belongs to the selected
+  // harness: a path detected for DeepSeek Harness must not hijack a Codex or
+  // OpenCode selection. An explicit custom command is always honoured.
   if (settings.harnessPath.isNotEmpty) {
     final resolved = host.resolveExecutable(settings.harnessPath);
     if (resolved != null) {
-      return _launchFor(
-        resolved,
-        settings.harnessKind == AssistantHarnessKind.auto
-            ? AssistantHarnessKind.dsh
-            : settings.harnessKind,
-        patchPath,
-      );
+      final inferred = harnessKindForExecutable(resolved);
+      if (settings.harnessKind == AssistantHarnessKind.custom ||
+          settings.harnessKind == AssistantHarnessKind.auto ||
+          inferred == settings.harnessKind) {
+        return _launchFor(
+          resolved,
+          settings.harnessKind == AssistantHarnessKind.auto
+              ? (inferred ?? AssistantHarnessKind.custom)
+              : settings.harnessKind,
+          patchPath,
+        );
+      }
     }
   }
   final directories = _harnessDirectories(host);
@@ -253,28 +261,44 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
         ]
       : <AssistantHarnessKind>[settings.harnessKind];
   for (final kind in wanted) {
-    final path = switch (kind) {
-      AssistantHarnessKind.dsh => host.findExecutable(
-        'dsh',
-        extraDirectories: directories,
-      ),
-      AssistantHarnessKind.claudeCode => host.findExecutable(
-        'claude-code-acp',
-        extraDirectories: directories,
-      ),
-      AssistantHarnessKind.codex => host.findExecutable(
-        'codex-acp',
-        extraDirectories: directories,
-      ),
-      AssistantHarnessKind.opencode => host.findExecutable(
-        'opencode',
-        extraDirectories: directories,
-      ),
-      AssistantHarnessKind.auto || AssistantHarnessKind.custom => null,
-    };
+    final path = host.findExecutable(
+      harnessExecutableName(kind),
+      extraDirectories: directories,
+    );
     if (path != null) return _launchFor(path, kind, patchPath);
   }
   return null;
+}
+
+/// The command a harness kind is launched through, or the empty string for
+/// kinds that are not a fixed executable.
+String harnessExecutableName(AssistantHarnessKind kind) => switch (kind) {
+  AssistantHarnessKind.dsh => 'dsh',
+  AssistantHarnessKind.claudeCode => 'claude-code-acp',
+  AssistantHarnessKind.codex => 'codex-acp',
+  AssistantHarnessKind.opencode => 'opencode',
+  AssistantHarnessKind.auto || AssistantHarnessKind.custom => '',
+};
+
+/// The harness an installed executable belongs to, judged by its file name.
+///
+/// Used to keep a detected path from standing in for a different harness the
+/// user has since selected, and to give a stored `auto` path its real launch
+/// arguments (DSH needs its ACP profile, OpenCode needs its `acp` verb).
+AssistantHarnessKind? harnessKindForExecutable(String executable) {
+  final name = executable
+      .replaceAll('\\', '/')
+      .split('/')
+      .last
+      .toLowerCase()
+      .replaceFirst(RegExp(r'\.(exe|cmd|bat|com)$'), '');
+  return switch (name) {
+    'dsh' => AssistantHarnessKind.dsh,
+    'claude-code-acp' => AssistantHarnessKind.claudeCode,
+    'codex-acp' => AssistantHarnessKind.codex,
+    'opencode' => AssistantHarnessKind.opencode,
+    _ => null,
+  };
 }
 
 /// Install locations a harness can occupy that a GUI launch never puts on
@@ -282,25 +306,41 @@ Future<HarnessLaunch?> resolveHarnessLaunch({
 /// per-user programs folder.
 List<String> _harnessDirectories(HostPlatform host) {
   final home = host.homeDirectory;
+  final localAppData = host.environment['LOCALAPPDATA'] ?? '';
+  final appData = host.environment['APPDATA'] ?? '';
+  final programFiles = host.environment['ProgramFiles'] ?? '';
   return [
     if (host.isMacOS)
       '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin',
     if (host.isMacOS) '/opt/homebrew/bin',
     if (host.isMacOS) '/usr/local/bin',
+    if (host.isMacOS && home.isNotEmpty) host.join(home, '.local', 'bin'),
+    if (host.isMacOS && home.isNotEmpty) host.join(home, 'Library', 'pnpm'),
     if (host.isLinux) '/usr/local/bin',
     if (host.isLinux) '/opt/deepseek-harness/bin',
+    if (host.isLinux && home.isNotEmpty) host.join(home, '.local', 'bin'),
     if (home.isNotEmpty) host.join(home, '.dsh', 'bin'),
     if (home.isNotEmpty) host.join(home, '.dsh', 'bin', 'runtime'),
-    if (host.isWindows && (host.environment['LOCALAPPDATA'] ?? '').isNotEmpty)
-      host.join(
-        host.environment['LOCALAPPDATA']!,
-        'Programs',
-        'DeepSeek Harness',
-      ),
-    if (host.isWindows && (host.environment['LOCALAPPDATA'] ?? '').isNotEmpty)
-      host.join(host.environment['LOCALAPPDATA']!, 'Programs', 'dsh'),
-    if (host.isWindows && (host.environment['APPDATA'] ?? '').isNotEmpty)
-      host.join(host.environment['APPDATA']!, 'dsh', 'bin'),
+    // Package-manager install roots: the usual home of `codex-acp`,
+    // `claude-code-acp` and `opencode` when the GUI did not inherit the
+    // interactive shell's PATH.
+    if (home.isNotEmpty) host.join(home, '.bun', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.cargo', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.volta', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.npm-global', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.opencode', 'bin'),
+    if (home.isNotEmpty) host.join(home, '.claude', 'local'),
+    if (home.isNotEmpty) host.join(home, '.codex', 'bin'),
+    if (host.isWindows && appData.isNotEmpty) host.join(appData, 'npm'),
+    if (host.isWindows && localAppData.isNotEmpty)
+      host.join(localAppData, 'Programs', 'DeepSeek Harness'),
+    if (host.isWindows && localAppData.isNotEmpty)
+      host.join(localAppData, 'Programs', 'dsh'),
+    if (host.isWindows && localAppData.isNotEmpty)
+      host.join(localAppData, 'pnpm'),
+    if (host.isWindows && appData.isNotEmpty) host.join(appData, 'dsh', 'bin'),
+    if (host.isWindows && programFiles.isNotEmpty)
+      host.join(programFiles, 'nodejs'),
   ];
 }
 

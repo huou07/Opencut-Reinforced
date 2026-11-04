@@ -35,13 +35,24 @@ states the panel must show. Architecture rationale is
 - **Model** and **reasoning effort** come from the session's advertised ACP
   configuration options. The choice is persisted and applied to the next
   connection and the live session.
-- Discovery is one platform seam, so Windows, Linux and macOS follow the same
-  rules. A configured path wins; otherwise the app looks for `dsh`, `claude-code-acp`,
-  `codex-acp` or `opencode` on `PATH` (split on `;` on Windows), in the
-  per-platform install folders (on Windows `%LOCALAPPDATA%\Programs\DeepSeek
-  Harness`), and in `~/.local/bin`. Windows names are probed with `.exe`, `.cmd`,
-  `.bat` and `.com`, and the overlay is read from `$DSH_HOME/profiles`,
+- **Harness** selects which ACP harness the panel starts: Auto-detect,
+  DeepSeek Harness, Claude Code, Codex, OpenCode or a custom command. Detection
+  is one platform seam, so Windows, Linux and macOS follow the same rules: the
+  app looks for the executable of the *selected* kind — `dsh`, `claude-code-acp`,
+  `codex-acp` or `opencode` — on `PATH` (split on `;` on Windows), in the
+  per-platform install folders, in `~/.local/bin` and in the package-manager
+  roots a GUI launch does not inherit (`~/.bun/bin`, `~/.cargo/bin`,
+  `~/.npm-global/bin`, `~/.local/bin`, `~/Library/pnpm`, `%APPDATA%\npm`, and
+  the DeepSeek Harness program folders on Windows). Auto-detect tries DSH, then
+  Claude Code, Codex and OpenCode, and adopts the kind it finds.
+- A stored path is honoured only when it plausibly belongs to the selected
+  harness (judged by the executable name) or when the kind is Custom; otherwise
+  it is ignored in favour of discovery, so a path detected for DSH cannot stand
+  in for a Codex or OpenCode selection. Windows names are probed with `.exe`,
+  `.cmd`, `.bat` and `.com`, and the DSH overlay is read from `$DSH_HOME/profiles`,
   `~/.dsh/profiles` or `%APPDATA%\dsh\profiles`, whichever exists.
+- Detection reports what it found, or that the selected harness is missing with
+  its install hint; the panel wait state names the harness that is starting.
 - If the harness or the `or` CLI cannot be found, the panel shows a setup error
   with the concrete fix; it never sends a prompt into a session without tools.
   **Settings → External tools** repeats detection, opens the harness download

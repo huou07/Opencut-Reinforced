@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
+import '../support/host_platform.dart';
 import 'assistant_controller.dart';
 import 'assistant_settings.dart';
 
@@ -50,6 +50,8 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       widget.controller.settings.workspaceMode;
   late bool _autoApprove = widget.controller.settings.autoApprove;
   late String _reasoning = widget.controller.settings.reasoningValue;
+  String _detection = '';
+  bool _detecting = false;
 
   @override
   void dispose() {
@@ -69,16 +71,22 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       AssistantHarnessKind.custom =>
         'https://github.com/deepseek-ai/deepseek-harness',
     };
-    await Process.run('open', [url]);
+    try {
+      await HostPlatform.current().openExternal(url);
+    } catch (_) {
+      // No browser or no default handler. Opening a download page is a
+      // convenience, so a host that cannot do it must not break the dialog.
+    }
   }
 
   Future<void> _detect() async {
+    if (_detecting) return;
+    setState(() => _detecting = true);
     final current = widget.controller.settings;
+    // Detect for the harness the dropdown is showing, not for the preferred
+    // family: choosing Codex and pressing Detect must look for Codex.
     final launch = await resolveHarnessLaunch(
-      settings: current.copyWith(
-        harnessKind: AssistantHarnessKind.auto,
-        harnessPath: '',
-      ),
+      settings: current.copyWith(harnessKind: _harnessKind, harnessPath: ''),
       patchPath: '',
     );
     final orCli = await resolveOrCliPath(
@@ -86,13 +94,32 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
     );
     if (!mounted) return;
     setState(() {
+      _detecting = false;
       if (launch != null) {
         _harness.text = launch.executable;
-        _harnessKind = launch.kind;
+        if (_harnessKind == AssistantHarnessKind.auto) _harnessKind = launch.kind;
+        _detection = 'Found ${launch.kind.label}.';
+      } else if (_harnessKind == AssistantHarnessKind.auto) {
+        _detection = 'No ACP harness was found. Set the executable below.';
+      } else {
+        _detection =
+            '${_harnessKind.label} was not found on this machine'
+            '${_installHint(_harnessKind)}.';
       }
       if (orCli != null) _orCli.text = orCli;
     });
   }
+
+  String _installHint(AssistantHarnessKind kind) => switch (kind) {
+    AssistantHarnessKind.codex =>
+      '; install the adapter with npm i -g @zed-industries/codex-acp',
+    AssistantHarnessKind.claudeCode =>
+      '; install the adapter with npm i -g @zed-industries/claude-code-acp',
+    AssistantHarnessKind.opencode => '; install it from opencode.ai',
+    AssistantHarnessKind.dsh ||
+    AssistantHarnessKind.auto ||
+    AssistantHarnessKind.custom => '',
+  };
 
   Future<void> _pickWorkspace() async {
     final path = await getDirectoryPath(
@@ -154,7 +181,7 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       backgroundColor: OrColors.surface,
       title: const Text('Assistant'),
       content: SizedBox(
-        width: 460,
+        width: OrDialogSizes.width(context, 460),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -185,16 +212,36 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                   for (final kind in AssistantHarnessKind.values)
                     DropdownMenuItem(value: kind, child: Text(kind.label)),
                 ],
-                onChanged: (value) =>
-                    setState(() => _harnessKind = value ?? _harnessKind),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _harnessKind = value;
+                    // A path belongs to the harness it was detected for; a new
+                    // selection starts from discovery again.
+                    _harness.clear();
+                    _detection = '';
+                  });
+                  _detect();
+                },
               ),
               const SizedBox(height: OrSpacing.x2),
               _field(
                 keyName: 'assistant-settings-harness',
                 label: 'Harness executable',
                 controller: _harness,
-                hint: 'Auto-detected when empty; any ACP stdio command',
+                hint: 'Found automatically when empty',
               ),
+              if (_detection.isNotEmpty) ...[
+                const SizedBox(height: OrSpacing.x1),
+                Text(
+                  _detection,
+                  key: const ValueKey('assistant-settings-detection'),
+                  style: const TextStyle(
+                    color: OrColors.textMuted,
+                    fontSize: OrType.tinySize,
+                  ),
+                ),
+              ],
               const SizedBox(height: OrSpacing.x3),
               _field(
                 keyName: 'assistant-settings-or-cli',
@@ -322,8 +369,9 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
                     child: const Text('Get a harness'),
                   ),
                   TextButton(
-                    onPressed: _detect,
-                    child: const Text('Detect paths'),
+                    key: const ValueKey('assistant-settings-detect'),
+                    onPressed: _detecting ? null : _detect,
+                    child: Text(_detecting ? 'Detecting…' : 'Detect paths'),
                   ),
                 ],
               ),

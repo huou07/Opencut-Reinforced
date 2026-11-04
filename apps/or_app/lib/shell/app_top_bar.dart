@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../screens/editor_labels.dart';
 import '../design/or_typography.dart';
 import '../design/or_spacing.dart';
 import '../widgets/or_widgets.dart';
@@ -265,19 +266,19 @@ class AppTopBar extends StatelessWidget {
                 ),
                 _TopBarIcon(
                   buttonKey: 'workspace-save',
-                  tooltip: dirty ? 'Save now (⌘S)' : 'Saved',
+                  tooltip: dirty ? 'Save now (${shortcutLabel('S')})' : 'Saved',
                   icon: Icons.save_outlined,
                   onPressed: dirty ? onSaveProject : null,
                 ),
                 _TopBarIcon(
                   buttonKey: 'workspace-undo',
-                  tooltip: 'Undo (⌘Z)',
+                  tooltip: 'Undo (${shortcutLabel('Z')})',
                   icon: Icons.undo_outlined,
                   onPressed: onUndo,
                 ),
                 _TopBarIcon(
                   buttonKey: 'workspace-redo',
-                  tooltip: 'Redo (⇧⌘Z)',
+                  tooltip: 'Redo (${shortcutLabel('Z', shift: true)})',
                   icon: Icons.redo_outlined,
                   onPressed: onRedo,
                 ),

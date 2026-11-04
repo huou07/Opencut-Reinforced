@@ -248,7 +248,7 @@ class _RecordVoiceDialogState extends State<RecordVoiceDialog>
       child: AlertDialog(
         title: const Text('Record voice'),
         content: SizedBox(
-          width: 520,
+          width: OrDialogSizes.width(context, 520),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,

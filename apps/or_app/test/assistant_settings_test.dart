@@ -146,6 +146,64 @@ void main() {
     expect(launch!.executable, harness.path);
   });
 
+  test('a stored DeepSeek path does not hijack another selection', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-hijack-');
+    addTearDown(() => root.delete(recursive: true));
+    final bin = Directory('${root.path}/bin')..createSync();
+    final dsh = File('${bin.path}/dsh')..writeAsStringSync('');
+    final codex = File('${bin.path}/codex-acp')..writeAsStringSync('');
+    final host = HostPlatform(
+      isWindows: false,
+      isMacOS: false,
+      isLinux: true,
+      environment: {'HOME': root.path, 'PATH': bin.path},
+      executablePath: '${root.path}/or_app',
+    );
+
+    final launch = await resolveHarnessLaunch(
+      settings: AssistantSettings(
+        harnessKind: AssistantHarnessKind.codex,
+        harnessPath: dsh.path,
+      ),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNotNull);
+    expect(launch!.kind, AssistantHarnessKind.codex);
+    expect(launch.executable, codex.path);
+  });
+
+  test('an explicit selection discovers its own executable', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-pick-');
+    addTearDown(() => root.delete(recursive: true));
+    final bin = Directory('${root.path}/bin')..createSync();
+    File('${bin.path}/dsh').writeAsStringSync('');
+    File('${bin.path}/opencode').writeAsStringSync('');
+    final host = HostPlatform(
+      isWindows: false,
+      isMacOS: true,
+      isLinux: false,
+      environment: {'HOME': root.path, 'PATH': bin.path},
+      executablePath: '${root.path}/or_app',
+    );
+
+    final launch = await resolveHarnessLaunch(
+      settings: const AssistantSettings(
+        harnessKind: AssistantHarnessKind.opencode,
+      ),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNotNull);
+    // The host may already carry its own copy in a system directory; either way
+    // the selection must resolve to OpenCode and not to the installed DSH.
+    expect(launch!.kind, AssistantHarnessKind.opencode);
+    expect(launch.executable, endsWith('opencode'));
+    expect(launch.arguments, ['acp']);
+  });
+
   test('no harness anywhere resolves to no launch', () async {
     final root = await Directory.systemTemp.createTemp('or-harness-none-');
     addTearDown(() => root.delete(recursive: true));
