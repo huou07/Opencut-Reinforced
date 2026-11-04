@@ -1000,7 +1000,7 @@ impl Nv12Planes {
     /// This is the layout the decoder produces so a CPU decode can reach the
     /// hardware encoder without an intermediate RGBA copy.
     pub fn from_contiguous(width: u32, height: u32, bytes: &[u8]) -> Option<Self> {
-        if width == 0 || height == 0 || width % 2 != 0 || height % 2 != 0 {
+        if width == 0 || height == 0 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
             return None;
         }
         let luma_len = (width as usize).checked_mul(height as usize)?;
