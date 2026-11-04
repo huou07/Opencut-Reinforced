@@ -31,23 +31,95 @@ use std::{
 /// spinning up every core.
 const VP9_MAX_THREADS: usize = 16;
 
+/// Hardware first, then the operating system's own encoder, then software.
+///
+/// A package can carry an encoder the machine cannot drive — NVENC in a Linux
+/// build on an AMD box — so presence alone is not evidence that an export will
+/// start. Every candidate is opened once on a tiny frame before the picker
+/// commits, which is the same call the export makes, so the choice is a working
+/// encoder rather than a name in a list.
+///
+/// The list stops at encoders that take a plain NV12 frame. VAAPI, QSV and AMF
+/// need a device frame pool the software export path does not build yet;
+/// listing them would promise a speed-up the writer cannot deliver, so they
+/// stay out until that path grows the pool. See `docs/features/export.md`.
 const H264_ENCODER_CANDIDATES: &[&str] = &[
     "h264_videotoolbox",
-    "h264_mf",
     "h264_nvenc",
-    "h264_qsv",
-    "h264_amf",
-    "h264_vaapi",
+    "h264_mf",
     "h264_open",
     "libx264",
 ];
 
-/// The first H.264 encoder this build carries, or a failure naming the gap.
+/// The encoders that need a device driver the build cannot see. NVENC loads the
+/// driver's library at run time, so a build always carries it and only the
+/// machine decides whether it works.
+fn hardware_device_type(name: &str) -> Option<ffmpeg::sys::AVHWDeviceType> {
+    use ffmpeg::sys::AVHWDeviceType;
+    match name {
+        "h264_nvenc" => Some(AVHWDeviceType::CUDA),
+        _ => None,
+    }
+}
+
+/// Whether this machine can drive a hardware encoder. Creating the device
+/// context is the same step the encoder does at open, so a refusal here is the
+/// refusal the export would hit, and the picker moves on instead of failing.
+fn hardware_device_available(name: &str) -> bool {
+    let Some(device_type) = hardware_device_type(name) else {
+        return true;
+    };
+    unsafe {
+        let mut device: *mut ffmpeg::sys::AVBufferRef = std::ptr::null_mut();
+        let status = ffmpeg::sys::av_hwdevice_ctx_create(
+            &mut device,
+            device_type,
+            std::ptr::null(),
+            std::ptr::null_mut(),
+            0,
+        );
+        let available = status >= 0 && !device.is_null();
+        if !device.is_null() {
+            ffmpeg::sys::av_buffer_unref(&mut device);
+        }
+        available
+    }
+}
+
+/// Whether an encoder opens on a plain frame. Media Foundation, VideoToolbox
+/// and NVENC all take an ordinary software frame, so a test open is the honest
+/// check that this process can encode with them.
+fn encoder_answers(encoder: codec::Codec) -> bool {
+    let Ok(mut context) = codec::context::Context::new_with_codec(encoder)
+        .encoder()
+        .video()
+    else {
+        return false;
+    };
+    context.set_width(64);
+    context.set_height(64);
+    context.set_format(format::Pixel::NV12);
+    context.set_time_base(ffmpeg::Rational::new(1, 30));
+    context.set_frame_rate(Some(ffmpeg::Rational::new(30, 1)));
+    context.open().is_ok()
+}
+
+/// The first H.264 encoder this build carries and this machine can run, or a
+/// failure naming the gap.
 fn pick_h264_encoder() -> Result<codec::Codec, ExportEncodeError> {
     for name in H264_ENCODER_CANDIDATES {
-        if let Some(encoder) = codec::encoder::find_by_name(name) {
-            return Ok(encoder);
+        let Some(encoder) = codec::encoder::find_by_name(name) else {
+            continue;
+        };
+        if !hardware_device_available(name) {
+            continue;
         }
+        // libx264 is the guaranteed tail: it needs no device and the real open
+        // reports its own failure if the build is misconfigured.
+        if *name != "libx264" && !encoder_answers(encoder) {
+            continue;
+        }
+        return Ok(encoder);
     }
     Err(ExportEncodeError(format!(
         "this FFmpeg build carries no H.264 encoder (looked for {}), so MP4 \
@@ -293,6 +365,13 @@ impl FfmpegExportWriter {
                 options.set("row-mt", "1");
             } else {
                 options.set("b", video_bitrate(width, height, quality).to_string());
+                if video_codec.name() == "h264_nvenc" {
+                    // NVENC's own speed ladder is its preset. Leaving it at the
+                    // default spends the same time on a Speed export as on a
+                    // Quality one, which is the opposite of what the preference
+                    // asks for.
+                    options.set("preset", nvenc_preset(quality));
+                }
             }
             video_context
                 .open_as_with(video_codec, options)
@@ -750,6 +829,17 @@ const fn vp9_settings(quality: ExportQuality) -> (&'static str, &'static str, &'
     }
 }
 
+/// NVENC's speed ladder: higher is slower and cleaner.
+///
+/// `p2` still uses the GPU for every stage, so a Speed export stays hardware
+/// bound rather than falling back to software.
+const fn nvenc_preset(quality: ExportQuality) -> &'static str {
+    match quality {
+        ExportQuality::Quality => "p5",
+        ExportQuality::Speed => "p2",
+    }
+}
+
 /// Video bitrate for the hardware H.264 profile, scaled by the quality preference.
 ///
 /// The base rate stays inside the bounds the profile always had; `Quality` spends
@@ -922,7 +1012,7 @@ fn is_again(error: ffmpeg::Error) -> bool {
 
 #[cfg(test)]
 mod quality_tests {
-    use super::{ExportQuality, video_bitrate, vp9_settings};
+    use super::{ExportQuality, nvenc_preset, video_bitrate, vp9_settings};
 
     #[test]
     fn quality_spends_more_encoding_time_and_bytes_than_speed() {
@@ -933,6 +1023,14 @@ mod quality_tests {
         // Lower `cpu-used` is slower and better; lower `crf` is better and larger.
         assert!(cpu_used.parse::<u8>().unwrap() < "8".parse::<u8>().unwrap());
         assert!(crf.parse::<u32>().unwrap() < "36".parse::<u32>().unwrap());
+    }
+
+    #[test]
+    fn nvenc_spends_more_time_on_a_quality_export_than_on_a_speed_export() {
+        assert_eq!(nvenc_preset(ExportQuality::Speed), "p2");
+        assert_eq!(nvenc_preset(ExportQuality::Quality), "p5");
+        // NVENC orders its presets from p1 (fastest) to p7 (slowest).
+        assert!(nvenc_preset(ExportQuality::Speed) < nvenc_preset(ExportQuality::Quality));
     }
 
     #[test]

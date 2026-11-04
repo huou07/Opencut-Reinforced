@@ -22,6 +22,9 @@ vpx_commit=6df3ec34557879fff673706f4a1d9fbd0f3a6f0e
 x264_commit=b35605ace3ddf7c1a5d67a2eb553f034aef41d55
 x264_sha256=6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224
 x264_url="https://code.videolan.org/videolan/x264/-/archive/$x264_commit/x264-$x264_commit.tar.bz2"
+nv_headers_version=n12.2.72.0
+nv_headers_sha256=dbeaec433d93b850714760282f1d0992b1254fc3b5a6cb7d76fc1340a1e47563
+nv_headers_url="https://github.com/FFmpeg/nv-codec-headers/archive/refs/tags/$nv_headers_version.tar.gz"
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -277,6 +280,28 @@ if [[ "$platform" == linux ]]; then
   test -f "$prefix/lib/libx264.a"
   test -f "$prefix/lib/pkgconfig/x264.pc"
   cp "$x264_source/COPYING" "$work/X264-COPYING"
+fi
+
+# Hardware H.264 needs FFmpeg's NVENC headers at build time only: the encoder
+# loads the driver's libnvcuda at run time and falls back to software when no
+# NVIDIA device answers, which the export path checks before it commits. The
+# archives are plain headers, so this costs seconds on both desktop builds.
+if [[ "$platform" == linux || "$platform" == windows ]]; then
+  nv_archive="$work/nv-codec-headers-$nv_headers_version.tar.gz"
+  if [[ ! -f "$nv_archive" ]]; then
+    curl --fail --location --silent --show-error --retry 5 --retry-all-errors \
+      "$nv_headers_url" --output "$nv_archive"
+  fi
+  actual_nv_sha256="$(sha256_file "$nv_archive")"
+  if [[ "$actual_nv_sha256" != "$nv_headers_sha256" ]]; then
+    echo "nv-codec-headers source SHA-256 mismatch: $actual_nv_sha256" >&2
+    exit 1
+  fi
+  if [[ ! -d "$work/nv-codec-headers-$nv_headers_version" ]]; then
+    tar -xzf "$nv_archive" -C "$work"
+  fi
+  make -C "$work/nv-codec-headers-$nv_headers_version" install PREFIX="$prefix"
+  test -f "$prefix/include/ffnvcodec/nvEncodeAPI.h"
 fi
 
 pkgconfig="$prefix/lib/pkgconfig"

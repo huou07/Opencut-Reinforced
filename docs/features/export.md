@@ -14,14 +14,29 @@ semantics, and how an export is validated.
 | H.264 delivery | MP4 | H.264 (host encoder; x264 on Linux) | AAC, 48 kHz stereo | desktop |
 
 MP4 is offered on every desktop. The core does not name one encoder: it walks a
-preference list (`h264_videotoolbox`, `h264_mf`, `h264_nvenc`, `h264_qsv`,
-`h264_amf`, `h264_vaapi`, `h264_open`, `libx264`) and uses the first encoder the
-linked FFmpeg actually carries. The macOS package carries VideoToolbox, the
-Windows package carries Media Foundation (`h264_mf`), and the Linux package
-carries x264 (`libx264`), so MP4 export works on all three without a platform
-branch in the profile code. Every package also carries AAC. When a build carries
-no H.264 encoder the format is still listed and the export fails with a message
-that names the gap and points at WebM.
+preference list and commits to the first candidate the linked FFmpeg carries
+*and* this machine can open. The order is `h264_videotoolbox`, `h264_nvenc`,
+`h264_mf`, `h264_open`, then `libx264` — a name the package does not carry is
+simply skipped, and each candidate is opened on a 64×64
+NV12 frame before the writer uses it, so a package that carries NVENC on a
+machine without an NVIDIA device falls through to the next encoder instead of
+failing the export. The macOS package carries VideoToolbox, the Windows package
+carries Media Foundation (the operating system's own encoder, hardware-backed
+when the driver exposes a hardware MFT), and the Linux package carries NVENC and
+x264, so MP4 export works on all three without a platform branch in the profile
+code. Every package also carries AAC. When nothing opens, the format is still
+listed and the export fails with a message that names the gap and points at
+WebM.
+
+The quality preference reaches the hardware encoder too: a `Quality` export sets
+the NVENC preset to `p5` and a `Speed` export to `p2`, so the choice trades time
+for picture on the GPU instead of only changing the bitrate. Software encoding
+keeps its own ladder (`x264` uses its defaults, VP9 uses the `cpu-used` table).
+
+VAAPI, QSV and AMF are not candidates yet. They need a device frame pool the
+software writer does not build, and linking VAAPI would also make the bundled
+`ffmpeg` depend on `libva` at run time, so the build leaves both out. They stay
+future work until that path grows the pool.
 
 The Linux build links x264 because Linux has no operating-system H.264 encoder;
 x264 is GPL-2.0-or-later, ships as `licenses/x264/COPYING` in the package, and

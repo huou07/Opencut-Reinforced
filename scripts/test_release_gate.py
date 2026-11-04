@@ -109,6 +109,28 @@ class ReleaseGateTests(unittest.TestCase):
                     self.assertEqual(code, 1, output)
                     self.assertIn(f"'{job}' reported '{outcome}'", output)
 
+    def test_a_pull_request_run_may_defer_the_desktop_jobs(self) -> None:
+        postponed = all_success(macos="skipped", linux="skipped", windows="skipped")
+        code, output = run(
+            ["--needs-json", json.dumps(postponed), "--event", "pull_request"]
+        )
+        self.assertEqual(code, 0, output)
+        self.assertIn("desktop builds deferred to the merge", output)
+
+    def test_a_pull_request_run_still_fails_on_a_desktop_failure(self) -> None:
+        failed = all_success(macos="skipped", linux="skipped", windows="failure")
+        code, output = run(
+            ["--needs-json", json.dumps(failed), "--event", "pull_request"]
+        )
+        self.assertEqual(code, 1, output)
+        self.assertIn("'windows' reported 'failure'", output)
+
+    def test_a_push_run_still_requires_every_desktop_job(self) -> None:
+        postponed = all_success(macos="skipped", linux="skipped", windows="skipped")
+        code, output = run(["--needs-json", json.dumps(postponed), "--event", "push"])
+        self.assertEqual(code, 1, output)
+        self.assertIn("'macos' reported 'skipped'", output)
+
     def test_cli_requires_the_needs_argument(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as raised:
