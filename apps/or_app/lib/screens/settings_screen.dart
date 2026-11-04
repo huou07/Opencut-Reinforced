@@ -276,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 final label = assistant.harnessLabel.isEmpty
                     ? assistant.settings.harnessKind.label
                     : assistant.harnessLabel;
-                final path = assistant.harnessPath ?? 'Not started yet';
+                final path = assistant.harnessPath ?? 'No harness started yet.';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

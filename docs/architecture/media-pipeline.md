@@ -1,6 +1,6 @@
 # Media Pipeline — Probe, Decode, Cache, Jobs, Encode
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-04
 
 Scope: how media enters the project, how frames and audio are produced, what is
 cached, and how bounded background work is scheduled.

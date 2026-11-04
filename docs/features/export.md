@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-11-03
+Last reviewed: 2026-11-04
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -66,6 +66,11 @@ the selected profile's muxer and encoders.
 - The H.264 profile is fed NV12 planes: the composited frame is
   converted on the GPU and read back as two planes, so no CPU colour conversion
   runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
+- A clip that covers the whole canvas with no effect, transition, transform,
+  crop or text on top is decoded straight to NV12 at the output size, so that
+  frame never becomes an RGBA texture or a readback: the decoder runs one
+  `swscale` pass and the planes go to the encoder. Any rotation on the source
+  falls back to the composited path.
 - The VP9 profile runs with its own row threading: the encoder is told how many
   threads the host can feed (capped at sixteen) and `row-mt` is on, because
   libvpx otherwise encodes on a single thread and an eight or sixteen core host

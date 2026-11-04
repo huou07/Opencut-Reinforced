@@ -31,7 +31,9 @@ abstract final class OrRadii {
 abstract final class OrDialogSizes {
   static double width(BuildContext context, double preferred) {
     final available = MediaQuery.sizeOf(context).width - 64;
-    return preferred < available ? preferred : (available < 280 ? 280 : available);
+    return preferred < available
+        ? preferred
+        : (available < 280 ? 280 : available);
   }
 }
 

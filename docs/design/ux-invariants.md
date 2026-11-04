@@ -1,6 +1,6 @@
 # UI/UX Acceptance Invariants
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-04
 
 Scope: behaviour that must not regress, and what counts as evidence for a UI
 change. Do not add an item here without a check that can fail.
@@ -35,6 +35,10 @@ journey. See [operations/verification.md](../operations/verification.md).
   every provider (installed, cloud or local server) before the clip is used.
 - User-facing copy never states an internal identifier (clip id, media id,
   job id, artifact key, checkpoint path); it names the consequence instead.
+- Copy names the device or the installation, never one operating system: no
+  "this Mac" in a Windows or Linux build, no hardcoded "Starting DeepSeek
+  Harness", and shortcut hints come from `shortcutLabel`/`deleteShortcutLabel`.
+  Guarded by `apps/or_app/test/platform_copy_test.dart`.
 - Transport and timeline keys resolve through the single shell
   `Shortcuts`/`Actions` map, dispatch the same gateway calls as the pointer
   controls, and do not fire while a text field holds focus.

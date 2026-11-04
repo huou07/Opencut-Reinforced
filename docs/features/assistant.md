@@ -1,6 +1,6 @@
 # Feature — Assistant Panel
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-04
 
 Scope: the in-editor AI panel, its connection to a local DeepSeek Harness over
 ACP, the `or` CLI surface and MCP fallback that edit the open project, and the

@@ -196,7 +196,18 @@ class UpdateInstaller {
   }
 
   /// `/Applications` when this user may write there, otherwise `~/Applications`.
+  ///
+  /// Only the real macOS host can use the shared folder. A host that is being
+  /// simulated — a test describing macOS while the process runs on Windows or
+  /// Linux — has no `/Applications` to probe, and `/Applications` on Windows
+  /// resolves to the current drive's root, which produced an invalid
+  /// destination path there.
   String _applicationsRoot() {
+    final simulated =
+        _host.isWindows != Platform.isWindows ||
+        _host.isMacOS != Platform.isMacOS ||
+        _host.isLinux != Platform.isLinux;
+    if (simulated) return _hostApplicationsFolder();
     final shared = '/Applications';
     try {
       final directory = Directory(shared);
@@ -208,10 +219,14 @@ class UpdateInstaller {
       probe.deleteSync();
       return shared;
     } on FileSystemException {
-      final home = '${_host.homeDirectory}/Applications';
-      Directory(home).createSync(recursive: true);
-      return home;
+      return _hostApplicationsFolder();
     }
+  }
+
+  String _hostApplicationsFolder() {
+    final home = _host.join(_host.homeDirectory, 'Applications');
+    Directory(home).createSync(recursive: true);
+    return home;
   }
 
   Future<void> _removeIfPresent(Directory directory) async {
@@ -219,7 +234,9 @@ class UpdateInstaller {
   }
 
   String _basename(String path) {
-    final separator = path.lastIndexOf('/');
-    return separator < 0 ? path : path.substring(separator + 1);
+    final separator = path.lastIndexOf(Platform.pathSeparator);
+    final posix = path.lastIndexOf('/');
+    final index = separator > posix ? separator : posix;
+    return index < 0 ? path : path.substring(index + 1);
   }
 }

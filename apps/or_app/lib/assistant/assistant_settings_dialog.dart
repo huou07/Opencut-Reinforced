@@ -97,7 +97,9 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       _detecting = false;
       if (launch != null) {
         _harness.text = launch.executable;
-        if (_harnessKind == AssistantHarnessKind.auto) _harnessKind = launch.kind;
+        if (_harnessKind == AssistantHarnessKind.auto) {
+          _harnessKind = launch.kind;
+        }
         _detection = 'Found ${launch.kind.label}.';
       } else if (_harnessKind == AssistantHarnessKind.auto) {
         _detection = 'No ACP harness was found. Set the executable below.';

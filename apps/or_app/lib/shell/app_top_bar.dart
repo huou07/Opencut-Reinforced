@@ -164,7 +164,7 @@ class AppTopBar extends StatelessWidget {
                       const SizedBox(width: OrSpacing.x2),
                       Tooltip(
                         message: dirty
-                            ? 'Unsaved changes · ${defaultTargetPlatform == TargetPlatform.macOS ? '⌘S' : 'Ctrl+S'} saves'
+                            ? 'Unsaved changes · ${shortcutLabel('S')} saves'
                             : 'Every change is on disk',
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
