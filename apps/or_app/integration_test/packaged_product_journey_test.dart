@@ -914,6 +914,14 @@ class _JourneyPicker implements ProjectFilePicker {
 /// Opens the title editor the way the editor exposes it: the clip's own menu,
 /// then the full dialog's Edit Title action.
 Future<void> _openTitleEditor(WidgetTester tester, String clipId) async {
+  // A snackbar sits over the bottom of the timeline on short windows and
+  // swallows the first click, so wait for transient feedback to clear before
+  // reaching for the clip.
+  await _pumpUntil(
+    tester,
+    () => find.byType(SnackBar).evaluate().isEmpty,
+    'timeline feedback clearing before the clip menu',
+  );
   final clip = find.byKey(ValueKey('timeline-clip-$clipId'));
   await tester.ensureVisible(clip);
   await tester.tap(clip, buttons: kSecondaryButton);
