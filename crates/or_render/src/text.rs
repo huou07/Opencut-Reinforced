@@ -120,8 +120,9 @@ impl TextRasterizer {
             self.cache.push(entry);
             return Ok(pixels);
         }
-        let pixels: Arc<[u8]> =
-            self.rasterize_spans_uncached(text, spans, formatting, width, height)?.into();
+        let pixels: Arc<[u8]> = self
+            .rasterize_spans_uncached(text, spans, formatting, width, height)?
+            .into();
         self.cache.push(CachedTextLayer {
             key,
             pixels: Arc::clone(&pixels),

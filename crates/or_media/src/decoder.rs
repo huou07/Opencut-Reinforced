@@ -1624,11 +1624,7 @@ fn make_nv12_frame(
     scaler: &mut ScalerCache,
     budgets: &RuntimeBudgets,
 ) -> Result<VideoFrame, DecodeError> {
-    if target_width == 0
-        || target_height == 0
-        || target_width % 2 != 0
-        || target_height % 2 != 0
-    {
+    if target_width == 0 || target_height == 0 || target_width % 2 != 0 || target_height % 2 != 0 {
         return Err(DecodeError::InvalidFrameData);
     }
     let frame_bytes = (target_width as usize)

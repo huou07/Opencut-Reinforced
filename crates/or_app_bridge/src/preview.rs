@@ -4594,47 +4594,22 @@ mod desktop {
                 } else {
                     RenderOutput::Packed
                 };
-                let lanes = usize::try_from(env_number("OR_BENCH_LANES", 1)).expect("lanes");
                 let started = Instant::now();
-                std::thread::scope(|scope| {
-                    for lane in 0..lanes {
-                        let program = Arc::clone(&program);
-                        let rate = rate;
-                        scope.spawn(move || {
-                            let resources = Arc::new(RenderResources {
-                                budgets: RuntimeBudgets::new(
-                                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
-                                    BudgetLimits::new(
-                                        AUDIO_DECODE_QUEUE_CAPACITY,
-                                        32 * 1024 * 1024,
-                                    )
-                                    .expect("audio budget"),
-                                    BudgetLimits::new(16, 256 * 1024 * 1024)
-                                        .expect("decode budget"),
-                                ),
-                                text_rasterizer: Mutex::new(TextRasterizer::new()),
-                                video_sessions: Mutex::new(VecDeque::new()),
-                            });
-                            let cancellation = CancellationToken::new();
-                            let mut frame_index = lane as u64;
-                            while frame_index < frames {
-                                let time = rate.frame_time(frame_index).expect("frame time");
-                                resources
-                                    .render_with_size(
-                                        &program,
-                                        time,
-                                        Some((width, height)),
-                                        None,
-                                        true,
-                                        output,
-                                        &cancellation,
-                                    )
-                                    .expect("render succeeds");
-                                frame_index += lanes as u64;
-                            }
-                        });
-                    }
-                });
+                let cancellation = CancellationToken::new();
+                for frame_index in 0..frames {
+                    let time = rate.frame_time(frame_index).expect("frame time");
+                    render_resources
+                        .render_with_size(
+                            &program,
+                            time,
+                            Some((width, height)),
+                            None,
+                            true,
+                            output,
+                            &cancellation,
+                        )
+                        .expect("render succeeds");
+                }
                 let elapsed = started.elapsed().as_secs_f64();
                 println!(
                     "OR_EXPORT_BENCH_RENDER source={source} out={width}x{height} frames={frames} text={with_text} seconds={elapsed:.3} fps={:.1}",
