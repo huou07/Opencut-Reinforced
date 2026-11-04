@@ -38,14 +38,14 @@ those fields.
 - macOS: MacBook Air M5 (10 CPU cores, 8 GPU cores, 16 GB), release build,
   VideoToolbox H.264, wgpu Metal, libvpx VP9, FFV1.
 
-| Row | macOS | Debian 13 (20 cores, no GPU) |
-|---|---|---|
-| decode mp4 | 335.2 fps | 157.4 fps |
-| render mp4 (NV12) | 96.3 fps | 29.3 fps |
-| full mp4 | 87.0 fps (3.71 MB) | not measurable on that host — its local FFmpeg prefix was built without any H.264 encoder |
-| render webm/mkv (packed RGBA) | 156.5 fps | 43.2 fps |
-| full webm | 23.6 fps (6.96 MB) | 13.1 fps (6.97 MB) |
-| full mkv | 21.9 fps (153.4 MB) | 14.2 fps (152.8 MB) |
+| Row | macOS | Debian 13 (20 cores, no GPU) | Windows 11 (12 cores, Intel GPU) |
+|---|---|---|---|
+| decode mp4 | 335.2 fps | 157.4 fps | 63.2 fps |
+| render mp4 (NV12) | 96.3 fps | 29.3 fps | 17.7 fps |
+| full mp4 | 87.0 fps (3.71 MB) | not measurable on that host — its local FFmpeg prefix was built without any H.264 encoder | 14.7 fps (4.31 MB), Media Foundation `h264_mf` |
+| render webm/mkv (packed RGBA) | 156.5 fps | 43.2 fps | 32.8 fps |
+| full webm | 23.6 fps (6.96 MB) | 13.1 fps (6.97 MB) | not measurable on that host — its benchmark FFmpeg build has no libvpx VP9 encoder |
+| full mkv | 21.9 fps (153.4 MB) | 14.2 fps (152.8 MB) | 5.4 fps (140.6 MB) |
 
 Two findings that shaped the code: the NV12 readback path used to allocate two
 textures and a staging buffer per frame and wait on the GPU twice, which cost
@@ -54,8 +54,15 @@ one submit and one wait per frame recovered 7% (89.7 → 96.3 fps render,
 81.3 → 87.0 fps full export on macOS). VP9 stays software everywhere, bounded by
 `VP9_MAX_THREADS = 16` with `row-mt=1`.
 
-Windows has no local FFmpeg development tree in this session, so its numbers come
-from hosted CI hardware and are not recorded here as local measurements.
+The Windows host has no FFmpeg package on it, so these rows come from a purpose
+built FFmpeg 8.1.3 configured for this machine only (`--toolchain=msvc` driven by
+compiled clang, encoders `aac`, `h264_mf`, `ffv1`, `pcm_s16le`, muxers `mp4`,
+`matroska`). That is why the WebM row is missing there: building libvpx needs a
+CMake-generated Visual Studio build this host cannot produce, so VP9 is absent
+from the measurement build although the shipped Windows package carries it. The
+same ~1.9× NV12 penalty appears on all three hosts (96.3 vs 156.5 fps on macOS,
+29.3 vs 43.2 on Debian, 17.7 vs 32.8 on Windows), which is the cost of the two
+extra fullscreen passes and the readback, not of allocation.
 
 ### MotionScene materialisation on the local host (2026-10-27)
 

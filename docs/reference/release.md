@@ -1,11 +1,21 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-04
+Last reviewed: 2026-11-05
 
 Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
+The published line is **0.1.15** (2026-11-05), the first release cut after
+the parity rule replaced the macOS-only target and the first to carry the
+in-app library and first-run panel. Its four desktop assets —
+`Opencut-Reinforced-0.1.15-arm64.dmg`,
+`Opencut-Reinforced-0.1.15-linux-x64.deb`,
+`Opencut-Reinforced-0.1.15-windows-x64-setup.exe` and
+`Opencut-Reinforced-0.1.15-windows-x64.zip` — plus `SHA256SUMS.txt` were
+produced by one tag run of `desktop-release.yml`, and the code they build
+was merged through one pull request whose `release-gate` went green.
+
 
 Stable releases ship three desktop packages from one source tree:
 **macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` (Debian 13
