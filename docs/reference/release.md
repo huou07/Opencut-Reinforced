@@ -66,6 +66,15 @@ requires) and one tag run of this workflow. Do not push a commit to that pull
 request to test something; run the lane locally, fix it there, and only then
 push.
 
+The pull request itself is short. `platform-verification.yml` skips the three
+native desktop jobs on `pull_request` events, so a branch waits only on the
+shared checks — repository hygiene, the Rust lane, the Flutter static and widget
+lane and the descriptor boundary — while `release-gate` accepts their `skipped`
+result for that event only. The full desktop matrix still runs on every push to
+`main` and on a tag, which is where the platform evidence is recorded. Set the
+repository variable `OR_VERIFY_DESKTOP_ON_PULL_REQUEST=1` when a change genuinely
+needs the hosted desktops before merge.
+
 ## Version numbers
 
 One release carries two versions and they must agree: `apps/or_app/pubspec.yaml`

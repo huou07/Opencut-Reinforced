@@ -236,6 +236,12 @@ jobs:
           # Foundation are macOS and Windows only), so delivery links the pinned
           # x264 build from scripts/build_desktop_export_codecs.sh.
           export_configure_args+=(--enable-gpl --enable-libx264 --enable-encoder=libx264)
+          # NVENC from the pinned headers: the driver library loads at run time,
+          # so the package stays self-contained and the export probe falls back
+          # to x264 on a machine without an NVIDIA device. VAAPI is deliberately
+          # not linked here: it would make the bundled ffmpeg depend on libva at
+          # run time, and the export writer has no device frame pool yet.
+          export_configure_args+=(--enable-ffnvcodec --enable-nvenc --enable-encoder=h264_nvenc)
           configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2

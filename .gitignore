@@ -6,6 +6,7 @@
 target/
 build/
 dist/
+dist-release/
 node_modules/
 .dart_tool/
 .gradle/

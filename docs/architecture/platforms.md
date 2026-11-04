@@ -86,11 +86,14 @@ separately; a feature that uses it works on every desktop at once.
 | Platform | Decode | Viewer presentation | MP4 H.264 encoder | System voice |
 |---|---|---|---|---|
 | macOS | FFmpeg 8.1.3 software, app-local `.dylib` | bounded BGRA8888 premultiplied pixel-buffer texture | VideoToolbox (`h264_videotoolbox`) | `say` |
-| Windows | FFmpeg 8.1.3 software, app-local `.dll` | same | Media Foundation (`h264_mf`) | SpeechSynthesis |
-| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | x264 (`libx264`, GPL build) | `espeak-ng` |
+| Windows | FFmpeg 8.1.3 software, app-local `.dll` | same | Media Foundation (hardware when the driver offers it) | SpeechSynthesis |
+| Linux | FFmpeg 8.1.3 software, app-local `.so` | same | NVENC, else x264 (GPL build) | `espeak-ng` |
 | Android | in-process FFmpeg via SAF descriptors | software preview only, no audio | not a desktop profile | n/a |
 
-Platform-specific interop stays behind narrow runtime adapters. Project and
+Each encoder cell is a capability the package carries; the writer probes the
+machine before it commits, so "NVENC, else Media Foundation" falls back to the
+software tail on a box without the hardware. Platform-specific interop stays
+behind narrow runtime adapters. Project and
 timeline semantics stay platform-independent; only pickers, permissions,
 packaging, window integration and hardware APIs may differ.
 

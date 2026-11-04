@@ -47,8 +47,20 @@ DESKTOP_JOBS = (
 REQUIRED_JOBS = CORE_JOBS + DESKTOP_JOBS
 
 
-def evaluate(needs: object, required: tuple[str, ...] = REQUIRED_JOBS) -> list[str]:
-    """Return one problem line per required job that did not succeed."""
+def evaluate(
+    needs: object,
+    required: tuple[str, ...] = REQUIRED_JOBS,
+    skippable: tuple[str, ...] = (),
+) -> list[str]:
+    """Return one problem line per required job that did not succeed.
+
+    `skippable` names required jobs whose `skipped` result is tolerated. It
+    exists for the pull-request lane: a desktop native build is proof a release
+    needs, not proof a change needs, so a branch waits on the shared checks and
+    the full matrix runs on the merged commit and on the release tag. A skipped
+    skippable job still fails the gate when the run is not that lane, because
+    the caller passes an empty `skippable` tuple everywhere else.
+    """
     if not isinstance(needs, dict):
         return ["the needs context is not a JSON object"]
 
@@ -59,6 +71,8 @@ def evaluate(needs: object, required: tuple[str, ...] = REQUIRED_JOBS) -> list[s
             problems.append(f"required job {job!r} was not reported (missing)")
             continue
         result = entry.get("result")
+        if result == "skipped" and job in skippable:
+            continue
         if result != "success":
             problems.append(f"required job {job!r} reported {result!r}, not 'success'")
     return problems
@@ -70,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="the workflow's toJSON(needs) context")
     parser.add_argument("--required", nargs="+", default=list(REQUIRED_JOBS),
                         help="job names that must all report success")
+    parser.add_argument("--event", default="",
+                        help="the workflow's github.event_name; a pull_request "
+                             "run may skip the native desktop jobs")
     args = parser.parse_args(argv)
 
     try:
@@ -79,7 +96,10 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 1
 
-    problems = evaluate(needs, tuple(args.required))
+    skippable: tuple[str, ...] = ()
+    if args.event == "pull_request":
+        skippable = DESKTOP_JOBS
+    problems = evaluate(needs, tuple(args.required), skippable)
     if problems:
         for problem in problems:
             print(f"release-gate: FAIL — {problem}", file=sys.stderr)
@@ -87,7 +107,12 @@ def main(argv: list[str] | None = None) -> int:
               "required job cannot pass the aggregate gate.", file=sys.stderr)
         return 1
 
-    print(f"release-gate: PASS — all {len(args.required)} required jobs succeeded")
+    skipped = [job for job in skippable if needs.get(job, {}).get("result") == "skipped"]
+    if skipped:
+        print(f"release-gate: PASS — {len(args.required)} required jobs, "
+              f"desktop builds deferred to the merge ({', '.join(skipped)})")
+    else:
+        print(f"release-gate: PASS — all {len(args.required)} required jobs succeeded")
     return 0
 
 
