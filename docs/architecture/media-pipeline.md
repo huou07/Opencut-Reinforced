@@ -1,6 +1,6 @@
 # Media Pipeline — Probe, Decode, Cache, Jobs, Encode
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-04
 
 Scope: how media enters the project, how frames and audio are produced, what is
 cached, and how bounded background work is scheduled.
@@ -22,7 +22,13 @@ use explicit overrides.
   playback and export, then applies the identical import matrix. A file the
   helper rejected on its matrix is not retried; the helper's diagnostic wins.
 - Decoding: `or_media` uses `ffmpeg-the-third` for demux, software decode and
-  seek, with bounded queues and exact timestamps.
+  seek, with bounded queues and exact timestamps. Video decoders open with
+  FFmpeg frame threading (`thread_count = 0`, one thread per core) instead of one
+  decode thread, and a decode request can ask for `DecodeOutput::Nv12` at an
+  output size: swscale then converts YUV to NV12 at the requested size and the
+  export writer consumes those planes directly, so a full-frame clip never
+  round-trips through RGBA, the GPU and a readback. Rotated sources and layered
+  compositions still decode to RGBA.
 - Android probes granted SAF descriptors through the in-process FFmpeg boundary;
   a `content://` URI is never converted into a filesystem path.
 

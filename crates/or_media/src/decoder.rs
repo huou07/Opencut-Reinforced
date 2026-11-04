@@ -36,6 +36,28 @@ const MAX_TRANSCRIPTION_AUDIO_DURATION_MS: u64 = 4 * 60 * 60 * 1_000;
 const MAX_TRANSCRIPTION_WAV_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_TRANSCRIPTION_FRAME_BYTES: u128 = 64 * 1024 * 1024;
 const MAX_SOFTWARE_FRAME_BYTES: usize = 256 * 1024 * 1024;
+
+/// Cached swscale context keyed by the exact input and output descriptors it
+/// was built for. Keying on the output as well lets one session alternate
+/// between RGBA (rotation fallback) and NV12 output safely.
+type ScalerCache = Option<(Pixel, u32, u32, Pixel, u32, u32, scaling::Context)>;
+
+/// Opens a video decoder with frame threading enabled.
+///
+/// The linked FFmpeg leaves `thread_count` at one unless told otherwise, so a
+/// 1080p export decoded a single frame at a time while the host's other cores
+/// idled. Frame threading lets the decoder stay ahead of the writer; the
+/// session still owns the context exclusively, so nothing here is shared.
+fn open_video_decoder(
+    mut context: codec::context::Context,
+) -> Result<codec::decoder::Video, DecodeError> {
+    context.set_threading(codec::threading::Config {
+        kind: codec::threading::Type::Frame,
+        count: 0,
+    });
+    context.decoder().video().map_err(DecodeError::Ffmpeg)
+}
+
 const MAX_AUDIO_INPUT_SAMPLES: usize = 1_048_576;
 const MAX_AUDIO_CHUNK_BYTES: usize = 64 * 1024 * 1024;
 
@@ -46,6 +68,31 @@ enum DisplayRotation {
     Clockwise90,
     HalfTurn,
     CounterClockwise90,
+}
+
+/// Pixel layout a decode session produces.
+///
+/// [`DecodeOutput::Nv12`] lets video-only pipelines read decoded planes at the
+/// final output size without the intermediate RGBA staging buffer or a GPU
+/// readback. Sessions that request it must never also request RGBA frames.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum DecodeOutput {
+    /// Packed RGBA, the layout every compositing path consumes.
+    Rgba,
+    /// Planar 4:2:0 with interleaved chroma, scaled to the requested size.
+    Nv12 { width: u32, height: u32 },
+}
+
+impl DecodeOutput {
+    /// Bytes a frame of this output occupies.
+    pub fn frame_bytes(self) -> usize {
+        match self {
+            Self::Rgba => 0,
+            Self::Nv12 { width, height } => {
+                (width as usize * height as usize) + (width as usize * height as usize / 2)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -106,9 +153,14 @@ impl VideoFrame {
     }
 
     pub fn pixels(&self) -> &[u8] {
+        self.bytes()
+    }
+
+    /// Raw software bytes in the descriptor's pixel layout.
+    pub fn bytes(&self) -> &[u8] {
         self.lease
             .software_bytes()
-            .expect("software decoder frames own packed pixels")
+            .expect("software decoder frames own software bytes")
     }
 
     fn duplicate(&self, budgets: &RuntimeBudgets) -> Result<Self, DecodeError> {
@@ -121,7 +173,7 @@ impl VideoFrame {
         let descriptor = FrameDescriptor::software(
             descriptor.width(),
             descriptor.height(),
-            FramePixelFormat::Rgba8,
+            descriptor.pixel_format(),
             descriptor.timing().timestamp(),
         )?;
         let lease = FrameLease::from_software(descriptor, pixels.to_vec())?;
@@ -302,6 +354,15 @@ impl SoftwareMediaDecoder {
         &self,
         cancellation: &or_runtime::CancellationToken,
     ) -> Result<VideoDecodeSession, DecodeError> {
+        self.open_video_session_with_output(DecodeOutput::Rgba, cancellation)
+    }
+
+    /// Opens one bounded demux/decode session that produces `output` frames.
+    pub fn open_video_session_with_output(
+        &self,
+        output: DecodeOutput,
+        cancellation: &or_runtime::CancellationToken,
+    ) -> Result<VideoDecodeSession, DecodeError> {
         if cancellation.is_cancelled() {
             return Err(DecodeError::Cancelled);
         }
@@ -323,10 +384,11 @@ impl SoftwareMediaDecoder {
                 display_rotation,
             )
         };
-        let decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        let decoder = open_video_decoder(context)?;
         Ok(VideoDecodeSession {
             input,
             decoder,
+            output,
             stream_index,
             time_base,
             display_rotation,
@@ -377,7 +439,7 @@ impl SoftwareMediaDecoder {
                 display_rotation,
             )
         };
-        let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        let mut decoder = open_video_decoder(context)?;
         if !still_image {
             seek_to_range(&mut input, stream_index, range, time_base)?;
         }
@@ -389,7 +451,7 @@ impl SoftwareMediaDecoder {
             cancellation,
             budgets: &self.budgets,
         };
-        let mut scaler: Option<(Pixel, u32, u32, scaling::Context)> = None;
+        let mut scaler: ScalerCache = None;
         let mut emitted = 0;
         for packet in input.packets() {
             check_request(snapshot, job.queue, job.cancellation)?;
@@ -453,7 +515,7 @@ impl SoftwareMediaDecoder {
                 display_rotation,
             )
         };
-        let mut decoder = context.decoder().video().map_err(DecodeError::Ffmpeg)?;
+        let mut decoder = open_video_decoder(context)?;
         let presentation = VideoStreamPresentation {
             time_base,
             display_rotation,
@@ -1134,12 +1196,13 @@ pub struct VideoDecodeSessionMetrics {
 pub struct VideoDecodeSession {
     input: MediaInput,
     decoder: codec::decoder::Video,
+    output: DecodeOutput,
     stream_index: usize,
     time_base: TimestampBase,
     display_rotation: DisplayRotation,
     still_image: bool,
     budgets: RuntimeBudgets,
-    scaler: Option<(Pixel, u32, u32, scaling::Context)>,
+    scaler: ScalerCache,
     previous_frame: Option<VideoFrame>,
     next_frame: Option<VideoFrame>,
     last_request: Option<RationalTime>,
@@ -1204,6 +1267,7 @@ impl VideoDecodeSession {
                         &decoded,
                         timestamp,
                         self.display_rotation,
+                        self.output,
                         &mut self.scaler,
                         &self.budgets,
                     )?;
@@ -1389,7 +1453,7 @@ struct DecodeJob<'a, T> {
 
 fn drain_video(
     decoder: &mut codec::decoder::Video,
-    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    scaler: &mut ScalerCache,
     display_rotation: DisplayRotation,
     time_base: TimestampBase,
     job: &DecodeJob<'_, VideoFrame>,
@@ -1427,10 +1491,17 @@ fn emit_video_frame(
     decoded: &VideoFrameBuffer,
     timestamp: RationalTime,
     display_rotation: DisplayRotation,
-    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    scaler: &mut ScalerCache,
     job: &DecodeJob<'_, VideoFrame>,
 ) -> Result<bool, DecodeError> {
-    let frame = make_video_frame(decoded, timestamp, display_rotation, scaler, job.budgets)?;
+    let frame = make_video_frame(
+        decoded,
+        timestamp,
+        display_rotation,
+        DecodeOutput::Rgba,
+        scaler,
+        job.budgets,
+    )?;
     queue_video(job.snapshot, frame, job.queue, job.cancellation)?;
     Ok(job.range.duration().is_zero())
 }
@@ -1439,10 +1510,29 @@ fn make_video_frame(
     decoded: &VideoFrameBuffer,
     timestamp: RationalTime,
     display_rotation: DisplayRotation,
-    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    output: DecodeOutput,
+    scaler: &mut ScalerCache,
     budgets: &RuntimeBudgets,
 ) -> Result<VideoFrame, DecodeError> {
     let (width, height, input_format) = (decoded.width(), decoded.height(), decoded.format());
+    // Rotated media cannot be turned by swscale, so it always takes the RGBA
+    // path where the rotation is applied while packing rows.
+    if let DecodeOutput::Nv12 {
+        width: target_width,
+        height: target_height,
+    } = output
+        && display_rotation == DisplayRotation::None
+    {
+        return make_nv12_frame(
+            decoded,
+            timestamp,
+            input_format,
+            (width, height),
+            (target_width, target_height),
+            scaler,
+            budgets,
+        );
+    }
     let packed_len = (width as usize)
         .checked_mul(height as usize)
         .and_then(|pixels| pixels.checked_mul(4))
@@ -1452,10 +1542,13 @@ fn make_video_frame(
         .decode()
         .try_acquire(packed_len as u64)
         .map_err(DecodeError::Budget)?;
-    if !matches!(scaler, Some((format, w, h, _)) if *format == input_format && *w == width && *h == height)
+    if !matches!(scaler, Some((format, w, h, Pixel::RGBA, ow, oh, _)) if *format == input_format && *w == width && *h == height && *ow == width && *oh == height)
     {
         *scaler = Some((
             input_format,
+            width,
+            height,
+            Pixel::RGBA,
             width,
             height,
             scaling::Context::get(
@@ -1471,7 +1564,7 @@ fn make_video_frame(
         ));
     }
 
-    let Some((_, _, _, scaler)) = scaler.as_mut() else {
+    let Some((_, _, _, _, _, _, scaler)) = scaler.as_mut() else {
         return Err(DecodeError::InvalidFrameData);
     };
     let mut rgba = VideoFrameBuffer::empty();
@@ -1519,9 +1612,105 @@ fn make_video_frame(
     })
 }
 
+/// Decodes straight to NV12 at the requested size: one swscale pass, no RGBA
+/// staging buffer, and reused across frames.
+fn make_nv12_frame(
+    decoded: &VideoFrameBuffer,
+    timestamp: RationalTime,
+    input_format: Pixel,
+    (width, height): (u32, u32),
+    (target_width, target_height): (u32, u32),
+    scaler: &mut ScalerCache,
+    budgets: &RuntimeBudgets,
+) -> Result<VideoFrame, DecodeError> {
+    if target_width == 0
+        || target_height == 0
+        || !target_width.is_multiple_of(2)
+        || !target_height.is_multiple_of(2)
+    {
+        return Err(DecodeError::InvalidFrameData);
+    }
+    let frame_bytes = (target_width as usize)
+        .checked_mul(target_height as usize)
+        .and_then(|luma| luma.checked_add(luma / 2))
+        .filter(|bytes| *bytes <= MAX_SOFTWARE_FRAME_BYTES)
+        .ok_or(DecodeError::VideoFrameTooLarge)?;
+    let budget = budgets
+        .decode()
+        .try_acquire(frame_bytes as u64)
+        .map_err(DecodeError::Budget)?;
+    if !matches!(scaler, Some((format, w, h, Pixel::NV12, ow, oh, _)) if *format == input_format && *w == width && *h == height && *ow == target_width && *oh == target_height)
+    {
+        *scaler = Some((
+            input_format,
+            width,
+            height,
+            Pixel::NV12,
+            target_width,
+            target_height,
+            scaling::Context::get(
+                input_format,
+                width,
+                height,
+                Pixel::NV12,
+                target_width,
+                target_height,
+                scaling::Flags::BILINEAR,
+            )
+            .map_err(DecodeError::Ffmpeg)?,
+        ));
+    }
+    let Some((_, _, _, _, _, _, scaler)) = scaler.as_mut() else {
+        return Err(DecodeError::InvalidFrameData);
+    };
+    let mut buffer = VideoFrameBuffer::empty();
+    scaler
+        .run(decoded, &mut buffer)
+        .map_err(DecodeError::Ffmpeg)?;
+    let luma_row = target_width as usize;
+    let chroma_row = target_width as usize;
+    let luma_bytes = luma_row
+        .checked_mul(target_height as usize)
+        .ok_or(DecodeError::VideoFrameTooLarge)?;
+    let chroma_bytes = chroma_row
+        .checked_mul(target_height as usize / 2)
+        .ok_or(DecodeError::VideoFrameTooLarge)?;
+    let luma_stride = buffer.stride(0);
+    let chroma_stride = buffer.stride(1);
+    let luma_plane = buffer.data(0);
+    let chroma_plane = buffer.data(1);
+    if luma_stride < luma_row || chroma_stride < chroma_row {
+        return Err(DecodeError::InvalidFrameData);
+    }
+    let mut bytes = vec![0; luma_bytes + chroma_bytes];
+    for row in 0..target_height as usize {
+        let source = row * luma_stride;
+        let destination = row * luma_row;
+        bytes[destination..destination + luma_row]
+            .copy_from_slice(&luma_plane[source..source + luma_row]);
+    }
+    for row in 0..target_height as usize / 2 {
+        let source = row * chroma_stride;
+        let destination = luma_bytes + row * chroma_row;
+        bytes[destination..destination + chroma_row]
+            .copy_from_slice(&chroma_plane[source..source + chroma_row]);
+    }
+    let descriptor = FrameDescriptor::software(
+        target_width,
+        target_height,
+        FramePixelFormat::Nv12,
+        timestamp,
+    )?;
+    let lease = FrameLease::from_software(descriptor, bytes)?;
+    Ok(VideoFrame {
+        lease,
+        _budget: budget,
+    })
+}
+
 fn drain_video_frame_at(
     decoder: &mut codec::decoder::Video,
-    scaler: &mut Option<(Pixel, u32, u32, scaling::Context)>,
+    scaler: &mut ScalerCache,
     presentation: VideoStreamPresentation,
     target: RationalTime,
     budgets: &RuntimeBudgets,
@@ -1545,6 +1734,7 @@ fn drain_video_frame_at(
                             &decoded,
                             timestamp,
                             presentation.display_rotation,
+                            DecodeOutput::Rgba,
                             scaler,
                             budgets,
                         )?);
@@ -1556,6 +1746,7 @@ fn drain_video_frame_at(
                     &decoded,
                     timestamp,
                     presentation.display_rotation,
+                    DecodeOutput::Rgba,
                     scaler,
                     budgets,
                 )?);

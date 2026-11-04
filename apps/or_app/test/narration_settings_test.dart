@@ -209,7 +209,7 @@ void main() {
   test('the settings intro names the source that is actually in use', () {
     expect(
       narrationSettingsIntroText('system'),
-      'Voices installed on this Mac. The assistant and the Audio tool use '
+      'Voices installed on this device. The assistant and the Audio tool use '
       'the saved default; nothing is uploaded.',
     );
     final local = narrationSettingsIntroText('local');

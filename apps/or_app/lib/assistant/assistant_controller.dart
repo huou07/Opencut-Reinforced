@@ -67,6 +67,11 @@ class AssistantController extends ChangeNotifier {
   String _agentWorkspacePath = '';
   String? _harnessPath;
   String _harnessLabel = '';
+
+  /// What the wait state says while a harness process starts.
+  String get connectingLabel => _harnessLabel.isEmpty
+      ? 'Starting the assistant harness…'
+      : 'Starting $_harnessLabel…';
   String? _orCliPath;
   String? _overlayProfile;
   List<Map<String, Object?>> _configOptions = const [];

@@ -5,6 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/assistant/agent_workspace.dart';
 import 'package:or_app/support/host_platform.dart';
 
+/// A POSIX host, described explicitly so the wrapper-format assertions hold
+/// when the suite runs on Windows too.
+const _posixHost = HostPlatform(
+  isWindows: false,
+  isMacOS: false,
+  isLinux: true,
+  environment: {'HOME': '/home/ana'},
+  executablePath: '/usr/bin/or_app',
+);
+
 void main() {
   AgentWorkspaceBundle bundle(int version, Map<String, String> files) =>
       AgentWorkspaceBundle(version: version, files: files);
@@ -135,7 +145,7 @@ void main() {
     );
 
     final cli = '/tmp/or build/or';
-    await workspace.writeOrCli(cli);
+    await workspace.writeOrCli(cli, platform: _posixHost);
     final wrapper = File('${root.path}/tools/or').readAsStringSync();
     expect(wrapper, startsWith('#!/bin/sh\n'));
     expect(wrapper, contains(cli));
@@ -150,7 +160,10 @@ void main() {
       bundle: bundle(1, {'AGENTS.md': '# index\n'}),
     );
 
-    await workspace.writeOrCli("/tmp/vibecode projects/it's or");
+    await workspace.writeOrCli(
+      "/tmp/vibecode projects/it's or",
+      platform: _posixHost,
+    );
     final wrapper = File('${root.path}/tools/or').readAsStringSync();
     expect(wrapper, contains(r"'/tmp/vibecode projects/it'\''s or'"));
   });

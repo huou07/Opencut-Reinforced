@@ -993,6 +993,28 @@ impl Nv12Planes {
     pub fn chroma(&self) -> &[u8] {
         &self.chroma
     }
+
+    /// Builds planes from one contiguous NV12 buffer: `width * height` luma
+    /// bytes followed by `width * height / 2` interleaved chroma bytes.
+    ///
+    /// This is the layout the decoder produces so a CPU decode can reach the
+    /// hardware encoder without an intermediate RGBA copy.
+    pub fn from_contiguous(width: u32, height: u32, bytes: &[u8]) -> Option<Self> {
+        if width == 0 || height == 0 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return None;
+        }
+        let luma_len = (width as usize).checked_mul(height as usize)?;
+        let expected = luma_len.checked_add(luma_len / 2)?;
+        if bytes.len() != expected {
+            return None;
+        }
+        Some(Self {
+            width,
+            height,
+            luma: bytes[..luma_len].to_vec(),
+            chroma: bytes[luma_len..].to_vec(),
+        })
+    }
 }
 
 impl fmt::Debug for RenderDevice {

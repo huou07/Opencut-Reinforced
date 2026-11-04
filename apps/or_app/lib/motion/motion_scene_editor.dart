@@ -1222,7 +1222,7 @@ Future<void> showAddAssetSheet(
       backgroundColor: OrColors.surface,
       title: const Text('Add an asset to the scene'),
       content: SizedBox(
-        width: 420,
+        width: OrDialogSizes.width(context, 420),
         height: 420,
         child: entries.isEmpty
             ? const Align(

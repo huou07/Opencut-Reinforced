@@ -1,6 +1,6 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-03
+Last reviewed: 2026-11-04
 
 Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
@@ -37,6 +37,14 @@ The Linux codec build also links x264, so MP4 delivery works without a GPU. That
 makes the Linux FFmpeg build GPL-2.0-or-later and ships `licenses/x264/COPYING`
 beside the FFmpeg notice; macOS and Windows stay LGPL. See
 [ADR 0011](../adr/0011-linux-delivery-encoder.md).
+A real Windows host needs four things on PATH before the lane behaves like CI:
+the MSVC tools that carry `dumpbin.exe` (VS 2022 Build Tools), a Python 3 that
+`python3` does not shadow with the Store alias, `LIBCLANG_PATH` pointing at the
+folder with `libclang.dll` (msys64 clang64), and `FFMPEG_INSTALL_PREFIX` with
+`FFMPEG_DIR` pointing at the pinned FFmpeg install. A real Linux host needs the
+rustup toolchain and Flutter on PATH, and the UI preflight refuses to start
+below 6 GiB of free memory and disk.
+
 The CI desktop jobs call the same scripts, so a package verified on a real host
 and one built by CI are produced by one procedure. All three platform scripts
 stage the optional runtime by calling `scripts/stage_desktop_runtime.py`, which

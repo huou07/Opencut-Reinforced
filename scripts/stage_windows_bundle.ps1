@@ -34,8 +34,14 @@ if ($env:GITHUB_ENV) {
   $env:OR_PACKAGED_BRIDGE_DIRECTORY = $runtimeDir
 }
 
-$probeSource = Join-Path $RepoRoot 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe'
-if (-not (Test-Path $probeSource -PathType Leaf)) { throw 'Production or_media FFmpeg probe was not built' }
+# A caller may redirect Cargo's output (the local lane reuses one target
+# directory), so look in the redirected release folder before the default one.
+$probeCandidates = @(
+  (Join-Path $RepoRoot 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe'),
+  (Join-Path $env:CARGO_TARGET_DIR 'release/ffmpeg-link-probe.exe')
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+$probeSource = $probeCandidates | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
+if ($null -eq $probeSource) { throw 'Production or_media FFmpeg probe was not built' }
 Copy-Item -Path $probeSource -Destination (Join-Path $runtimeDir 'ffmpeg-link-probe.exe') -Force
 
 $destinations = @($runtimeDir)
@@ -59,8 +65,15 @@ foreach ($helper in @('ffmpeg.exe', 'ffprobe.exe')) {
 # Speech runtime and the `or` CLI come from the shared stager, so the Windows
 # package carries the same helpers as macOS and Linux.
 $stager = Join-Path $RepoRoot 'scripts/stage_desktop_runtime.py'
-$python = Get-Command python3 -ErrorAction SilentlyContinue
-if ($null -eq $python) { $python = Get-Command python -ErrorAction Stop }
+# An App Execution Alias named python3.exe can sit first on PATH and only
+# opens the Store. Pick the first candidate that actually starts Python: the
+# stager is mandatory, so a stub must not be mistaken for an interpreter.
+$python = $null
+foreach ($candidate in @(Get-Command python3, python -ErrorAction SilentlyContinue)) {
+  & $candidate.Source -c "import sys" 2>$null | Out-Null
+  if ($LASTEXITCODE -eq 0) { $python = $candidate; break }
+}
+if ($null -eq $python) { throw 'Python 3 is required to stage the runtime' }
 $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'amd64' }
 $required = ''
 $download = @()

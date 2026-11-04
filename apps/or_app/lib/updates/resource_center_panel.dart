@@ -212,9 +212,9 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
             title: 'Speech models',
             detail: widget.onManageSpeechModels == null
                 ? 'Open a project, then use Audio → Speech model to download '
-                      'or switch a local Whisper model. Models stay on this Mac.'
+                      'or switch a local Whisper model. Models stay on this device.'
                 : 'Download, switch or remove a local Whisper model. Models '
-                      'stay on this Mac and audio is processed locally.',
+                      'stay on this device and audio is processed locally.',
             action: widget.onManageSpeechModels == null
                 ? null
                 : OutlinedButton.icon(
@@ -229,7 +229,7 @@ class _ResourceCenterPanelState extends State<ResourceCenterPanel> {
             title: 'Assistant harness',
             detail:
                 'The editor’s AI panel connects to a harness installed '
-                'outside the app bundle. DeepSeek Harness is the default.',
+                'outside the app bundle; choose which one in Assistant settings.',
             action: OutlinedButton.icon(
               key: const ValueKey('resources-install-assistant'),
               onPressed: () => _openUrl(widget.assistantInstallUrl),

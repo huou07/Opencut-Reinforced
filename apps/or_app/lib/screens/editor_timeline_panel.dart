@@ -1069,7 +1069,7 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
               ),
               IconButton(
                 key: const ValueKey('timeline-selection-delete'),
-                tooltip: 'Delete clip (⌫)',
+                tooltip: 'Delete clip (${deleteShortcutLabel()})',
                 visualDensity: VisualDensity.compact,
                 onPressed: canDelete
                     ? () => unawaited(
@@ -1697,7 +1697,11 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
         PopupMenuItem<_ClipMenuChoice>(
           value: _ClipMenuChoice.rippleDelete,
           enabled: widget.onRippleDeleteClip != null && !widget.busy,
-          child: const _ClipMenuItem('Ripple delete', '⇧⌫', destructive: true),
+          child: _ClipMenuItem(
+            'Ripple delete',
+            deleteShortcutLabel(shift: true),
+            destructive: true,
+          ),
         ),
         const PopupMenuDivider(),
         PopupMenuItem<_ClipMenuChoice>(

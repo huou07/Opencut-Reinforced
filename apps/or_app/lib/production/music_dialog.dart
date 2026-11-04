@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
+import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
 import 'ducking_service.dart';
@@ -336,7 +337,7 @@ class _MusicDialogState extends State<MusicDialog> {
     return AlertDialog(
       title: const Text('Generate background music'),
       content: SizedBox(
-        width: 580,
+        width: OrDialogSizes.width(context, 580),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

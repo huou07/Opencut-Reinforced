@@ -85,16 +85,20 @@ void main() {
     addTearDown(() => root.delete(recursive: true));
     final first = Directory('${root.path}/first')..createSync();
     final second = Directory('${root.path}/second')..createSync();
-    final executable = File(p.join(second.path, 'dsh'))..writeAsStringSync('');
+    // The real rules of the running host: a simulated POSIX host on Windows
+    // splits a `C:\...` PATH entry at its drive colon.
+    final isWindows = Platform.isWindows;
+    final executable = File(p.join(second.path, isWindows ? 'dsh.exe' : 'dsh'))
+      ..writeAsStringSync('');
     final host = HostPlatform(
-      isWindows: false,
+      isWindows: isWindows,
       isMacOS: Platform.isMacOS,
       isLinux: Platform.isLinux,
       environment: {
-        'HOME': root.path,
-        'PATH': [first.path, second.path].join(':'),
+        if (isWindows) 'USERPROFILE': root.path else 'HOME': root.path,
+        'PATH': [first.path, second.path].join(isWindows ? ';' : ':'),
       },
-      executablePath: p.join(root.path, 'or_app'),
+      executablePath: p.join(root.path, isWindows ? 'or_app.exe' : 'or_app'),
     );
     expect(host.findExecutable('dsh'), executable.path);
   });

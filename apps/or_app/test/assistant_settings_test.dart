@@ -127,14 +127,8 @@ void main() {
     final root = await Directory.systemTemp.createTemp('or-harness-path-');
     addTearDown(() => root.delete(recursive: true));
     final bin = Directory('${root.path}/bin')..createSync();
-    final harness = File('${bin.path}/dsh')..writeAsStringSync('');
-    final host = HostPlatform(
-      isWindows: false,
-      isMacOS: false,
-      isLinux: true,
-      environment: {'HOME': root.path, 'PATH': bin.path},
-      executablePath: '${root.path}/or_app',
-    );
+    final host = _localHost(root, bin);
+    final harness = File(_binary(host, bin, 'dsh'))..writeAsStringSync('');
 
     final launch = await resolveHarnessLaunch(
       settings: const AssistantSettings(),
@@ -144,6 +138,52 @@ void main() {
     );
     expect(launch, isNotNull);
     expect(launch!.executable, harness.path);
+  });
+
+  test('a stored DeepSeek path does not hijack another selection', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-hijack-');
+    addTearDown(() => root.delete(recursive: true));
+    final bin = Directory('${root.path}/bin')..createSync();
+    final host = _localHost(root, bin);
+    final dsh = File(_binary(host, bin, 'dsh'))..writeAsStringSync('');
+    final codex = File(_binary(host, bin, 'codex-acp'))..writeAsStringSync('');
+
+    final launch = await resolveHarnessLaunch(
+      settings: AssistantSettings(
+        harnessKind: AssistantHarnessKind.codex,
+        harnessPath: dsh.path,
+      ),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNotNull);
+    expect(launch!.kind, AssistantHarnessKind.codex);
+    expect(launch.executable, codex.path);
+  });
+
+  test('an explicit selection discovers its own executable', () async {
+    final root = await Directory.systemTemp.createTemp('or-harness-pick-');
+    addTearDown(() => root.delete(recursive: true));
+    final bin = Directory('${root.path}/bin')..createSync();
+    final host = _localHost(root, bin);
+    File(_binary(host, bin, 'dsh')).writeAsStringSync('');
+    File(_binary(host, bin, 'opencode')).writeAsStringSync('');
+
+    final launch = await resolveHarnessLaunch(
+      settings: const AssistantSettings(
+        harnessKind: AssistantHarnessKind.opencode,
+      ),
+      patchPath: '${root.path}/agents.patch.yml',
+      environment: host.environment,
+      platform: host,
+    );
+    expect(launch, isNotNull);
+    // The host may already carry its own copy in a system directory; either way
+    // the selection must resolve to OpenCode and not to the installed DSH.
+    expect(launch!.kind, AssistantHarnessKind.opencode);
+    expect(p.basename(launch.executable), 'opencode${host.executableSuffix}');
+    expect(launch.arguments, ['acp']);
   });
 
   test('no harness anywhere resolves to no launch', () async {
@@ -259,3 +299,32 @@ void main() {
     expect(launch.kind, AssistantHarnessKind.custom);
   });
 }
+
+/// The host rules of the machine running the suite, with a temporary `PATH`.
+///
+/// Windows must use its real rules: describing a POSIX host there splits
+/// `C:\...` at its drive colon and cannot find anything, which is a test
+/// artifact rather than a product defect. The POSIX hosts stay simulated and
+/// exclude the system install folders, so a harness installed on the developer
+/// machine cannot satisfy the assertion instead of the temporary `PATH` entry.
+HostPlatform _localHost(Directory root, Directory bin) {
+  if (Platform.isWindows) {
+    return HostPlatform(
+      isWindows: true,
+      isMacOS: false,
+      isLinux: false,
+      environment: {'USERPROFILE': root.path, 'PATH': bin.path},
+      executablePath: p.join(root.path, 'or_app.exe'),
+    );
+  }
+  return HostPlatform(
+    isWindows: false,
+    isMacOS: false,
+    isLinux: true,
+    environment: {'HOME': root.path, 'PATH': bin.path},
+    executablePath: p.join(root.path, 'or_app'),
+  );
+}
+
+String _binary(HostPlatform host, Directory bin, String name) =>
+    p.join(bin.path, '$name${host.executableSuffix}');

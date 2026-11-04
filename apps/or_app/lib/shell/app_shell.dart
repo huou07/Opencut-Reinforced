@@ -743,6 +743,7 @@ class _AppShellState extends State<AppShell> {
       onOpenEditorPreview: () => _select(AppDestination.editorPreview),
       initialSection: _settingsInitialSection,
       onManageSpeechModels: _activeSession == null ? null : _manageSpeechModel,
+      assistant: _assistant,
     ),
     AppDestination.editorPreview =>
       _activeSession == null
@@ -3046,7 +3047,7 @@ class _AppShellState extends State<AppShell> {
           builder: (context, setDialogState) => AlertDialog(
             title: const Text('Export video'),
             content: SizedBox(
-              width: 420,
+              width: OrDialogSizes.width(context, 420),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
