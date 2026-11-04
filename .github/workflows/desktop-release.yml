@@ -187,8 +187,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential clang cmake desktop-file-utils dpkg-dev \
-            libclang-dev libasound2-dev nasm ninja-build pkg-config patchelf xz-utils \
-            libgtk-3-dev liblzma-dev zlib1g-dev xvfb xauth python3
+            libclang-dev libasound2-dev libva-dev libdrm-dev nasm ninja-build \
+            pkg-config patchelf xz-utils libgtk-3-dev liblzma-dev zlib1g-dev xvfb \
+            xauth python3
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # v1
@@ -236,12 +237,14 @@ jobs:
           # Foundation are macOS and Windows only), so delivery links the pinned
           # x264 build from scripts/build_desktop_export_codecs.sh.
           export_configure_args+=(--enable-gpl --enable-libx264 --enable-encoder=libx264)
-          # NVENC from the pinned headers: the driver library loads at run time,
-          # so the package stays self-contained and the export probe falls back
-          # to x264 on a machine without an NVIDIA device. VAAPI is deliberately
-          # not linked here: it would make the bundled ffmpeg depend on libva at
-          # run time, and the export writer has no device frame pool yet.
+          # NVENC comes from the pinned headers: the driver library loads at run
+          # time, so the package stays self-contained and the export probe falls
+          # back to x264 on a machine without an NVIDIA device.
           export_configure_args+=(--enable-ffnvcodec --enable-nvenc --enable-encoder=h264_nvenc)
+          # VAAPI drives Intel and AMD devices on Linux. libva is a normal system
+          # library, so the package declares it as a dependency instead of
+          # bundling a driver that only matches one GPU generation.
+          export_configure_args+=(--enable-vaapi --enable-hwaccel=h264_vaapi --enable-encoder=h264_vaapi)
           configure_args=("--prefix=$prefix" "${common_configure_args[@]}" "${helper_configure_args[@]}" "${export_configure_args[@]}")
           ./configure "${configure_args[@]}"
           make -j2

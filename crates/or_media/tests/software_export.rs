@@ -220,6 +220,7 @@ fn writer_publishes_mp4_with_the_host_h264_encoder_and_aac_streams() {
             return;
         }
     };
+    eprintln!("MP4 encoder: {}", writer.video_encoder_name());
     let mut rgba = vec![0; 64 * 48 * 4];
     for pixel in rgba.as_chunks_mut::<4>().0.iter_mut() {
         *pixel = [80, 140, 210, 255];
