@@ -37,9 +37,11 @@ if ($env:GITHUB_ENV) {
 # A caller may redirect Cargo's output (the local lane reuses one target
 # directory), so look in the redirected release folder before the default one.
 $probeCandidates = @(
-  (Join-Path $RepoRoot 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe'),
-  (Join-Path $env:CARGO_TARGET_DIR 'release/ffmpeg-link-probe.exe')
-) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+  (Join-Path $RepoRoot 'tools/ffmpeg-link-probe/target/release/ffmpeg-link-probe.exe')
+)
+if (-not [string]::IsNullOrWhiteSpace($env:CARGO_TARGET_DIR)) {
+  $probeCandidates += (Join-Path $env:CARGO_TARGET_DIR 'release/ffmpeg-link-probe.exe')
+}
 $probeSource = $probeCandidates | Where-Object { Test-Path $_ -PathType Leaf } | Select-Object -First 1
 if ($null -eq $probeSource) { throw 'Production or_media FFmpeg probe was not built' }
 Copy-Item -Path $probeSource -Destination (Join-Path $runtimeDir 'ffmpeg-link-probe.exe') -Force
