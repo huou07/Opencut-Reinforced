@@ -13,6 +13,48 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.15 — 2026-11-05
+
+### Added
+- **Library: templates, text looks, generated sound effects and an in-app guide.**
+  A new `Library` destination on every desktop, browsable without a project. A
+  template sets its own canvas and frame rate and places its starter text through
+  the ordinary timeline command; a text look states its real font, size, weight,
+  alignment and anchor rather than promising one; a sound effect is synthesised
+  as a real 16-bit PCM WAV and imported through the media command; the guide
+  covers start, import, edit, text, audio, export, shortcuts, files and
+  troubleshooting and renders `Cmd` or `Ctrl` from the platform seam.
+- **First-run panel on Home** that explains where media lives, that a project is
+  one atomically saved `.orproj` file, and that export runs locally with the
+  hardware encoder when the machine has one. Dismissal is remembered, and an
+  unreadable preference file shows the panel rather than hiding it.
+- `or project create --file PATH --name NAME [--json]`, so a script or an agent
+  can start a project headlessly and get the same refusal the app applies when
+  the destination already holds one.
+- `scripts/bench_export.py`: portable `decode`/`render`/`full` export rows for
+  MP4, WebM and Matroska at one picture size, on any desktop, with the FFmpeg
+  prefix and library path resolved automatically.
+
+### Changed
+- **Parity is the product rule.** macOS, Windows and Linux are all acceptance
+  targets over one codebase; `docs/architecture/platforms.md`,
+  `docs/reference/roadmap.md` and `docs/operations/workflow.md` now say so, and
+  the workflow records the one-pull-request, one-CI-run release rule.
+- The NV12 readback path pools its two textures and one staging buffer instead of
+  allocating them per frame, and issues one submit and one wait instead of two.
+  Measured on the local MacBook at 1920×1080: NV12 render 89.7 → 96.3 fps, full
+  MP4 export 81.3 → 87.0 fps.
+
+### Fixed
+- **MP4 export failure named nothing.** A build with no usable H.264 encoder
+  returned FFmpeg's bare `Invalid argument`. It now names the encoder that did
+  not open and points at WebM or Matroska.
+- **A template's starter text was silently dropped.** The insert ran while the
+  shell still held its project-action lock; the overlays are now placed after the
+  create action releases it, which two widget tests guard.
+- **The first-run panel could stay hidden when the preference read stalled**, so
+  a beginner saw a bare Home screen. A bounded timer now shows it anyway.
+
 ## 0.1.4 — 2026-11-02
 
 ### Added

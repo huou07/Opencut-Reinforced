@@ -1,6 +1,6 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-05
 
 Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
@@ -73,22 +73,28 @@ One near-term delivery mission for the local macOS app, in this order:
     and the panel widget test "a rendered clip stays visible and can be rendered
     again".
 
-macOS on the owner's MacBook Air is the only required runtime target. Complete
-supporting work only when it unblocks one of these two journeys.
+All three desktop platforms — macOS, Windows and Linux — are acceptance targets.
+One codebase serves them: shared Dart presentation over the Rust core, with
+platform differences confined to the platform seam. Cross-platform parity is
+therefore not separate work; a feature that only works on one desktop is an
+unfinished feature.
 
 ## Deferred by the owner
 
 Cloud or generative AI providers (including neural voices and music), translation,
-dubbing, community/templates catalog, advanced effects, animation-heavy showcase
-surfaces, Android/Windows packaging work, hosted CI claims, release publication,
-and cross-platform parity work.
+dubbing, advanced effects, animation-heavy showcase surfaces, Android packaging
+work, hosted CI claims and cross-platform parity as a *separate* workstream
+(there is one shared product, not three). The in-app library of templates, text
+looks, generated sound effects and the usage guide was promoted out of this list
+on 2026-11-05 and shipped as a first-run surface.
 
 ## Acceptance target
 
-A beginner can use the built macOS application to complete both journeys through
-real pointer and keyboard interaction, with the resulting Rust-owned project
-state, save/reopen behaviour, actual preview, and independently validated
-playable exports. A widget test, hidden command, screenshot or successful build
+A beginner can install the built application on macOS, Windows or Linux, find
+their way in without a manual (first-run panel, library, in-app guide), and
+complete both journeys through real pointer and keyboard interaction, with the
+resulting Rust-owned project state, save/reopen behaviour, actual preview, and
+independently validated playable exports. A widget test, hidden command, screenshot or successful build
 alone does not establish a completed journey.
 
 ## Longer-term inventory (not the active queue)

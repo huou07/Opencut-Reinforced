@@ -1,6 +1,6 @@
 # Tooling Inventory
 
-Last reviewed: 2026-11-03
+Last reviewed: 2026-11-05
 
 Scope: the scripts and machine-local tools an agent uses, and what each is for.
 Host-specific commands are in [operations/local-macos.md](../operations/local-macos.md).
@@ -15,6 +15,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/or_tree_outline.py` | one line per semantics node with rect and actions |
 | `scripts/packaged_drive.py` | CoreGraphics mouse/keyboard driving of the packaged app |
 | `scripts/bench_quality.py` | local performance budget rows |
+| `scripts/bench_export.py` | portable export/render benchmark: `decode.<profile>`, `render.<profile>` and `full.<profile>` rows for mp4/webm/mkv at one picture size, driven through the bridge test `export_media_benchmark`; resolves the FFmpeg prefix from `FFMPEG_DIR`, the cargo config, or the known prefixes, runs the test binary directly with the library path it needs, and exits 3 when a row cannot be measured |
 | `scripts/build_macos_release.sh` | build/package/codesign the macOS bundle with bridge hash check; a packaged local bundle also carries the `or` CLI the assistant edits through |
 | `scripts/stage_macos_ffmpeg.sh` | build the pinned LGPL FFmpeg 8.1.3 prefix (codec sources, packaged helpers, VideoToolbox) that macOS app packaging consumes |
 | `scripts/check_doc_links.py`, `scripts/check_doc_freshness.sh`, `scripts/check_claims.py` | documentation and claim gates |

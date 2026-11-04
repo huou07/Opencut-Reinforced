@@ -1,6 +1,6 @@
 # Change Workflow
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-05
 
 Scope: the path from a requested outcome to a verified local increment. Read the
 feature and architecture document that owns the area, not all of them.
@@ -23,6 +23,20 @@ feature and architecture document that owns the area, not all of them.
    [local-macos.md](local-macos.md) and [ui-harness.md](ui-harness.md).
 6. **Report and commit.** State checks, build, source revision, artifacts and
    anything unverified; commit one coherent verified increment. See [git.md](git.md).
+
+## Cross-platform delivery loop
+
+The product is one codebase on three desktops. A feature is added once, in
+shared Dart presentation over the Rust core, and lands on macOS, Windows and
+Linux together; only the platform seam may branch. Verify locally on every
+machine reachable in the session (this MacBook, `ssh debian`, `ssh win11`) —
+build, the full test suite and the benchmark rows — before any hosted action.
+
+**One pull request, one CI run, one public release.** Do not open a PR to see
+whether CI passes: a draft PR costs a full matrix and pushes verification into
+a queue. Finish the local work, run the local gates, then open a single PR whose
+CI run is the release run. A hosted failure at that point is a bug in the local
+gates and is fixed by extending them, not by re-running CI repeatedly.
 
 ## Repair discipline
 

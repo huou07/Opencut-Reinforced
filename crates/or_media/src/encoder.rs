@@ -326,6 +326,19 @@ fn pick_h264_encoder() -> Result<H264Pick, ExportEncodeError> {
     )))
 }
 
+/// Turns an H.264 open failure into a sentence the choosing writer can act on.
+///
+/// A build that carries no usable H.264 encoder answers "Invalid argument" from
+/// the codec context. That string names neither the format nor the way out, and
+/// the format choice is exactly what the person in front of the dialog owns.
+fn h264_open_error(encoder: &str, error: ffmpeg::Error) -> ExportEncodeError {
+    ExportEncodeError(format!(
+        "MP4 could not be encoded here: the {encoder} encoder did not open \
+         ({error}). This machine has no working H.264 encoder; export WebM or \
+         Matroska instead."
+    ))
+}
+
 const AUDIO_RATE: u32 = 48_000;
 const COMPRESSED_AUDIO_QUEUE_FRAMES: usize = 4_096;
 static STAGING_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -602,7 +615,7 @@ impl FfmpegExportWriter {
             };
             video_context
                 .open_as_with(video_codec, options)
-                .map_err(ExportEncodeError::from)
+                .map_err(|error| h264_open_error(video_codec.name(), error))
                 .map(|encoder| (encoder, hardware_frames))?
         } else {
             (

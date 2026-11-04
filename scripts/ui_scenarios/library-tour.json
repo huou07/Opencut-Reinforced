@@ -1,0 +1,30 @@
+{
+  "name": "library-tour",
+  "harness": "or_ui",
+  "description": "The library a beginner meets before a project exists: the first-run Home panel, then every library tab by its visible content. Every step names a widget key or visible text; no step injects project state, so a failure is a real interface failure.",
+  "viewport": { "width": 1440, "height": 900 },
+  "steps": [
+    { "op": "shot", "name": "home-first-run" },
+    { "op": "expect", "key": "home-welcome" },
+    { "op": "tap", "selector": { "key": "home-welcome-library" } },
+    { "op": "pump", "ms": 900 },
+    { "op": "expect", "key": "library-tabs" },
+    { "op": "shot", "name": "templates" },
+    { "op": "tap", "selector": { "key": "library-tab-text" } },
+    { "op": "pump", "ms": 600 },
+    { "op": "shot", "name": "text" },
+    { "op": "tap", "selector": { "key": "library-tab-sound" } },
+    { "op": "pump", "ms": 600 },
+    { "op": "shot", "name": "sound" },
+    { "op": "tap", "selector": { "key": "library-tab-guide" } },
+    { "op": "pump", "ms": 600 },
+    { "op": "shot", "name": "guide" },
+    { "op": "tree", "name": "guide" },
+    { "op": "tap", "selector": { "key": "nav-home" } },
+    { "op": "pump", "ms": 600 },
+    { "op": "tap", "selector": { "key": "home-welcome-dismiss" } },
+    { "op": "pump", "ms": 600 },
+    { "op": "expect_absent", "key": "home-welcome" },
+    { "op": "shot", "name": "home-without-welcome" }
+  ]
+}

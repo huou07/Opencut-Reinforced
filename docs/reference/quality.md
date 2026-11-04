@@ -1,6 +1,6 @@
 # Quality Bar
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-05
 
 Scope: the attributes OR holds itself to, how each is measured, and which gaps
 are known. The current runtime target is the local macOS app on the owner's M5
@@ -25,6 +25,37 @@ A performance claim needs the workload, source/build, codec/backend, machine and
 measured result. The recorded budget rows were measured on 2026-10-18 on an idle
 Debian 13 (trixie) OptiPlex-class x86_64 host; do not reuse them as M5 numbers. Add a current Mac measurement only after recording
 those fields.
+
+### Cross-platform export benchmark (2026-11-05)
+
+- Workload: `python3 scripts/bench_export.py --frames 90` — 90 frames of
+  1920×1080 at 30 fps decoded from one 6.02 s H.264/AAC fixture, composited, and
+  written through each of the three profiles by the bridge test
+  `export_media_benchmark` (`OR_BENCH_MODE` selects decode-only or render-only).
+- Rows: `decode.<profile>` is source decode; `render.<profile>` is decode plus
+  composite and readback; `full.<profile>` is the whole export including encode
+  and mux.
+- macOS: MacBook Air M5 (10 CPU cores, 8 GPU cores, 16 GB), release build,
+  VideoToolbox H.264, wgpu Metal, libvpx VP9, FFV1.
+
+| Row | macOS | Debian 13 (20 cores, no GPU) |
+|---|---|---|
+| decode mp4 | 335.2 fps | 157.4 fps |
+| render mp4 (NV12) | 96.3 fps | 29.3 fps |
+| full mp4 | 87.0 fps (3.71 MB) | not measurable on that host — its local FFmpeg prefix was built without any H.264 encoder |
+| render webm/mkv (packed RGBA) | 156.5 fps | 43.2 fps |
+| full webm | 23.6 fps (6.96 MB) | 13.1 fps (6.97 MB) |
+| full mkv | 21.9 fps (153.4 MB) | 14.2 fps (152.8 MB) |
+
+Two findings that shaped the code: the NV12 readback path used to allocate two
+textures and a staging buffer per frame and wait on the GPU twice, which cost
+about 1.5× against the packed-RGBA path; pooling those allocations and issuing
+one submit and one wait per frame recovered 7% (89.7 → 96.3 fps render,
+81.3 → 87.0 fps full export on macOS). VP9 stays software everywhere, bounded by
+`VP9_MAX_THREADS = 16` with `row-mt=1`.
+
+Windows has no local FFmpeg development tree in this session, so its numbers come
+from hosted CI hardware and are not recorded here as local measurements.
 
 ### MotionScene materialisation on the local host (2026-10-27)
 
