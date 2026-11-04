@@ -932,9 +932,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 &mapped[usize::try_from(scratch.chroma_offset)
                     .map_err(|_| RenderError::ReadbackSizeOverflow)?..],
                 scratch.chroma_row_bytes,
-                usize::try_from(chroma_width)
-                    .map_err(|_| RenderError::ReadbackSizeOverflow)?
-                    * 2,
+                usize::try_from(chroma_width).map_err(|_| RenderError::ReadbackSizeOverflow)? * 2,
                 usize::try_from(chroma_height).map_err(|_| RenderError::ReadbackSizeOverflow)?,
             )?;
             (luma, chroma)

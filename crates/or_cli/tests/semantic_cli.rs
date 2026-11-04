@@ -311,49 +311,6 @@ fn without_instance_id(mut value: Value) -> Value {
 }
 
 #[test]
-/// Creation is available headlessly, refuses to replace a file, and produces a
-/// project the ordinary read verbs can open.
-#[test]
-fn headless_project_create_refuses_to_replace_a_project() {
-    let directory = TestDirectory::new();
-    let path = directory.project_path();
-
-    let mut create_args = path_args(
-        &["project", "create"],
-        "--file",
-        &path,
-        &["--name", "Scripted"],
-    );
-    create_args.push("--json".into());
-    let (created, _) = json_success(create_args);
-    assert_eq!(created["name"], "Scripted");
-    assert_eq!(created["project_revision"], 0);
-    assert!(path.is_file());
-
-    let summary_args = path_args(&["project", "summary"], "--file", &path, &["--json"]);
-    let (summary, _) = json_success(summary_args);
-    assert_eq!(summary["project_id"], created["project_id"]);
-    assert_eq!(summary["name"], "Scripted");
-
-    let mut repeat_args = path_args(
-        &["project", "create"],
-        "--file",
-        &path,
-        &["--name", "Second"],
-    );
-    repeat_args.push("--json".into());
-    let before = fs::read(&path).unwrap();
-    let output = cli(repeat_args);
-    assert!(!output.status.success());
-    let error: Value = serde_json::from_slice(&output.stdout).expect("JSON error output");
-    assert_eq!(error["error"]["code"], "DESTINATION_EXISTS");
-    assert_eq!(
-        fs::read(&path).unwrap(),
-        before,
-        "the existing project is left untouched"
-    );
-}
-
 fn discovery_and_headless_project_commands_use_core_contracts() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
@@ -3967,5 +3924,48 @@ fn export_verbs_reject_missing_or_malformed_arguments() {
         ),
         2,
         "must match the destination extension",
+    );
+}
+
+/// Creation is available headlessly, refuses to replace a file, and produces a
+/// project the ordinary read verbs can open.
+#[test]
+fn headless_project_create_refuses_to_replace_a_project() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+
+    let mut create_args = path_args(
+        &["project", "create"],
+        "--file",
+        &path,
+        &["--name", "Scripted"],
+    );
+    create_args.push("--json".into());
+    let (created, _) = json_success(create_args);
+    assert_eq!(created["name"], "Scripted");
+    assert_eq!(created["project_revision"], 0);
+    assert!(path.is_file());
+
+    let summary_args = path_args(&["project", "summary"], "--file", &path, &["--json"]);
+    let (summary, _) = json_success(summary_args);
+    assert_eq!(summary["project_id"], created["project_id"]);
+    assert_eq!(summary["name"], "Scripted");
+
+    let mut repeat_args = path_args(
+        &["project", "create"],
+        "--file",
+        &path,
+        &["--name", "Second"],
+    );
+    repeat_args.push("--json".into());
+    let before = fs::read(&path).unwrap();
+    let output = cli(repeat_args);
+    assert!(!output.status.success());
+    let error: Value = serde_json::from_slice(&output.stdout).expect("JSON error output");
+    assert_eq!(error["error"]["code"], "DESTINATION_EXISTS");
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        before,
+        "the existing project is left untouched"
     );
 }
