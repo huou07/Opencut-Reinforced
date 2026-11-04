@@ -11,32 +11,41 @@ semantics, and how an export is validated.
 |---|---|---|---|---|
 | Lossless | Matroska | FFV1 | PCM S16LE, 48 kHz stereo | desktop, Android |
 | Delivery | WebM | VP9 | Opus, 48 kHz stereo | desktop, Android (verified on emulator) |
-| H.264 delivery | MP4 | H.264 (host encoder; x264 on Linux) | AAC, 48 kHz stereo | desktop |
+| H.264 delivery | MP4 | H.264 (VideoToolbox, NVENC, Media Foundation or VAAPI; x264 fallback) | AAC, 48 kHz stereo | desktop |
 
 MP4 is offered on every desktop. The core does not name one encoder: it walks a
 preference list and commits to the first candidate the linked FFmpeg carries
 *and* this machine can open. The order is `h264_videotoolbox`, `h264_nvenc`,
-`h264_mf`, `h264_open`, then `libx264` — a name the package does not carry is
-simply skipped, and each candidate is opened on a 64×64
-NV12 frame before the writer uses it, so a package that carries NVENC on a
-machine without an NVIDIA device falls through to the next encoder instead of
-failing the export. The macOS package carries VideoToolbox, the Windows package
-carries Media Foundation (the operating system's own encoder, hardware-backed
-when the driver exposes a hardware MFT), and the Linux package carries NVENC and
-x264, so MP4 export works on all three without a platform branch in the profile
-code. Every package also carries AAC. When nothing opens, the format is still
-listed and the export fails with a message that names the gap and points at
-WebM.
+`h264_mf`, `h264_vaapi`, `h264_open`, then `libx264` — a name the package does
+not carry is simply skipped, and a carrier is proved before it is used: NVENC
+asks for a CUDA device, Media Foundation and VideoToolbox open on a 64×64 NV12
+frame, and VAAPI builds its own device and frame pool and pushes a frame through
+it. A machine that has no matching device therefore falls through to the next
+encoder instead of failing the export. The macOS package carries VideoToolbox,
+the Windows package carries NVENC and Media Foundation (the operating system's
+own encoder, hardware-backed when the driver exposes a hardware MFT), and the
+Linux package carries NVENC, VAAPI and x264, so MP4 export works on all three
+without a platform branch in the profile code. Every package also carries AAC.
+When nothing opens, the format is still listed and the export fails with a
+message that names the gap and points at WebM.
 
 The quality preference reaches the hardware encoder too: a `Quality` export sets
 the NVENC preset to `p5` and a `Speed` export to `p2`, so the choice trades time
 for picture on the GPU instead of only changing the bitrate. Software encoding
 keeps its own ladder (`x264` uses its defaults, VP9 uses the `cpu-used` table).
 
-VAAPI, QSV and AMF are not candidates yet. They need a device frame pool the
-software writer does not build, and linking VAAPI would also make the bundled
-`ffmpeg` depend on `libva` at run time, so the build leaves both out. They stay
-future work until that path grows the pool.
+VAAPI is the Linux path for Intel and AMD devices. The writer builds the
+`AVHWFrameContext` pool, attaches it to the encoder and uploads each composited
+NV12 frame with `av_hwframe_transfer_data`, so a machine with
+`/dev/dri/renderD128` and a VAAPI H.264 entrypoint encodes on the GPU. `libva`
+stays a system library: the `.deb` declares it rather than bundling one driver
+generation that would only match a single GPU family.
+
+QSV and AMF are deliberately not listed. QSV needs the oneVPL dispatcher and, on
+Linux, drives through the same VAAPI device, so VAAPI already covers Intel
+there; AMF needs the AMD header SDK, and Media Foundation already reaches AMD
+hardware on Windows. Both would add build dependencies without a test surface
+the project can exercise, so they stay future work.
 
 The Linux build links x264 because Linux has no operating-system H.264 encoder;
 x264 is GPL-2.0-or-later, ships as `licenses/x264/COPYING` in the package, and

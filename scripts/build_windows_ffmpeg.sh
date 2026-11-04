@@ -78,6 +78,10 @@ configure_args=("--prefix=$prefix_win" --toolchain=msvc --target-os=win64 --arch
 # mfenc.c does not compile under MSVC. D3D11 comes with the Windows SDK, so the
 # hwaccel is enabled next to the encoder rather than left to autodetect.
 configure_args+=("--enable-mediafoundation" "--enable-d3d11va" "--enable-encoder=h264_mf")
+# NVENC is the NVIDIA path and usually beats Media Foundation on the same
+# machine. The encoder is compiled in unconditionally (the headers are a build
+# dependency only) and the app probes for a driver before it selects it.
+configure_args+=("--enable-ffnvcodec" "--enable-nvenc" "--enable-encoder=h264_nvenc")
 # MSVC lacks the C23 stdbit.h header. Expose FFmpeg's own compatible
 # implementation during configure so compiler feature checks can use it.
 stdbit_compat="$(cygpath -am "$source/compat/stdbit")"
@@ -114,9 +118,13 @@ EOF
 codec_pkgconfig="$(cygpath -u "$FFMPEG_CODEC_PREFIX")/lib/pkgconfig"
 test -f "$codec_pkgconfig/opus.pc"
 test -f "$codec_pkgconfig/vpx.pc"
+# NVENC comes from the pinned ffnvcodec headers only; no NVIDIA library is
+# linked, because the driver is loaded at run time.
+test -f "$codec_pkgconfig/ffnvcodec.pc"
 export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$codec_pkgconfig:/clang64/lib/pkgconfig:/clang64/share/pkgconfig"
 test "$(pkg-config --modversion opus)" = "1.6.1"
 test "$(pkg-config --modversion vpx)" = "1.17.0"
+pkg-config --exists ffnvcodec
 pkg-config --static --libs opus vpx
 test "$(pkg-config --modversion zlib)" = "1.3.2"
 pkg-config --cflags --libs zlib

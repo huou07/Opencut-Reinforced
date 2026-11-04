@@ -35,21 +35,169 @@ const VP9_MAX_THREADS: usize = 16;
 ///
 /// A package can carry an encoder the machine cannot drive — NVENC in a Linux
 /// build on an AMD box — so presence alone is not evidence that an export will
-/// start. Every candidate is opened once on a tiny frame before the picker
-/// commits, which is the same call the export makes, so the choice is a working
-/// encoder rather than a name in a list.
+/// start. Every candidate is opened on a tiny frame before the picker commits,
+/// which is the same call the export makes, so the choice is a working encoder
+/// rather than a name in a list.
 ///
-/// The list stops at encoders that take a plain NV12 frame. VAAPI, QSV and AMF
-/// need a device frame pool the software export path does not build yet;
-/// listing them would promise a speed-up the writer cannot deliver, so they
-/// stay out until that path grows the pool. See `docs/features/export.md`.
+/// VAAPI is the one candidate that reads GPU surfaces instead of a plain NV12
+/// frame, so it is probed by building its frame pool and running one frame
+/// through the encoder. QSV and AMF stay out: QSV needs the oneVPL dispatcher
+/// on top of a VAAPI device, AMF needs AMD's headers, and on Windows Media
+/// Foundation already drives the same hardware for both vendors.
 const H264_ENCODER_CANDIDATES: &[&str] = &[
     "h264_videotoolbox",
     "h264_nvenc",
     "h264_mf",
+    "h264_vaapi",
     "h264_open",
     "libx264",
 ];
+
+/// Surfaces the VAAPI pool holds before it has to grow. One frame is in
+/// flight per rendered frame and the encoder may hold a few, so a short runway
+/// keeps the upload from stalling on allocation.
+const HARDWARE_POOL_SURFACES: i32 = 20;
+
+/// The MP4 encoder the picker settled on, and whether it reads GPU surfaces.
+#[derive(Clone, Copy)]
+struct H264Pick {
+    encoder: codec::Codec,
+    vaapi: bool,
+}
+
+/// A VAAPI device and the NV12 surface pool built on it.
+///
+/// The encoder reads from this pool, so the writer uploads every rendered frame
+/// into it. The handles are owned by this value and released on drop; the
+/// encoder keeps its own reference to the pool.
+struct HardwareFrames {
+    device: *mut ffmpeg::sys::AVBufferRef,
+    frames: *mut ffmpeg::sys::AVBufferRef,
+}
+
+impl HardwareFrames {
+    /// Opens the driver and allocates the surface pool.
+    fn vaapi(width: u32, height: u32) -> Result<Self, ExportEncodeError> {
+        if !cfg!(target_os = "linux") {
+            return Err(ExportEncodeError(
+                "VAAPI is only available in the Linux package".to_owned(),
+            ));
+        }
+        let width = i32::try_from(width)
+            .map_err(|_| ExportEncodeError("export width is out of range".to_owned()))?;
+        let height = i32::try_from(height)
+            .map_err(|_| ExportEncodeError("export height is out of range".to_owned()))?;
+        // SAFETY: the two references are created here and released together in
+        // `Drop`; FFmpeg owns the underlying contexts.
+        unsafe {
+            let mut device: *mut ffmpeg::sys::AVBufferRef = std::ptr::null_mut();
+            let status = ffmpeg::sys::av_hwdevice_ctx_create(
+                &mut device,
+                ffmpeg::sys::AVHWDeviceType::VAAPI,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                0,
+            );
+            if status < 0 || device.is_null() {
+                return Err(ExportEncodeError(
+                    "this machine has no VAAPI device to encode with".to_owned(),
+                ));
+            }
+            let frames = ffmpeg::sys::av_hwframe_ctx_alloc(device);
+            if frames.is_null() {
+                ffmpeg::sys::av_buffer_unref(&mut device);
+                return Err(ExportEncodeError(
+                    "VAAPI surface pool allocation failed".to_owned(),
+                ));
+            }
+            let context = (*frames).data.cast::<ffmpeg::sys::AVHWFramesContext>();
+            (*context).format = format::Pixel::VAAPI.into();
+            (*context).sw_format = format::Pixel::NV12.into();
+            (*context).width = width;
+            (*context).height = height;
+            (*context).initial_pool_size = HARDWARE_POOL_SURFACES;
+            let status = ffmpeg::sys::av_hwframe_ctx_init(frames);
+            if status < 0 {
+                let mut frames = frames;
+                let mut device = device;
+                ffmpeg::sys::av_buffer_unref(&mut frames);
+                ffmpeg::sys::av_buffer_unref(&mut device);
+                return Err(ExportEncodeError(
+                    "the VAAPI driver refused the surface pool".to_owned(),
+                ));
+            }
+            Ok(Self { device, frames })
+        }
+    }
+
+    /// Points the encoder at this pool. Called before the encoder opens.
+    ///
+    /// SAFETY: `context` must be an encoder context that has not been opened
+    /// yet, and the pool must outlive it.
+    unsafe fn attach(&self, context: *mut ffmpeg::sys::AVCodecContext) {
+        unsafe {
+            (*context).pix_fmt = format::Pixel::VAAPI.into();
+            (*context).hw_frames_ctx = ffmpeg::sys::av_buffer_ref(self.frames);
+        }
+    }
+
+    /// Uploads one software frame into the pool and sends it to the encoder.
+    ///
+    /// SAFETY: `context` must be the opened encoder that owns this pool, and
+    /// `software` must be a live NV12 frame.
+    unsafe fn send(
+        &self,
+        context: *mut ffmpeg::sys::AVCodecContext,
+        software: *const ffmpeg::sys::AVFrame,
+    ) -> Result<(), ExportEncodeError> {
+        unsafe {
+            let hardware = ffmpeg::sys::av_frame_alloc();
+            if hardware.is_null() {
+                return Err(ExportEncodeError(
+                    "VAAPI frame allocation failed".to_owned(),
+                ));
+            }
+            (*hardware).format = ffmpeg::sys::AVPixelFormat::VAAPI.0;
+            (*hardware).width = (*software).width;
+            (*hardware).height = (*software).height;
+            let mut status = ffmpeg::sys::av_hwframe_get_buffer(self.frames, hardware, 0);
+            if status < 0 {
+                let mut hardware = hardware;
+                ffmpeg::sys::av_frame_free(&mut hardware);
+                return Err(ExportEncodeError::from(ffmpeg::Error::from(status)));
+            }
+            (*hardware).pts = (*software).pts;
+            status = ffmpeg::sys::av_hwframe_transfer_data(hardware, software as *mut _, 0);
+            if status < 0 {
+                let mut hardware = hardware;
+                ffmpeg::sys::av_frame_free(&mut hardware);
+                return Err(ExportEncodeError::from(ffmpeg::Error::from(status)));
+            }
+            status = ffmpeg::sys::avcodec_send_frame(context, hardware);
+            let mut hardware = hardware;
+            ffmpeg::sys::av_frame_free(&mut hardware);
+            if status < 0 {
+                return Err(ExportEncodeError::from(ffmpeg::Error::from(status)));
+            }
+            Ok(())
+        }
+    }
+}
+
+impl Drop for HardwareFrames {
+    fn drop(&mut self) {
+        // SAFETY: both handles were created by FFmpeg for this value and are
+        // released exactly once.
+        unsafe {
+            ffmpeg::sys::av_buffer_unref(&mut self.frames);
+            ffmpeg::sys::av_buffer_unref(&mut self.device);
+        }
+    }
+}
+
+// SAFETY: the handles are plain pointers to FFmpeg reference-counted buffers;
+// moving the owning value between threads does not share mutable access.
+unsafe impl Send for HardwareFrames {}
 
 /// The encoders that need a device driver the build cannot see. NVENC loads the
 /// driver's library at run time, so a build always carries it and only the
@@ -86,6 +234,43 @@ fn hardware_device_available(name: &str) -> bool {
     }
 }
 
+/// Whether this machine can encode H.264 through VAAPI.
+///
+/// A driver can advertise the profile and still refuse the encode, so the probe
+/// builds the real pool and pushes one frame through the real encoder. Nothing
+/// is written: the frame never reaches a muxer.
+fn vaapi_answers() -> bool {
+    if !cfg!(target_os = "linux") {
+        return false;
+    }
+    let Some(encoder) = codec::encoder::find_by_name("h264_vaapi") else {
+        return false;
+    };
+    let Ok(pool) = HardwareFrames::vaapi(64, 64) else {
+        return false;
+    };
+    let Ok(mut context) = codec::context::Context::new_with_codec(encoder)
+        .encoder()
+        .video()
+    else {
+        return false;
+    };
+    context.set_width(64);
+    context.set_height(64);
+    context.set_time_base(ffmpeg::Rational::new(1, 30));
+    context.set_frame_rate(Some(ffmpeg::Rational::new(30, 1)));
+    // SAFETY: the context is not open yet and the pool outlives it here.
+    unsafe { pool.attach(context.as_mut_ptr()) };
+    let Ok(mut encoder) = context.open_as_with(encoder, Dictionary::new()) else {
+        return false;
+    };
+    let mut software = frame::Video::new(format::Pixel::NV12, 64, 64);
+    software.set_pts(Some(0));
+    // SAFETY: the encoder is open on this pool and the frame is a live NV12
+    // frame of the same size.
+    unsafe { pool.send(encoder.as_mut_ptr(), software.as_ptr()).is_ok() }
+}
+
 /// Whether an encoder opens on a plain frame. Media Foundation, VideoToolbox
 /// and NVENC all take an ordinary software frame, so a test open is the honest
 /// check that this process can encode with them.
@@ -106,11 +291,20 @@ fn encoder_answers(encoder: codec::Codec) -> bool {
 
 /// The first H.264 encoder this build carries and this machine can run, or a
 /// failure naming the gap.
-fn pick_h264_encoder() -> Result<codec::Codec, ExportEncodeError> {
+fn pick_h264_encoder() -> Result<H264Pick, ExportEncodeError> {
     for name in H264_ENCODER_CANDIDATES {
         let Some(encoder) = codec::encoder::find_by_name(name) else {
             continue;
         };
+        if *name == "h264_vaapi" {
+            if vaapi_answers() {
+                return Ok(H264Pick {
+                    encoder,
+                    vaapi: true,
+                });
+            }
+            continue;
+        }
         if !hardware_device_available(name) {
             continue;
         }
@@ -119,7 +313,10 @@ fn pick_h264_encoder() -> Result<codec::Codec, ExportEncodeError> {
         if *name != "libx264" && !encoder_answers(encoder) {
             continue;
         }
-        return Ok(encoder);
+        return Ok(H264Pick {
+            encoder,
+            vaapi: false,
+        });
     }
     Err(ExportEncodeError(format!(
         "this FFmpeg build carries no H.264 encoder (looked for {}), so MP4 \
@@ -180,6 +377,12 @@ pub struct FfmpegExportWriter {
     audio_encoder: AudioEncoder,
     profile: FfmpegExportProfile,
     pixel_format: format::Pixel,
+    /// The encoder this writer settled on, so a caller or a test can tell which
+    /// host path an export took.
+    video_encoder_name: String,
+    /// Set when the video encoder reads GPU surfaces; the writer uploads every
+    /// rendered frame into this pool before sending it.
+    hardware_frames: Option<HardwareFrames>,
     video_scaler: Option<scaling::Context>,
     video_stream: usize,
     audio_stream: usize,
@@ -272,6 +475,14 @@ impl FfmpegExportWriter {
         }
         let staging_directory = create_staging_directory(&destination)?;
         let mut staging_guard = StagingDirectoryGuard::new(staging_directory.clone());
+        // The MP4 arm needs two things from one pick: the encoder to open and
+        // whether it wants a device surface pool. Resolving it here keeps the
+        // probe out of the tuple below.
+        let h264_pick = if profile == FfmpegExportProfile::Mp4H264Aac {
+            Some(pick_h264_encoder()?)
+        } else {
+            None
+        };
         let (container, staging_name, video_codec, audio_codec, pixel_format, video_scaler) =
             match profile {
                 FfmpegExportProfile::MatroskaFfv1PcmS16le => (
@@ -301,7 +512,11 @@ impl FfmpegExportWriter {
                 FfmpegExportProfile::Mp4H264Aac => (
                     "mov",
                     "output.mp4",
-                    pick_h264_encoder()?,
+                    h264_pick
+                        .ok_or_else(|| {
+                            ExportEncodeError("internal: no H.264 encoder was picked".to_owned())
+                        })?
+                        .encoder,
                     codec::encoder::find(codec::Id::AAC).ok_or_else(|| {
                         ExportEncodeError("linked FFmpeg has no AAC encoder".to_owned())
                     })?,
@@ -373,14 +588,31 @@ impl FfmpegExportWriter {
                     options.set("preset", nvenc_preset(quality));
                 }
             }
+            // A VAAPI encoder reads surfaces from its own pool, so the pool is
+            // attached before the encoder opens and every frame is uploaded
+            // into it on the way in.
+            let hardware_frames = if h264_pick.is_some_and(|pick| pick.vaapi) {
+                let pool = HardwareFrames::vaapi(width, height)?;
+                // SAFETY: the encoder has not opened, and the pool is moved
+                // into the writer below, so it outlives the encoder.
+                unsafe { pool.attach(video_context.as_mut_ptr()) };
+                Some(pool)
+            } else {
+                None
+            };
             video_context
                 .open_as_with(video_codec, options)
-                .map_err(ExportEncodeError::from)?
+                .map_err(ExportEncodeError::from)
+                .map(|encoder| (encoder, hardware_frames))?
         } else {
-            video_context
-                .open_as(video_codec)
-                .map_err(ExportEncodeError::from)?
+            (
+                video_context
+                    .open_as(video_codec)
+                    .map_err(ExportEncodeError::from)?,
+                None,
+            )
         };
+        let (video_encoder, hardware_frames) = video_encoder;
 
         let mut audio_context = codec::context::Context::new_with_codec(audio_codec)
             .encoder()
@@ -451,6 +683,8 @@ impl FfmpegExportWriter {
             audio_encoder,
             profile,
             pixel_format,
+            video_encoder_name: video_codec.name().to_owned(),
+            hardware_frames,
             video_scaler,
             video_stream,
             audio_stream,
@@ -462,6 +696,11 @@ impl FfmpegExportWriter {
             audio_frames_encoded: 0,
             committed: false,
         })
+    }
+
+    /// The H.264/VP9/FFV1 encoder this writer opened.
+    pub fn video_encoder_name(&self) -> &str {
+        &self.video_encoder_name
     }
 
     /// Encodes one packed RGBA frame at its exact sequence frame index.
@@ -564,9 +803,19 @@ impl FfmpegExportWriter {
         encoded.set_pts(Some(i64::try_from(frame_index).map_err(|_| {
             ExportEncodeError("video frame index exceeds the FFmpeg time base".to_owned())
         })?));
-        self.video_encoder
-            .send_frame(&encoded)
-            .map_err(ExportEncodeError::from)?;
+        match &self.hardware_frames {
+            // A VAAPI encoder only reads its own surfaces, so the rendered
+            // NV12 frame is uploaded into the device pool first.
+            Some(pool) => unsafe {
+                // SAFETY: the pool belongs to this writer and the encoder is
+                // open on it; `encoded` is a live NV12 frame.
+                pool.send(self.video_encoder.as_mut_ptr(), encoded.as_ptr())?
+            },
+            None => self
+                .video_encoder
+                .send_frame(&encoded)
+                .map_err(ExportEncodeError::from)?,
+        }
         self.drain_video_packets()
     }
 
