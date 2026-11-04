@@ -67,6 +67,13 @@ fi
 run 'Lock files resolve without a write' \
   bash scripts/check-locks.sh
 
+# The hosted Rust lane runs rustfmt and clippy with `-D warnings` before the
+# tests; running neither locally is how a duplicated attribute reached CI.
+run 'Rust formatting' \
+  cargo fmt --all -- --check
+run 'Rust clippy' \
+  cargo clippy --workspace --all-targets --locked -- -D warnings
+
 # The documented local Rust lanes.
 run 'Rust core and CLI tests' \
   cargo test -p or_core -p or_cli --locked
