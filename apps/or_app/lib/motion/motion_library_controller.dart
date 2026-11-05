@@ -990,6 +990,72 @@ class MotionLibraryController extends ChangeNotifier {
     'font_size': size.clamp(1, 2000),
   });
 
+  /// Sets a text node's type family, or clears the override with `null`.
+  Future<void> setNodeFontFamily(String nodeId, String? font) => _applyEdit({
+    'op': 'set_font_family',
+    'node_id': nodeId,
+    'font': font,
+  });
+
+  /// Sets a text node's weight (`regular`, `medium`, `semibold`, `bold`).
+  Future<void> setNodeFontWeight(String nodeId, String weight) => _applyEdit({
+    'op': 'set_font_weight',
+    'node_id': nodeId,
+    'weight': weight,
+  });
+
+  /// Sets a text node's alignment inside its box (`start`, `center`, `end`).
+  Future<void> setNodeTextAlign(String nodeId, String align) => _applyEdit({
+    'op': 'set_text_align',
+    'node_id': nodeId,
+    'align': align,
+  });
+
+  /// Sets a text node's line height as a multiple of its type size.
+  Future<void> setNodeLineHeight(String nodeId, double lineHeight) => _applyEdit({
+    'op': 'set_line_height',
+    'node_id': nodeId,
+    'line_height': lineHeight.clamp(0.8, 3.0),
+  });
+
+  /// Sets a text node's tracking in points; negative tightens.
+  Future<void> setNodeLetterSpacing(String nodeId, double spacing) => _applyEdit({
+    'op': 'set_letter_spacing',
+    'node_id': nodeId,
+    'letter_spacing': spacing.clamp(-50.0, 200.0),
+  });
+
+  /// A text node's typography, read from the draft document.
+  ///
+  /// The generated bridge views predate these fields, and regenerating them for
+  /// six optional values would force a toolchain upgrade in the same change. The
+  /// draft JSON is the same contract the edits go back through, so reading it here
+  /// keeps one source of truth and no second model.
+  MotionNodeTypography? nodeTypography(String nodeId) {
+    final json = _draftSceneJson;
+    if (json == null) return null;
+    try {
+      final decoded = jsonDecode(json);
+      final nodes = decoded is Map ? decoded['nodes'] : null;
+      if (nodes is! List) return null;
+      for (final entry in nodes) {
+        if (entry is! Map) continue;
+        if (entry['node_id'] != nodeId) continue;
+        return MotionNodeTypography(
+          font: entry['font'] as String?,
+          weight: entry['font_weight'] as String?,
+          align: entry['text_align'] as String?,
+          lineHeight: (entry['line_height'] as num?)?.toDouble(),
+          letterSpacing: (entry['letter_spacing'] as num?)?.toDouble(),
+          hasBox: entry['size'] is Map,
+        );
+      }
+    } catch (_) {
+      // An unreadable draft simply shows the defaults; the edit path validates it.
+    }
+    return null;
+  }
+
   /// Removes one node, its children and the animations that targeted it.
   Future<void> deleteNode(String nodeId) {
     _selectedNodeIds.remove(nodeId);
@@ -1520,4 +1586,47 @@ class _SceneSnapshot {
   final Uint8List? preview;
   final List<MotionSceneNodeView> nodes;
   final Set<String> selected;
+}
+
+/// One text node's optional typography overrides, as the scene stores them.
+///
+/// `null` means "no override": the renderer then picks the family from the text and
+/// the historical metrics, which is what every scene authored before schema version 2
+/// expects.
+class MotionNodeTypography {
+  const MotionNodeTypography({
+    this.font,
+    this.weight,
+    this.align,
+    this.lineHeight,
+    this.letterSpacing,
+    this.hasBox = false,
+  });
+
+  /// `inter`, `be_vietnam_pro`, or null for the automatic choice.
+  final String? font;
+
+  /// `regular`, `medium`, `semibold`, `bold`, or null for regular.
+  final String? weight;
+
+  /// `start`, `center`, `end`, or null for start.
+  final String? align;
+
+  /// A multiple of the type size, or null for the historical 1.32.
+  final double? lineHeight;
+
+  /// Tracking in points, or null for none.
+  final double? letterSpacing;
+
+  /// Whether the node names a box. Without one the node keeps the historical
+  /// single-line measurement.
+  final bool hasBox;
+
+  double get effectiveLineHeight => lineHeight ?? 1.32;
+
+  double get effectiveLetterSpacing => letterSpacing ?? 0;
+
+  String get effectiveWeight => weight ?? 'regular';
+
+  String get effectiveAlign => align ?? 'start';
 }

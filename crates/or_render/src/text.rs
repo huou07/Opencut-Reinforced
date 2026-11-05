@@ -9,7 +9,10 @@ use or_core::{
 use std::{error::Error, fmt, sync::Arc};
 
 const MAX_RGBA_BYTES: usize = 256 * 1024 * 1024;
-const LINE_HEIGHT_FACTOR: f32 = 1.32;
+/// The historical line height, used when a formatter leaves the field at its
+/// default. Kept as a named constant so the fallback cannot drift from the value
+/// `or_core` writes into every project.
+const DEFAULT_LINE_HEIGHT_PERMILLE: u16 = 1_320;
 const INTER_REGULAR: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Regular.ttf");
 const INTER_MEDIUM: &[u8] = include_bytes!("../assets/fonts/inter/Inter-Medium.ttf");
 const INTER_SEMIBOLD: &[u8] = include_bytes!("../assets/fonts/inter/Inter-SemiBold.ttf");
@@ -146,7 +149,7 @@ impl TextRasterizer {
         let font_size = formatting.size_milli_points as f32 / 1_000.0 * (4.0 / 3.0);
         let mut buffer = Buffer::new(
             &mut self.font_system,
-            Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR),
+            Metrics::new(font_size, font_size * line_height_factor(formatting)),
         );
         buffer.set_size(Some(max_width.max(1.0)), Some(1_000_000.0));
         buffer.set_wrap(Wrap::WordOrGlyph);
@@ -154,14 +157,7 @@ impl TextRasterizer {
             FontIdentity::BundledInter => "Inter",
             FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
-        let attrs = Attrs::new()
-            .family(Family::Name(family))
-            .weight(match formatting.weight {
-                TextWeight::Regular => Weight(400),
-                TextWeight::Medium => Weight(500),
-                TextWeight::Semibold => Weight(600),
-                TextWeight::Bold => Weight(700),
-            });
+        let attrs = styled_attrs(&family, formatting);
         buffer.set_text(text, &attrs, Shaping::Advanced, Some(Align::Left));
         buffer.shape_until_scroll(&mut self.font_system, false);
         let mut width = 0.0_f32;
@@ -234,7 +230,7 @@ impl TextRasterizer {
         let font_size = formatting.size_milli_points as f32 / 1000.0 * (4.0 / 3.0);
         let mut buffer = Buffer::new(
             &mut self.font_system,
-            Metrics::new(font_size, font_size * LINE_HEIGHT_FACTOR),
+            Metrics::new(font_size, font_size * line_height_factor(formatting)),
         );
         buffer.set_size(
             Some(width_f - 2.0 * margin_x),
@@ -245,14 +241,7 @@ impl TextRasterizer {
             FontIdentity::BundledInter => "Inter",
             FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
-        let attrs = Attrs::new()
-            .family(Family::Name(family))
-            .weight(match formatting.weight {
-                TextWeight::Regular => Weight(400),
-                TextWeight::Medium => Weight(500),
-                TextWeight::Semibold => Weight(600),
-                TextWeight::Bold => Weight(700),
-            });
+        let attrs = styled_attrs(&family, formatting);
         let alignment = match formatting.alignment {
             TextAlignment::Start => Align::Left,
             TextAlignment::Center => Align::Center,
@@ -447,6 +436,39 @@ impl fmt::Display for TextRasterError {
 }
 
 impl Error for TextRasterError {}
+
+/// The baseline distance as a multiple of the type size, clamped to the range
+/// `or_core` writes. A zero or absurd value would otherwise collapse or explode a
+/// block, so the fallback is the historical 1.32 rather than a panic.
+fn line_height_factor(formatting: TextFormatting) -> f32 {
+    let permille = if formatting.line_height_permille == 0 {
+        DEFAULT_LINE_HEIGHT_PERMILLE
+    } else {
+        formatting.line_height_permille
+    };
+    f32::from(permille) / 1_000.0
+}
+
+/// The attributes shared by measuring and rasterising, so a measurement can never
+/// disagree with the pixels it is predicting.
+fn styled_attrs<'a>(family: &'a str, formatting: TextFormatting) -> Attrs<'a> {
+    let attrs = Attrs::new()
+        .family(Family::Name(family))
+        .weight(match formatting.weight {
+            TextWeight::Regular => Weight(400),
+            TextWeight::Medium => Weight(500),
+            TextWeight::Semibold => Weight(600),
+            TextWeight::Bold => Weight(700),
+        });
+    // Tracking is stored resolution-independently in milli-points; cosmic-text
+    // advances glyphs in the pixels the buffer was shaped at, so convert once.
+    let spacing_px = formatting.letter_spacing_milli_points as f32 / 1_000.0 * (4.0 / 3.0);
+    if spacing_px == 0.0 {
+        attrs
+    } else {
+        attrs.letter_spacing(spacing_px)
+    }
+}
 
 #[cfg(test)]
 mod tests {

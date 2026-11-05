@@ -1,7 +1,7 @@
 {
   "name": "motion-scene-edit",
   "harness": "or_ui",
-  "description": "Compose a scene from a library cutout, then edit the objects on the canvas: add text, retitle it, recolour it, nudge and drag it, open the expanded editor, delete it, and insert the edited scene on the timeline.",
+  "description": "Compose a scene from a library cutout, then edit the objects on the canvas: add text, retitle it, recolour it, nudge and drag it, open the expanded editor, set its weight, alignment, line height and tracking, delete it, and insert the edited scene on the timeline.",
   "viewport": {
     "width": 1440,
     "height": 900
@@ -153,6 +153,39 @@
       "selector": {
         "key": "motion-editor-node-size-up"
       }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-weight-semibold"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Semi",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-align-center"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-line-height-up"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-editor-node-tracking-up"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "motion-editor-node-tracking-value"
     },
     {
       "op": "tap",

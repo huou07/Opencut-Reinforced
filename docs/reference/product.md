@@ -1,6 +1,6 @@
 # Product Requirements Inventory
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-05
 
 Scope: what OR is meant to be, area by area, with maturity labels. This is the
 requirement inventory, not implemented status — current work is selected by
@@ -107,7 +107,11 @@ app-level JSON library with deterministic name/tag classification
 (background, people, nature, animal, vehicle, ...) and a manual override; PNG
 import and rendering; a Motion panel with search, previews, parameter editing
 and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
-See [motion-assets.md](../features/motion-assets.md).
+A composed scene's text can be set with its own family, weight, alignment, line
+height and tracking inside an explicit text box (schema version 2, ADR 0012), so
+titles can carry hierarchy instead of one uniform weight. See
+[motion-assets.md](../features/motion-assets.md) and
+[motionscene.md](../features/motionscene.md).
 
 **DEFERRED:** a live timeline MotionClip that stays editable in place; motion
 presets applied to an existing node; a marketplace. Placement stays materialised

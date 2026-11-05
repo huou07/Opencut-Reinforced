@@ -81,11 +81,17 @@ insert the result; use it only when a file is wanted, never as an insertion path
   duration — a slow drift, a pulse, a wipe — not only entrance fades. If the
   middle of the scene is static, it reads as a slide.
 - **Type first.** Titles are at most six or seven words per line at 1080p, at
-  least 28 px, with a 5 % margin. ASCII lines use Inter; a line with Vietnamese
-  or any non-ASCII character uses Be Vietnam Pro, the bundled display face, so
-  stacked marks keep their shape. Write NFC text, never strip diacritics to fit,
-  and never pick a font name — both faces are bundled and the renderer chooses.
+  least 28 px, with a 5 % margin. Two OFL faces are bundled: `inter` (default,
+  ASCII) and `be_vietnam_pro` (the display face for Vietnamese, so stacked marks
+  keep their shape). Set `font` only when you mean to override the automatic
+  ASCII/non-ASCII choice. Write NFC text and never strip diacritics to fit.
   Wrapping and shrinking to 60 % are safety nets, not a layout choice.
+- **Build hierarchy with the type fields, not with size alone.** A title card
+  reads as designed when the display line is `font_weight: "bold"` with
+  `letter_spacing` around -1 to -2, and the supporting line is `"medium"` with
+  `line_height` 1.4–1.5. Give a multi-line block an explicit `size` box so it
+  wraps at the measure you chose and aligns; without a box, `text_align` has
+  nothing to align inside and a long line is measured against the canvas edge.
 - **Cut on movement.** Overlap the end of one idea with the start of the next;
   avoid a fully empty frame between beats.
 - **A camera move is the cheapest life.** A slow push-in (`camera.keyframes`
@@ -99,7 +105,7 @@ insert the result; use it only when a file is wanted, never as an insertion path
 ```json
 {
   "format": "opencut-reinforced-motion-scene",
-  "schema_version": 1,
+  "schema_version": 2,
   "scene_id": "<UUIDv4>",
   "name": "...",
   "duration": {"numerator": 4, "denominator": 1},
@@ -125,7 +131,14 @@ every resolved instruction, so preview, layout and materialisation agree.
 Node kinds: `group`, `text`, `rectangle`, `ellipse`, `arrow`, `image`.
 
 - Text needs `text`; optional `position`, `font_size`, `fill`, `spans`
-  (byte-offset highlight runs).
+  (byte-offset highlight runs), and the typography set: `font` (`inter` |
+  `be_vietnam_pro`), `font_weight` (`regular` | `medium` | `semibold` | `bold`),
+  `text_align` (`start` | `center` | `end`), `line_height` (0.5–3.0, a multiple of
+  the type size) and `letter_spacing` (-50–200 points). Omitted fields use the
+  version 1 behaviour, so a version 1 document renders exactly as before.
+- `size` on a text node is an explicit box: its width is the measure, its height
+  bounds the block, and the text anchors at the box top. Omit it and the line is
+  measured against the canvas and shrunk (to 60 %) before wrapping.
 - Rectangle and ellipse need `size`; optional `position`, `fill`, `stroke`,
   `stroke_width`, `rotation_degrees`, `opacity`.
 - Image needs `asset_id`; group needs `children`.
@@ -136,7 +149,8 @@ Node kinds: `group`, `text`, `rectangle`, `ellipse`, `arrow`, `image`.
   and each node animates a property once. Easings: `linear`, `ease_in`,
   `ease_out`, `ease_in_out`.
 
-To change the title, a colour or a size, edit the node's fields and re-materialise.
+To change the title, a colour, a size or the typography, edit the node's fields and
+re-materialise.
 The materialised clip already on the timeline is an ordinary video clip; re-running
 the scene never silently replaces it — insert the new render and delete the old
 clip only if the user asks.

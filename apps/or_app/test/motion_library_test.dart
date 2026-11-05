@@ -10,6 +10,7 @@ import 'package:or_app/motion/motion_insert_log.dart';
 import 'package:or_app/motion/motion_library_controller.dart';
 import 'package:or_app/motion/motion_library_models.dart';
 import 'package:or_app/motion/motion_library_panel.dart';
+import 'package:or_app/motion/motion_scene_editor.dart';
 
 final Uint8List _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -92,6 +93,41 @@ Map<String, dynamic> _applyFakeEdit(
       find(id!)!['fill'] = edit['color'];
     case 'set_font_size':
       find(id!)!['font_size'] = edit['font_size'];
+    case 'set_font_family':
+      final node = find(id!)!;
+      if (edit['font'] == null) {
+        node.remove('font');
+      } else {
+        node['font'] = edit['font'];
+      }
+    case 'set_font_weight':
+      final node = find(id!)!;
+      if (edit['weight'] == null) {
+        node.remove('font_weight');
+      } else {
+        node['font_weight'] = edit['weight'];
+      }
+    case 'set_text_align':
+      final node = find(id!)!;
+      if (edit['align'] == null) {
+        node.remove('text_align');
+      } else {
+        node['text_align'] = edit['align'];
+      }
+    case 'set_line_height':
+      final node = find(id!)!;
+      if (edit['line_height'] == null) {
+        node.remove('line_height');
+      } else {
+        node['line_height'] = edit['line_height'];
+      }
+    case 'set_letter_spacing':
+      final node = find(id!)!;
+      if (edit['letter_spacing'] == null) {
+        node.remove('letter_spacing');
+      } else {
+        node['letter_spacing'] = edit['letter_spacing'];
+      }
     case 'delete':
       nodes.removeWhere((node) => node['node_id'] == id);
     case 'delete_many':
@@ -1588,4 +1624,74 @@ void main() {
     expect(log.last!.outputPath, isNot(firstOutput));
     expect(log.last!.frameCount, 150);
   });
+  testWidgets('the inspector edits scene typography without a bridge regeneration', (
+    tester,
+  ) async {
+    late MotionLibraryController controller;
+    late _FakeMotionGateway gateway;
+    await tester.runAsync(() async {
+      (controller, gateway, _) = await buildController();
+      await controller.importSceneFile('/tmp/composition.ormotion.json');
+    });
+    controller.selectNode('title');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 1200,
+            child: MotionSceneInspector(controller: controller, scope: 'probe'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // A scene written before version 2 shows the automatic choices.
+    final before = controller.nodeTypography('title');
+    expect(before, isNotNull);
+    expect(before!.font, isNull);
+    expect(before.weight, isNull);
+
+    await tester.tap(find.byKey(const ValueKey('probe-node-weight-bold')));
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_font_weight');
+    expect(gateway.edits.last['weight'], 'bold');
+    expect(controller.nodeTypography('title')!.weight, 'bold');
+
+    await tester.tap(
+      find.byKey(const ValueKey('probe-node-align-end')),
+    );
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_text_align');
+    expect(controller.nodeTypography('title')!.align, 'end');
+
+    await tester.tap(find.byKey(const ValueKey('probe-node-font-inter')));
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_font_family');
+    expect(controller.nodeTypography('title')!.font, 'inter');
+
+    await tester.tap(
+      find.byKey(const ValueKey('probe-node-line-height-up')),
+    );
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_line_height');
+    expect(
+      controller.nodeTypography('title')!.lineHeight,
+      closeTo(1.38, 0.001),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('probe-node-tracking-up')),
+    );
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_letter_spacing');
+    expect(
+      controller.nodeTypography('title')!.letterSpacing,
+      closeTo(0.5, 0.001),
+    );
+
+  });
+
 }
