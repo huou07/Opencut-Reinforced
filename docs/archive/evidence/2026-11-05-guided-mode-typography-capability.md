@@ -60,6 +60,7 @@ the same branch and commit as the macOS tree.
 | The Flutter surface analyzes and tests on Linux | `flutter analyze --no-pub` → no issues; `flutter test` → `+462 ~5` pass |
 | The Rust bridge and IPC layers test on Linux | `cargo test -p or_app_bridge -p or_ipc -p or_runtime --locked` → 53, 7, 10, 4 and 22 pass |
 | The CLI drives a real project on Linux | `or project create`, `media add` (decode gate admitted the fixture), `timeline add-track` video and text, `insert-clip`, `insert-text` |
+| The editor preferences are reachable under their own name | `scripts/ui_scenarios/resources-setup.json` → PASS: Settings → Resources reports each bundled component and the external-tools controls, and the guided/tips/guides/inspector switches sit in an **Editor** panel rather than trailing the narration panel |
 | The semantic editor journey passes on Linux | `python3 scripts/run_linux_ui_preflight.py` under bounded Xvfb → `All tests passed!` at `6a1fbb3` |
 
 Export through the CLI is **not** claimed on Linux: `or session serve` installs

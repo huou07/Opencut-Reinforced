@@ -143,9 +143,10 @@ file holds. A version-1 settings file opens in guided mode.
   are painted in Flutter after presentation, never handed to a renderer, and
   never appear in an exported frame. `G` toggles them when no text field has
   focus and the viewer guide button toggles the same preference.
-- **Settings** carries the three switches under Appearance: guided mode,
-  next-step tips, composition guides. Each writes the shared store, so the
-  shell, the editor and the next launch agree.
+- **Settings** carries the three switches in its own **Editor** panel, beside
+  the narration settings that own the voice: guided mode, next-step tips,
+  composition guides, plus the inspector preference. Each writes the shared
+  store, so the shell, the editor and the next launch agree.
 
 ## Interaction rules
 

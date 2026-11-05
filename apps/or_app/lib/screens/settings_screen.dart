@@ -203,7 +203,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SettingsSection.resources => _resourcesSection(),
     SettingsSection.assistant => _assistantSection(),
     SettingsSection.appearance => _appearanceSection(),
-    SettingsSection.general => _generalSection(),
+    SettingsSection.general => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _generalSection(),
+        const SizedBox(height: OrSpacing.x3),
+        _editorPanel(),
+      ],
+    ),
     SettingsSection.advanced => _advancedSection(),
   };
 
@@ -421,7 +428,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             settings: narration ?? const NarrationSettings(),
             onChanged: (settings) => unawaited(_saveNarration(settings)),
           ),
-          const Divider(height: OrSpacing.x6),
+        ],
+      ),
+    );
+  }
+
+  /// The switches that change the editor itself live with the editor, not
+  /// inside the narration panel they used to trail: a preference is easier to
+  /// find under the name of the thing it changes.
+  Widget _editorPanel() {
+    return OrPanel(
+      key: const ValueKey('settings-editor'),
+      title: 'Editor',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Material(
             type: MaterialType.transparency,
             child: SwitchListTile(
