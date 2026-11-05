@@ -296,3 +296,25 @@ Two host-only frictions are recorded rather than hidden: the Debian host needed
 one online `cargo metadata` to populate the registry cache before
 `check-locks.sh` could run offline, and the Windows suite reports the same five
 skips the Linux suite does.
+
+## The Windows uninstaller, run against a running copy, `13f5b4f`
+
+The published 0.1.17 installer removes program files over a running copy, but its
+uninstaller did not. Every row below was measured on the Windows host with the
+setup rebuilt from this commit, `start /wait "" <setup> /VERYSILENT
+/SUPPRESSMSGBOXES /NORESTART /CURRENTUSER /LOG=<file>` and
+`<install>\unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=<file>`.
+
+| Step | Condition | Result |
+| --- | --- | --- |
+| Install | folder removed first | exit 0, `or.exe version` → `Opencut Reinforced 0.1.18` |
+| Upgrade | app running | exit 0, version unchanged, log records `or: stopping a running copy before touching files` |
+| Uninstall | app running | exit 0, `or: InitializeUninstall` in the log, then `or: image still held after attempt 1`, then the app and every DLL deleted |
+| Left over | after uninstall | `unins000.exe` stub only; Inno defers that one file (and the folder) to the next reboot |
+| Projects | after uninstall | untouched — the uninstaller removes `{app}` only |
+
+What this replaced: on 0.1.17 the same silent uninstall over a running copy exited
+1 and removed nothing, because Inno runs `PrepareToInstall` for an install but not
+for an uninstall; stopping the process alone then exited 0 with every DLL still
+there, because Windows keeps the image sections mapped after the process object
+is gone.

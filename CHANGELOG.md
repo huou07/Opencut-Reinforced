@@ -13,6 +13,20 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.18 — 2026-11-06
+
+### Fixed
+- **The Windows installer can uninstall itself while the app is running.** Inno
+  runs `PrepareToInstall` for an install but not for an uninstall, so a silent
+  uninstall over a running copy exited 1 and left every file in place, and a
+  build that only stopped the process exited 0 but left the DLLs for the next
+  reboot. `InitializeUninstall` now stops the app and waits until Windows has
+  released its image sections before the uninstaller touches a file. Verified on
+  the Windows host on a fresh install: uninstall over a running copy removes the
+  program and keeps the user's projects. Nothing else changed, and no macOS or
+  Linux behaviour is affected; a patch release is cheaper for users than asking
+  them to kill the app by hand before uninstalling.
+
 ## 0.1.17 — 2026-11-06
 
 ### Added
