@@ -1021,6 +1021,34 @@ class MotionLibraryController extends ChangeNotifier {
         'letter_spacing': spacing.clamp(-50.0, 200.0),
       });
 
+  /// Rounds a shape node's corners in canvas pixels; `null` restores the square
+  /// corner.
+  Future<void> setNodeCornerRadius(String nodeId, double? radius) =>
+      _applyEdit({
+        'op': 'set_corner_radius',
+        'node_id': nodeId,
+        if (radius != null) 'corner_radius': radius.clamp(0.0, 4096.0),
+      });
+
+  /// A shape node's corner radius from the draft document, so the inspector shows
+  /// what the scene actually carries rather than a remembered value.
+  double nodeCornerRadius(String nodeId) {
+    final json = _draftSceneJson;
+    if (json == null) return 0;
+    try {
+      final decoded = jsonDecode(json);
+      final nodes = decoded is Map ? decoded['nodes'] : null;
+      if (nodes is! List) return 0;
+      for (final entry in nodes) {
+        if (entry is! Map || entry['node_id'] != nodeId) continue;
+        return (entry['corner_radius'] as num?)?.toDouble() ?? 0;
+      }
+    } catch (_) {
+      // An unreadable draft shows the square corner; the edit path validates it.
+    }
+    return 0;
+  }
+
   /// A text node's typography, read from the draft document.
   ///
   /// The generated bridge views predate these fields, and regenerating them for

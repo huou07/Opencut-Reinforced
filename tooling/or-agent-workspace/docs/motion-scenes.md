@@ -74,9 +74,10 @@ insert the result; use it only when a file is wanted, never as an insertion path
 
 ## Design rules (learned from the slideshow failure)
 
-- **Flat colour only.** Pick three to five flat fills and reuse them; do not
-  fake a gradient with stacked bands. The format has no gradient and reviewers
-  read bands as a mistake.
+- **Three to five fills, one of them a gradient.** Reuse a small palette. A
+  two-stop gradient on a card or a bar reads as depth; stacked bands and
+  per-node rainbow fills read as a mistake. A gradient is one node property,
+  never twenty rectangles.
 - **Never a dead frame.** Keep two or three animations running across the whole
   duration — a slow drift, a pulse, a wipe — not only entrance fades. If the
   middle of the scene is static, it reads as a slide.
@@ -100,12 +101,27 @@ insert the result; use it only when a file is wanted, never as an insertion path
 - Read the result with `tools/or motion layout --file ... --at MID --json`; the
   boxes are what a viewer sees, so check that text stays inside its canvas.
 
+## A card that does not look unfinished
+
+The difference between a slide and a product shot is usually four properties,
+not forty nodes:
+
+- a rectangle with `corner_radius` between 8 and 24 at 1080p,
+- a `gradient` from a dark tint to a slightly lighter one at the same angle for
+  every card in the scene,
+- a text box whose `size` is inside the card with 24–32 px of padding,
+- one animation on the card (`scale` 0.98 → 1 or `opacity` 0 → 1) so it lands
+  with the type.
+
+Panels, chart backgrounds and lower thirds use the same recipe; only the
+gradient angle changes between the light and dark halves of a scene.
+
 ## Envelope
 
 ```json
 {
   "format": "opencut-reinforced-motion-scene",
-  "schema_version": 2,
+  "schema_version": 3,
   "scene_id": "<UUIDv4>",
   "name": "...",
   "duration": {"numerator": 4, "denominator": 1},
@@ -140,7 +156,12 @@ Node kinds: `group`, `text`, `rectangle`, `ellipse`, `arrow`, `image`.
   bounds the block, and the text anchors at the box top. Omit it and the line is
   measured against the canvas and shrunk (to 60 %) before wrapping.
 - Rectangle and ellipse need `size`; optional `position`, `fill`, `stroke`,
-  `stroke_width`, `rotation_degrees`, `opacity`.
+  `stroke_width`, `rotation_degrees`, `opacity`, and for shapes two style
+  fields: `corner_radius` (canvas pixels, clamped to half the shorter side) and
+  `gradient` (`{"from": colour, "to": colour, "angle_degrees": n}`, 0° pointing
+  right and measuring counter-clockwise). A gradient replaces `fill` across the
+  node's own box; omit it for a flat fill. Version 2 documents without either
+  field keep their square, flat look.
 - Image needs `asset_id`; group needs `children`.
 - Colours are typed `{red, green, blue, alpha}` with 0–255 channels. There is no
   CSS string and no expression language.

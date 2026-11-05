@@ -787,6 +787,10 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
         ],
         const SizedBox(height: OrSpacing.x1),
         _colorRow(node),
+        if (node.kind == 'rectangle') ...[
+          const SizedBox(height: OrSpacing.x1),
+          _cornerRadiusRow(node),
+        ],
         if (node.strokeable) ...[
           const SizedBox(height: OrSpacing.x1),
           _outlineRow(node),
@@ -1128,6 +1132,58 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
           tooltip: 'Larger type',
           onPressed: () => unawaited(
             controller.setNodeFontSize(node.nodeId, math.min(400, size + 8)),
+          ),
+          icon: const Icon(Icons.add),
+        ),
+      ],
+    );
+  }
+
+  Widget _cornerRadiusRow(MotionSceneNodeView node) {
+    final radius = controller.nodeCornerRadius(node.nodeId);
+    return Row(
+      children: [
+        const Text(
+          'Corners',
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+          ),
+        ),
+        const SizedBox(width: OrSpacing.x2),
+        Expanded(
+          child: Text(
+            radius <= 0 ? 'square' : '${radius.round()} px',
+            key: ValueKey('${widget.scope}-node-corner-radius-value'),
+            style: const TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.tinySize,
+            ),
+          ),
+        ),
+        IconButton(
+          key: ValueKey('${widget.scope}-node-corner-radius-down'),
+          iconSize: 14,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'Less rounded',
+          onPressed: () => unawaited(
+            controller.setNodeCornerRadius(
+              node.nodeId,
+              math.max(0, radius - 4).toDouble(),
+            ),
+          ),
+          icon: const Icon(Icons.remove),
+        ),
+        IconButton(
+          key: ValueKey('${widget.scope}-node-corner-radius-up'),
+          iconSize: 14,
+          visualDensity: VisualDensity.compact,
+          tooltip: 'More rounded',
+          onPressed: () => unawaited(
+            controller.setNodeCornerRadius(
+              node.nodeId,
+              math.min(120, radius + 4).toDouble(),
+            ),
           ),
           icon: const Icon(Icons.add),
         ),

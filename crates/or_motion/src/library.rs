@@ -432,6 +432,8 @@ impl MotionLibrary {
             text_align: None,
             line_height: None,
             letter_spacing: None,
+            corner_radius: None,
+            gradient: None,
             spans: None,
         };
         let parameter =
@@ -1002,6 +1004,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                     spans: None,
                 }],
                 animations: vec![],

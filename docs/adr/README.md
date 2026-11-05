@@ -19,6 +19,7 @@ the machine execution plan; they do not replace `docs/archive/execution/PLAN.jso
 - [0011 — A Linux delivery encoder for MP4 export](0011-linux-delivery-encoder.md) (Accepted; x264 in the Linux build only)
 - [0011 — Export frame handoff, hardware colour conversion and zero-copy](0011-export-frame-handoff-and-hardware-colour.md) (Proposed)
 - [0012 — Scene typography, schema version 2 and explicit text boxes](0012-scene-typography-schema-v2.md) (Implemented; version 1 stays readable)
+- [0013 — Scene shape style, schema version 3 (rounded corners and gradients)](0013-scene-shape-style-schema-v3.md) (Implemented; versions 1 and 2 stay readable)
 
 All records are architecture intent. A later implementation checkpoint must
 provide its own dependency, platform, licensing, test, and migration evidence.

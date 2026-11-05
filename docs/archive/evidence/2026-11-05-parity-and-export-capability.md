@@ -18,6 +18,10 @@ unverified. The limits at the end are part of the record.
 | `62d770e` | optional components can be removed, but only what the app installed |
 | `3d43c9c` | the library shows the licence and origin of every bundled asset |
 | `ea8cb31` | Windows 11 builds, tests and packages the ZIP from the same tree |
+| `9676ef3` | the Windows stager works on a real host, not only in CI |
+| `c64a128d` | the DMG is built and opened on all three hosts' evidence in one place |
+| `018b5ab` | scene shapes carry a corner radius and a two-stop gradient |
+| PT2 | rooted scene asset paths are refused on Windows too |
 | branch head after this receipt | `ea8cb31`, macOS, Linux and Windows verified from that commit |
 
 ## What was proven, and how
@@ -91,12 +95,64 @@ Not verified: the Inno Setup `.setup.exe` (Inno Setup 6 is absent on the Windows
 host) and the speech engine inside the Windows package (the local stage skipped
 the optional runtime).
 
+## MotionScene shapes, schema version 3, same commit
+
+| Claim | Evidence |
+|---|---|
+| A rectangle draws rounded corners | `cargo test -p or_render --lib a_rounded_rectangle_leaves_its_corner_empty` — pixel (11,11) of a 40×40 card at (10,10) with radius 12 has alpha 0, the centre is opaque, ink stays inside the box |
+| A gradient varies across the box | `a_gradient_changes_colour_across_the_box` — 0° black→white over 40 px gives red < 40 at x=0 and > 215 at x=39 |
+| Version 1 and 2 documents still parse and render identically | `cargo test -p or_motion --lib version_one_document_still_resolves_with_the_classic_look`; every new field defaults to the old behaviour |
+| Bad shape style is refused with a location | `an_out_of_range_corner_radius_is_reported_with_a_location` (`MOTION_INVALID_CORNER_RADIUS`, `/nodes/0/corner_radius`), `an_unknown_gradient_key_is_refused` (`InvalidJson`) |
+| Only shapes can be rounded | `corner_radius_edits_shapes_and_refuses_text` — `MOTION_EDIT_INVALID_VALUE` for −1, `MOTION_EDIT_NOT_SHAPE` for a text node |
+| The inspector steps the radius | `flutter test test/motion_library_test.dart` — `the inspector rounds a shape without a bridge regeneration` |
+| The scene journey still inserts a motion clip | `python3 scripts/or_ui.py run scripts/ui_scenarios/motion-scene-edit.json` → `RESULT: OR_UI=PASS`, 63 steps, ends "Motion clip added to the timeline." |
+| Local gates | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, or_core 376 / or_motion 99 / or_render 45, `flutter analyze --no-pub`, `flutter test` **499 pass**, `check-repo.sh` OK (875 files), doc links PASS (159), doc freshness PASS |
+
+Running the Rust suites on Windows found a real defect rather than passing
+quietly: `scene_images_resolve_relative_to_the_scene_and_refuse_escape` failed
+because `Path::new("/etc/passwd").is_absolute()` is **false** on Windows (a
+rooted path without a drive prefix is not absolute there), so a scene could name
+`\\Users\me\pic.png` and the loader would join it to `\Users\me\pic.png`,
+outside the scene's own folder. Windows PT2 fixed the refusal with
+`relative.has_root()` and the test now passes on both platforms
+(`cargo test -p or_render --lib` 45 pass on macOS and Windows).
+
+Not verified for this increment: a gradient chosen in the app's inspector (a
+scene file or the agent sets it), and any materialised render of a rounded,
+gradient-filled card beyond the rasteriser tests above.
+
+## Three hosts at `9938dd4`, the shape-style increment
+
+| Host | Static | Widget suite | Rust suites | Journey |
+|---|---|---|---|---|
+| macOS 15 arm64 | `flutter analyze --no-pub` no issues | `flutter test` **499 pass** | `or_motion` 99, `or_render` 45, `or_core` 376 | `motion-scene-edit` `RESULT: OR_UI=PASS`; `scripts/acceptance.sh` `PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)` |
+| Debian 13 x86_64 | `flutter analyze --no-pub` no issues | `flutter test` **494 pass, 5 skipped** | `or_motion` 99, `or_render` 45 | `scripts/run_linux_ui_preflight.py` under Xvfb |
+| Windows 11 x86_64 | `flutter analyze --no-pub` no issues | `flutter test` **494 pass, 5 skipped** | `or_render` 45 (after the rooted-path fix), `or_motion` 99 | native build is hosted-CI authority |
+
+All three checked out the same tree from one `git bundle`; Windows needed
+`LIBCLANG_PATH` and `C:\msys64\clang64\bin` on `PATH` for the FRB native-assets
+build, which is an environment note, not a code change.
+
+## The Linux package, built and installed on the Debian host, `a9b30ed`
+
+| Claim | Evidence |
+|---|---|
+| The pinned inputs build in user space | `scripts/build_desktop_export_codecs.sh linux …` (Opus 1.6.1, libvpx `v1.17.0`, x264, nv-codec-headers `n12.2.72.0`) plus FFmpeg 8.1.3 configured with `scripts/ffmpeg_configure_args.py`; `scripts/verify_ffmpeg_helpers.py` then encoded a proxy (mpeg4), a thumbnail, a waveform and a VP9+Opus WebM and decoded it back |
+| The lane builds a `.deb` | `bash scripts/run_local_lane.sh linux --packaged --steps deb,journey` → `deb PASS 86.3 s`; `opencut-reinforced-linux-x64-debug.deb` 33,882,200 B, SHA-256 `bd7391fd7bedc74986935c6c0902fb70ebf621404c8ffc7bbdc0088b783da055` |
+| The package installs, launches and exports | `journey PASS 317.2 s`; the packaged product journey wrote `existing-export.webm` (13,105,798 B) and the pinned `ffprobe` reports `vp9 1920×1080 24 fps` + `opus`, `duration=30.008` |
+| Lane result | `RESULT: LOCAL_LANE=PASS`, `elapsed_seconds 403.64` |
+
+Two real defects surfaced only by running the lane: the exported
+`packaged_build_deb` function used the unexported `$ROOT` (now `$root`), which
+failed the step with `ROOT: unbound variable` after the bundle was already
+built, and the first run had no pinned inputs at all.
+
 ## Limits
 
-- Windows: no Flutter, no FFmpeg and no C toolchain on that host, and
-  `docs/operations/permissions.md` forbids installing system tooling. The
-  Windows export row therefore remains a claim about the package, not a
-  measurement on that machine.
+- Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do
+  exist on that host, so the Windows analyse/test/build rows above were measured
+  there. What stays unmeasured is the `.setup.exe` (Inno Setup 6 is not
+  installed) and the optional speech runtime inside the package.
 - The parity lane renders a 320×180 composition. It compares the two writer
   paths on the same snapshot; it does not sweep every resolution or every
   adapter.

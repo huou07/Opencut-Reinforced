@@ -16,11 +16,11 @@
 //! the UI uses to draw its handles.
 
 use crate::{
-    MAX_MOTION_KEYFRAMES, MAX_MOTION_LETTER_SPACING, MAX_MOTION_LINE_HEIGHT, MAX_MOTION_NODES,
-    MAX_MOTION_TEXT_BYTES, MIN_MOTION_LETTER_SPACING, MIN_MOTION_LINE_HEIGHT, MotionAnimation,
-    MotionCanvas, MotionColor, MotionEasing, MotionFontFamily, MotionKeyframe, MotionNode,
-    MotionNodeKind, MotionPoint, MotionProperty, MotionScene, MotionSize, MotionTextAlignment,
-    MotionTextWeight, validate_scene,
+    MAX_MOTION_CORNER_RADIUS, MAX_MOTION_KEYFRAMES, MAX_MOTION_LETTER_SPACING,
+    MAX_MOTION_LINE_HEIGHT, MAX_MOTION_NODES, MAX_MOTION_TEXT_BYTES, MIN_MOTION_LETTER_SPACING,
+    MIN_MOTION_LINE_HEIGHT, MotionAnimation, MotionCanvas, MotionColor, MotionEasing,
+    MotionFontFamily, MotionKeyframe, MotionNode, MotionNodeKind, MotionPoint, MotionProperty,
+    MotionScene, MotionSize, MotionTextAlignment, MotionTextWeight, validate_scene,
 };
 use or_core::RationalTime;
 use serde::{Deserialize, Serialize};
@@ -125,6 +125,12 @@ pub enum MotionSceneEdit {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         letter_spacing: Option<f64>,
     },
+    /// Rounds a shape's corners; an absent value restores the square corner.
+    SetCornerRadius {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        corner_radius: Option<f64>,
+    },
     /// Removes a node, its children and the animations that targeted it.
     Delete { node_id: String },
     /// Removes a whole selection.
@@ -173,6 +179,8 @@ pub enum MotionSceneEditError {
     NotResizable(String),
     /// The operation needs a node that can carry an outline.
     NotStrokeable(String),
+    /// The operation needs a shape node and this one is not.
+    NotShape(MotionNodeKind),
     /// The node's size is animated, so a static size cannot change it.
     AnimatedSize(String),
     /// The operation names no nodes.
@@ -197,6 +205,7 @@ impl MotionSceneEditError {
             Self::NotDrawable(_) => "MOTION_EDIT_NOT_DRAWABLE",
             Self::NotResizable(_) => "MOTION_EDIT_NOT_RESIZABLE",
             Self::NotStrokeable(_) => "MOTION_EDIT_NOT_STROKEABLE",
+            Self::NotShape(_) => "MOTION_EDIT_NOT_SHAPE",
             Self::AnimatedSize(_) => "MOTION_EDIT_ANIMATED_SIZE",
             Self::EmptySelection => "MOTION_EDIT_EMPTY_SELECTION",
             Self::SelectionTooLarge => "MOTION_EDIT_SELECTION_TOO_LARGE",
@@ -222,6 +231,7 @@ impl fmt::Display for MotionSceneEditError {
                 write!(formatter, "{node_id} has no resizeable box")
             }
             Self::NotStrokeable(node_id) => write!(formatter, "{node_id} cannot carry an outline"),
+            Self::NotShape(kind) => write!(formatter, "a {kind:?} node has no corners to round"),
             Self::AnimatedSize(node_id) => write!(
                 formatter,
                 "{node_id} has an animated width or height, so its size is driven by the track"
@@ -365,6 +375,19 @@ fn text_node<'a>(
         return Err(MotionSceneEditError::NotText(node_id.to_owned()));
     }
     Ok(node)
+}
+
+/// The mutable shape a shape-only operation may touch.
+fn shape_node<'a>(
+    scene: &'a mut MotionScene,
+    node_id: &str,
+) -> Result<&'a mut MotionNode, MotionSceneEditError> {
+    let node = find_node_mut(&mut scene.nodes, node_id)
+        .ok_or_else(|| MotionSceneEditError::UnknownNode(node_id.to_owned()))?;
+    match node.kind {
+        MotionNodeKind::Rectangle | MotionNodeKind::Ellipse => Ok(node),
+        _ => Err(MotionSceneEditError::NotShape(node.kind)),
+    }
 }
 
 pub fn apply_scene_edit(
@@ -566,6 +589,20 @@ pub fn apply_scene_edit(
             let node = text_node(&mut next, node_id)?;
             node.letter_spacing = *letter_spacing;
         }
+        MotionSceneEdit::SetCornerRadius {
+            node_id,
+            corner_radius,
+        } => {
+            if let Some(value) = corner_radius
+                && (!value.is_finite() || !(0.0..=MAX_MOTION_CORNER_RADIUS).contains(value))
+            {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "corner_radius must be between 0 and {MAX_MOTION_CORNER_RADIUS}"
+                )));
+            }
+            let node = shape_node(&mut next, node_id)?;
+            node.corner_radius = *corner_radius;
+        }
         MotionSceneEdit::Delete { node_id } => {
             if !remove_node(&mut next.nodes, node_id) {
                 return Err(MotionSceneEditError::UnknownNode(node_id.clone()));
@@ -656,6 +693,8 @@ pub fn apply_scene_edit(
                 text_align: None,
                 line_height: None,
                 letter_spacing: None,
+                corner_radius: None,
+                gradient: None,
                 spans: None,
             });
         }
@@ -998,6 +1037,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                     spans: None,
                 },
                 MotionNode {
@@ -1026,6 +1067,8 @@ mod tests {
                         text_align: None,
                         line_height: None,
                         letter_spacing: None,
+                        corner_radius: None,
+                        gradient: None,
                         spans: None,
                     }]),
                     text: None,
@@ -1044,6 +1087,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                     spans: None,
                 },
             ],
@@ -1462,6 +1507,67 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(zero.code(), "MOTION_EDIT_INVALID_VALUE");
+    }
+
+    #[test]
+    fn corner_radius_edits_shapes_and_refuses_text() {
+        let document = serde_json::json!({
+            "format": crate::MOTION_SCENE_FORMAT,
+            "schema_version": 3,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Cards",
+            "duration": {"numerator": 2, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [
+                {
+                    "node_id": "card",
+                    "kind": "rectangle",
+                    "position": {"x": 40, "y": 40},
+                    "size": {"width": 300, "height": 160},
+                    "fill": {"red": 30, "green": 30, "blue": 34}
+                },
+                {
+                    "node_id": "title",
+                    "kind": "text",
+                    "text": "Hello",
+                    "position": {"x": 60, "y": 80},
+                    "font_size": 40
+                }
+            ],
+            "animations": []
+        });
+        let start = crate::parse_motion_scene(&serde_json::to_vec(&document).unwrap()).unwrap();
+        let rounded = apply_scene_edit_json(
+            &start,
+            br#"{"op": "set_corner_radius", "node_id": "card", "corner_radius": 18}"#,
+        )
+        .expect("round");
+        assert_eq!(rounded.nodes[0].corner_radius, Some(18.0));
+        let cleared = apply_scene_edit_json(
+            &rounded,
+            br#"{"op": "set_corner_radius", "node_id": "card"}"#,
+        )
+        .expect("clear");
+        assert!(cleared.nodes[0].corner_radius.is_none());
+        assert_eq!(
+            apply_scene_edit_json(
+                &cleared,
+                br#"{"op": "set_corner_radius", "node_id": "card", "corner_radius": -1}"#,
+            )
+            .unwrap_err()
+            .code(),
+            "MOTION_EDIT_INVALID_VALUE"
+        );
+        assert_eq!(
+            apply_scene_edit_json(
+                &cleared,
+                br#"{"op": "set_corner_radius", "node_id": "title", "corner_radius": 4}"#,
+            )
+            .unwrap_err()
+            .code(),
+            "MOTION_EDIT_NOT_SHAPE"
+        );
     }
 
     #[test]

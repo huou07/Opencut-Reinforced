@@ -13,6 +13,54 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.16 — 2026-11-05
+
+### Added
+- **A guided first project.** Simple mode is on by default: the timeline toolbar
+  names the next step (import, first clip, title, audio, export), the export
+  dialog asks what the file is for instead of which codec, and composition
+  guides (`G`) show the action- and title-safe areas without ever reaching the
+  export. Every step writes the ordinary command, so a beginner and a
+  professional edit the same project.
+- **Scene typography (MotionScene schema version 2).** A text node sets its own
+  font, weight, alignment, line height and tracking, and an explicit `size` is a
+  real text box, so titles wrap and anchor instead of shrinking. Project text
+  clips reach the same two metrics from their own dialog.
+- **Scene shape style (schema version 3).** A rectangle carries a corner radius
+  and any shape a two-stop gradient, so cards, chart panels and lower thirds are
+  styled in the scene language instead of being drawn as hard-edged blocks. The
+  inspector steps the radius.
+- **The app states the machine it will render on.** Settings → This machine and
+  the first-run panel report the CPU class, memory and the measured export
+  formats, with the 4 GiB headroom rule stated rather than hidden.
+- **Export formats are measured, not assumed.** The engine reports which encoder
+  the build actually has, the dialog filters profiles by that answer, and a
+  caveat replaces the choice instead of failing at the end of a long export.
+- **Optional components can be removed.** Setup deletes exactly the files it
+  installed (recorded in a manifest), refuses to touch anything a user added,
+  and says so when there is no record to act on.
+- **Library credits.** Library → Guide lists the licence, origin and permitted
+  use of every bundled font and generated asset; the Text and Sound tabs name
+  their licence beside the content.
+
+### Changed
+- **Preview and export share one picture.** A parity test renders the same frame
+  through the viewer path and the export path, decodes the export the way a
+  player does and refuses more than a 30 dB difference (measured 62.6 dB on
+  Apple Silicon and on Intel under Mesa).
+
+### Fixed
+- **Scene image loading refuses rooted paths on Windows.** A path such as
+  `\Users\me\pic.png` is not `is_absolute()` there, so a scene could read
+  outside its own folder; the loader now refuses `has_root()` as well.
+- **The packaged Linux lane uses the root it was handed** instead of an
+  unexported variable, and it now runs end to end with the pinned FFmpeg 8 and
+  codec prefixes: the `.deb` is built, installed, launched and shown to export a
+  VP9+Opus 1080p file that an independent `ffprobe` decodes.
+- **The Windows package stages the runtime it is asked for**, accepts a real
+  Python on a host whose `python3` is a Store alias, and the lane runs under
+  pwsh 7.
+
 ## 0.1.15 — 2026-11-05
 
 ### Added

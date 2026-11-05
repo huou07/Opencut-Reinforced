@@ -43,7 +43,7 @@ pub const MOTION_SCENE_FORMAT: &str = "opencut-reinforced-motion-scene";
 /// height, tracking) and the optional text box. They are additive: a version 1
 /// document parses unchanged and renders exactly as it did, which is why the
 /// upgrade needs no migration step.
-pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 2;
+pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 3;
 /// The oldest schema this crate still reads.
 pub const MIN_MOTION_SCENE_SCHEMA_VERSION: u32 = 1;
 /// The largest scene this accepts. A scene is authored text, not media, so this is
@@ -68,6 +68,11 @@ pub const MAX_MOTION_LINE_HEIGHT: f64 = 3.0;
 /// opens a label; both are bounded so a scene stays legible.
 pub const MIN_MOTION_LETTER_SPACING: f64 = -50.0;
 pub const MAX_MOTION_LETTER_SPACING: f64 = 200.0;
+
+/// A rounded corner radius is measured in canvas pixels and may not exceed the
+/// shape's own shorter side; a larger value is clamped when it is drawn so a
+/// resize cannot turn a rounded card into an invalid scene.
+pub const MAX_MOTION_CORNER_RADIUS: f64 = 4_096.0;
 
 /// The whole scene document.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -291,6 +296,25 @@ pub struct MotionNode {
     /// Tracking in canvas pixels, added to every glyph advance. Absent means zero.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub letter_spacing: Option<f64>,
+    /// Corner radius of a rectangle in canvas pixels. Absent means a square corner;
+    /// a value above half the shorter side is clamped when drawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corner_radius: Option<f64>,
+    /// A two-stop fill that replaces `fill` on a shape. Absent means a flat fill.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<MotionGradient>,
+}
+
+/// A two-stop linear gradient across a shape's own box.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MotionGradient {
+    /// The colour at the gradient's start edge.
+    pub from: MotionColor,
+    /// The colour at the gradient's end edge.
+    pub to: MotionColor,
+    /// Direction in degrees, counter-clockwise from the +x axis, like rotation.
+    pub angle_degrees: f64,
 }
 
 /// The animatable properties V1 supports. A locked set: there is no expression
@@ -821,6 +845,26 @@ fn walk_nodes(
                 }
             }
             MotionNodeKind::Rectangle | MotionNodeKind::Ellipse => {
+                if let Some(radius) = node.corner_radius
+                    && (!radius.is_finite() || !(0.0..=MAX_MOTION_CORNER_RADIUS).contains(&radius))
+                {
+                    errors.push(MotionDiagnostic::new(
+                        "MOTION_INVALID_CORNER_RADIUS",
+                        format!("{node_path}/corner_radius"),
+                        format!(
+                            "corner_radius must be between 0 and {MAX_MOTION_CORNER_RADIUS} canvas pixels"
+                        ),
+                    ));
+                }
+                if let Some(gradient) = node.gradient
+                    && !gradient.angle_degrees.is_finite()
+                {
+                    errors.push(MotionDiagnostic::new(
+                        "MOTION_INVALID_GRADIENT",
+                        format!("{node_path}/gradient/angle_degrees"),
+                        "gradient angle must be a finite number of degrees",
+                    ));
+                }
                 if let Some(size) = node.size
                     && (size.width <= 0.0 || size.height <= 0.0)
                 {
@@ -1025,11 +1069,90 @@ mod schema_version_tests {
     fn a_future_schema_version_is_refused_rather_than_guessed() {
         let mut value: serde_json::Value =
             serde_json::from_slice(&styled_document(serde_json::json!({}))).unwrap();
-        value["schema_version"] = serde_json::json!(3);
+        value["schema_version"] = serde_json::json!(crate::MOTION_SCENE_SCHEMA_VERSION + 1);
         let bytes = serde_json::to_vec(&value).unwrap();
         assert_eq!(
             crate::parse_motion_scene(&bytes).unwrap_err(),
             crate::MotionSceneError::UnsupportedSchemaVersion
+        );
+    }
+
+    fn shape_document(shape: serde_json::Value) -> Vec<u8> {
+        let mut node = serde_json::json!({
+            "node_id": "card",
+            "kind": "rectangle",
+            "position": {"x": 10, "y": 10},
+            "size": {"width": 320, "height": 180},
+            "fill": {"red": 32, "green": 32, "blue": 36}
+        });
+        for (key, value) in shape.as_object().expect("shape object") {
+            node[key] = value.clone();
+        }
+        let scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 3,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Shaped",
+            "duration": {"numerator": 2, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [node],
+            "animations": []
+        });
+        serde_json::to_vec(&scene).unwrap()
+    }
+
+    #[test]
+    fn version_three_shape_style_reaches_the_resolved_instruction() {
+        let bytes = shape_document(serde_json::json!({
+            "corner_radius": 24,
+            "gradient": {
+                "from": {"red": 62, "green": 199, "blue": 255},
+                "to": {"red": 155, "green": 124, "blue": 255},
+                "angle_degrees": 90
+            }
+        }));
+        let scene = crate::parse_motion_scene(&bytes).unwrap();
+        assert!(crate::validate_scene(&scene).errors.is_empty());
+        let frame = crate::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap())
+            .expect("evaluate");
+        let card = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.node_id == "card")
+            .expect("card instruction");
+        assert_eq!(card.corner_radius, Some(24.0));
+        let gradient = card.gradient.expect("gradient");
+        assert_eq!(gradient.from.blue, 255);
+        assert_eq!(gradient.to.green, 124);
+        assert_eq!(gradient.angle_degrees, 90.0);
+    }
+
+    #[test]
+    fn an_out_of_range_corner_radius_is_reported_with_a_location() {
+        let scene = crate::parse_motion_scene(&shape_document(serde_json::json!({
+            "corner_radius": -4
+        })))
+        .unwrap();
+        let validation = crate::validate_scene(&scene);
+        assert_eq!(validation.errors.len(), 1, "{:?}", validation.errors);
+        assert_eq!(validation.errors[0].code, "MOTION_INVALID_CORNER_RADIUS");
+        assert_eq!(validation.errors[0].path, "/nodes/0/corner_radius");
+    }
+
+    #[test]
+    fn an_unknown_gradient_key_is_refused() {
+        let bytes = shape_document(serde_json::json!({
+            "gradient": {
+                "from": {"red": 0, "green": 0, "blue": 0},
+                "to": {"red": 255, "green": 255, "blue": 255},
+                "angle_degrees": 45,
+                "stops": 3
+            }
+        }));
+        assert_eq!(
+            crate::parse_motion_scene(&bytes).unwrap_err(),
+            crate::MotionSceneError::InvalidJson
         );
     }
 
@@ -1109,6 +1232,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                 },
                 MotionNode {
                     node_id: "callout".to_owned(),
@@ -1139,6 +1264,8 @@ mod tests {
                         text_align: None,
                         line_height: None,
                         letter_spacing: None,
+                        corner_radius: None,
+                        gradient: None,
                     }]),
                     text: None,
                     position: None,
@@ -1157,6 +1284,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                 },
                 MotionNode {
                     node_id: "diagram".to_owned(),
@@ -1182,6 +1311,8 @@ mod tests {
                     text_align: None,
                     line_height: None,
                     letter_spacing: None,
+                    corner_radius: None,
+                    gradient: None,
                 },
             ],
             animations: vec![MotionAnimation {
@@ -1734,6 +1865,12 @@ pub struct MotionInstruction {
     pub line_height: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub letter_spacing: Option<f64>,
+    /// Corner radius of a shape instruction, in canvas pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub corner_radius: Option<f64>,
+    /// A two-stop fill that replaces `fill` when the shape is drawn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gradient: Option<MotionGradient>,
 }
 
 /// Everything a renderer draws for one exact time.
@@ -2032,6 +2169,8 @@ fn resolve_node(
         text_align: node.text_align,
         line_height: node.line_height,
         letter_spacing: node.letter_spacing,
+        corner_radius: node.corner_radius,
+        gradient: node.gradient,
     }
 }
 
