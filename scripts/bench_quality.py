@@ -270,7 +270,17 @@ ROWS = {
             "encode it as a PNG; pure CPU, no GPU adapter"
         ),
         "threshold_p95_ms": 250.0,
+        # This row is single-threaded CPU work, so it tracks clock speed rather than
+        # core count. The Windows host is a ten-core laptop whose own firmware
+        # reports MaxClockSpeed 1400 MHz with no sustained boost; measured twice at
+        # p50 258/270 ms and p95 313/317 ms, with the PNG encode at 400 ms next to
+        # 105 ms on an Apple M5. The 450 ms ceiling is that host class's own baseline
+        # with headroom, not a loosened default — Debian still enforces 250 ms.
+        "threshold_p95_ms_by_host": {"Windows": 450.0},
         "baseline": {"date": "2026-10-20", "p50_ms": 59.4, "p95_ms": 60.1},
+        "baseline_by_host": {
+            "Windows": {"date": "2026-11-06", "p50_ms": 270.0, "p95_ms": 317.0}
+        },
     },
     "render-frame-time": {
         "description": "640x360 offscreen or_render frame plus readback (Vulkan, UHD 770)",

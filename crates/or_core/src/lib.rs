@@ -45,6 +45,7 @@ pub use cache::{
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,
     JobManagerConfig, JobManagerConfigError, JobProgress, JobSnapshot, JobState, JobSubmitError,
+    artifact_worker_count, artifact_worker_count_for,
 };
 pub use media::{
     AndroidSafDocumentUri, AudioStreamMetadata, MAX_MEDIA_CHANNEL_LAYOUT_BYTES,

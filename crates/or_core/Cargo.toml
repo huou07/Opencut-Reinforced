@@ -15,4 +15,4 @@ uuid = { version = "1.26.1", features = ["serde", "v4"] }
 url = { version = "2.5.8", default-features = false, features = ["std"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_System_Threading"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem"] }
