@@ -493,6 +493,11 @@ jobs:
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
       - name: Build, stage and archive the release bundle
         shell: pwsh
         env:
