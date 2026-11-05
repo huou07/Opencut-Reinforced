@@ -21,6 +21,7 @@ unverified. The limits at the end are part of the record.
 | `9676ef3` | the Windows stager works on a real host, not only in CI |
 | `c64a128d` | the DMG is built and opened on all three hosts' evidence in one place |
 | `018b5ab` | scene shapes carry a corner radius and a two-stop gradient |
+| PT2 | rooted scene asset paths are refused on Windows too |
 | branch head after this receipt | `ea8cb31`, macOS, Linux and Windows verified from that commit |
 
 ## What was proven, and how
@@ -106,6 +107,15 @@ the optional runtime).
 | The inspector steps the radius | `flutter test test/motion_library_test.dart` — `the inspector rounds a shape without a bridge regeneration` |
 | The scene journey still inserts a motion clip | `python3 scripts/or_ui.py run scripts/ui_scenarios/motion-scene-edit.json` → `RESULT: OR_UI=PASS`, 63 steps, ends "Motion clip added to the timeline." |
 | Local gates | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, or_core 376 / or_motion 99 / or_render 45, `flutter analyze --no-pub`, `flutter test` **499 pass**, `check-repo.sh` OK (875 files), doc links PASS (159), doc freshness PASS |
+
+Running the Rust suites on Windows found a real defect rather than passing
+quietly: `scene_images_resolve_relative_to_the_scene_and_refuse_escape` failed
+because `Path::new("/etc/passwd").is_absolute()` is **false** on Windows (a
+rooted path without a drive prefix is not absolute there), so a scene could name
+`\\Users\me\pic.png` and the loader would join it to `\Users\me\pic.png`,
+outside the scene's own folder. Windows PT2 fixed the refusal with
+`relative.has_root()` and the test now passes on both platforms
+(`cargo test -p or_render --lib` 45 pass on macOS and Windows).
 
 Not verified for this increment: a gradient chosen in the app's inspector (a
 scene file or the agent sets it), and any materialised render of a rounded,

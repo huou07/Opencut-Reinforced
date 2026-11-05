@@ -210,6 +210,10 @@ pub fn load_motion_scene_images(
     for asset in &scene.assets {
         let relative = Path::new(&asset.path);
         if relative.is_absolute()
+            // On Windows a path such as `\\Users\me\pic.png` or `/etc/passwd`
+            // is rooted without carrying a drive prefix, so `is_absolute` alone
+            // would let a scene read outside its own folder.
+            || relative.has_root()
             || asset.path.contains("://")
             || relative
                 .components()
