@@ -13,12 +13,13 @@ video platform on one shared codebase. The work is organised so each increment i
 a product improvement with recorded evidence, not a library addition:
 
 11. **Guided first video (owner request, 2026-11-05).** A beginner's next step is
-    always one click away above the timeline, the export dialog asks what the
-    file is for instead of which codec, and composition guides show the safe
+    always one click away in the timeline toolbar, the export dialog asks what
+    the file is for instead of which codec, and composition guides show the safe
     areas. Delivered with `apps/or_app/lib/screens/editor_guided_bar.dart`, the
     intent-first export dialog, `_CompositionGuidesPainter`, and the
     `guided-beginner` journey through the real app. Settings exposes guided mode,
-    next-step tips and guides as preferences over the same state.
+    next-step tips, guides and the inspector as preferences over the same state,
+    in their own **Editor** panel rather than trailing the narration settings.
 12. **Scene typography (owner request, 2026-11-05).** MotionScene schema v2 adds
     family, weight, alignment, line height and tracking inside an explicit text
     box, with the two metrics shared through `or_core::TextFormatting`.
@@ -35,18 +36,32 @@ a product improvement with recorded evidence, not a library addition:
     repositories were checked against their real licences; no runtime dependency
     was adopted and the reasons are recorded in
     [technology-review.md](technology-review.md).
+15. **Linux verification of the same branch (owner request, 2026-11-05).** The
+    Debian 13 host built and tested the branch with a user-space Flutter and Rust
+    toolchain: `flutter analyze` clean, 462 widget tests, the bridge/IPC/runtime
+    Rust lanes, a CLI journey on a real project, and the semantic editor journey
+    under bounded Xvfb (`scripts/run_linux_ui_preflight.py`). That run is what
+    diagnosed the six failing widget tests and the failing `editor` workflow: the
+    guided band took 46 px from the panes. The step is now a toolbar item.
+16. **Setup is a GUI surface (owner request, 2026-11-05).** Settings → Resources
+    reports each bundled component, keeps speech models and the harness behind
+    explicit actions, and exposes the external-tools controls; the
+    `resources-setup` journey records that opening it installs nothing.
 
 Blocked, and reported as blocked rather than attempted:
 
-- **Three-machine build/test from one revision.** This mission's permission
-  boundary forbids installing system tooling on the Debian and Windows hosts, and
-  neither host has the Rust/Flutter toolchains (Windows also has no FFmpeg). The
-  cross-platform claim therefore rests on shared Rust/Dart code plus the macOS
-  measurements, and must stay labelled unverified on those hosts until a host
-  with toolchains runs the lanes.
-- **Resource manager GUI journey and installer-level parity.** The app owns
-  optional downloads, but this session did not install or remove an optional
-  component through the GUI, so that journey is not claimed as verified.
+- **Windows build/test from one revision.** The Windows 11 host has no Rust or
+  Flutter toolchain and no FFmpeg, and this mission's permission boundary
+  forbids installing system tooling there. macOS and Linux are verified from the
+  same commit; Windows stays labelled unverified rather than inferred from
+  shared code.
+- **Installer-level parity on Linux and Windows.** No packaged install was
+  exercised on either host. The Linux journey runs from a developer build under
+  Xvfb; packaging and install remain a separate, unclaimed step.
+- **An optional download installed and removed through the GUI.** The
+  `resources-setup` journey proves the surface is reachable and inert until a
+  user acts; it does not download a model or an update, so that path is not
+  claimed as verified.
 
 ## Previous focus (owner restatement, 2026-10-21)
 
