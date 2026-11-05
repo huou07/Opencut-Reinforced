@@ -133,6 +133,20 @@ All three checked out the same tree from one `git bundle`; Windows needed
 `LIBCLANG_PATH` and `C:\msys64\clang64\bin` on `PATH` for the FRB native-assets
 build, which is an environment note, not a code change.
 
+## The Linux package, built and installed on the Debian host, `a9b30ed`
+
+| Claim | Evidence |
+|---|---|
+| The pinned inputs build in user space | `scripts/build_desktop_export_codecs.sh linux …` (Opus 1.6.1, libvpx `v1.17.0`, x264, nv-codec-headers `n12.2.72.0`) plus FFmpeg 8.1.3 configured with `scripts/ffmpeg_configure_args.py`; `scripts/verify_ffmpeg_helpers.py` then encoded a proxy (mpeg4), a thumbnail, a waveform and a VP9+Opus WebM and decoded it back |
+| The lane builds a `.deb` | `bash scripts/run_local_lane.sh linux --packaged --steps deb,journey` → `deb PASS 86.3 s`; `opencut-reinforced-linux-x64-debug.deb` 33,882,200 B, SHA-256 `bd7391fd7bedc74986935c6c0902fb70ebf621404c8ffc7bbdc0088b783da055` |
+| The package installs, launches and exports | `journey PASS 317.2 s`; the packaged product journey wrote `existing-export.webm` (13,105,798 B) and the pinned `ffprobe` reports `vp9 1920×1080 24 fps` + `opus`, `duration=30.008` |
+| Lane result | `RESULT: LOCAL_LANE=PASS`, `elapsed_seconds 403.64` |
+
+Two real defects surfaced only by running the lane: the exported
+`packaged_build_deb` function used the unexported `$ROOT` (now `$root`), which
+failed the step with `ROOT: unbound variable` after the bundle was already
+built, and the first run had no pinned inputs at all.
+
 ## Limits
 
 - Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do

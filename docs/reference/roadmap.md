@@ -111,12 +111,15 @@ Blocked, and reported as blocked rather than attempted:
   exercised locally because Inno Setup 6 is not installed on that host; the
   `.zip` is the tested artifact and `.setup.exe` remains a CI-produced,
   locally-unproven package.
-- **Installer-level parity on Linux.** No `.deb` was built or installed on the
-  Debian host in this round. The lane reports `LOCAL_LANE=BLOCKED` before it
-  starts, naming the pinned FFmpeg 8 prefix, the codec prefix, the FFmpeg
-  `COPYING.LGPLv2.1` file and the codec notices it cannot find; building those on
-  that host is the outstanding work. Linux app behaviour itself is verified
-  (suite, Rust tests, native editor journey under Xvfb).
+- **Installer-level parity on Linux.** Closed on 2026-11-05: the pinned LGPL
+  FFmpeg 8.1.3 build and the codec prefix (Opus, libvpx, x264, nv-codec-headers)
+  were compiled in user space on the Debian host, and
+  `scripts/run_local_lane.sh linux --packaged --steps deb,journey` now reports
+  `RESULT: PASS` — the `.deb` (33.9 MB, SHA-256 `bd7391fd…`) was built, installed
+  into a local root, launched, and the packaged journey exported a real
+  1920×1080 24 fps VP9+Opus WebM that the pinned `ffprobe` decodes. The debug
+  package is what was proven; a `--build-mode release` `.deb` is still produced
+  only by the release workflow.
 - **An optional download installed and removed through the GUI.** The
   `resources-setup` journey proves the surface is reachable and inert until a
   user acts; it does not download a model or an update, so that path is not
