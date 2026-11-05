@@ -168,6 +168,21 @@ tagged had published no release and the same version number is the one in
 `CHANGELOG.md`, `Cargo.toml` and `apps/or_app/pubspec.yaml`. A corrective tag
 move is recorded here instead of being left to be discovered later.
 
+## Release `v0.1.16` published and opened from every asset
+
+| Claim | Evidence |
+|---|---|
+| One tag run produced all four packages | `Desktop release` run 42051101193 on `6ee16160`: Ubuntu, Apple Silicon and Windows jobs each success, `Publish every desktop asset` success |
+| The recorded checksums match the published bytes | `gh release download v0.1.16` then `shasum -a 256 -c SHA256SUMS.txt` → four `OK` lines |
+| The macOS image opens | mounted read-only: `Contents/MacOS/or version` → `Opencut Reinforced 0.1.16`, `whisper-cli --help` prints its usage, `file` reports `Mach-O 64-bit executable arm64` |
+| The Debian package installs and runs | `sudo dpkg -i Opencut-Reinforced-0.1.16-linux-x64.deb` → `Setting up opencut-reinforced (0.1.16+6ee161607b4d)`; `/opt/opencut-reinforced/or version` → `Opencut Reinforced 0.1.16` |
+| The Windows archive runs | expanded with `Expand-Archive`: `Get-FileHash` matches `25118f97…`, `or.exe version` → `Opencut Reinforced 0.1.16`, `ffmpeg.exe -version` → `ffmpeg version 8.1.3` |
+
+The `v0.1.16` tag was moved once, from `d713d55d` to `6ee16160`, because the
+first tag run failed on Windows while staging the runtime and published
+nothing; the fix and the decision are recorded above. No other tag was moved,
+deleted or re-created, and no version was published twice.
+
 ## Limits
 
 - Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do
