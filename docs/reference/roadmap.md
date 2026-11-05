@@ -104,9 +104,11 @@ Blocked, and reported as blocked rather than attempted:
   `.zip` is the tested artifact and `.setup.exe` remains a CI-produced,
   locally-unproven package.
 - **Installer-level parity on Linux.** No `.deb` was built or installed on the
-  Debian host in this round; the Linux journey runs from a developer build under
-  Xvfb. The Windows ZIP install/uninstall journey and the macOS bundle are
-  recorded in the parity receipt.
+  Debian host in this round. The lane reports `LOCAL_LANE=BLOCKED` before it
+  starts, naming the pinned FFmpeg 8 prefix, the codec prefix, the FFmpeg
+  `COPYING.LGPLv2.1` file and the codec notices it cannot find; building those on
+  that host is the outstanding work. Linux app behaviour itself is verified
+  (suite, Rust tests, native editor journey under Xvfb).
 - **An optional download installed and removed through the GUI.** The
   `resources-setup` journey proves the surface is reachable and inert until a
   user acts; it does not download a model or an update, so that path is not

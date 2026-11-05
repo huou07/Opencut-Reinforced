@@ -67,6 +67,30 @@ Not verified on Windows: the Inno Setup `.setup.exe` (Inno Setup 6 is not
 installed on that host) and the speech engine in the package (the local run
 stages the app and the `or` CLI without the pinned Whisper archive).
 
+## Packaging on all three hosts, same commit
+
+A package is evidence only when it was built, opened and exercised, so each host
+was asked for the artifact its users install.
+
+| Host | Artifact | Result |
+|---|---|---|
+| macOS 15 arm64 | `dist/Opencut-Reinforced-0.1.15-arm64.dmg` (36 MB, SHA-256 `1f75ff94…`) | built by `scripts/build_macos_dmg.sh`, checksum valid, mounted read-only, `Contents/MacOS/or version` prints `Opencut Reinforced 0.1.15`, `whisper-cli --help` starts, `codesign -dv` reports an ad-hoc arm64 bundle |
+| Windows 11 x86_64 | `build/windows/or-windows-x64-release.zip` (35 MB, SHA-256 `d24a1bd2…`) | `WINDOWS_LANE=PASS`: staged, installed to the user location, launched, replaced, uninstalled, project data survived |
+| Debian 13 x86_64 | none | `LOCAL_LANE=BLOCKED` before packaging: the pinned FFmpeg 8 prefix, codec prefix, `COPYING.LGPLv2.1` and codec notices are not on that host |
+
+Two blockers were removed rather than reported: the macOS gate rejects any
+Mach-O above the public minimum, and the debug bundle carried a `whisper-cli`
+built with `minos 26.0`, so whisper.cpp `b5454` was rebuilt with
+`-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0` and the provider with
+`MACOSX_DEPLOYMENT_TARGET=13.0` (`otool -l` now reports `minos 13.0` for both).
+The Linux lane named exactly what it was missing instead of fabricating a
+package; building a pinned LGPL FFmpeg 8 and the codec prefix on that host is a
+multi-hour compile that this round did not spend.
+
+Not verified: the Inno Setup `.setup.exe` (Inno Setup 6 is absent on the Windows
+host) and the speech engine inside the Windows package (the local stage skipped
+the optional runtime).
+
 ## Limits
 
 - Windows: no Flutter, no FFmpeg and no C toolchain on that host, and
