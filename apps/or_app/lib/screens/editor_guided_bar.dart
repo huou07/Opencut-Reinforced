@@ -86,11 +86,13 @@ GuidedStep? guidedNextStep({
   );
 }
 
-/// The guided row: one step, one button, one way to hide it.
+/// The guided step as one inline toolbar item.
 ///
-/// It sits above the timeline rather than over the viewer, so it never covers
-/// the frame the user is judging, and its height is fixed so the layout below
-/// it does not move when the step changes.
+/// It lives inside the timeline toolbar instead of taking its own row, so the
+/// panes keep the height they would have without guidance: a next step can
+/// never shrink the inspector a user is scrolling or push a clip under a
+/// transient snackbar. The toolbar already scrolls, so the item costs nothing
+/// when a wide window has room and still fits a narrow one.
 class EditorGuidedBar extends StatelessWidget {
   const EditorGuidedBar({
     super.key,
@@ -105,76 +107,54 @@ class EditorGuidedBar extends StatelessWidget {
   final VoidCallback onDismiss;
   final bool busy;
 
-  static const height = 46.0;
-
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Padding(
       key: const ValueKey('editor-guided-bar'),
-      height: height,
-      decoration: const BoxDecoration(
-        color: OrColors.backgroundRaised,
-        border: Border(bottom: BorderSide(color: OrColors.border)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
+      padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x1),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(
-            Icons.tips_and_updates_outlined,
-            size: 16,
-            color: OrColors.textSecondary,
+          Tooltip(
+            message: step.detail,
+            child: const Icon(
+              Icons.tips_and_updates_outlined,
+              size: 15,
+              color: OrColors.selection,
+            ),
           ),
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    step.title,
-                    key: const ValueKey('editor-guided-title'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: OrColors.text,
-                      fontSize: OrType.metadataSize,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (constraints.maxWidth > 380)
-                    Text(
-                      step.detail,
-                      key: const ValueKey('editor-guided-detail'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: OrColors.textMuted,
-                        fontSize: OrType.metadataCompactSize,
-                      ),
-                    ),
-                ],
-              ),
+          const SizedBox(width: OrSpacing.x1),
+          Text(
+            step.title,
+            key: const ValueKey('editor-guided-title'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.tinySize,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(width: OrSpacing.x2),
-          FilledButton(
+          TextButton(
             key: ValueKey('editor-guided-action-${step.kind.name}'),
             onPressed: busy ? null : onAction,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 32),
-              padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x3),
-              textStyle: const TextStyle(fontSize: OrType.metadataSize),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 26),
+              padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
+              visualDensity: VisualDensity.compact,
+              textStyle: const TextStyle(fontSize: OrType.tinySize),
             ),
             child: Text(step.actionLabel),
           ),
-          const SizedBox(width: OrSpacing.x1),
           IconButton(
             key: const ValueKey('editor-guided-dismiss'),
             tooltip: 'Hide next-step tips',
             visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+            padding: EdgeInsets.zero,
             onPressed: onDismiss,
-            icon: const Icon(Icons.close, size: 16),
+            icon: const Icon(Icons.close, size: 14),
             color: OrColors.textMuted,
           ),
         ],
