@@ -68,12 +68,30 @@ Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait pos
 procedure StopRunningApp();
 var
   ResultCode: Integer;
+  AppPath: String;
+  Attempt: Integer;
 begin
   Exec('taskkill.exe', '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM or.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM or-whisper-provider.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  // Give the window server a moment to release the image sections.
-  Sleep(400);
+  // Ending a process is not the same as releasing its image sections: Windows
+  // keeps every loaded DLL mapped for a moment after the process object is
+  // gone, so a wait for the process alone still let the uninstaller run into
+  // "file may be in use (5)" and defer the whole directory to a reboot. The
+  // rename below only succeeds once the image is really released.
+  AppPath := ExpandConstant('{app}\{#AppExe}');
+  for Attempt := 1 to 25 do
+  begin
+    Sleep(200);
+    if not FileExists(AppPath) then
+      Break;
+    if RenameFile(AppPath, AppPath + '.old') then
+    begin
+      DeleteFile(AppPath + '.old');
+      Break;
+    end;
+  end;
+  Sleep(200);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
