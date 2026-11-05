@@ -1,6 +1,6 @@
 # Feature — Agent Workspace
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-05
 
 Scope: the workspace the assistant opens by default, its `AGENTS.md` index,
 guides, skills and tools, and how the app installs and binds it to the open
@@ -15,7 +15,7 @@ write, organised like this repository's own routing:
 | Path | Holds |
 |---|---|
 | `AGENTS.md` | the index: one routing entry per guide, skill and tool, with the task trigger and the exact path |
-| `docs/` | one guide per operating concern: workspace layout, CLI-first operation, timeline, media/import, motion scenes, motion production, captions, export and delivery, project safety, script/narration/music, audio prep (recording, clean-up, speech models), troubleshooting, style packs and docs maintenance |
+| `docs/` | one guide per operating concern: workspace layout, CLI-first operation, timeline, media/import, motion scenes, motion production, captions, export and delivery, project safety, script/narration/music, audio prep (recording, clean-up, speech models), capability and setup (what this machine decodes, import refusal codes, where optional pieces are installed), design and type (hierarchy, type scale, motion timing), troubleshooting, style packs and docs maintenance |
 | `.agents/skills/` | task skills discovered by the harness skill provider (`or-timeline-edit`, `or-motion-scene`, `or-project-safety`, `or-script-production`, `or-video-production`) |
 | `tools/` | `or`, the app's CLI bound to this build, `motion-scaffold.mjs`, `voiceover.mjs` and `music.mjs`; the CLI carries the file-level verbs the tools do not (clean-up, transcription, motion publish and the asset library) |
 | `scenes/` | scene sources the agent authors |
