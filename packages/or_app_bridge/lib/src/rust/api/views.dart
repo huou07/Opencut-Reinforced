@@ -661,6 +661,12 @@ class ProjectTextFormattingView {
   final ProjectTextBackgroundView? background;
   final int opacityBasisPoints;
 
+  /// Line height as per-mille of the type size; 1320 is the historical value.
+  final int lineHeightPermille;
+
+  /// Tracking in milli-points; 0 keeps the shipped spacing.
+  final int letterSpacingMilliPoints;
+
   const ProjectTextFormattingView({
     required this.font,
     required this.sizeMilliPoints,
@@ -672,6 +678,8 @@ class ProjectTextFormattingView {
     required this.offsetYBasisPoints,
     this.background,
     required this.opacityBasisPoints,
+    required this.lineHeightPermille,
+    required this.letterSpacingMilliPoints,
   });
 
   @override
@@ -685,7 +693,9 @@ class ProjectTextFormattingView {
       offsetXBasisPoints.hashCode ^
       offsetYBasisPoints.hashCode ^
       background.hashCode ^
-      opacityBasisPoints.hashCode;
+      opacityBasisPoints.hashCode ^
+      lineHeightPermille.hashCode ^
+      letterSpacingMilliPoints.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -701,7 +711,9 @@ class ProjectTextFormattingView {
           offsetXBasisPoints == other.offsetXBasisPoints &&
           offsetYBasisPoints == other.offsetYBasisPoints &&
           background == other.background &&
-          opacityBasisPoints == other.opacityBasisPoints;
+          opacityBasisPoints == other.opacityBasisPoints &&
+          lineHeightPermille == other.lineHeightPermille &&
+          letterSpacingMilliPoints == other.letterSpacingMilliPoints;
 }
 
 class ProjectTimelineAudioSettingsView {

@@ -7014,6 +7014,8 @@ impl SseDecode for crate::api::views::ProjectTextFormattingView {
         let mut var_background =
             <Option<crate::api::views::ProjectTextBackgroundView>>::sse_decode(deserializer);
         let mut var_opacityBasisPoints = <u16>::sse_decode(deserializer);
+        let mut var_lineHeightPermille = <u16>::sse_decode(deserializer);
+        let mut var_letterSpacingMilliPoints = <i32>::sse_decode(deserializer);
         return crate::api::views::ProjectTextFormattingView {
             font: var_font,
             size_milli_points: var_sizeMilliPoints,
@@ -7025,6 +7027,8 @@ impl SseDecode for crate::api::views::ProjectTextFormattingView {
             offset_y_basis_points: var_offsetYBasisPoints,
             background: var_background,
             opacity_basis_points: var_opacityBasisPoints,
+            line_height_permille: var_lineHeightPermille,
+            letter_spacing_milli_points: var_letterSpacingMilliPoints,
         };
     }
 }
@@ -9236,6 +9240,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectTextFormattingV
             self.offset_y_basis_points.into_into_dart().into_dart(),
             self.background.into_into_dart().into_dart(),
             self.opacity_basis_points.into_into_dart().into_dart(),
+            self.line_height_permille.into_into_dart().into_dart(),
+            self.letter_spacing_milli_points
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -10928,6 +10936,8 @@ impl SseEncode for crate::api::views::ProjectTextFormattingView {
             serializer,
         );
         <u16>::sse_encode(self.opacity_basis_points, serializer);
+        <u16>::sse_encode(self.line_height_permille, serializer);
+        <i32>::sse_encode(self.letter_spacing_milli_points, serializer);
     }
 }
 

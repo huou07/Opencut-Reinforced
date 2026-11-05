@@ -1797,6 +1797,8 @@ class RustProjectGateway implements ProjectGateway {
             paddingMilliPoints: value.background!.paddingMilliPoints,
           ),
     opacityBasisPoints: value.opacityBasisPoints,
+    lineHeightPermille: value.lineHeightPermille,
+    letterSpacingMilliPoints: value.letterSpacingMilliPoints,
   );
 
   static rust.ProjectTextFormattingView _rustTextFormatting(
@@ -1843,6 +1845,8 @@ class RustProjectGateway implements ProjectGateway {
             paddingMilliPoints: value.background!.paddingMilliPoints,
           ),
     opacityBasisPoints: value.opacityBasisPoints,
+    lineHeightPermille: value.lineHeightPermille,
+    letterSpacingMilliPoints: value.letterSpacingMilliPoints,
   );
 
   static rust.TimelineClipContentKindView _rustClipContentKind(

@@ -1,0 +1,73 @@
+{
+  "name": "text-typography",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "description": "A title's typography is editable where the title is: the text dialog offers line height and tracking beside the size, weight and alignment it already had, and saving keeps the resulting block on the timeline. The journey proves the two controls exist in the real app and that a scene still lands after they are present.",
+  "steps": [
+    {
+      "op": "tap",
+      "key": "home-new-project"
+    },
+    {
+      "op": "enter_text",
+      "key": "new-project-name",
+      "value": "Typography dialog"
+    },
+    {
+      "op": "tap",
+      "key": "confirm-new-project"
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "key": "timeline-create-menu"
+    },
+    {
+      "op": "tap",
+      "text": "Add text track"
+    },
+    {
+      "op": "tap",
+      "key": "timeline-create-menu"
+    },
+    {
+      "op": "tap",
+      "text": "Add title"
+    },
+    {
+      "op": "expect",
+      "key": "timeline-text-line-height"
+    },
+    {
+      "op": "expect",
+      "key": "timeline-text-tracking"
+    },
+    {
+      "op": "shot",
+      "name": "text-dialog-typography"
+    },
+    {
+      "op": "tree",
+      "name": "text-dialog-typography"
+    },
+    {
+      "op": "enter_text",
+      "key": "timeline-text-content",
+      "value": "Wide and airy"
+    },
+    {
+      "op": "tap",
+      "key": "timeline-save-text"
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    }
+  ]
+}

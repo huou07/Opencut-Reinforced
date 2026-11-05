@@ -118,7 +118,9 @@ import and rendering; a Motion panel with search, previews, parameter editing
 and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
 A composed scene's text can be set with its own family, weight, alignment, line
 height and tracking inside an explicit text box (schema version 2, ADR 0012), so
-titles can carry hierarchy instead of one uniform weight. See
+titles can carry hierarchy instead of one uniform weight. A project text clip
+reaches the same two metrics from its own dialog (line height 0.80–3.00 in tenths,
+tracking -5.0–20.0 points) and keeps the historical 1.32/0 when untouched. See
 [motion-assets.md](../features/motion-assets.md) and
 [motionscene.md](../features/motionscene.md).
 

@@ -7249,8 +7249,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return ProjectTextFormattingView(
       font: dco_decode_font_identity_view(arr[0]),
       sizeMilliPoints: dco_decode_u_32(arr[1]),
@@ -7264,6 +7264,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         arr[8],
       ),
       opacityBasisPoints: dco_decode_u_16(arr[9]),
+      lineHeightPermille: dco_decode_u_16(arr[10]),
+      letterSpacingMilliPoints: dco_decode_i_32(arr[11]),
     );
   }
 
@@ -9097,6 +9099,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_background =
         sse_decode_opt_box_autoadd_project_text_background_view(deserializer);
     var var_opacityBasisPoints = sse_decode_u_16(deserializer);
+    var var_lineHeightPermille = sse_decode_u_16(deserializer);
+    var var_letterSpacingMilliPoints = sse_decode_i_32(deserializer);
     return ProjectTextFormattingView(
       font: var_font,
       sizeMilliPoints: var_sizeMilliPoints,
@@ -9108,6 +9112,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       offsetYBasisPoints: var_offsetYBasisPoints,
       background: var_background,
       opacityBasisPoints: var_opacityBasisPoints,
+      lineHeightPermille: var_lineHeightPermille,
+      letterSpacingMilliPoints: var_letterSpacingMilliPoints,
     );
   }
 
@@ -10860,6 +10866,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       serializer,
     );
     sse_encode_u_16(self.opacityBasisPoints, serializer);
+    sse_encode_u_16(self.lineHeightPermille, serializer);
+    sse_encode_i_32(self.letterSpacingMilliPoints, serializer);
   }
 
   @protected

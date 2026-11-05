@@ -2281,6 +2281,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the text dialog sets line height and tracking', (tester) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-text-metrics.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Text metrics');
+
+    await _tapTimelineCreate(tester, 'Add text track');
+    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Add title');
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-content')),
+      'Airy title',
+    );
+    final lineHeightSlider = find.byKey(
+      const ValueKey('timeline-text-line-height'),
+    );
+    await tester.ensureVisible(lineHeightSlider);
+    await tester.pumpAndSettle();
+    await tester.drag(lineHeightSlider, const Offset(140, 0));
+    await tester.pumpAndSettle();
+    final trackingSlider = find.byKey(const ValueKey('timeline-text-tracking'));
+    await tester.ensureVisible(trackingSlider);
+    await tester.pumpAndSettle();
+    await tester.drag(trackingSlider, const Offset(120, 0));
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+    await tester.pumpAndSettle();
+
+    final title = gateway.lastSession!.clips['track-1']!.single;
+    expect(
+      title.formatting!.lineHeightPermille,
+      greaterThan(ProjectTextFormatting.defaultLineHeightPermille),
+    );
+    expect(title.formatting!.letterSpacingMilliPoints, greaterThan(0));
+    expect(title.formatting!.lineHeightPermille, lessThanOrEqualTo(3000));
+  });
+
   testWidgets('titles and manual captions can be added and edited', (
     tester,
   ) async {
@@ -2322,6 +2363,11 @@ void main() {
     expect(title.formatting?.anchor, ProjectTextVerticalAnchor.center);
     expect(title.formatting?.opacityBasisPoints, 10000);
     expect(title.formatting?.background, isNull);
+    expect(
+      title.formatting?.lineHeightPermille,
+      ProjectTextFormatting.defaultLineHeightPermille,
+    );
+    expect(title.formatting?.letterSpacingMilliPoints, 0);
     expect(gateway.insertTimelineTextClipCalls, 1);
 
     await _openAdvancedClipActions(

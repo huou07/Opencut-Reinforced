@@ -1925,6 +1925,8 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
                 padding_milli_points: background.padding_milli_points,
             }),
         opacity_basis_points: formatting.opacity_basis_points,
+        line_height_permille: formatting.line_height_permille,
+        letter_spacing_milli_points: formatting.letter_spacing_milli_points,
     }
 }
 
@@ -1952,12 +1954,11 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
             blue: view.color.blue,
             alpha: view.color.alpha,
         },
-        // Advanced typography is not on the bridge surface yet: the view is a
-        // flutter_rust_bridge mirror, and widening it would require regenerating both
-        // sides. The dialog sets neither value, so a project opened here keeps the
-        // historical defaults; MotionScene carries its own copy of these fields.
-        line_height_permille: or_core::DEFAULT_TEXT_LINE_HEIGHT_PERMILLE,
-        letter_spacing_milli_points: 0,
+        // The dialog now edits these two metrics; the renderer already honours
+        // them through the shared `TextFormatting`, so this is a mirror, not a
+        // second typography model.
+        line_height_permille: view.line_height_permille,
+        letter_spacing_milli_points: view.letter_spacing_milli_points,
         anchor: match view.anchor {
             TextVerticalAnchorView::Top => or_core::TextVerticalAnchor::Top,
             TextVerticalAnchorView::Center => or_core::TextVerticalAnchor::Center,

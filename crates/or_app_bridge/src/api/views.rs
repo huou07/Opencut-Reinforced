@@ -437,6 +437,10 @@ pub struct ProjectTextFormattingView {
     pub offset_y_basis_points: i16,
     pub background: Option<ProjectTextBackgroundView>,
     pub opacity_basis_points: u16,
+    /// Line height as per-mille of the type size; 1320 is the historical value.
+    pub line_height_permille: u16,
+    /// Tracking in milli-points; 0 keeps the shipped spacing.
+    pub letter_spacing_milli_points: i32,
 }
 
 #[derive(Clone, Debug)]
