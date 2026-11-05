@@ -55,12 +55,16 @@ folder with `libclang.dll` (msys64 clang64), and `FFMPEG_INSTALL_PREFIX` with
 
 Run the lane with PowerShell 7 (`pwsh -File scripts/run_windows_lane.ps1 …`).
 Windows PowerShell 5.1 cannot load `System.Runtime.InteropServices.NativeLibrary`,
-so the staging step stops with a `TypeNotFound` error. When a Store alias owns
-`python3`/`python` on PATH, pass `OR_PYTHON=<real python.exe>`; the stager skips
-an alias that opens the Store instead of trusting the first interpreter it sees,
-and `--require=` is passed explicitly because the stager otherwise defaults to
-`whisper,provider` and refuses a package that deliberately skips the optional
-engine. A real Linux host needs the
+so the staging step stops with a `TypeNotFound` error. The Windows release job
+installs Python 3.12 explicitly (`actions/setup-python`) because the staging
+script needs it; the stager also searches `RUNNER_TOOL_CACHE\Python` and the
+usual per-machine install directories, and it proves a candidate by starting it
+rather than by reading its banner, so a Store alias that opens the Microsoft
+Store is skipped instead of trusted. When a machine keeps its interpreter
+somewhere the search does not look, pass `OR_PYTHON=<real python.exe>`; the
+failure message names every candidate it tried. `--require=` is passed
+explicitly because the stager otherwise defaults to `whisper,provider` and
+refuses a package that deliberately skips the optional engine. A real Linux host needs the
 rustup toolchain and Flutter on PATH, and the UI preflight refuses to start
 below 6 GiB of free memory and disk.
 

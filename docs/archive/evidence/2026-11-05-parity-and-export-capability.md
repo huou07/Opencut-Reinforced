@@ -147,6 +147,27 @@ Two real defects surfaced only by running the lane: the exported
 failed the step with `ROOT: unbound variable` after the bundle was already
 built, and the first run had no pinned inputs at all.
 
+## The Windows release staging failure, fixed at `34ed9f3`
+
+The `v0.1.16` tag run built and verified macOS and Linux, then failed on
+Windows in `scripts/stage_windows_bundle.ps1:109` with `Python 3 is required to
+stage the runtime; set OR_PYTHON to its executable` — although
+`%LOCALAPPDATA%\Programs\Python\Python312\python.exe` existed. The candidate
+probe captured output with `2>&1` and tested it with `-notmatch`; a successful
+silent run leaves that variable `$null`, a comparison against `$null` is not a
+boolean, so every candidate was rejected.
+
+| Claim | Evidence |
+|---|---|
+| The discovery works without `OR_PYTHON` | On the Windows 11 host the extracted block prints `FOUND: C:\Users\hp\AppData\Local\Programs\Python\Python312\python.exe` (it printed `NONE` before the fix) |
+| The stage step works without `OR_PYTHON` | `pwsh -NoProfile -File scripts\run_windows_lane.ps1 -Mode release -Steps stage,zip -RepoRoot C:\orb\wt-verify` → `=== OK stage packaged runtime`, `=== OK desktop ZIP install, replacement and removal`, `WINDOWS_LANE=PASS`, `SHA256=d88bd50b603b311046a43065fc5e0e7b6021baa578b63c6dd4dbb26bcf976a2c` |
+| CI no longer depends on the runner image | the Windows release job gained `actions/setup-python` 3.12, so the staging step always has an interpreter |
+
+The `v0.1.16` tag was re-pointed at the merge of this fix, because the run it
+tagged had published no release and the same version number is the one in
+`CHANGELOG.md`, `Cargo.toml` and `apps/or_app/pubspec.yaml`. A corrective tag
+move is recorded here instead of being left to be discovered later.
+
 ## Limits
 
 - Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do
