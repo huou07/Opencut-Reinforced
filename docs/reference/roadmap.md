@@ -93,6 +93,14 @@ a product improvement with recorded evidence, not a library addition:
     came from. The Text and Sound tabs name their licence beside the content, so
     nobody has to open the repository to learn what they may do with a font or a
     sound.
+23. **Scene shapes stop looking unfinished (owner request, 2026-11-05).** A
+    rectangle carries a `corner_radius` and any shape a two-stop `gradient`
+    (schema version 3, ADR 0013), so cards, chart panels and lower thirds are
+    styled in the scene language instead of being drawn as hard-edged blocks.
+    The inspector steps the radius; gradients are authored by the agent or in the
+    file. Running the suites on Windows also found and fixed a real escape: a
+    rooted asset path such as `\Users\me\pic.png` is not `is_absolute()` there,
+    so scene image loading now refuses `has_root()` as well.
 
 Blocked, and reported as blocked rather than attempted:
 

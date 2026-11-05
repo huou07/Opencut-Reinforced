@@ -121,6 +121,18 @@ Not verified for this increment: a gradient chosen in the app's inspector (a
 scene file or the agent sets it), and any materialised render of a rounded,
 gradient-filled card beyond the rasteriser tests above.
 
+## Three hosts at `9938dd4`, the shape-style increment
+
+| Host | Static | Widget suite | Rust suites | Journey |
+|---|---|---|---|---|
+| macOS 15 arm64 | `flutter analyze --no-pub` no issues | `flutter test` **499 pass** | `or_motion` 99, `or_render` 45, `or_core` 376 | `motion-scene-edit` `RESULT: OR_UI=PASS`; `scripts/acceptance.sh` `PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)` |
+| Debian 13 x86_64 | `flutter analyze --no-pub` no issues | `flutter test` **494 pass, 5 skipped** | `or_motion` 99, `or_render` 45 | `scripts/run_linux_ui_preflight.py` under Xvfb |
+| Windows 11 x86_64 | `flutter analyze --no-pub` no issues | `flutter test` **494 pass, 5 skipped** | `or_render` 45 (after the rooted-path fix), `or_motion` 99 | native build is hosted-CI authority |
+
+All three checked out the same tree from one `git bundle`; Windows needed
+`LIBCLANG_PATH` and `C:\msys64\clang64\bin` on `PATH` for the FRB native-assets
+build, which is an environment note, not a code change.
+
 ## Limits
 
 - Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do
