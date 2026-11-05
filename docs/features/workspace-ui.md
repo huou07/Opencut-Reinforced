@@ -30,6 +30,15 @@ Library, Read Guide) — no tour, no overlay, no modal. Dismissal is stored in
 `welcome.json` beside the other preferences, and a preference file that cannot
 be read shows the panel rather than hiding the only explanation a beginner gets.
 
+The same panel also states what the machine is, measured once off the first
+frame: the platform and build, processors, memory, free space on the volume that
+will hold an export, and the export formats the linked encoder opens. Those two
+lines come from `readHostFacts` and `describe_export_capability` — the same
+measurements Settings shows — so the first sentence a beginner reads about
+their computer is the one the editor will act on. When the disk is short of the
+4 GB staging headroom the line becomes a warning that says why and what to do.
+Until the measurement lands the lines are absent, never guessed.
+
 ## Library
 
 `AppDestination.library` is the project-independent catalogue, so a template or

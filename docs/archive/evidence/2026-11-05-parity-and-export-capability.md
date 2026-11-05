@@ -26,7 +26,8 @@ unverified. The limits at the end are part of the record.
 | The capability comes from the engine, not a Dart list | `cargo test -p or_media --lib` → 22 pass, including `the_described_profiles_match_the_encoders_this_build_links` |
 | Formatting is honest when no encoder is present | `flutter test test/export_capability_test.dart` → 7 pass (hardware, software, no-H.264, lossless-only, none, assumption, fixed cache) |
 | Setup reports the machine it will render on | `flutter test test/system_check_test.dart` → 9 pass (df parse, PowerShell parse, refusing host reports unknown, small-disk warning); the `resources-setup` journey reads back **"macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free"** from the real app |
-| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **488 pass** |
+| The first-run panel states the measured machine, or omits the line | `flutter test test/home_welcome_test.dart` → 3 pass (measured lines, short-disk warning, no measurement); the live journey cannot show it because this profile has already dismissed `welcome.json` |
+| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **491 pass** |
 
 ## Limits
 
