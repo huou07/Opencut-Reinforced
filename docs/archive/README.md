@@ -10,7 +10,7 @@ reach the live document for a subject.
 | Path | What it holds |
 |---|---|
 | [legacy/](legacy/) | the pre-2026-10-26 document set: architecture plan, phase plan, product roadmap, testing/tooling records, delivery logs, superseded design and policy docs |
-| [evidence/](evidence/) | dated local acceptance receipts for Linux, Android and transcription work |
+| [evidence/](evidence/) | dated local acceptance receipts for Linux, Android, transcription, and the 2026-11-05 guided-mode, typography and capability work |
 | [execution/](execution/) | the paused execution lock: checkpoint graph, ledger, phase specs, evidence policy and JSON receipts |
 | [prompts/](prompts/) | retired owner mission briefs |
 

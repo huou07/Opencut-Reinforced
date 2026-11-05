@@ -89,18 +89,6 @@ fn loaded_avutil_path() -> Option<String> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn the_linked_ffmpeg_runtime_is_an_approved_build() {
-        assert!(
-            super::verify_ffmpeg_runtime(),
-            "the linked FFmpeg runtime must report an approved licence: {:?}",
-            ffmpeg_the_third::util::license()
-        );
-    }
-}
-
 /// Decodes the first frame of `source`, proving this host can actually play it.
 ///
 /// `decoder_available` only proves the linked build carries a decoder. Some
@@ -111,10 +99,8 @@ mod tests {
 pub fn video_frame_decodes(source: &or_core::MediaSourceRef) -> Result<(), String> {
     let limits = or_runtime::BudgetLimits::new(1, 16 * 1024 * 1024)
         .map_err(|error| format!("decode budget is invalid: {error}"))?;
-    let budgets =
-        or_runtime::RuntimeBudgets::new(limits, limits, limits);
-    let decoder =
-        SoftwareMediaDecoder::new(source, budgets).map_err(|error| error.to_string())?;
+    let budgets = or_runtime::RuntimeBudgets::new(limits, limits, limits);
+    let decoder = SoftwareMediaDecoder::new(source, budgets).map_err(|error| error.to_string())?;
     let cancellation = or_runtime::CancellationToken::new();
     let mut session = decoder
         .open_video_session(&cancellation)
@@ -123,4 +109,16 @@ pub fn video_frame_decodes(source: &or_core::MediaSourceRef) -> Result<(), Strin
         .frame_at(or_core::RationalTime::ZERO, &cancellation)
         .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_linked_ffmpeg_runtime_is_an_approved_build() {
+        assert!(
+            super::verify_ffmpeg_runtime(),
+            "the linked FFmpeg runtime must report an approved licence: {:?}",
+            ffmpeg_the_third::util::license()
+        );
+    }
 }

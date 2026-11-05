@@ -26,6 +26,29 @@ measured result. The recorded budget rows were measured on 2026-10-18 on an idle
 Debian 13 (trixie) OptiPlex-class x86_64 host; do not reuse them as M5 numbers. Add a current Mac measurement only after recording
 those fields.
 
+### Local performance budget on macOS (2026-11-05)
+
+`python3 scripts/bench_quality.py` now runs to the last row on this host after
+two harness fixes: it takes the FFmpeg prefix from `scripts/bench_export.py` and
+passes those libraries as a dyld *fallback* path (a forced path made a child
+`ffmpeg` load the wrong libav set), and it keeps the caller's `PATH` (the shared
+helper prepended the packaged `bin`, which shadowed the general-purpose `ffmpeg`
+the clean-up fixture needs). `crates/or_core/tests/command_latency.rs` now earns
+its fixture by writing it rather than trusting `-version`.
+
+Rows on the MacBook Air M5, debug build, 200-clip project: `create` p95 8.07 ms,
+`import` 35.7 ms, `project-save` 36.0 ms, `project-open` 16.2 ms,
+`caption_import` 10.0 ms, `audio_cleanup` 225.3 ms, `split` 0.33 ms,
+`ripple_trim` 0.55 ms, `slide` 0.45 ms, `render-frame-time` 1.80 ms (Metal),
+`motion-rasterize-frame` 123.9 ms, `ffmpeg-export` 60.2 ms, export throughput
+174 fps, queue-priority ratio 2.88.
+
+`command.create` misses its 5 ms budget on APFS at 8.07 ms. The same row measures
+8.03 ms on unmodified `main` at `2cf1b96`, so this is project-file creation cost
+on this host class, not a regression from the later work. The budget was not
+loosened: the row is calibrated for the Debian 13 host the script names, and it
+stays `FAIL` here until it is re-baselined on a Mac.
+
 ### Cross-platform export benchmark (2026-11-05)
 
 - Workload: `python3 scripts/bench_export.py --frames 90` — 90 frames of

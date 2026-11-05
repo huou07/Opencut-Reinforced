@@ -809,8 +809,7 @@ fn walk_nodes(
                     ));
                 }
                 if let Some(spacing) = node.letter_spacing
-                    && !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING)
-                        .contains(&spacing)
+                    && !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING).contains(&spacing)
                 {
                     errors.push(MotionDiagnostic::new(
                         "MOTION_INVALID_LETTER_SPACING",
@@ -1024,10 +1023,8 @@ mod schema_version_tests {
 
     #[test]
     fn a_future_schema_version_is_refused_rather_than_guessed() {
-        let mut value: serde_json::Value = serde_json::from_slice(&styled_document(
-            serde_json::json!({}),
-        ))
-        .unwrap();
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&styled_document(serde_json::json!({}))).unwrap();
         value["schema_version"] = serde_json::json!(3);
         let bytes = serde_json::to_vec(&value).unwrap();
         assert_eq!(

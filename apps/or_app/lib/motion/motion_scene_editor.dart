@@ -882,7 +882,11 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
           label: 'Font',
           keyPrefix: '${widget.scope}-node-font',
           selected: typography?.font,
-          options: const [(null, 'Auto'), ('inter', 'Inter'), ('be_vietnam_pro', 'Be Vietnam')],
+          options: const [
+            (null, 'Auto'),
+            ('inter', 'Inter'),
+            ('be_vietnam_pro', 'Be Vietnam'),
+          ],
           onSelected: (value) =>
               unawaited(controller.setNodeFontFamily(node.nodeId, value)),
         ),
@@ -924,9 +928,8 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
                 color: (typography?.effectiveAlign ?? 'start') == value
                     ? OrColors.selection
                     : OrColors.textMuted,
-                onPressed: () => unawaited(
-                  controller.setNodeTextAlign(node.nodeId, value),
-                ),
+                onPressed: () =>
+                    unawaited(controller.setNodeTextAlign(node.nodeId, value)),
                 icon: Icon(icon),
               ),
           ],
@@ -1067,7 +1070,9 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
                     : OrColors.backgroundRecessed,
                 borderRadius: BorderRadius.circular(OrRadii.small),
                 border: Border.all(
-                  color: selected == value ? OrColors.selection : OrColors.border,
+                  color: selected == value
+                      ? OrColors.selection
+                      : OrColors.border,
                 ),
               ),
               child: Text(

@@ -63,6 +63,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# The prebuilt test binaries link FFmpeg dynamically and carry no rpath, so a
+# run started outside `cargo test` needs the build prefix on the library search
+# path. Reuse the resolution `bench_export.py` already owns instead of keeping a
+# second copy of the prefix rules.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bench_export import _configured_prefix, _runtime_env  # noqa: E402
+
+_RUNTIME_ENV = _runtime_env(_configured_prefix())
+# A row may launch a *different* ffmpeg (the clean-up fixture generator), and
+# forcing our prefix through DYLD_LIBRARY_PATH would make that child load the
+# wrong libav set. A fallback path satisfies our own test binaries without
+# overriding a child's own resolution.
+# The shared helper also prepends the FFmpeg prefix's `bin` to PATH. That would
+# shadow the host's own `ffmpeg` for rows that need a general-purpose helper
+# (the clean-up fixture), so keep the caller's PATH and only add libraries.
+_RUNTIME_ENV["PATH"] = os.environ.get("PATH", _RUNTIME_ENV.get("PATH", ""))
+_forced_dyld = _RUNTIME_ENV.pop("DYLD_LIBRARY_PATH", "")
+if _forced_dyld:
+    _existing = _RUNTIME_ENV.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    _RUNTIME_ENV["DYLD_FALLBACK_LIBRARY_PATH"] = _forced_dyld + (
+        os.pathsep + _existing if _existing else ""
+    )
+
 HOST_CLASS = (
     "Debian 13 (trixie) x86_64 OptiPlex-class workstation "
     "(13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD, Intel UHD 770/Vulkan)"
@@ -358,7 +381,7 @@ def find_test_binary(prefix: str, row_id: str, settle: str) -> Path:
 
 def wall_time_ms(argv: list[str]) -> float:
     start = time.perf_counter()
-    subprocess.run(argv, cwd=ROOT, capture_output=True, check=True)
+    subprocess.run(argv, cwd=ROOT, capture_output=True, check=True, env=_RUNTIME_ENV)
     return (time.perf_counter() - start) * 1000.0
 
 
@@ -373,6 +396,7 @@ def bench_json(binary: Path, test_name: str, row_id: str, settle: str,
     completed = subprocess.run(
         [str(binary), "--ignored", "--exact", test_name, "--test-threads=1", "--nocapture"],
         cwd=ROOT, capture_output=True, text=True, timeout=timeout, check=False,
+        env=_RUNTIME_ENV,
     )
     if completed.returncode != 0:
         tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-6:]

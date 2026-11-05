@@ -157,7 +157,7 @@ impl TextRasterizer {
             FontIdentity::BundledInter => "Inter",
             FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
-        let attrs = styled_attrs(&family, formatting);
+        let attrs = styled_attrs(family, formatting);
         buffer.set_text(text, &attrs, Shaping::Advanced, Some(Align::Left));
         buffer.shape_until_scroll(&mut self.font_system, false);
         let mut width = 0.0_f32;
@@ -241,7 +241,7 @@ impl TextRasterizer {
             FontIdentity::BundledInter => "Inter",
             FontIdentity::BeVietnamPro => "Be Vietnam Pro",
         };
-        let attrs = styled_attrs(&family, formatting);
+        let attrs = styled_attrs(family, formatting);
         let alignment = match formatting.alignment {
             TextAlignment::Start => Align::Left,
             TextAlignment::Center => Align::Center,

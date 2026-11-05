@@ -429,10 +429,7 @@ pub struct TextFormatting {
     pub line_height_permille: u16,
     /// Tracking, in milli-points, added to every glyph advance. Negative tightens
     /// a display line; positive opens a small-caps label. Absent means zero.
-    #[serde(
-        default,
-        skip_serializing_if = "is_zero_i32"
-    )]
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
     pub letter_spacing_milli_points: i32,
 }
 

@@ -10,7 +10,13 @@ import '../design/or_typography.dart';
 /// a clip on the timeline, a title, sound, then the file. A step disappears when
 /// the state proves it was done, so the row never asks for work already
 /// finished and never becomes a static tutorial.
-enum GuidedStepKind { importMedia, addFirstClip, addTitle, addAudio, exportVideo }
+enum GuidedStepKind {
+  importMedia,
+  addFirstClip,
+  addTitle,
+  addAudio,
+  exportVideo,
+}
 
 class GuidedStep {
   const GuidedStep({
@@ -43,7 +49,8 @@ GuidedStep? guidedNextStep({
       return const GuidedStep(
         kind: GuidedStepKind.importMedia,
         title: 'Start with something to show',
-        detail: 'Import a video, a photo or a recording. It stays in its folder.',
+        detail:
+            'Import a video, a photo or a recording. It stays in its folder.',
         actionLabel: 'Import media',
       );
     }
@@ -58,7 +65,8 @@ GuidedStep? guidedNextStep({
     return const GuidedStep(
       kind: GuidedStepKind.addTitle,
       title: 'Give the video a title',
-      detail: 'A title names the story and is the fastest way to look finished.',
+      detail:
+          'A title names the story and is the fastest way to look finished.',
       actionLabel: 'Add a title',
     );
   }

@@ -88,7 +88,9 @@ void main() {
     test('guided mode and guides are on by default, guides off', () async {
       final directory = await Directory.systemTemp.createTemp('or-guided-');
       addTearDown(() => directory.delete(recursive: true));
-      final store = EditorSettingsStore(supportDirectory: () async => directory);
+      final store = EditorSettingsStore(
+        supportDirectory: () async => directory,
+      );
       final settings = await store.load();
       expect(settings.simpleMode, isTrue);
       expect(settings.showGuides, isFalse);
@@ -101,7 +103,9 @@ void main() {
       await File(
         '${directory.path}${Platform.pathSeparator}editor-settings.json',
       ).writeAsString('{"version":1,"show_inspector":true}');
-      final store = EditorSettingsStore(supportDirectory: () async => directory);
+      final store = EditorSettingsStore(
+        supportDirectory: () async => directory,
+      );
       final settings = await store.load();
       expect(settings.showInspector, isTrue);
       expect(settings.simpleMode, isTrue);
@@ -111,7 +115,9 @@ void main() {
     test('every guided preference round-trips', () async {
       final directory = await Directory.systemTemp.createTemp('or-guided-rt-');
       addTearDown(() => directory.delete(recursive: true));
-      final store = EditorSettingsStore(supportDirectory: () async => directory);
+      final store = EditorSettingsStore(
+        supportDirectory: () async => directory,
+      );
       await store.save(
         const EditorSettings(
           simpleMode: false,

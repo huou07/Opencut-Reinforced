@@ -928,8 +928,7 @@ class _AppShellState extends State<AppShell> {
               onExport: () => unawaited(_startExport()),
               hasExported:
                   _activeProject?.projectInstanceId != null &&
-                  _exportedProjectInstance ==
-                      _activeProject?.projectInstanceId,
+                  _exportedProjectInstance == _activeProject?.projectInstanceId,
             ),
   };
 
@@ -5639,7 +5638,6 @@ void _journeyTrace(String message) {
   } catch (_) {}
 }
 
-
 /// A beginner-level reason to export, resolved into the ordinary profile,
 /// quality and resolution the export contract already takes.
 ///
@@ -5672,30 +5670,31 @@ extension on _ExportIntent {
   };
 }
 
-({ExportProfile profile, ExportQuality quality, int? shortSide})
-_intentOptions(_ExportIntent intent, ExportProfile platformDefault) =>
-    switch (intent) {
-      _ExportIntent.share => (
-        profile: platformDefault,
-        quality: ExportQuality.quality,
-        shortSide: 1080,
-      ),
-      _ExportIntent.smaller => (
-        profile: ExportProfile.webmVp9Opus,
-        quality: ExportQuality.speed,
-        shortSide: 1080,
-      ),
-      _ExportIntent.best => (
-        profile: ExportProfile.mp4H264Aac,
-        quality: ExportQuality.quality,
-        shortSide: null,
-      ),
-      _ExportIntent.lossless => (
-        profile: ExportProfile.matroskaFfv1PcmS16le,
-        quality: ExportQuality.quality,
-        shortSide: null,
-      ),
-    };
+({ExportProfile profile, ExportQuality quality, int? shortSide}) _intentOptions(
+  _ExportIntent intent,
+  ExportProfile platformDefault,
+) => switch (intent) {
+  _ExportIntent.share => (
+    profile: platformDefault,
+    quality: ExportQuality.quality,
+    shortSide: 1080,
+  ),
+  _ExportIntent.smaller => (
+    profile: ExportProfile.webmVp9Opus,
+    quality: ExportQuality.speed,
+    shortSide: 1080,
+  ),
+  _ExportIntent.best => (
+    profile: ExportProfile.mp4H264Aac,
+    quality: ExportQuality.quality,
+    shortSide: null,
+  ),
+  _ExportIntent.lossless => (
+    profile: ExportProfile.matroskaFfv1PcmS16le,
+    quality: ExportQuality.quality,
+    shortSide: null,
+  ),
+};
 
 _ExportIntent? _intentFor(
   ExportProfile profile,

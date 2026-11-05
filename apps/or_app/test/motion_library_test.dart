@@ -1624,74 +1624,70 @@ void main() {
     expect(log.last!.outputPath, isNot(firstOutput));
     expect(log.last!.frameCount, 150);
   });
-  testWidgets('the inspector edits scene typography without a bridge regeneration', (
-    tester,
-  ) async {
-    late MotionLibraryController controller;
-    late _FakeMotionGateway gateway;
-    await tester.runAsync(() async {
-      (controller, gateway, _) = await buildController();
-      await controller.importSceneFile('/tmp/composition.ormotion.json');
-    });
-    controller.selectNode('title');
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: OrTheme.dark,
-        home: Scaffold(
-          body: SizedBox(
-            width: 320,
-            height: 1200,
-            child: MotionSceneInspector(controller: controller, scope: 'probe'),
+  testWidgets(
+    'the inspector edits scene typography without a bridge regeneration',
+    (tester) async {
+      late MotionLibraryController controller;
+      late _FakeMotionGateway gateway;
+      await tester.runAsync(() async {
+        (controller, gateway, _) = await buildController();
+        await controller.importSceneFile('/tmp/composition.ormotion.json');
+      });
+      controller.selectNode('title');
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OrTheme.dark,
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              height: 1200,
+              child: MotionSceneInspector(
+                controller: controller,
+                scope: 'probe',
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    // A scene written before version 2 shows the automatic choices.
-    final before = controller.nodeTypography('title');
-    expect(before, isNotNull);
-    expect(before!.font, isNull);
-    expect(before.weight, isNull);
+      // A scene written before version 2 shows the automatic choices.
+      final before = controller.nodeTypography('title');
+      expect(before, isNotNull);
+      expect(before!.font, isNull);
+      expect(before.weight, isNull);
 
-    await tester.tap(find.byKey(const ValueKey('probe-node-weight-bold')));
-    await tester.pump();
-    expect(gateway.edits.last['op'], 'set_font_weight');
-    expect(gateway.edits.last['weight'], 'bold');
-    expect(controller.nodeTypography('title')!.weight, 'bold');
+      await tester.tap(find.byKey(const ValueKey('probe-node-weight-bold')));
+      await tester.pump();
+      expect(gateway.edits.last['op'], 'set_font_weight');
+      expect(gateway.edits.last['weight'], 'bold');
+      expect(controller.nodeTypography('title')!.weight, 'bold');
 
-    await tester.tap(
-      find.byKey(const ValueKey('probe-node-align-end')),
-    );
-    await tester.pump();
-    expect(gateway.edits.last['op'], 'set_text_align');
-    expect(controller.nodeTypography('title')!.align, 'end');
+      await tester.tap(find.byKey(const ValueKey('probe-node-align-end')));
+      await tester.pump();
+      expect(gateway.edits.last['op'], 'set_text_align');
+      expect(controller.nodeTypography('title')!.align, 'end');
 
-    await tester.tap(find.byKey(const ValueKey('probe-node-font-inter')));
-    await tester.pump();
-    expect(gateway.edits.last['op'], 'set_font_family');
-    expect(controller.nodeTypography('title')!.font, 'inter');
+      await tester.tap(find.byKey(const ValueKey('probe-node-font-inter')));
+      await tester.pump();
+      expect(gateway.edits.last['op'], 'set_font_family');
+      expect(controller.nodeTypography('title')!.font, 'inter');
 
-    await tester.tap(
-      find.byKey(const ValueKey('probe-node-line-height-up')),
-    );
-    await tester.pump();
-    expect(gateway.edits.last['op'], 'set_line_height');
-    expect(
-      controller.nodeTypography('title')!.lineHeight,
-      closeTo(1.38, 0.001),
-    );
+      await tester.tap(find.byKey(const ValueKey('probe-node-line-height-up')));
+      await tester.pump();
+      expect(gateway.edits.last['op'], 'set_line_height');
+      expect(
+        controller.nodeTypography('title')!.lineHeight,
+        closeTo(1.38, 0.001),
+      );
 
-    await tester.tap(
-      find.byKey(const ValueKey('probe-node-tracking-up')),
-    );
-    await tester.pump();
-    expect(gateway.edits.last['op'], 'set_letter_spacing');
-    expect(
-      controller.nodeTypography('title')!.letterSpacing,
-      closeTo(0.5, 0.001),
-    );
-
-  });
-
+      await tester.tap(find.byKey(const ValueKey('probe-node-tracking-up')));
+      await tester.pump();
+      expect(gateway.edits.last['op'], 'set_letter_spacing');
+      expect(
+        controller.nodeTypography('title')!.letterSpacing,
+        closeTo(0.5, 0.001),
+      );
+    },
+  );
 }

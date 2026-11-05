@@ -7158,8 +7158,7 @@ void main() {
   ) async {
     _setViewport(tester, const Size(1280, 800));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/guides.orproj';
+    final picker = _FakeProjectPicker()..savePath = '/tmp/guides.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
     await _createProject(tester, 'Guides');
     await tester.pumpAndSettle();
@@ -7184,8 +7183,7 @@ void main() {
   ) async {
     _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
-    final picker = _FakeProjectPicker()
-      ..savePath = '/tmp/guided-bar.orproj';
+    final picker = _FakeProjectPicker()..savePath = '/tmp/guided-bar.orproj';
     await _mount(
       tester,
       gateway: gateway,

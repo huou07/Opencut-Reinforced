@@ -991,11 +991,8 @@ class MotionLibraryController extends ChangeNotifier {
   });
 
   /// Sets a text node's type family, or clears the override with `null`.
-  Future<void> setNodeFontFamily(String nodeId, String? font) => _applyEdit({
-    'op': 'set_font_family',
-    'node_id': nodeId,
-    'font': font,
-  });
+  Future<void> setNodeFontFamily(String nodeId, String? font) =>
+      _applyEdit({'op': 'set_font_family', 'node_id': nodeId, 'font': font});
 
   /// Sets a text node's weight (`regular`, `medium`, `semibold`, `bold`).
   Future<void> setNodeFontWeight(String nodeId, String weight) => _applyEdit({
@@ -1005,25 +1002,24 @@ class MotionLibraryController extends ChangeNotifier {
   });
 
   /// Sets a text node's alignment inside its box (`start`, `center`, `end`).
-  Future<void> setNodeTextAlign(String nodeId, String align) => _applyEdit({
-    'op': 'set_text_align',
-    'node_id': nodeId,
-    'align': align,
-  });
+  Future<void> setNodeTextAlign(String nodeId, String align) =>
+      _applyEdit({'op': 'set_text_align', 'node_id': nodeId, 'align': align});
 
   /// Sets a text node's line height as a multiple of its type size.
-  Future<void> setNodeLineHeight(String nodeId, double lineHeight) => _applyEdit({
-    'op': 'set_line_height',
-    'node_id': nodeId,
-    'line_height': lineHeight.clamp(0.8, 3.0),
-  });
+  Future<void> setNodeLineHeight(String nodeId, double lineHeight) =>
+      _applyEdit({
+        'op': 'set_line_height',
+        'node_id': nodeId,
+        'line_height': lineHeight.clamp(0.8, 3.0),
+      });
 
   /// Sets a text node's tracking in points; negative tightens.
-  Future<void> setNodeLetterSpacing(String nodeId, double spacing) => _applyEdit({
-    'op': 'set_letter_spacing',
-    'node_id': nodeId,
-    'letter_spacing': spacing.clamp(-50.0, 200.0),
-  });
+  Future<void> setNodeLetterSpacing(String nodeId, double spacing) =>
+      _applyEdit({
+        'op': 'set_letter_spacing',
+        'node_id': nodeId,
+        'letter_spacing': spacing.clamp(-50.0, 200.0),
+      });
 
   /// A text node's typography, read from the draft document.
   ///

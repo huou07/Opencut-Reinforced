@@ -390,7 +390,10 @@ fn draw_instruction(
             // without a box the node keeps the historical behaviour of one line
             // measured to the canvas edge.
             let explicit_box = instruction.size.filter(|size| {
-                size.width > 0.0 && size.height > 0.0 && size.width.is_finite() && size.height.is_finite()
+                size.width > 0.0
+                    && size.height > 0.0
+                    && size.width.is_finite()
+                    && size.height.is_finite()
             });
             let max_width = match explicit_box {
                 Some(box_size) => (canvas.width as f64 - instruction.position.x)
@@ -432,7 +435,8 @@ fn draw_instruction(
                     .clamp(500.0, 3_000.0) as u16,
                 letter_spacing_milli_points: (instruction.letter_spacing.unwrap_or(0.0) * 750.0)
                     .round()
-                    .clamp(-50_000.0, 200_000.0) as i32,
+                    .clamp(-50_000.0, 200_000.0)
+                    as i32,
                 ..TextFormatting::DEFAULT
             };
             // Fit the text to its box instead of letting a long sentence run off

@@ -540,14 +540,13 @@ pub fn apply_scene_edit(
             node_id,
             line_height,
         } => {
-            if let Some(value) = line_height {
-                if !value.is_finite()
-                    || !(MIN_MOTION_LINE_HEIGHT..=MAX_MOTION_LINE_HEIGHT).contains(value)
-                {
-                    return Err(MotionSceneEditError::InvalidValue(format!(
-                        "line_height must be between {MIN_MOTION_LINE_HEIGHT} and {MAX_MOTION_LINE_HEIGHT}"
-                    )));
-                }
+            if let Some(value) = line_height
+                && (!value.is_finite()
+                    || !(MIN_MOTION_LINE_HEIGHT..=MAX_MOTION_LINE_HEIGHT).contains(value))
+            {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "line_height must be between {MIN_MOTION_LINE_HEIGHT} and {MAX_MOTION_LINE_HEIGHT}"
+                )));
             }
             let node = text_node(&mut next, node_id)?;
             node.line_height = *line_height;
@@ -556,14 +555,13 @@ pub fn apply_scene_edit(
             node_id,
             letter_spacing,
         } => {
-            if let Some(value) = letter_spacing {
-                if !value.is_finite()
-                    || !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING).contains(value)
-                {
-                    return Err(MotionSceneEditError::InvalidValue(format!(
-                        "letter_spacing must be between {MIN_MOTION_LETTER_SPACING} and {MAX_MOTION_LETTER_SPACING}"
-                    )));
-                }
+            if let Some(value) = letter_spacing
+                && (!value.is_finite()
+                    || !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING).contains(value))
+            {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "letter_spacing must be between {MIN_MOTION_LETTER_SPACING} and {MAX_MOTION_LETTER_SPACING}"
+                )));
             }
             let node = text_node(&mut next, node_id)?;
             node.letter_spacing = *letter_spacing;
@@ -1510,11 +1508,9 @@ mod tests {
 
         // Omitting the value clears the override, returning the node to the automatic
         // family and the historical metrics.
-        let cleared = apply_scene_edit_json(
-            &styled,
-            br#"{"op": "set_font_family", "node_id": "title"}"#,
-        )
-        .expect("clear");
+        let cleared =
+            apply_scene_edit_json(&styled, br#"{"op": "set_font_family", "node_id": "title"}"#)
+                .expect("clear");
         assert_eq!(cleared.nodes[0].font, None);
 
         let too_loose = apply_scene_edit_json(

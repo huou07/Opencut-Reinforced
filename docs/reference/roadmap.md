@@ -6,7 +6,49 @@ Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
 [features/](../features/).
 
-## Current focus (owner restatement, 2026-10-21)
+## Current focus (owner restatement, 2026-11-05)
+
+The owner's 2026-11-05 mission turns OR into a professional, beginner-usable
+video platform on one shared codebase. The work is organised so each increment is
+a product improvement with recorded evidence, not a library addition:
+
+11. **Guided first video (owner request, 2026-11-05).** A beginner's next step is
+    always one click away above the timeline, the export dialog asks what the
+    file is for instead of which codec, and composition guides show the safe
+    areas. Delivered with `apps/or_app/lib/screens/editor_guided_bar.dart`, the
+    intent-first export dialog, `_CompositionGuidesPainter`, and the
+    `guided-beginner` journey through the real app. Settings exposes guided mode,
+    next-step tips and guides as preferences over the same state.
+12. **Scene typography (owner request, 2026-11-05).** MotionScene schema v2 adds
+    family, weight, alignment, line height and tracking inside an explicit text
+    box, with the two metrics shared through `or_core::TextFormatting`.
+    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md); the
+    project text dialog cannot set the two metrics yet because the bridge view is
+    not widened.
+13. **Measured media capability (owner request, 2026-11-05).** The capability
+    claim is now a measurement: `scripts/probe_media_matrix.py` probes and decodes
+    18 fixtures per host, import proves a real decode and refuses an unusable
+    decoder with `DECODE_UNAVAILABLE`, and
+    [media-capability-matrix.md](media-capability-matrix.md) records the rows.
+    The AV1 finding on Apple silicon is the reason the gate exists.
+14. **Technology adoption review (owner request, 2026-11-05).** Twenty candidate
+    repositories were checked against their real licences; no runtime dependency
+    was adopted and the reasons are recorded in
+    [technology-review.md](technology-review.md).
+
+Blocked, and reported as blocked rather than attempted:
+
+- **Three-machine build/test from one revision.** This mission's permission
+  boundary forbids installing system tooling on the Debian and Windows hosts, and
+  neither host has the Rust/Flutter toolchains (Windows also has no FFmpeg). The
+  cross-platform claim therefore rests on shared Rust/Dart code plus the macOS
+  measurements, and must stay labelled unverified on those hosts until a host
+  with toolchains runs the lanes.
+- **Resource manager GUI journey and installer-level parity.** The app owns
+  optional downloads, but this session did not install or remove an optional
+  component through the GUI, so that journey is not claimed as verified.
+
+## Previous focus (owner restatement, 2026-10-21)
 
 One near-term delivery mission for the local macOS app, in this order:
 

@@ -516,7 +516,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   bool get _timelineHasAudio {
     final pages = widget.timelineClipPages;
-    final tracks = widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[];
+    final tracks =
+        widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[];
     for (final track in tracks) {
       if (track.kind != ProjectTimelineTrackKind.audio) continue;
       if ((pages[track.trackId]?.totalCount ?? 0) > 0) return true;

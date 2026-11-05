@@ -434,8 +434,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Every advanced control stays available.',
               ),
               value: _editorSettings.simpleMode,
-              onChanged: (value) =>
-                  unawaited(_saveEditor(_editorSettings.copyWith(simpleMode: value))),
+              onChanged: (value) => unawaited(
+                _saveEditor(_editorSettings.copyWith(simpleMode: value)),
+              ),
             ),
           ),
           Material(
@@ -469,8 +470,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'the viewer. Guides are a preview aid and never exported.',
               ),
               value: _editorSettings.showGuides,
-              onChanged: (value) =>
-                  unawaited(_saveEditor(_editorSettings.copyWith(showGuides: value))),
+              onChanged: (value) => unawaited(
+                _saveEditor(_editorSettings.copyWith(showGuides: value)),
+              ),
             ),
           ),
           Material(
