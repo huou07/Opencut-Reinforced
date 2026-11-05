@@ -61,7 +61,12 @@ fn preview_rgba_and_export_nv12_agree_on_one_composition() {
     assert_eq!(decoded.len(), rgba.len());
 
     let psnr = psnr(&rgba, &decoded);
-    eprintln!("preview/export parity PSNR {psnr:.2} dB");
+    let adapter = renderer.adapter_info();
+    eprintln!(
+        "preview/export parity PSNR {psnr:.2} dB on {} ({})",
+        adapter.name(),
+        adapter.driver()
+    );
     assert!(
         psnr >= 30.0,
         "preview and export layouts disagree: PSNR {psnr:.2} dB"
