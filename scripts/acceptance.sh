@@ -101,7 +101,6 @@ if [[ -x "$FFMPEG8_DIR/ffmpeg" && -x "$FFMPEG8_DIR/ffprobe" ]]; then
       cargo test -p or_core --test media_probe_integration --locked -- --ignored
     run 'Media artifact integration tests (real FFmpeg 8)' \
       cargo test -p or_core --test media_artifacts_integration --locked -- --ignored
-    lavfi_reason=''
   else
     printf 'note: this FFmpeg 8 build has no lavfi input device, so the fixture-generating lanes are listed as UNVERIFIED\n'
     unverified_lane 'Media probe integration tests (synthetic fixtures)' \
