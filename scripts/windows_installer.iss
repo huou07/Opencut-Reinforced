@@ -81,3 +81,11 @@ begin
   StopRunningApp();
   Result := '';
 end;
+
+// The uninstaller never runs PrepareToInstall, so an uninstall over a running
+// copy failed with exit code 1 and left the files in place.
+function InitializeUninstall(): Boolean;
+begin
+  StopRunningApp();
+  Result := True;
+end;
