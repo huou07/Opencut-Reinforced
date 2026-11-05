@@ -139,10 +139,12 @@ class EditorGuidedBar extends StatelessWidget {
           TextButton(
             key: ValueKey('editor-guided-action-${step.kind.name}'),
             onPressed: busy ? null : onAction,
+            // A compact density would shrink this below the 24 px pointer
+            // minimum the design language requires, so the row keeps its
+            // small type without shrinking the target.
             style: TextButton.styleFrom(
               minimumSize: const Size(0, 26),
               padding: const EdgeInsets.symmetric(horizontal: OrSpacing.x2),
-              visualDensity: VisualDensity.compact,
               textStyle: const TextStyle(fontSize: OrType.tinySize),
             ),
             child: Text(step.actionLabel),
@@ -150,7 +152,6 @@ class EditorGuidedBar extends StatelessWidget {
           IconButton(
             key: const ValueKey('editor-guided-dismiss'),
             tooltip: 'Hide next-step tips',
-            visualDensity: VisualDensity.compact,
             constraints: const BoxConstraints.tightFor(width: 26, height: 26),
             padding: EdgeInsets.zero,
             onPressed: onDismiss,

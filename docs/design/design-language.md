@@ -49,6 +49,9 @@ warning/error colours only when required. No new accent colours without review.
 - 4/8 px spacing rhythm; restrained radii; borders instead of heavy shadows.
 - Desktop trim handles keep a hit area of at least 24 px, 44 px in compact layout,
   while the painted bar stays thin.
+- The editor stacks below 980 px, earlier than the 760 px shell breakpoint,
+  because three columns under that width leave the judged frame too small; the
+  other screens keep 760 px, where a list is still comfortable.
 
 ## Shell and screens
 

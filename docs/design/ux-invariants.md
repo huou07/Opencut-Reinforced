@@ -95,7 +95,11 @@ assistant-driven MotionScene insertion through the real harness; native menus;
 export receipt; pacing recorded from the app; the guided next-step step and the
 intent-first export dialog (`guided_steps_test.dart`, `widget_test.dart`
 "guided export dialog"/"codec choice"/"G toggles composition guides"), with the
-macOS run recorded in [ui-harness.md](../operations/ui-harness.md).
+macOS run recorded in [ui-harness.md](../operations/ui-harness.md); setup through
+Settings (`resources-setup` scenario, which also proves the editor preferences
+sit in their own panel); the compact window reaching the media panel through the
+tool dock sheet (`widget_test.dart` "compact window reaches the tools"); and a
+guided export that really encodes, probed and decoded independently.
 
 Each of these is backed by a named scenario or widget test in
 `scripts/ui_scenarios/` or `apps/or_app/test/`. Re-run the affected one when you

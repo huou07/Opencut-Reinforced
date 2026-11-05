@@ -160,6 +160,10 @@ file holds. A version-1 settings file opens in guided mode.
   commands. Hiding a control never forks or removes project data.
 - Mobile/compact layout exposes the same semantics as the desktop rail, with
   selection carried by fill and border, not colour alone.
+- The editor stacks below 980 px (earlier than the 760 px shell breakpoint) and
+  reaches every tool through the dock sheet: a small window keeps the viewer at
+  a usable width instead of squeezing three panes, and losing a pane never means
+  losing a feature.
 - The menu bar renders from one description of the verbs: macOS draws the
   native bar, Windows and Linux draw an in-window bar in the same shell. Both
   disable the same entries under the same conditions, so a verb added once

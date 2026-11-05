@@ -990,7 +990,35 @@ void main() {
     expect(gateway.illustrationRequests, isEmpty);
   });
 
+  testWidgets('a compact window reaches the tools through the dock sheet', (
+    tester,
+  ) async {
+    // Below the editor breakpoint the three panes stack, so the media panel is
+    // not on screen; the dock must still open it, or a small window would
+    // silently lose the import path.
+    _setViewport(tester, const Size(800, 600));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/or-compact-tools.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact tools');
+
+    expect(
+      find.byKey(const ValueKey('mobile-editor-tool-dock')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('media-import')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+  });
+
   testWidgets('a first page failure still offers a retry', (tester) async {
+    // The media panel is a desktop pane; a compact window reaches it through
+    // the tool sheet instead, so this test states the layout it exercises.
+    _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()..savePath = '/tmp/or-first-page.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
@@ -1002,6 +1030,7 @@ void main() {
   });
 
   testWidgets('the media error retry shows a reload state', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()..savePath = '/tmp/or-held-retry.orproj';
     await _mount(tester, gateway: gateway, picker: picker);

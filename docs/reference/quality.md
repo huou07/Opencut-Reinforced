@@ -49,6 +49,18 @@ on this host class, not a regression from the later work. The budget was not
 loosened: the row is calibrated for the Debian 13 host the script names, and it
 stays `FAIL` here until it is re-baselined on a Mac.
 
+`queue-priority` needed its sample count fixed before its verdict meant anything.
+With 40 frames the row reported `FAIL` once (idle p95 1.55 ms, loaded 19.79 ms,
+ratio 12.75) and `PASS` in the next run on the same idle sample (loaded 3.90 ms),
+while loaded p95 never exceeded its own 33.3 ms budget. The gate compares two
+noisy numbers, so a fast idle sample inflates the ratio without showing
+starvation. `crates/or_render/tests/queue_priority.rs` now measures 120 frames
+per phase (about three seconds more) and the criterion is unchanged. Three
+consecutive runs: ratio 1.94, 5.99, 2.94 with loaded p95 3.00, 9.56, 4.56 ms —
+still a wide spread on a machine that is also running a desktop, so the ratio is
+reported per run and a single breach on this host is not by itself a starvation
+claim. The budget itself stays as written.
+
 ### Cross-platform export benchmark (2026-11-05)
 
 - Workload: `python3 scripts/bench_export.py --frames 90` — 90 frames of

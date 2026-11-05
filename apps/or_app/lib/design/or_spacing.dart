@@ -41,8 +41,16 @@ abstract final class OrBreakpoints {
   static const compact = 760.0;
   static const wide = 1180.0;
 
+  /// The editor keeps three columns — tools, viewer, assistant — and each one
+  /// needs a usable share of the width. Below this figure the viewer would fall
+  /// under about 450 px, so the editor stacks instead of squeezing the frame the
+  /// user is judging. Other screens keep the 760 px figure because a list at
+  /// 800 px is still comfortable.
+  static const editorCompact = 980.0;
+
   static bool isCompact(double width) => width < compact;
   static bool isWide(double width) => width >= wide;
+  static bool isEditorCompact(double width) => width < editorCompact;
 }
 
 /// Minimum pointer/contact area for a control.

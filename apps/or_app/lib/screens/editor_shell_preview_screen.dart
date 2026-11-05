@@ -1140,7 +1140,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     return LayoutBuilder(
       key: const ValueKey('editor-shell-preview'),
       builder: (context, constraints) {
-        final compact = OrBreakpoints.isCompact(constraints.maxWidth);
+        final compact = OrBreakpoints.isEditorCompact(constraints.maxWidth);
         return ColoredBox(
           color: OrColors.background,
           child: Column(
