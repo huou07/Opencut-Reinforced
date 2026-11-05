@@ -120,14 +120,18 @@ editor. It is stored in `editor-settings.json` beside the inspector preference
 and changes only what is shown, never what a command does or what a project
 file holds. A version-1 settings file opens in guided mode.
 
-- **Next-step row.** Above the timeline, one row names the next useful action
-  and offers it as a single button: import media, add the first clip, add a
-  title, add sound, then export. The row is derived from the open project's
-  read model (media count, clip count, whether a text or audio clip exists, and
-  whether this session has exported), so it disappears on its own as the work
-  is done instead of tracking a tutorial. It can be dismissed on its own; that
-  is a separate preference from guided mode, and Settings owns the switch that
-  brings it back.
+- **Next-step step.** The step trails the timeline toolbar as one compact item
+  that names the next useful action and offers it as a single button: import
+  media, add the first clip, add a title, add sound, then export. It lives in
+  the toolbar rather than its own band so it can never change a pane's height,
+  push an existing control out of reach, or place a clip under a transient
+  snackbar; the toolbar already scrolls, so a narrow window still reaches every
+  tool. The step is derived from the open project's read model (media count,
+  clip count, whether a text or audio clip exists, and whether this session has
+  exported), so it disappears on its own as the work is done instead of
+  tracking a tutorial. It can be dismissed on its own; that is a separate
+  preference from guided mode, and Settings owns the switch that brings it
+  back.
 - **Export by intent.** The same export command and the same three output
   profiles back a dialog that leads with what the file is for — share or
   upload, smaller file, highest quality, keep every pixel — and states the real

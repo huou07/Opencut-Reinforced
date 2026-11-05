@@ -1,8 +1,8 @@
 # Guided first video, scene typography and measured capability — 2026-11-05
 
-Status: **local macOS evidence** for branch `mission/pro-video-platform` on the
-commits named below. It is not hosted CI evidence and not cross-platform evidence.
-The limits at the end are part of the record.
+Status: **local macOS and Linux evidence** for branch
+`mission/pro-video-platform` on the commits named below. Windows stays
+unverified. The limits at the end are part of the record.
 
 ## Commits
 
@@ -12,6 +12,9 @@ The limits at the end are part of the record.
 | `d073c61` | MotionScene schema v2 typography |
 | `8161fa5` | import proves a decode; capability matrix measured |
 | `78ce0b0` | agent workspace routes capability and design guides |
+| `0a7475c` | local gates green; measured macOS budget recorded |
+| `63a4bd6`, `6a1fbb3` | the next step moves out of its own band so no pane changes height |
+| `343e089` | the import decode gate sizes its own lease budget |
 
 ## What was proven, and how
 
@@ -45,12 +48,40 @@ plus the guided journey itself, which now asserts the media row and the first
 clip appear. The refusal scenario still passes, and its trace shows the AV1
 reason rather than a budget reason.
 
+## Linux verification, same branch
+
+The Debian 13 host was brought up in user space only — no `sudo`, no system
+packages, no security-setting change: Flutter 3.47.5 at `~/or-linux/flutter`
+(framework `6a19cca564`) and rustup `1.98.0` under `$HOME`. The clone tracked
+the same branch and commit as the macOS tree.
+
+| Claim | Evidence |
+|---|---|
+| The Flutter surface analyzes and tests on Linux | `flutter analyze --no-pub` → no issues; `flutter test` → `+462 ~5` pass |
+| The Rust bridge and IPC layers test on Linux | `cargo test -p or_app_bridge -p or_ipc -p or_runtime --locked` → 53, 7, 10, 4 and 22 pass |
+| The CLI drives a real project on Linux | `or project create`, `media add` (decode gate admitted the fixture), `timeline add-track` video and text, `insert-clip`, `insert-text` |
+| The semantic editor journey passes on Linux | `python3 scripts/run_linux_ui_preflight.py` under bounded Xvfb → `All tests passed!` at `6a1fbb3` |
+
+Export through the CLI is **not** claimed on Linux: `or session serve` installs
+no export handler (`EXPORT_RUNTIME_UNAVAILABLE`, "the project host has no export
+runtime"), which the desktop application supplies. That is a boundary of the
+CLI host, and the same boundary exists on macOS.
+
+The Linux run is also what diagnosed the six failing widget tests and the
+failing `editor` workflow: the guided band took 46 px from the panes, which on a
+1280×720 window pushed the first clip under a transient snackbar and pushed
+toolbar controls past the visible surface. At `6a1fbb3` the step is a toolbar
+item, so nothing moves, and both the widget suite and the Xvfb journey pass.
+
 ## Limits, stated plainly
 
-- **Cross-platform verification did not happen.** The Debian host has no
-  `cargo`/`flutter`; the Windows host has neither and no FFmpeg. The mission's
-  permission boundary forbids installing system tooling on those hosts. No
-  Linux or Windows build, install or journey is claimed here.
+- **Windows verification did not happen.** The Windows 11 host has no
+  toolchain and no FFmpeg, and the mission's permission boundary forbids
+  installing system tooling there. No Windows build, install or journey is
+  claimed. macOS and Linux are both verified above, from one branch and commit.
+- **No packaged install was exercised on Linux.** The journey ran from a
+  developer build under Xvfb, not from a Linux bundle installed through the
+  package manager.
 - **The project text dialog still cannot set line height or tracking.** The
   bridge view is not widened; the two values default to the historical 1320 and
   0, so existing projects render identically. This is recorded in

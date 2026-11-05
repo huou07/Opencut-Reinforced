@@ -1,7 +1,7 @@
 {
   "name": "guided-beginner",
   "harness": "or_ui",
-  "description": "The beginner path in guided mode: Home -> new project -> the next-step row names import, the row's own button imports media, the row then names the first clip and inserts it through the same track-ensure and insert commands a drop uses, the title step creates the text track it needs, and the export dialog leads with intent while Advanced still exposes every codec row. The row must disappear once its step is done, and the guides overlay must be togglable without reaching export.",
+  "description": "The beginner path in guided mode: Home -> new project -> the timeline toolbar carries the next step, its own button imports media, it then names the first clip and inserts it through the same track-ensure and insert commands a drop uses, the title step creates the text track it needs, and the export dialog leads with intent while Advanced still exposes every codec row. The step must disappear once its work is done, and the guides overlay must be togglable without reaching export.",
   "viewport": {
     "width": 1280,
     "height": 800

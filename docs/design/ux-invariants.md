@@ -57,9 +57,11 @@ journey. See [operations/verification.md](../operations/verification.md).
 - Pressing play at the content end replays from zero. A speed other than 1× turns
   preview audio off and says so; it never plays pitched or drifting audio.
 - Simple mode is a visibility setting over one state and command model. Its
-  next-step row names one action derived from the open project, never from a
+  next step names one action derived from the open project, never from a
   tutorial counter, and disappears once the work exists; dismissing it is a
-  separate preference that Settings can restore. Guided mode changes the export
+  separate preference that Settings can restore. Guidance never changes
+  layout: the step is a toolbar item, so opening it cannot resize a pane, move
+  an existing control, or shift a clip into a transient snackbar's hit area. Guided mode changes the export
   dialog's order, not the export fields: an intent maps onto the same profile,
   quality and resolution triple, and **Advanced settings** reveals those fields.
 - Composition guides are a preview overlay. They draw after presentation, are
@@ -90,7 +92,7 @@ and captions; effect presets; MotionScene render-and-insert; in-app scene
 editing (drag an object, retitle, recolour, resize text, add text, add a library
 object, delete) inline and in the expanded editor; assistant chat edits and
 assistant-driven MotionScene insertion through the real harness; native menus;
-export receipt; pacing recorded from the app; the guided next-step row and the
+export receipt; pacing recorded from the app; the guided next-step step and the
 intent-first export dialog (`guided_steps_test.dart`, `widget_test.dart`
 "guided export dialog"/"codec choice"/"G toggles composition guides"), with the
 macOS run recorded in [ui-harness.md](../operations/ui-harness.md).
