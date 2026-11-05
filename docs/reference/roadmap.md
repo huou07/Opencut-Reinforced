@@ -52,14 +52,25 @@ a product improvement with recorded evidence, not a library addition:
     every tool through the dock sheet; the guided action keeps a 26 px target
     instead of the 18 px compact density produced. The macOS suite, the Linux
     suite at the same commit, and the bounded Linux preflight all pass.
+18. **The local acceptance gate states its own environment (owner request,
+    2026-11-05).** `bash scripts/acceptance.sh` now passes every lane it can
+    select on this host (`PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)`):
+    the Linux-only preflight is UNVERIFIED off Linux instead of a traceback, the
+    two media lanes that synthesise fixtures with `-f lavfi` are UNVERIFIED with
+    that reason when the packaged build omits the device, and `command.create`
+    carries a measured Darwin baseline beside the Debian ceiling. The media crate
+    tests and the export writer run against the pinned FFmpeg 8 through the
+    `$HOME/.local/ffmpeg8` shims recorded in
+    [local-macos.md](../operations/local-macos.md).
 
 Blocked, and reported as blocked rather than attempted:
 
-- **Windows build/test from one revision.** The Windows 11 host has no Rust or
-  Flutter toolchain and no FFmpeg, and this mission's permission boundary
-  forbids installing system tooling there. macOS and Linux are verified from the
-  same commit; Windows stays labelled unverified rather than inferred from
-  shared code.
+- **Windows build/test from one revision.** The Windows 11 host has cargo and
+  rustc, the VS 2022 Build Tools, Python and git, but no Flutter SDK, no FFmpeg,
+  no cmake/ninja and no libclang; this mission's permission boundary forbids
+  installing that toolchain there. macOS and Linux are verified from the same
+  commit; Windows stays labelled unverified rather than inferred from shared
+  code, and the exact missing pieces are listed so the owner can decide.
 - **Installer-level parity on Linux and Windows.** No packaged install was
   exercised on either host. The Linux journey runs from a developer build under
   Xvfb; packaging and install remain a separate, unclaimed step.

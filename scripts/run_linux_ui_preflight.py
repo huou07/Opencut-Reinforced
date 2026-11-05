@@ -25,7 +25,11 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
+
+try:  # Python 3.11+; the lane reports a host precondition rather than crashing.
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - exercised on macOS system Python
+    tomllib = None
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps/or_app"
@@ -615,6 +619,13 @@ def supervise(command: list[str], budget: int,
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if tomllib is None:
+        print(
+            "host precondition: this lane needs Python 3.11+ for tomllib. "
+            "Run it on the Linux host, or with a newer interpreter.",
+            file=sys.stderr,
+        )
+        return 3
     if "--exec" in argv:
         # Parsed by hand: the command after `--` must reach the child untouched.
         return exec_in_environment(argv[argv.index("--exec") + 1:])

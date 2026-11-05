@@ -712,10 +712,25 @@ fn measure_audio_cleanup(workspace: &Path) -> Result<Vec<f64>, String> {
     // The resolver's fallback is the *name* `ffmpeg`, which `is_file` cannot see, so
     // each candidate is asked for its version instead of being stat-ed.
     let resolved = or_core::ffmpeg_executable();
-    let candidates: Vec<PathBuf> = if resolved.is_file() {
-        vec![resolved]
-    } else {
-        vec![resolved, PathBuf::from("ffmpeg")]
+    // Every `ffmpeg` on PATH is a candidate, not just the first one: a trimmed
+    // runtime build can sit beside a general-purpose one, and only the second
+    // can write a lavfi fixture.
+    let candidates = {
+        let mut paths: Vec<PathBuf> = Vec::new();
+        if resolved.is_file() {
+            paths.push(resolved);
+        } else {
+            paths.push(PathBuf::from("ffmpeg"));
+        }
+        if let Some(search) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&search) {
+                let candidate = dir.join("ffmpeg");
+                if candidate.is_file() && !paths.contains(&candidate) {
+                    paths.push(candidate);
+                }
+            }
+        }
+        paths
     };
     let source = workspace.join("cleanup-source.wav");
     // The build under test is a decode-oriented bundle with no lavfi sources, so

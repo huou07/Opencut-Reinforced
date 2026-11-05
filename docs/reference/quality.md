@@ -43,11 +43,14 @@ Rows on the MacBook Air M5, debug build, 200-clip project: `create` p95 8.07 ms,
 `motion-rasterize-frame` 123.9 ms, `ffmpeg-export` 60.2 ms, export throughput
 174 fps, queue-priority ratio 2.88.
 
-`command.create` misses its 5 ms budget on APFS at 8.07 ms. The same row measures
-8.03 ms on unmodified `main` at `2cf1b96`, so this is project-file creation cost
-on this host class, not a regression from the later work. The budget was not
-loosened: the row is calibrated for the Debian 13 host the script names, and it
-stays `FAIL` here until it is re-baselined on a Mac.
+`command.create` costs about 8 ms on APFS against the 5 ms ceiling set on the
+Debian calibration host: 8.07 ms on this branch and 8.03 ms on unmodified `main`
+at `2cf1b96`, so it is this host class's atomic-publish cost, not a regression.
+The row now carries a measured macOS baseline (p95 8.20 ms, 2026-11-05) and a
+12 ms Darwin ceiling, while the Debian figure stays 5 ms; `scripts/bench_quality.py`
+prints `host run` with the machine it actually measured, because a run on a Mac
+used to be labelled a Debian one. The default threshold was not raised — a
+second platform got its own, with the measurement that justifies it.
 
 `queue-priority` needed its sample count fixed before its verdict meant anything.
 With 40 frames the row reported `FAIL` once (idle p95 1.55 ms, loaded 19.79 ms,
