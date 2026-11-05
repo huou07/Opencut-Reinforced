@@ -94,10 +94,13 @@ Three constraints shaped the fix:
   is indistinguishable in output from version 1.
 - Rasterising a boxed text node now depends on the box, not only on the canvas,
   so a scene must set `size` to get wrapping at a chosen measure.
-- `TextFormatting` round-trips the two new fields, but the bridge view that the
-  text dialog uses does not carry them yet, so the dialog writes the defaults.
-  That limit is stated in [text-captions.md](../features/text-captions.md); it is
-  not a silent loss, because nothing in the app sets them on a project text clip.
+- `TextFormatting` round-trips the two new fields, and the bridge view the text
+  dialog writes through now mirrors them: `ProjectTextFormattingView` gained
+  `line_height_permille` and `letter_spacing_milli_points` and the bindings were
+  regenerated with `flutter_rust_bridge_codegen` (the documented
+  `HOME=/tmp/frb-home` recipe; the diff was the two fields plus import ordering
+  that `cargo fmt` normalises). The dialog offers both as sliders, so the
+  limitation recorded when this ADR landed is closed rather than carried.
 - Evidence: `crates/or_motion` (version 1 compatibility, version 2 resolution,
   unknown key refusal, range rejection, typed edit operations),
   `crates/or_render` (boxed wrapping, alignment, tracking, weight ink),

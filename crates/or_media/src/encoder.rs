@@ -374,6 +374,64 @@ pub enum FfmpegExportProfile {
     Mp4H264Aac,
 }
 
+/// What this build can actually offer from the Export dialog.
+///
+/// Presence is measured the same way the writer measures it — `avcodec` lookup
+/// by the very names the profile code uses — so the dialog and the writer can
+/// never disagree about which profiles exist. Presence is still not a promise
+/// that a hardware encoder will open on this machine; the writer opens every
+/// candidate on a frame before it commits, and a failure there is reported by
+/// the export itself.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExportCapability {
+    /// The H.264 encoder this build would pick first, by name.
+    pub h264_encoder: Option<String>,
+    /// True when that encoder reads GPU surfaces rather than host memory.
+    pub h264_hardware: bool,
+    /// Whether the MP4 profile's H.264 *and* AAC encoders are both present.
+    pub mp4_available: bool,
+    /// Whether the WebM profile's VP9 and Opus encoders are both present.
+    pub webm_available: bool,
+    /// Whether the lossless profile's FFV1 and PCM S16LE encoders are present.
+    pub lossless_available: bool,
+}
+
+impl ExportCapability {
+    /// The profile a new project should default to on this build.
+    pub fn preferred_profile(&self) -> FfmpegExportProfile {
+        if self.mp4_available {
+            FfmpegExportProfile::Mp4H264Aac
+        } else if self.webm_available {
+            FfmpegExportProfile::WebmVp9Opus
+        } else {
+            FfmpegExportProfile::MatroskaFfv1PcmS16le
+        }
+    }
+}
+
+/// Measures which export profiles this build carries.
+pub fn describe_export_capability() -> ExportCapability {
+    let h264 = H264_ENCODER_CANDIDATES
+        .iter()
+        .copied()
+        .find(|name| codec::encoder::find_by_name(name).is_some());
+    let aac = codec::encoder::find(codec::Id::AAC).is_some();
+    let vp9 = codec::encoder::find_by_name("libvpx-vp9").is_some()
+        && codec::encoder::find_by_name("libopus").is_some();
+    let lossless = codec::encoder::find(codec::Id::FFV1).is_some()
+        && codec::encoder::find(codec::Id::PCM_S16LE).is_some();
+    ExportCapability {
+        h264_encoder: h264.map(str::to_owned),
+        h264_hardware: matches!(
+            h264,
+            Some("h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi" | "h264_open")
+        ),
+        mp4_available: h264.is_some() && aac,
+        webm_available: vp9,
+        lossless_available: lossless,
+    }
+}
+
 /// Compatibility name for the previous software-only profile type.
 pub type SoftwareExportProfile = FfmpegExportProfile;
 
@@ -1274,7 +1332,10 @@ fn is_again(error: ffmpeg::Error) -> bool {
 
 #[cfg(test)]
 mod quality_tests {
-    use super::{ExportQuality, nvenc_preset, video_bitrate, vp9_settings};
+    use super::{
+        ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES, codec,
+        describe_export_capability, nvenc_preset, video_bitrate, vp9_settings,
+    };
 
     #[test]
     fn quality_spends_more_encoding_time_and_bytes_than_speed() {
@@ -1308,5 +1369,32 @@ mod quality_tests {
             4320,
             ExportQuality::Quality
         )));
+    }
+
+    #[test]
+    fn the_described_profiles_match_the_encoders_this_build_links() {
+        let capability = describe_export_capability();
+        // Every shipped build links the lossless pair, so an empty row is a
+        // packaging regression rather than a host difference.
+        assert!(
+            capability.lossless_available,
+            "the linked FFmpeg has no FFV1/PCM_S16LE pair"
+        );
+        let h264_present = H264_ENCODER_CANDIDATES
+            .iter()
+            .any(|name| codec::encoder::find_by_name(name).is_some());
+        assert_eq!(capability.h264_encoder.is_some(), h264_present);
+        // A named encoder is one of the candidates, never an invention.
+        if let Some(name) = capability.h264_encoder.as_deref() {
+            assert!(H264_ENCODER_CANDIDATES.contains(&name), "{name}");
+        }
+        // The preferred profile is one the description says is available.
+        let preferred = capability.preferred_profile();
+        let preferred_available = match preferred {
+            FfmpegExportProfile::Mp4H264Aac => capability.mp4_available,
+            FfmpegExportProfile::WebmVp9Opus => capability.webm_available,
+            FfmpegExportProfile::MatroskaFfv1PcmS16le => capability.lossless_available,
+        };
+        assert!(preferred_available, "{preferred:?} is not available");
     }
 }

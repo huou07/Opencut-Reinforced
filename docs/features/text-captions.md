@@ -34,10 +34,13 @@ defaulted so every project written before them renders unchanged:
 The two metrics are serialized and honoured by the renderer through the same
 `TextFormatting` value MotionScene uses (ADR 0012), and both are omitted from the
 document when they hold their defaults, so a project written before them is
-byte-identical. **They are not editable from the text dialog yet:** the Flutter
-bridge view that dialog writes through does not mirror the two fields, and
-widening that view is a separate generated-code change. A text clip therefore
-keeps the historical metrics, and the dialog cannot silently change them.
+byte-identical. **Both are editable in the title and caption dialog**, which
+offers a line-height slider (0.80–3.00, 0.10 steps, shown as a multiple) and a
+tracking slider (-5.0–20.0 points, 0.5 steps) beside size, weight and alignment;
+leaving them alone keeps the historical 1.32 and 0, so nothing changes for a
+project that never touches them. The dialog reaches them through the widened
+`ProjectTextFormattingView` (ADR 0012, consequence update), which was
+regenerated with `flutter_rust_bridge_codegen` rather than hand-edited.
 
 The Edit Title/Caption dialog writes all of these through the existing
 `timeline.clip.update` command; the renderer measures the shaped text, so the

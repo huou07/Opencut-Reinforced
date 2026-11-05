@@ -146,3 +146,17 @@ and the first clip appear, and
 `crates/or_media/tests/software_decode.rs::the_import_decode_gate_admits_a_frame_it_can_decode`
 pins the same behaviour in Rust. Without those, a gate that refuses everything
 would look like a working refusal.
+
+## The export side is the same measurement
+
+`or_media::describe_export_capability` asks the linked encoders the same
+question the writer asks before it starts: can this build open an H.264 encoder
+(and AAC), libvpx VP9 with libopus, FFV1 with PCM S16LE. The app reads that
+answer once per launch, so the Export dialog offers only formats the engine can
+write, defaults to the engine's preferred profile, and Settings → Resources
+shows the same Ready/Unavailable list. On this macOS host the panel reports
+"This build exports MP4 (VideoToolbox, hardware), WebM (VP9), Lossless (FFV1)."
+from the real bridge, which matches the encoder column above.
+
+A row here and a row in that panel therefore cannot disagree: both come from the
+same probe in `crates/or_media`, and neither is a list of names kept in Dart.

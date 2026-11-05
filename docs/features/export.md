@@ -26,8 +26,15 @@ the Windows package carries NVENC and Media Foundation (the operating system's
 own encoder, hardware-backed when the driver exposes a hardware MFT), and the
 Linux package carries NVENC, VAAPI and x264, so MP4 export works on all three
 without a platform branch in the profile code. Every package also carries AAC.
-When nothing opens, the format is still listed and the export fails with a
-message that names the gap and points at WebM.
+The same probe answers the UI: `or_media::describe_export_capability` reports
+which profiles this build can write and which encoder it would use, the bridge
+exposes it as `export_capabilities()`, and the app reads it once per launch.
+Consequences in the surface: the Export dialog lists only formats whose encoder
+opens, starts on the engine's preferred profile instead of a hardcoded platform
+default, and shows a warning line when MP4 is missing; Settings → Resources
+lists MP4/WebM/lossless as Ready or Unavailable with the encoder name. A build
+whose only working encoder is FFV1 says so rather than offering an MP4 export
+that would fail.
 
 The quality preference reaches the hardware encoder too: a `Quality` export sets
 the NVENC preset to `p5` and a `Speed` export to `p2`, so the choice trades time
@@ -66,6 +73,14 @@ the selected profile's muxer and encoders.
 - The H.264 profile is fed NV12 planes: the composited frame is
   converted on the GPU and read back as two planes, so no CPU colour conversion
   runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
+- The two readback layouts are held together by a test rather than by
+  inspection: `crates/or_render/tests/preview_export_parity.rs` renders one
+  snapshot twice, as RGBA for the viewer and as NV12 for the hardware encoder,
+  decodes the planes back to RGB and compares pictures (PSNR, ink centroid, black
+  level). Measured at 320×180: **62.60 dB** on Apple M5 via Metal and the same
+  62.60 dB on Debian's Intel UHD 770 via Mesa, so the agreement is not one
+  driver's accident; mutating the expected limited-range black level to full
+  range drops it to 23.96 dB, which is the failure the lane exists to catch.
 - A clip that covers the whole canvas with no effect, transition, transform,
   crop or text on top is decoded straight to NV12 at the output size, so that
   frame never becomes an RGBA texture or a readback: the decoder runs one
@@ -102,6 +117,12 @@ the selected profile's muxer and encoders.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.
+- What the dialog offers is measured, not assumed: `ExportCapability.supports`
+  filters the profile list, `preferredProfile` picks the default, and
+  `ExportCapability.assumed()` keeps an export startable when the bridge cannot
+  answer. A widget test mounts a build with no H.264 encoder and asserts the
+  MP4 tile is absent, the caveat names the reason, and `Continue` still sends
+  the WebM profile.
 
 ## Validation
 

@@ -68,6 +68,12 @@ for the contracts. Product-level expectations: useful metadata and errors,
 thumbnails/waveforms, offline/relink, captions and subtitle interchange, typed
 transform and effect parameters, coherent preview/export parity.
 
+**Onboarding (delivered):** first run offers a guided first video, and
+Settings → Resources measures what this installation can do instead of
+promising: the machine's processors, memory and free space, the export formats
+the linked encoder opens, the external tools that are optional, and the one
+warning worth showing when the disk cannot stage an export.
+
 **MVP FOUNDATION (delivered):** the import codec list and the three export
 profiles are shared Rust rules, and whether a *given host* can decode a codec is
 measured at import rather than assumed: the first video frame is decoded, and a
@@ -75,7 +81,11 @@ codec whose decoder exists but cannot run on this machine is refused with
 `DECODE_UNAVAILABLE` and the reason. Measured rows per host, including the AV1
 finding on Apple silicon, are in
 [media-capability-matrix.md](media-capability-matrix.md). GIF and TIFF import,
-extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED.
+extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED. Which of the three
+delivered profiles a build can actually write is measured at runtime
+(`describe_export_capability`): the Export dialog offers only those and defaults
+to the engine's preferred one, and Settings → Resources lists them as Ready or
+Unavailable.
 
 ## AI assistance
 
@@ -118,7 +128,9 @@ import and rendering; a Motion panel with search, previews, parameter editing
 and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
 A composed scene's text can be set with its own family, weight, alignment, line
 height and tracking inside an explicit text box (schema version 2, ADR 0012), so
-titles can carry hierarchy instead of one uniform weight. See
+titles can carry hierarchy instead of one uniform weight. A project text clip
+reaches the same two metrics from its own dialog (line height 0.80–3.00 in tenths,
+tracking -5.0–20.0 points) and keeps the historical 1.32/0 when untouched. See
 [motion-assets.md](../features/motion-assets.md) and
 [motionscene.md](../features/motionscene.md).
 
@@ -129,8 +141,10 @@ for now.
 ## Interchange and extensibility
 
 SRT/WebVTT now; OTIO, Lottie/dotLottie, ASS, audio stems, EDL/XML as bounded
-adapters later. Plugins, templates, themes and community distribution are future
-and default to no code execution.
+adapters later. Plugins, a community template marketplace, themes and community
+distribution are future and default to no code execution. Bundled templates,
+text looks, sound effects and motion scenes ship today and are covered by the
+credits panel in Library → Guide.
 
 ## Accessibility, localisation, platforms
 

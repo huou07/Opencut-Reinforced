@@ -32,6 +32,13 @@ Local speech engines (for example VieNeu-TTS, Apache-2.0) are user-installed
 servers the app reaches only over loopback with no credential; the app ships no
 weights and no server.
 
+When the app does install an optional component itself, it records exactly what
+it wrote in an install manifest inside that component's folder. Removal reads
+that manifest and deletes only those entries, refusing paths that escape the
+folder; a folder with no manifest is reported as "nothing this app can safely
+remove" rather than emptied. Model weights the user downloaded are never in the
+manifest, so removing the engine cannot delete them.
+
 ## Current dependency posture
 
 | Dependency | Purpose | Licence |

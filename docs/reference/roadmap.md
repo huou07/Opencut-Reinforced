@@ -23,9 +23,10 @@ a product improvement with recorded evidence, not a library addition:
 12. **Scene typography (owner request, 2026-11-05).** MotionScene schema v2 adds
     family, weight, alignment, line height and tracking inside an explicit text
     box, with the two metrics shared through `or_core::TextFormatting`.
-    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md); the
-    project text dialog cannot set the two metrics yet because the bridge view is
-    not widened.
+    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md). The
+    bridge view was widened afterwards, so the project text dialog sets line
+    height and tracking too (`timeline-text-line-height`, `timeline-text-tracking`)
+    and the `text-typography` journey drives both through the real app.
 13. **Measured media capability (owner request, 2026-11-05).** The capability
     claim is now a measurement: `scripts/probe_media_matrix.py` probes and decodes
     18 fixtures per host, import proves a real decode and refuses an unusable
@@ -62,18 +63,52 @@ a product improvement with recorded evidence, not a library addition:
     tests and the export writer run against the pinned FFmpeg 8 through the
     `$HOME/.local/ffmpeg8` shims recorded in
     [local-macos.md](../operations/local-macos.md).
+19. **Export formats are measured, not assumed (owner request, 2026-11-05).**
+    `or_media::describe_export_capability` reports which profiles this build can
+    write and which encoder it would use; the bridge exposes it and the app reads
+    it once per launch. The Export dialog lists only formats whose encoder opens,
+    defaults to the engine's preferred profile, and warns when MP4 is missing;
+    Settings → Resources shows the same Ready/Unavailable list. The `no-h264`
+    widget test and the `resources-setup` journey record both halves.
+
+20. **Setup reports the machine it will render on (owner request, 2026-11-05).**
+    Settings → Resources opens with a measured **This machine** panel —
+    platform, processors, memory and free space on the volume that will hold an
+    export — and warns with the consequence when the disk is short of the 4 GB
+    staging headroom. `df`/`sysctl`/PowerShell are the only host commands, each
+    behind one seam (`readHostFacts`), and a host that refuses reports "unknown"
+    rather than a guess. Proven by `flutter test test/system_check_test.dart` and
+    the `resources-setup` journey, which reads back
+    "macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free".
+
+21. **Removing an optional component is as explicit as installing it (owner
+    request, 2026-11-05).** Installing records exactly which files the app wrote;
+    removal reads that record and deletes only those entries, refusing paths that
+    leave the folder, so a model the user downloaded and a runtime they copied by
+    hand both survive. The action is offered only when the record exists, which
+    keeps a bundled engine from looking removable.
+22. **Every bundled asset states its licence in the app (owner request,
+    2026-11-05).** Library → Guide ends with the credits for both bundled font
+    families and every generated asset: licence, what it permits, and where it
+    came from. The Text and Sound tabs name their licence beside the content, so
+    nobody has to open the repository to learn what they may do with a font or a
+    sound.
 
 Blocked, and reported as blocked rather than attempted:
 
-- **Windows build/test from one revision.** The Windows 11 host has cargo and
-  rustc, the VS 2022 Build Tools, Python and git, but no Flutter SDK, no FFmpeg,
-  no cmake/ninja and no libclang; this mission's permission boundary forbids
-  installing that toolchain there. macOS and Linux are verified from the same
-  commit; Windows stays labelled unverified rather than inferred from shared
-  code, and the exact missing pieces are listed so the owner can decide.
-- **Installer-level parity on Linux and Windows.** No packaged install was
-  exercised on either host. The Linux journey runs from a developer build under
-  Xvfb; packaging and install remain a separate, unclaimed step.
+- **The Windows installer (.setup.exe).** The Windows ZIP package is built,
+  installed, replaced, launched and uninstalled on a real Windows 11 host from
+  the same commit as macOS and Linux (`WINDOWS_LANE=PASS`, SHA-256
+  `d24a1bd2…`, see the parity receipt). The Inno Setup definition is not
+  exercised locally because Inno Setup 6 is not installed on that host; the
+  `.zip` is the tested artifact and `.setup.exe` remains a CI-produced,
+  locally-unproven package.
+- **Installer-level parity on Linux.** No `.deb` was built or installed on the
+  Debian host in this round. The lane reports `LOCAL_LANE=BLOCKED` before it
+  starts, naming the pinned FFmpeg 8 prefix, the codec prefix, the FFmpeg
+  `COPYING.LGPLv2.1` file and the codec notices it cannot find; building those on
+  that host is the outstanding work. Linux app behaviour itself is verified
+  (suite, Rust tests, native editor journey under Xvfb).
 - **An optional download installed and removed through the GUI.** The
   `resources-setup` journey proves the surface is reachable and inert until a
   user acts; it does not download a model or an update, so that path is not

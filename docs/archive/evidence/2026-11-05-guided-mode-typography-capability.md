@@ -84,10 +84,11 @@ item, so nothing moves, and both the widget suite and the Xvfb journey pass.
 - **No packaged install was exercised on Linux.** The journey ran from a
   developer build under Xvfb, not from a Linux bundle installed through the
   package manager.
-- **The project text dialog still cannot set line height or tracking.** The
-  bridge view is not widened; the two values default to the historical 1320 and
-  0, so existing projects render identically. This is recorded in
-  [text-captions.md](../../features/text-captions.md), not implied complete.
+- ~~The project text dialog still cannot set line height or tracking.~~ Closed
+  after the merge: `ProjectTextFormattingView` was widened and regenerated, and
+  the dialog now offers both as sliders (see
+  [text-captions.md](../../features/text-captions.md) and the consequence update
+  in [ADR 0012](../../adr/0012-scene-typography-schema-v2.md)).
 - **AV1 does not decode on this Apple silicon host** with the pinned build, and
   the app now says so at import instead of failing at the first frame. AV1 is not
   claimed as playable there.

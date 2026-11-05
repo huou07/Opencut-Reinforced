@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -41,6 +42,8 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
 
   String? _error;
   bool _installingSpeech = false;
+  bool _removingSpeech = false;
+  bool _canRemoveSpeech = false;
   int _received = 0;
   int _total = 0;
   LocalTtsEngine _engine = localTtsEngines.first;
@@ -49,12 +52,20 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
   void initState() {
     super.initState();
     _runtime = widget.service.inspectRuntime();
+    unawaited(_readRemovable());
   }
 
   void _refresh() {
     setState(() {
       _runtime = widget.service.inspectRuntime();
     });
+    unawaited(_readRemovable());
+  }
+
+  Future<void> _readRemovable() async {
+    final removable = await widget.service.hasSpeechInstallRecord();
+    if (!mounted) return;
+    setState(() => _canRemoveSpeech = removable);
   }
 
   Future<void> _installSpeechRuntime() async {
@@ -169,6 +180,60 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
     );
   }
 
+  Future<void> _removeSpeechRuntime() async {
+    if (_removingSpeech) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove the speech engine?'),
+        content: const Text(
+          'Only the files this setup installed are removed. Captions and '
+          'speech-to-text stop working until you install them again, and any '
+          'voiceover recordings you already made stay in their projects.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('tools-speech-remove-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _removingSpeech = true;
+      _error = null;
+    });
+    try {
+      final removed = await widget.service.removeSpeechRuntime();
+      if (!mounted) return;
+      _refresh();
+      OrSnackBar.show(
+        context,
+        removed == 1
+            ? 'Removed 1 file the setup installed.'
+            : 'Removed $removed files the setup installed.',
+      );
+    } on GithubReleaseException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'The installed files could not be removed. '
+              'Nothing else in the folder was touched.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _removingSpeech = false);
+    }
+  }
+
   Widget _speechRuntimeSection(RuntimeSnapshot? runtime) {
     final ready = runtime?.speechRuntime ?? false;
     final detail = ready
@@ -216,6 +281,19 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
                     onPressed: _installSpeechRuntime,
                     icon: const Icon(Icons.download_outlined, size: 16),
                     label: const Text('Install engine'),
+                  ),
+                if (ready && _canRemoveSpeech)
+                  TextButton.icon(
+                    key: const ValueKey('tools-speech-remove'),
+                    onPressed: _removingSpeech ? null : _removeSpeechRuntime,
+                    icon: _removingSpeech
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Remove copy'),
                   ),
                 OutlinedButton.icon(
                   key: const ValueKey('tools-speech-add-files'),

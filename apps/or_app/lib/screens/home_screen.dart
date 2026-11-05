@@ -23,6 +23,9 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenGuide,
     this.showWelcome = false,
     this.onDismissWelcome,
+    this.machineSummary,
+    this.exportSummary,
+    this.machineWarning,
   });
 
   final bool canPickProjects;
@@ -42,6 +45,14 @@ class HomeScreen extends StatelessWidget {
   final bool showWelcome;
   final VoidCallback? onDismissWelcome;
 
+  /// What the first-run check measured, shown inside the welcome panel.
+  ///
+  /// Null until the measurement lands; the panel then simply omits the line
+  /// rather than inventing a machine.
+  final String? machineSummary;
+  final String? exportSummary;
+  final String? machineWarning;
+
   @override
   Widget build(BuildContext context) {
     const androidMessage = 'Project file access is unavailable in this build.';
@@ -54,6 +65,9 @@ class HomeScreen extends StatelessWidget {
         children: [
           if (showWelcome) ...[
             _WelcomePanel(
+              machineSummary: machineSummary,
+              exportSummary: exportSummary,
+              machineWarning: machineWarning,
               canPickProjects: canPickProjects,
               onNewProject: onNewProject,
               onOpenProject: onOpenProject,
@@ -139,6 +153,9 @@ class HomeScreen extends StatelessWidget {
 /// ways to begin.
 class _WelcomePanel extends StatelessWidget {
   const _WelcomePanel({
+    required this.machineSummary,
+    required this.exportSummary,
+    required this.machineWarning,
     required this.canPickProjects,
     required this.onNewProject,
     required this.onOpenProject,
@@ -147,6 +164,9 @@ class _WelcomePanel extends StatelessWidget {
     required this.onDismiss,
   });
 
+  final String? machineSummary;
+  final String? exportSummary;
+  final String? machineWarning;
   final bool canPickProjects;
   final VoidCallback onNewProject;
   final VoidCallback onOpenProject;
@@ -175,6 +195,32 @@ class _WelcomePanel extends StatelessWidget {
             style: OrType.body.copyWith(color: OrColors.textSecondary),
           ),
           const SizedBox(height: OrSpacing.x4),
+          if (machineSummary != null) ...[
+            Text(
+              machineSummary!,
+              key: const ValueKey('home-welcome-machine'),
+              style: OrType.metadata.copyWith(color: OrColors.textMuted),
+            ),
+            if (exportSummary != null) ...[
+              const SizedBox(height: OrSpacing.x1),
+              Text(
+                exportSummary!,
+                key: const ValueKey('home-welcome-export'),
+                style: OrType.metadata.copyWith(color: OrColors.textSecondary),
+              ),
+            ],
+            if (machineWarning != null) ...[
+              const SizedBox(height: OrSpacing.x1),
+              Text(
+                machineWarning!,
+                key: const ValueKey('home-welcome-warning'),
+                style: OrType.metadata.copyWith(color: OrColors.warning),
+              ),
+            ],
+            const SizedBox(height: OrSpacing.x2),
+            const Divider(height: 1),
+            const SizedBox(height: OrSpacing.x4),
+          ],
           const _WelcomeFact(
             title: 'Your media stays where it is',
             detail:

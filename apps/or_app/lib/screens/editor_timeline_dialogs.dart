@@ -156,6 +156,7 @@ Widget textStyleSlider({
   required double max,
   required String display,
   required ValueChanged<double> onChanged,
+  int? divisions,
 }) => Row(
   children: [
     SizedBox(
@@ -168,7 +169,7 @@ Widget textStyleSlider({
         value: value.clamp(min, max),
         min: min,
         max: max,
-        divisions: (max - min).round(),
+        divisions: divisions ?? (max - min).round(),
         onChanged: onChanged,
       ),
     ),
@@ -209,6 +210,8 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
   var offsetX = formatting.offsetXBasisPoints.toDouble();
   var offsetY = formatting.offsetYBasisPoints.toDouble();
   var opacityPercent = formatting.opacityBasisPoints / 100.0;
+  var lineHeight = formatting.lineHeightPermille / 1000.0;
+  var trackingPoints = formatting.letterSpacingMilliPoints / 1000.0;
   var backgroundEnabled = formatting.background != null;
   var backgroundPercent = (formatting.background?.color.alpha ?? 170) / 2.55;
   var backgroundRed = formatting.background?.color.red ?? 0;
@@ -435,6 +438,28 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                   onChanged: (value) =>
                       setDialogState(() => opacityPercent = value),
                 ),
+                textStyleSlider(
+                  keyName: 'timeline-text-line-height',
+                  label: 'Line height',
+                  value: lineHeight,
+                  min: 0.8,
+                  max: 3,
+                  divisions: 22,
+                  display: '${lineHeight.toStringAsFixed(2)}×',
+                  onChanged: (value) =>
+                      setDialogState(() => lineHeight = value),
+                ),
+                textStyleSlider(
+                  keyName: 'timeline-text-tracking',
+                  label: 'Tracking',
+                  value: trackingPoints,
+                  min: -5,
+                  max: 20,
+                  divisions: 50,
+                  display: trackingPoints.toStringAsFixed(1),
+                  onChanged: (value) =>
+                      setDialogState(() => trackingPoints = value),
+                ),
                 SwitchListTile(
                   key: const ValueKey('timeline-text-background'),
                   contentPadding: EdgeInsets.zero,
@@ -515,6 +540,9 @@ Future<TimelineTextClipEdit?> showTimelineTextClipDialog({
                             offsetXBasisPoints: offsetX.round(),
                             offsetYBasisPoints: offsetY.round(),
                             opacityBasisPoints: opacityPercent.round() * 100,
+                            lineHeightPermille: (lineHeight * 1000).round(),
+                            letterSpacingMilliPoints: (trackingPoints * 1000)
+                                .round(),
                             background: backgroundEnabled
                                 ? ProjectTextBackground(
                                     color: ProjectTextColor(

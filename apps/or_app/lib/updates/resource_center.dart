@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -245,7 +246,9 @@ class ResourceCenterService {
       }
       final target = await speechRuntimeDirectory();
       await target.create(recursive: true);
-      await _copyDirectory(binary.parent, target);
+      final installed = <String>[];
+      await _copyDirectory(binary.parent, target, installed: installed);
+      await _recordInstall(target, installed);
       return target;
     } finally {
       try {
@@ -261,7 +264,9 @@ class ResourceCenterService {
   Future<Directory> addSpeechRuntimeFiles(Directory source) async {
     final target = await speechRuntimeDirectory();
     await target.create(recursive: true);
-    await _copyDirectory(source, target);
+    final installed = <String>[];
+    await _copyDirectory(source, target, installed: installed);
+    await _recordInstall(target, installed);
     return target;
   }
 
@@ -304,17 +309,108 @@ class ResourceCenterService {
     return null;
   }
 
-  Future<void> _copyDirectory(Directory source, Directory target) async {
+  Future<void> _copyDirectory(
+    Directory source,
+    Directory target, {
+    List<String>? installed,
+  }) async {
     await target.create(recursive: true);
     await for (final entry in source.list(followLinks: false)) {
       final name = entry.uri.pathSegments.where((part) => part.isNotEmpty).last;
       final path = '${target.path}${Platform.pathSeparator}$name';
       if (entry is File) {
         await entry.copy(path);
+        installed?.add(
+          path
+              .substring(target.path.length)
+              .replaceFirst(RegExp(r'^[/\\]'), ''),
+        );
       } else if (entry is Directory) {
-        await _copyDirectory(entry, Directory(path));
+        await _copyDirectory(entry, Directory(path), installed: installed);
       }
     }
+  }
+
+  /// The file an install wrote, so a removal deletes only what it added.
+  File _installManifest(Directory runtime) =>
+      File('${runtime.path}${Platform.pathSeparator}.or-speech-install.json');
+
+  Future<void> _recordInstall(Directory runtime, List<String> files) async {
+    if (files.isEmpty) return;
+    try {
+      await _installManifest(runtime).writeAsString(
+        jsonEncode({
+          'installed_at': DateTime.now().toUtc().toIso8601String(),
+          'files': files,
+        }),
+      );
+    } on FileSystemException {
+      // A runtime that cannot record the manifest still works; it just cannot
+      // be removed file by file later, which the remove path reports.
+    }
+  }
+
+  /// Removes exactly the files a previous install recorded.
+  ///
+  /// Models, projects and anything the user put in the folder stay: the
+  /// Whether the app itself installed this speech runtime. A bundled engine
+  /// (macOS) or a hand-copied one has no record, so the UI must not offer to
+  /// remove something it did not write.
+  Future<bool> hasSpeechInstallRecord() async {
+    final runtime = await speechRuntimeDirectory();
+    return _installManifest(runtime).exists();
+  }
+
+  /// manifest lists the payload, not the directory. A runtime installed by
+  /// hand (copied in by the user) has no manifest, so the caller is told the
+  /// app has nothing it can safely remove.
+  Future<int> removeSpeechRuntime() async {
+    final runtime = await speechRuntimeDirectory();
+    final manifest = _installManifest(runtime);
+    if (!await manifest.exists()) {
+      throw const GithubReleaseException(
+        'No installed copy is recorded for this folder, so nothing was '
+        'removed. Delete the files yourself if you added them by hand.',
+      );
+    }
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(await manifest.readAsString());
+    } on FormatException {
+      throw const GithubReleaseException(
+        'The install record for the speech engine could not be read. Delete '
+        'the folder yourself if you want it gone.',
+      );
+    }
+    final files = decoded is Map<String, dynamic>
+        ? (decoded['files'] as List?)?.whereType<String>().toList()
+        : null;
+    if (files == null) {
+      throw const GithubReleaseException(
+        'The install record for the speech engine could not be read. Delete '
+        'the folder yourself if you want it gone.',
+      );
+    }
+    var removed = 0;
+    for (final relative in files) {
+      // A recorded path is relative to the runtime folder; anything that
+      // escapes it is refused rather than trusted.
+      if (relative.contains('..') || relative.startsWith('/')) continue;
+      final file = File('${runtime.path}${Platform.pathSeparator}$relative');
+      if (!await file.exists()) continue;
+      try {
+        await file.delete();
+        removed++;
+      } on FileSystemException {
+        // One locked file must not abort the rest.
+      }
+    }
+    try {
+      await manifest.delete();
+    } on FileSystemException {
+      // The manifest is a record; leaving it behind is not a failure.
+    }
+    return removed;
   }
 
   /// Finds `Foo.app/Contents` even when Flutter reports a nested binary as the

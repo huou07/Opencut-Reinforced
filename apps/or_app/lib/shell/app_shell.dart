@@ -18,6 +18,8 @@ import '../library/sound_library.dart';
 import '../library/text_presets.dart';
 import '../design/or_spacing.dart';
 import '../production/editor_settings.dart';
+import '../updates/system_check.dart';
+import '../project/export_capability.dart';
 import '../project/export_profile.dart';
 import '../support/host_platform.dart';
 import '../project/project_file_picker.dart';
@@ -110,6 +112,7 @@ class AppShell extends StatefulWidget {
     this.welcomeStore,
     this.assistantController,
     this.editorSettingsStore,
+    this.exportCapabilityCache,
   });
 
   final CoreGateway gateway;
@@ -133,6 +136,10 @@ class AppShell extends StatefulWidget {
   /// Editor preferences, shared by the export dialog and the editor. Injectable
   /// so a test decides the mode instead of reading the user's real file.
   final EditorSettingsStore? editorSettingsStore;
+
+  /// Injected in tests so a build with no H.264 encoder can be described
+  /// without a real engine.
+  final ExportCapabilityCache? exportCapabilityCache;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -235,8 +242,12 @@ class _AppShellState extends State<AppShell> {
   bool _welcomeDismissed = false;
   Timer? _welcomeDeadline;
   late final WelcomeStore _welcomeStore = widget.welcomeStore ?? WelcomeStore();
+  HostFacts? _hostFacts;
+  ExportCapability? _capability;
   late final EditorSettingsStore _editorSettingsStore =
       widget.editorSettingsStore ?? EditorSettingsStore();
+  late final ExportCapabilityCache _exportCapability =
+      widget.exportCapabilityCache ?? ExportCapabilityCache();
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
@@ -340,6 +351,7 @@ class _AppShellState extends State<AppShell> {
     );
     unawaited(_loadRecentProjects());
     unawaited(_loadWelcome());
+    unawaited(_loadFirstRunCheck());
   }
 
   /// The last motion clip the Motion panel put on the timeline. Owned here so
@@ -777,6 +789,12 @@ class _AppShellState extends State<AppShell> {
       onOpenGuide: _openGuide,
       showWelcome: _welcomeLoaded && !_welcomeDismissed,
       onDismissWelcome: _dismissWelcome,
+      machineSummary: _hostFacts?.summary,
+      exportSummary: _capability?.summary,
+      machineWarning: _hostFacts != null && !_hostFacts!.hasExportHeadroom
+          ? 'Less than 4 GB free where exports are staged. Free some space '
+                'before a long export.'
+          : null,
     ),
     AppDestination.projects => ProjectsScreen(
       project: _activeProject,
@@ -965,6 +983,31 @@ class _AppShellState extends State<AppShell> {
   /// Reads the dismissal flag. A failure here shows the panel: a preference
   /// file that cannot be read must not hide the only explanation a first-run
   /// user gets.
+  /// The first-run panel states what this machine is and what it can write.
+  ///
+  /// It is measured once, off the frame that shows the panel, and a host that
+  /// refuses a command leaves the line out rather than showing a guess.
+  Future<void> _loadFirstRunCheck() async {
+    HostFacts? facts;
+    try {
+      Directory volume;
+      try {
+        volume = await getApplicationSupportDirectory();
+      } catch (_) {
+        volume = Directory.current;
+      }
+      facts = await readHostFacts(volume: volume);
+    } catch (_) {
+      facts = null;
+    }
+    final capability = await _exportCapability.load();
+    if (!mounted) return;
+    setState(() {
+      _hostFacts = facts;
+      _capability = capability;
+    });
+  }
+
   Future<void> _loadWelcome() async {
     var dismissed = false;
     // A read that stalls must not swallow the panel: a first-run user would be
@@ -3358,15 +3401,21 @@ class _AppShellState extends State<AppShell> {
       );
 
   Future<ExportOptions?> _chooseExportOptions() async {
-    final profiles = ExportProfile.available;
-    if (profiles.isEmpty) return null;
     // The preference is read at open time: the dialog is an occasional surface
     // and a second copy of the setting in the shell would be one more thing to
     // keep in sync.
     final settings = await _editorSettingsStore.load();
+    // What this build can write is measured by the engine, not assumed from the
+    // operating system: a package without an H.264 encoder must offer WebM as
+    // the default instead of starting an export that cannot run.
+    final capability = await _exportCapability.load();
     if (!mounted) return null;
     final simple = settings.simpleMode;
-    final platformDefault = ExportProfile.defaultForPlatform;
+    final profiles = ExportProfile.available
+        .where(capability.supports)
+        .toList(growable: false);
+    if (profiles.isEmpty) return null;
+    final platformDefault = capability.preferredProfile;
     // Advanced mode keeps "Match project" (no short side) as the default it has
     // always had; the guided intents carry their own resolution, and "Share or
     // upload" deliberately names 1080p so the first file is not a 4K surprise.
@@ -3450,6 +3499,17 @@ class _AppShellState extends State<AppShell> {
                     intent = null;
                   }),
                 ),
+                if (capability.caveat.isNotEmpty) ...[
+                  const SizedBox(height: OrSpacing.x2),
+                  Text(
+                    capability.caveat,
+                    key: const ValueKey('export-capability-caveat'),
+                    style: const TextStyle(
+                      color: OrColors.warning,
+                      fontSize: OrType.metadataSize,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: OrSpacing.x2),
                 Text(
                   shortSide == null

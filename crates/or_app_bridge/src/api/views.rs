@@ -437,6 +437,27 @@ pub struct ProjectTextFormattingView {
     pub offset_y_basis_points: i16,
     pub background: Option<ProjectTextBackgroundView>,
     pub opacity_basis_points: u16,
+    /// Line height as per-mille of the type size; 1320 is the historical value.
+    pub line_height_permille: u16,
+    /// Tracking in milli-points; 0 keeps the shipped spacing.
+    pub letter_spacing_milli_points: i32,
+}
+
+/// What the linked export engine carries on this host.
+///
+/// Presence comes from the encoder lookup the writer itself uses, so the dialog
+/// cannot claim a profile the writer would refuse.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExportCapabilityView {
+    /// The H.264 encoder this build picks first, by FFmpeg name.
+    pub h264_encoder: Option<String>,
+    /// True when that encoder reads GPU surfaces.
+    pub h264_hardware: bool,
+    pub mp4_available: bool,
+    pub webm_available: bool,
+    pub lossless_available: bool,
+    /// The profile a new export dialog should select, by wire name.
+    pub preferred_profile: String,
 }
 
 #[derive(Clone, Debug)]

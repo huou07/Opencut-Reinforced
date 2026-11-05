@@ -12,8 +12,9 @@ pub use decoder::{
     VideoDecodeSessionMetrics, VideoFrame,
 };
 pub use encoder::{
-    ExportEncodeError, FfmpegExportProfile, FfmpegExportWriter, FfmpegSoftwareExportWriter,
-    MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
+    ExportCapability, ExportEncodeError, FfmpegExportProfile, FfmpegExportWriter,
+    FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
+    describe_export_capability,
 };
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 

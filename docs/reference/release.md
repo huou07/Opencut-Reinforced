@@ -51,7 +51,16 @@ A real Windows host needs four things on PATH before the lane behaves like CI:
 the MSVC tools that carry `dumpbin.exe` (VS 2022 Build Tools), a Python 3 that
 `python3` does not shadow with the Store alias, `LIBCLANG_PATH` pointing at the
 folder with `libclang.dll` (msys64 clang64), and `FFMPEG_INSTALL_PREFIX` with
-`FFMPEG_DIR` pointing at the pinned FFmpeg install. A real Linux host needs the
+`FFMPEG_DIR` pointing at the pinned FFmpeg install.
+
+Run the lane with PowerShell 7 (`pwsh -File scripts/run_windows_lane.ps1 …`).
+Windows PowerShell 5.1 cannot load `System.Runtime.InteropServices.NativeLibrary`,
+so the staging step stops with a `TypeNotFound` error. When a Store alias owns
+`python3`/`python` on PATH, pass `OR_PYTHON=<real python.exe>`; the stager skips
+an alias that opens the Store instead of trusting the first interpreter it sees,
+and `--require=` is passed explicitly because the stager otherwise defaults to
+`whisper,provider` and refuses a package that deliberately skips the optional
+engine. A real Linux host needs the
 rustup toolchain and Flutter on PATH, and the UI preflight refuses to start
 below 6 GiB of free memory and disk.
 

@@ -433,7 +433,13 @@ class ProjectTextFormatting {
     this.offsetYBasisPoints = 0,
     this.background,
     this.opacityBasisPoints = 10000,
+    this.lineHeightPermille = defaultLineHeightPermille,
+    this.letterSpacingMilliPoints = 0,
   });
+
+  /// The historical block height; a project that never touches line height keeps
+  /// rendering exactly as it did before the setting existed.
+  static const defaultLineHeightPermille = 1320;
 
   static const defaults = ProjectTextFormatting(
     font: ProjectFontIdentity.bundledInter,
@@ -465,6 +471,8 @@ class ProjectTextFormatting {
     ProjectTextBackground? background,
     bool clearBackground = false,
     int? opacityBasisPoints,
+    int? lineHeightPermille,
+    int? letterSpacingMilliPoints,
   }) => ProjectTextFormatting(
     font: font ?? this.font,
     sizeMilliPoints: sizeMilliPoints ?? this.sizeMilliPoints,
@@ -476,6 +484,9 @@ class ProjectTextFormatting {
     offsetYBasisPoints: offsetYBasisPoints ?? this.offsetYBasisPoints,
     background: clearBackground ? null : (background ?? this.background),
     opacityBasisPoints: opacityBasisPoints ?? this.opacityBasisPoints,
+    lineHeightPermille: lineHeightPermille ?? this.lineHeightPermille,
+    letterSpacingMilliPoints:
+        letterSpacingMilliPoints ?? this.letterSpacingMilliPoints,
   );
 
   final ProjectFontIdentity font;
@@ -497,6 +508,12 @@ class ProjectTextFormatting {
 
   /// Whole-block opacity; 10000 is fully opaque.
   final int opacityBasisPoints;
+
+  /// Line height as per-mille of the type size; 1320 is the historical value.
+  final int lineHeightPermille;
+
+  /// Tracking in milli-points; 0 keeps the shipped spacing.
+  final int letterSpacingMilliPoints;
 }
 
 class ProjectTimelineTextContent {

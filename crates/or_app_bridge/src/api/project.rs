@@ -1882,6 +1882,24 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     }
 }
 
+/// Describes the export profiles this build actually carries.
+pub fn export_capabilities() -> ExportCapabilityView {
+    let capability = or_media::describe_export_capability();
+    let preferred_profile = match capability.preferred_profile() {
+        or_media::FfmpegExportProfile::Mp4H264Aac => "mp4_h264_aac",
+        or_media::FfmpegExportProfile::WebmVp9Opus => "webm_vp9_opus",
+        or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le => "matroska_ffv1_pcm_s16le",
+    };
+    ExportCapabilityView {
+        h264_encoder: capability.h264_encoder,
+        h264_hardware: capability.h264_hardware,
+        mp4_available: capability.mp4_available,
+        webm_available: capability.webm_available,
+        lossless_available: capability.lossless_available,
+        preferred_profile: preferred_profile.to_owned(),
+    }
+}
+
 fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView {
     ProjectTextFormattingView {
         font: match formatting.font {
@@ -1925,6 +1943,8 @@ fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView
                 padding_milli_points: background.padding_milli_points,
             }),
         opacity_basis_points: formatting.opacity_basis_points,
+        line_height_permille: formatting.line_height_permille,
+        letter_spacing_milli_points: formatting.letter_spacing_milli_points,
     }
 }
 
@@ -1952,12 +1972,11 @@ fn text_formatting_from_view(view: ProjectTextFormattingView) -> TextFormatting 
             blue: view.color.blue,
             alpha: view.color.alpha,
         },
-        // Advanced typography is not on the bridge surface yet: the view is a
-        // flutter_rust_bridge mirror, and widening it would require regenerating both
-        // sides. The dialog sets neither value, so a project opened here keeps the
-        // historical defaults; MotionScene carries its own copy of these fields.
-        line_height_permille: or_core::DEFAULT_TEXT_LINE_HEIGHT_PERMILLE,
-        letter_spacing_milli_points: 0,
+        // The dialog now edits these two metrics; the renderer already honours
+        // them through the shared `TextFormatting`, so this is a mirror, not a
+        // second typography model.
+        line_height_permille: view.line_height_permille,
+        letter_spacing_milli_points: view.letter_spacing_milli_points,
         anchor: match view.anchor {
             TextVerticalAnchorView::Top => or_core::TextVerticalAnchor::Top,
             TextVerticalAnchorView::Center => or_core::TextVerticalAnchor::Center,

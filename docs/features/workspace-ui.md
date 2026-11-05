@@ -30,6 +30,15 @@ Library, Read Guide) — no tour, no overlay, no modal. Dismissal is stored in
 `welcome.json` beside the other preferences, and a preference file that cannot
 be read shows the panel rather than hiding the only explanation a beginner gets.
 
+The same panel also states what the machine is, measured once off the first
+frame: the platform and build, processors, memory, free space on the volume that
+will hold an export, and the export formats the linked encoder opens. Those two
+lines come from `readHostFacts` and `describe_export_capability` — the same
+measurements Settings shows — so the first sentence a beginner reads about
+their computer is the one the editor will act on. When the disk is short of the
+4 GB staging headroom the line becomes a warning that says why and what to do.
+Until the measurement lands the lines are absent, never guessed.
+
 ## Library
 
 `AppDestination.library` is the project-independent catalogue, so a template or
@@ -48,7 +57,11 @@ a sound can be browsed before a project exists. Four tabs:
 - **Guide** — the in-app manual: start, import, edit, text, audio, export,
   shortcuts, files and troubleshooting. Shortcut rows render `Cmd` on macOS and
   `Ctrl` elsewhere from the platform seam, and the list matches the shell's real
-  shortcut map.
+  shortcut map. It ends with **Bundled content and licences**: every bundled font
+  and every generated asset, with the licence as a person reads it, what it
+  permits and where it came from (`library/content_credits.dart` is the one
+  source). The Text tab states the font licence beside the looks and the Sound
+  tab states that the effects are synthesised rather than recorded.
 
 An action that needs a project is visibly unavailable with its reason, never a
 silent no-op: adding a text look or a sound without an open project states what
@@ -110,6 +123,18 @@ is missing.
   project is open, and checks the public GitHub release. A newer DMG downloads to
   Downloads and opens for the user to drag into Applications; the app never
   replaces itself silently. Optional model and harness downloads stay explicit.
+  The section opens with two measured panels, not prose: **This machine**
+  (platform, processors, memory, free space on the volume that will hold an
+  export, with a warning naming the staging headroom when the disk is short) and
+  **Export formats** (MP4/WebM/lossless as Ready or Unavailable, naming the
+  encoder this build would use). Both read the engine and the host; neither
+  keeps its own list of what "should" work.
+  Optional components follow one lifecycle: **install** downloads a pinned asset
+  after showing its source, version, licence, size and checksum; **repair**
+  reinstalls over a half-installed folder; **remove** deletes only the files the
+  setup recorded in `<runtime>/.or-speech-install.json` and leaves anything the
+  user put there by hand, which is why a hand-copied runtime refuses removal
+  instead of guessing.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

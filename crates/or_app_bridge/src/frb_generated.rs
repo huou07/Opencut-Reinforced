@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1971631043;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1433193701;
 
 // Section: executor
 
@@ -4935,6 +4935,38 @@ fn wire__crate__api__project__discard_recovery_impl(
         },
     )
 }
+fn wire__crate__api__project__export_capabilities_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "export_capabilities",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(crate::api::project::export_capabilities())?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__health_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5909,6 +5941,26 @@ impl SseDecode for crate::api::views::CaptionFileFormatView {
             0 => crate::api::views::CaptionFileFormatView::Srt,
             1 => crate::api::views::CaptionFileFormatView::WebVtt,
             _ => unreachable!("Invalid variant for CaptionFileFormatView: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::views::ExportCapabilityView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_h264Encoder = <Option<String>>::sse_decode(deserializer);
+        let mut var_h264Hardware = <bool>::sse_decode(deserializer);
+        let mut var_mp4Available = <bool>::sse_decode(deserializer);
+        let mut var_webmAvailable = <bool>::sse_decode(deserializer);
+        let mut var_losslessAvailable = <bool>::sse_decode(deserializer);
+        let mut var_preferredProfile = <String>::sse_decode(deserializer);
+        return crate::api::views::ExportCapabilityView {
+            h264_encoder: var_h264Encoder,
+            h264_hardware: var_h264Hardware,
+            mp4_available: var_mp4Available,
+            webm_available: var_webmAvailable,
+            lossless_available: var_losslessAvailable,
+            preferred_profile: var_preferredProfile,
         };
     }
 }
@@ -7014,6 +7066,8 @@ impl SseDecode for crate::api::views::ProjectTextFormattingView {
         let mut var_background =
             <Option<crate::api::views::ProjectTextBackgroundView>>::sse_decode(deserializer);
         let mut var_opacityBasisPoints = <u16>::sse_decode(deserializer);
+        let mut var_lineHeightPermille = <u16>::sse_decode(deserializer);
+        let mut var_letterSpacingMilliPoints = <i32>::sse_decode(deserializer);
         return crate::api::views::ProjectTextFormattingView {
             font: var_font,
             size_milli_points: var_sizeMilliPoints,
@@ -7025,6 +7079,8 @@ impl SseDecode for crate::api::views::ProjectTextFormattingView {
             offset_y_basis_points: var_offsetYBasisPoints,
             background: var_background,
             opacity_basis_points: var_opacityBasisPoints,
+            line_height_permille: var_lineHeightPermille,
+            letter_spacing_milli_points: var_letterSpacingMilliPoints,
         };
     }
 }
@@ -8194,114 +8250,117 @@ fn pde_ffi_dispatcher_primary_impl(
         84 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
         85 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
         86 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__motion__materialize_motion_scene_impl(
+        87 => {
+            wire__crate__api__project__export_capabilities_impl(port, ptr, rust_vec_len, data_len)
+        }
+        88 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__motion__materialize_motion_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
+        91 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__motion_library__motion_asset_import_image_impl(
+        92 => wire__crate__api__motion_library__motion_asset_import_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__motion_library__motion_asset_load_impl(
+        93 => wire__crate__api__motion_library__motion_asset_load_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__motion_library__motion_asset_materialize_impl(
+        94 => wire__crate__api__motion_library__motion_asset_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__motion_library__motion_asset_remove_impl(
+        95 => wire__crate__api__motion_library__motion_asset_remove_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__motion_library__motion_asset_save_impl(
+        96 => wire__crate__api__motion_library__motion_asset_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__motion_library__motion_asset_scene_impl(
+        97 => wire__crate__api__motion_library__motion_asset_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => {
+        98 => {
             wire__crate__api__motion_library__motion_library_impl(port, ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__api__motion_library__motion_scene_append_impl(
+        99 => wire__crate__api__motion_library__motion_scene_append_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__api__motion_library__motion_scene_compose_impl(
+        100 => wire__crate__api__motion_library__motion_scene_compose_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__api__motion_library__motion_scene_edit_impl(
+        101 => wire__crate__api__motion_library__motion_scene_edit_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
+        102 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__api__motion_library__motion_scene_materialize_impl(
+        103 => wire__crate__api__motion_library__motion_scene_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__motion_library__motion_scene_new_impl(
+        104 => wire__crate__api__motion_library__motion_scene_new_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__motion_library__motion_scene_preview_impl(
+        105 => wire__crate__api__motion_library__motion_scene_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__motion_library__motion_scene_read_impl(
+        106 => wire__crate__api__motion_library__motion_scene_read_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__motion_library__motion_scene_save_impl(
+        107 => wire__crate__api__motion_library__motion_scene_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -8386,6 +8445,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::views::CaptionFileFormatView>
     for crate::api::views::CaptionFileFormatView
 {
     fn into_into_dart(self) -> crate::api::views::CaptionFileFormatView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::views::ExportCapabilityView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.h264_encoder.into_into_dart().into_dart(),
+            self.h264_hardware.into_into_dart().into_dart(),
+            self.mp4_available.into_into_dart().into_dart(),
+            self.webm_available.into_into_dart().into_dart(),
+            self.lossless_available.into_into_dart().into_dart(),
+            self.preferred_profile.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::views::ExportCapabilityView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::views::ExportCapabilityView>
+    for crate::api::views::ExportCapabilityView
+{
+    fn into_into_dart(self) -> crate::api::views::ExportCapabilityView {
         self
     }
 }
@@ -9236,6 +9320,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectTextFormattingV
             self.offset_y_basis_points.into_into_dart().into_dart(),
             self.background.into_into_dart().into_dart(),
             self.opacity_basis_points.into_into_dart().into_dart(),
+            self.line_height_permille.into_into_dart().into_dart(),
+            self.letter_spacing_milli_points
+                .into_into_dart()
+                .into_dart(),
         ]
         .into_dart()
     }
@@ -10119,6 +10207,18 @@ impl SseEncode for crate::api::views::CaptionFileFormatView {
     }
 }
 
+impl SseEncode for crate::api::views::ExportCapabilityView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.h264_encoder, serializer);
+        <bool>::sse_encode(self.h264_hardware, serializer);
+        <bool>::sse_encode(self.mp4_available, serializer);
+        <bool>::sse_encode(self.webm_available, serializer);
+        <bool>::sse_encode(self.lossless_available, serializer);
+        <String>::sse_encode(self.preferred_profile, serializer);
+    }
+}
+
 impl SseEncode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10928,6 +11028,8 @@ impl SseEncode for crate::api::views::ProjectTextFormattingView {
             serializer,
         );
         <u16>::sse_encode(self.opacity_basis_points, serializer);
+        <u16>::sse_encode(self.line_height_permille, serializer);
+        <i32>::sse_encode(self.letter_spacing_milli_points, serializer);
     }
 }
 

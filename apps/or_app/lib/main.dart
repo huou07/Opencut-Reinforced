@@ -12,6 +12,7 @@ import 'project/recent_projects.dart';
 import 'project/rust_project_gateway.dart';
 import 'rust_core_gateway.dart';
 import 'production/editor_settings.dart';
+import 'project/export_capability.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
@@ -97,6 +98,7 @@ class OrApp extends StatelessWidget {
     this.recentProjectStore,
     this.audioCleanupDirectory,
     this.editorSettingsStore,
+    this.exportCapabilityCache,
   });
 
   final CoreGateway gateway;
@@ -110,6 +112,10 @@ class OrApp extends StatelessWidget {
   /// Where editor preferences live. Injectable so a test controls which mode
   /// the export dialog and the editor open in.
   final EditorSettingsStore? editorSettingsStore;
+
+  /// What this build can export. Injectable so a test can describe a package
+  /// with no H.264 encoder without a real engine.
+  final ExportCapabilityCache? exportCapabilityCache;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +132,7 @@ class OrApp extends StatelessWidget {
             recentProjectStore ?? PersistentRecentProjectStore(),
         audioCleanupDirectory: audioCleanupDirectory,
         editorSettingsStore: editorSettingsStore,
+        exportCapabilityCache: exportCapabilityCache,
       ),
     );
   }

@@ -17,6 +17,7 @@ import 'package:or_app/design/or_spacing.dart';
 import 'package:or_app/design/or_theme.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/production/editor_settings.dart';
+import 'package:or_app/project/export_capability.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
@@ -2281,6 +2282,47 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the text dialog sets line height and tracking', (tester) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/timeline-text-metrics.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Text metrics');
+
+    await _tapTimelineCreate(tester, 'Add text track');
+    await tester.pumpAndSettle();
+    await _tapTimelineCreate(tester, 'Add title');
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('timeline-text-content')),
+      'Airy title',
+    );
+    final lineHeightSlider = find.byKey(
+      const ValueKey('timeline-text-line-height'),
+    );
+    await tester.ensureVisible(lineHeightSlider);
+    await tester.pumpAndSettle();
+    await tester.drag(lineHeightSlider, const Offset(140, 0));
+    await tester.pumpAndSettle();
+    final trackingSlider = find.byKey(const ValueKey('timeline-text-tracking'));
+    await tester.ensureVisible(trackingSlider);
+    await tester.pumpAndSettle();
+    await tester.drag(trackingSlider, const Offset(120, 0));
+    await tester.pumpAndSettle();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('timeline-save-text')));
+    await tester.pumpAndSettle();
+
+    final title = gateway.lastSession!.clips['track-1']!.single;
+    expect(
+      title.formatting!.lineHeightPermille,
+      greaterThan(ProjectTextFormatting.defaultLineHeightPermille),
+    );
+    expect(title.formatting!.letterSpacingMilliPoints, greaterThan(0));
+    expect(title.formatting!.lineHeightPermille, lessThanOrEqualTo(3000));
+  });
+
   testWidgets('titles and manual captions can be added and edited', (
     tester,
   ) async {
@@ -2322,6 +2364,11 @@ void main() {
     expect(title.formatting?.anchor, ProjectTextVerticalAnchor.center);
     expect(title.formatting?.opacityBasisPoints, 10000);
     expect(title.formatting?.background, isNull);
+    expect(
+      title.formatting?.lineHeightPermille,
+      ProjectTextFormatting.defaultLineHeightPermille,
+    );
+    expect(title.formatting?.letterSpacingMilliPoints, 0);
     expect(gateway.insertTimelineTextClipCalls, 1);
 
     await _openAdvancedClipActions(
@@ -3319,6 +3366,45 @@ void main() {
     await tester.pump();
     expect(gateway.exportCancelCalls, 1);
     expect(find.text('Export cancelled'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a build without an H.264 encoder exports WebM and says why', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/no-h264.orproj'
+      ..exportPath = '/tmp/no-h264.webm';
+    await _mount(
+      tester,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+      exportCapabilityCache: ExportCapabilityCache(
+        measured: const ExportCapability(
+          webmAvailable: true,
+          losslessAvailable: true,
+          preferredProfile: ExportProfile.webmVp9Opus,
+        ),
+      ),
+    );
+    await _createProject(tester, 'No H264 project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    expect(find.text('Export video'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('export-capability-caveat')),
+      findsOneWidget,
+    );
+    // The format the engine cannot write is not offered at all.
+    expect(find.text(ExportProfile.mp4H264Aac.label), findsNothing);
+    expect(find.text(ExportProfile.webmVp9Opus.label), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(picker.lastExportProfile, ExportProfile.webmVp9Opus);
     expect(tester.takeException(), isNull);
   });
 
@@ -7466,6 +7552,7 @@ Future<void> _mount(
   RecentProjectStore? recentProjectStore,
   Future<Directory> Function()? audioCleanupDirectory,
   EditorSettingsStore? editorSettingsStore,
+  ExportCapabilityCache? exportCapabilityCache,
 }) async {
   await tester.pumpWidget(
     OrApp(
@@ -7475,6 +7562,7 @@ Future<void> _mount(
       recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
       audioCleanupDirectory: audioCleanupDirectory,
       editorSettingsStore: editorSettingsStore,
+      exportCapabilityCache: exportCapabilityCache,
     ),
   );
   await tester.pumpAndSettle();

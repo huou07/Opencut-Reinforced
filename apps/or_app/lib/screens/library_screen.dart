@@ -4,6 +4,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../library/project_templates.dart';
+import '../library/content_credits.dart';
 import '../library/sound_library.dart';
 import '../library/text_presets.dart';
 import '../library/usage_guide.dart';
@@ -335,6 +336,13 @@ class _TextPresetList extends StatelessWidget {
           onOpenEditor: projectOpen ? onOpenEditor : null,
         ),
         const SizedBox(height: OrSpacing.x4),
+        Text(
+          'Every look uses Inter or Be Vietnam Pro, both bundled under the SIL '
+          'Open Font License 1.1. The Guide tab lists each licence in full.',
+          key: const ValueKey('library-text-font-licence'),
+          style: OrType.metadata.copyWith(color: OrColors.textMuted),
+        ),
+        const SizedBox(height: OrSpacing.x4),
         for (final preset in textPresets)
           Padding(
             padding: const EdgeInsets.only(bottom: OrSpacing.x3),
@@ -466,6 +474,13 @@ class _SoundList extends StatelessWidget {
               'Open a project to add a sound. Generation needs no network and '
               'no download.',
           onOpenEditor: projectOpen ? onOpenEditor : null,
+        ),
+        const SizedBox(height: OrSpacing.x3),
+        Text(
+          'These effects are synthesised by the app, not recorded: no '
+          'third-party audio is bundled, so nothing here needs attribution.',
+          key: const ValueKey('library-sound-licence'),
+          style: OrType.metadata.copyWith(color: OrColors.textMuted),
         ),
         const SizedBox(height: OrSpacing.x4),
         OrPanel(
@@ -625,6 +640,7 @@ class _GuideList extends StatelessWidget {
               ),
             ),
           ),
+        const ContentCreditsPanel(),
       ],
     );
   }
