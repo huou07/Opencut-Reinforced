@@ -298,7 +298,8 @@ def run_macos(payload: dict, report_dir: Path) -> int:
     completed = subprocess.run(command, cwd=str(APP), env=environment,
                                capture_output=True, text=True,
                                timeout=MACOS_BUDGET_SECONDS)
-    log = f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n"
+    log = (f"$ {' '.join(command)}\nexit {completed.returncode}\n"
+           f"{completed.stdout}\n{completed.stderr}\n")
     # The host tooling intermittently refuses to foreground the freshly built
     # app ("open returned 1") and the run dies before the first step, which says
     # nothing about the app or the scenario. Retry that launch failure once with a
@@ -324,8 +325,11 @@ def run_macos(payload: dict, report_dir: Path) -> int:
         # non-zero for that reason; anything else keeps the failure.
         transcript = read_transcript(artifacts, payload["name"])
         steps = transcript.get("steps", [])
+        # The host tool exits with 1 or 2 for this, depending on how the window
+        # server refused the request, so the code alone cannot separate a tooling
+        # artefact from a real failure; the complete transcript can.
         teardown_only = (
-            completed.returncode == 1
+            completed.returncode != 0
             and steps
             and all(step.get("status") == "ok" for step in steps)
             and "Failed to foreground app" in (completed.stderr + completed.stdout)

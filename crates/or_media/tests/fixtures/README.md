@@ -25,6 +25,20 @@ run on any machine instead of a hand-made `/tmp/long720.mp4`, and it has
 1280x720 H.264 at 24 fps with stereo AAC at 48 kHz. Its SHA-256 is
 `4aead26118183d24eeae903c6bb12480df2e5bcfa16b94d645434f33c48c5aef`.
 
+`or-fallback-tiny.mov` is generated the same way, for the import scenario that
+exercises a QuickTime container: `ffmpeg -f lavfi -i
+testsrc2=size=320x180:rate=24:duration=1 -f lavfi -i
+sine=frequency=440:sample_rate=48000:duration=1 -c:v libx264 -preset veryfast
+-crf 32 -pix_fmt yuv420p -c:a aac -b:a 64k`, with SHA-256
+`1affb48caf7a0248679a19726b5beb9c1f235c1935dcdd009cfe41480298ad62`.
+
+`or-av1-refused.mkv` is a one-second AV1 sample (`ffmpeg -f lavfi -i
+testsrc2=size=320x180:rate=24:duration=1 -c:v libsvtav1 -preset 12 -crf 50`,
+SHA-256 `d7c5c9a52074c18880d2cf6539f5f600a266771ede3d6bc124fe07992a13e089`). It
+exists to prove the import gate refuses a codec this build cannot decode instead
+of admitting a clip that would not play; on a host that can decode AV1 the
+scenario's expectation would need revisiting.
+
 The packaged desktop product journey fetches the same 30-second source MP4
 from the immutable upstream revision above and verifies its size
 (`22718509` bytes) and SHA-256

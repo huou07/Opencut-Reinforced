@@ -238,3 +238,25 @@ installer change is `scripts/windows_installer.iss` `PrepareToInstall` plus
 `RestartApplications=no`; the staging change is the release build of `or_cli` and
 `or_whisper_provider` in `scripts/run_windows_lane.ps1` and the version guard in
 `scripts/stage_windows_bundle.ps1`.
+
+## The performance budget on three hosts, 2026-11-06
+
+`scripts/bench_quality.py` reached a verdict on macOS, Debian and Windows from
+the same commit for the first time. Getting there exposed four harness defects
+and one lane that was measuring the wrong thing; the details are in
+`docs/reference/quality.md` under "Performance budget on all three hosts".
+
+| Evidence | Result |
+| --- | --- |
+| macOS, branch `4ee97f0` | `PERFORMANCE_BUDGET=PASS`; `queue-priority` ratio 1.08 with 16 jobs on 4 workers, `motion-rasterize-frame` p95 66.6 ms, `render-frame-time` p95 1.71 ms on Metal |
+| Debian 13, same commit | `PERFORMANCE_BUDGET=PASS`; ratio 1.27, `motion-rasterize-frame` p95 60.5 ms, `command.import` p95 40.7 ms |
+| Windows 11, same commit | every row has a verdict: ratio 1.39 with the re-modelled lane against 29.69-33.77 before it, `render-frame-time` p95 1.87 ms on Intel Graphics/Vulkan |
+| The lane was measuring an operating system | it spun two threads per logical core while the product pool is four workers; `or_core::artifact_worker_count` now owns the policy and the lane saturates that pool |
+| A clean machine could not run `export-long` | the scenario imported `/tmp/long720.mp4`, which nothing generated; it now imports the checked-in generated fixture and the run measures `export-720p-5s` p50 3436 ms |
+| A stale label kept `track-reorder` red | the track lane says `active`, not `enabled`; the scenario now matches the wording the app produces |
+| Windows single-threaded raster is a clock class, not a regression | firmware `MaxClockSpeed 1400` MHz with no boost, PNG encode 400 ms against 105 ms on the M5; the row carries a Windows baseline (p95 317 ms) and a 450 ms Windows ceiling, Debian stays 250 ms |
+| Windows save cost is host class too | 256 KiB flush-and-rename probe on the same volume: p50 4.0 ms, p95 20.7 ms, on top of a 1400 MHz CPU; the row records a Windows baseline (p95 102 ms) and a 160 ms ceiling, Debian stays 80 ms |
+| `command.*` on Windows | verified once a general-purpose FFmpeg was installed: `command.import` p95 36.2/33.9 ms, `caption_import` 37.0 ms, `audio_cleanup` 239.6 ms, all inside their budgets |
+
+The worker-priority experiment that preceded the lane fix is not in the tree: it
+measured 33.77 against 29.69 before it, so it was dropped rather than shipped.

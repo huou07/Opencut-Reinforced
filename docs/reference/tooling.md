@@ -16,7 +16,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/or_ui.py` | drive the real app by semantics and record a transcript |
 | `scripts/or_tree_outline.py` | one line per semantics node with rect and actions |
 | `scripts/packaged_drive.py` | CoreGraphics mouse/keyboard driving of the packaged app |
-| `scripts/bench_quality.py` | local performance budget rows |
+| `scripts/bench_quality.py` | local performance budget rows on macOS, Linux and Windows; on Windows the FFmpeg prefix `bin` must be reachable (the tool prepends it) or the export lane dies with `STATUS_DLL_NOT_FOUND`, and `command.*` stays unverified unless a helper with lavfi is on `PATH` — rows that cannot be measured say so instead of reporting a number |
 | `scripts/probe_media_matrix.py` | measure the media matrix: build one fixture per container/codec, probe and decode it with the shipped FFmpeg, apply the Rust import profile, and emit a table or JSON; codec truth is read out of `crates/or_core/src/media_probe.rs` so the probe cannot drift |
 | `scripts/bench_export.py` | portable export/render benchmark: `decode.<profile>`, `render.<profile>` and `full.<profile>` rows for mp4/webm/mkv at one picture size, driven through the bridge test `export_media_benchmark`; resolves the FFmpeg prefix from `FFMPEG_DIR`, the cargo config, or the known prefixes, runs the test binary directly with the library path it needs, and exits 3 when a row cannot be measured |
 | `scripts/build_macos_release.sh` | build/package/codesign the macOS bundle with bridge hash check; a packaged local bundle also carries the `or` CLI the assistant edits through |

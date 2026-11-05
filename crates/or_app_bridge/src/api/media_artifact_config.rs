@@ -14,6 +14,9 @@ pub(crate) fn media_artifact_worker_count() -> usize {
     or_core::artifact_worker_count()
 }
 
+// Only the tests pick a thread count by hand; the app reads the host's, so
+// this wrapper exists for the test modules alone.
+#[cfg(test)]
 pub(crate) fn media_artifact_worker_count_for(parallelism: usize) -> usize {
     or_core::artifact_worker_count_for(parallelism)
 }
