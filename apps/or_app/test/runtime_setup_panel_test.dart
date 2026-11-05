@@ -35,6 +35,7 @@ class _FakeService extends ResourceCenterService {
   @override
   Future<Directory> installSpeechRuntime({
     void Function(int received, int total)? onProgress,
+    SpeechRuntimeAsset? asset,
   }) async {
     installed++;
     onProgress?.call(1024, 2048);

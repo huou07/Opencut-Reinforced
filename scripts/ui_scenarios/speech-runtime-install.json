@@ -1,0 +1,86 @@
+{
+  "name": "speech-runtime-install",
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "description": "On a host whose package does not ship the speech engine (Linux and Windows packages), Settings -> Resources downloads the pinned whisper.cpp release over HTTPS, checks its published size and SHA-256, unpacks it, records every installed file, and then removes exactly those files again. macOS is excluded because the engine is inside the application bundle there, so no Install control is offered.",
+  "steps": [
+    {
+      "op": "tap",
+      "key": "nav-settings"
+    },
+    {
+      "op": "wait",
+      "text": "Settings"
+    },
+    {
+      "op": "tap",
+      "key": "settings-section-resources"
+    },
+    {
+      "op": "wait",
+      "text": "Resources & updates"
+    },
+    {
+      "op": "expect",
+      "key": "tools-speech-install"
+    },
+    {
+      "op": "shot",
+      "name": "speech-before-install"
+    },
+    {
+      "op": "tap",
+      "key": "tools-speech-install"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Remove copy",
+      "budget_ms": 240000
+    },
+    {
+      "op": "expect",
+      "key": "tools-speech-remove"
+    },
+    {
+      "op": "shot",
+      "name": "speech-installed"
+    },
+    {
+      "op": "tap",
+      "key": "tools-speech-remove"
+    },
+    {
+      "op": "wait",
+      "text": "Remove the speech engine?",
+      "budget_ms": 10000
+    },
+    {
+      "op": "tap",
+      "key": "tools-speech-remove-confirm"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Removed [0-9]+ files",
+      "budget_ms": 30000
+    },
+    {
+      "op": "wait_label_absent",
+      "label_regex": "Remove copy",
+      "budget_ms": 30000
+    },
+    {
+      "op": "expect",
+      "key": "tools-speech-install"
+    },
+    {
+      "op": "shot",
+      "name": "speech-removed"
+    },
+    {
+      "op": "tree",
+      "name": "speech-removed"
+    }
+  ]
+}
