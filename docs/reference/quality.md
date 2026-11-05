@@ -14,6 +14,7 @@ MacBook Air; older Linux/hosted numbers are historical, not a current baseline.
 | Correctness (source) | hygiene, docs, claims, core dependency boundary | `bash scripts/check-repo.sh` | verify |
 | Performance | bounded local budget rows (process, command, project file, render frame, queue priority) on the named host class | `python3 scripts/bench_quality.py` | acceptance |
 | Reliability | save/reopen, undo/redo, autosave and recovery in named journeys | widget + UI journeys | acceptance / hosted |
+| Preview/export parity | the viewer's RGBA and the encoder's NV12 decode to the same picture (PSNR ≥ 30 dB, ink centroid within 0.5 px, black stays black) | `cargo test -p or_render --test preview_export_parity` — 62.60 dB on this host | local Rust lane |
 | Accessibility / UX | 4.5:1 contrast, ≥11 px type, 24/44 px hit areas, keyboard alternatives | headless guards in [design/ux-invariants.md](../design/ux-invariants.md) | widget tests |
 | Security | no secrets tracked; dependency boundary enforced | `gitleaks detect`, `check_or_core_deps.py` | acceptance / hosted |
 | Compatibility | macOS/Windows/Linux/Android hosted jobs | CI matrix | hosted |

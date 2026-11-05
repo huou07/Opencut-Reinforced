@@ -66,6 +66,13 @@ the selected profile's muxer and encoders.
 - The H.264 profile is fed NV12 planes: the composited frame is
   converted on the GPU and read back as two planes, so no CPU colour conversion
   runs per frame. The lossless and VP9 profiles keep the packed RGBA path.
+- The two readback layouts are held together by a test rather than by
+  inspection: `crates/or_render/tests/preview_export_parity.rs` renders one
+  snapshot twice, as RGBA for the viewer and as NV12 for the hardware encoder,
+  decodes the planes back to RGB and compares pictures (PSNR, ink centroid, black
+  level). Measured on this host: **62.60 dB** at 320×180; mutating the expected
+  limited-range black level to full range drops it to 23.96 dB, which is the
+  failure the lane exists to catch.
 - A clip that covers the whole canvas with no effect, transition, transform,
   crop or text on top is decoded straight to NV12 at the output size, so that
   frame never becomes an RGBA texture or a readback: the decoder runs one
