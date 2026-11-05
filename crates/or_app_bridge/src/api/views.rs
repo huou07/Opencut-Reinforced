@@ -443,6 +443,23 @@ pub struct ProjectTextFormattingView {
     pub letter_spacing_milli_points: i32,
 }
 
+/// What the linked export engine carries on this host.
+///
+/// Presence comes from the encoder lookup the writer itself uses, so the dialog
+/// cannot claim a profile the writer would refuse.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExportCapabilityView {
+    /// The H.264 encoder this build picks first, by FFmpeg name.
+    pub h264_encoder: Option<String>,
+    /// True when that encoder reads GPU surfaces.
+    pub h264_hardware: bool,
+    pub mp4_available: bool,
+    pub webm_available: bool,
+    pub lossless_available: bool,
+    /// The profile a new export dialog should select, by wire name.
+    pub preferred_profile: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct ProjectTimelineClipView {
     pub clip_id: String,

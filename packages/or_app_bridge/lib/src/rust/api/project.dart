@@ -30,6 +30,10 @@ Future<RecoveryActionResult> applyRecovery({required String path}) =>
 Future<RecoveryActionResult> discardRecovery({required String path}) =>
     RustLib.instance.api.crateApiProjectDiscardRecovery(path: path);
 
+/// Describes the export profiles this build actually carries.
+Future<ExportCapabilityView> exportCapabilities() =>
+    RustLib.instance.api.crateApiProjectExportCapabilities();
+
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>>
 abstract class ProjectHostHandle implements RustOpaqueInterface {
   Future<ProjectActionResult> addTimelineMarker({

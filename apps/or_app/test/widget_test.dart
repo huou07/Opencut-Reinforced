@@ -17,6 +17,7 @@ import 'package:or_app/design/or_spacing.dart';
 import 'package:or_app/design/or_theme.dart';
 import 'package:or_app/main.dart';
 import 'package:or_app/production/editor_settings.dart';
+import 'package:or_app/project/export_capability.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
@@ -3365,6 +3366,45 @@ void main() {
     await tester.pump();
     expect(gateway.exportCancelCalls, 1);
     expect(find.text('Export cancelled'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a build without an H.264 encoder exports WebM and says why', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/no-h264.orproj'
+      ..exportPath = '/tmp/no-h264.webm';
+    await _mount(
+      tester,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+      exportCapabilityCache: ExportCapabilityCache(
+        measured: const ExportCapability(
+          webmAvailable: true,
+          losslessAvailable: true,
+          preferredProfile: ExportProfile.webmVp9Opus,
+        ),
+      ),
+    );
+    await _createProject(tester, 'No H264 project');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pump();
+    expect(find.text('Export video'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('export-capability-caveat')),
+      findsOneWidget,
+    );
+    // The format the engine cannot write is not offered at all.
+    expect(find.text(ExportProfile.mp4H264Aac.label), findsNothing);
+    expect(find.text(ExportProfile.webmVp9Opus.label), findsOneWidget);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(picker.lastExportProfile, ExportProfile.webmVp9Opus);
     expect(tester.takeException(), isNull);
   });
 
@@ -7512,6 +7552,7 @@ Future<void> _mount(
   RecentProjectStore? recentProjectStore,
   Future<Directory> Function()? audioCleanupDirectory,
   EditorSettingsStore? editorSettingsStore,
+  ExportCapabilityCache? exportCapabilityCache,
 }) async {
   await tester.pumpWidget(
     OrApp(
@@ -7521,6 +7562,7 @@ Future<void> _mount(
       recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
       audioCleanupDirectory: audioCleanupDirectory,
       editorSettingsStore: editorSettingsStore,
+      exportCapabilityCache: exportCapabilityCache,
     ),
   );
   await tester.pumpAndSettle();

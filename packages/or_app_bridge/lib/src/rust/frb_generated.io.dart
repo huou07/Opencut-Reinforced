@@ -138,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptionFileFormatView dco_decode_caption_file_format_view(dynamic raw);
 
   @protected
+  ExportCapabilityView dco_decode_export_capability_view(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -643,6 +646,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CaptionFileFormatView sse_decode_caption_file_format_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ExportCapabilityView sse_decode_export_capability_view(
     SseDeserializer deserializer,
   );
 
@@ -1257,6 +1265,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_caption_file_format_view(
     CaptionFileFormatView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_export_capability_view(
+    ExportCapabilityView self,
     SseSerializer serializer,
   );
 

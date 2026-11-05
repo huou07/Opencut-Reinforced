@@ -4,7 +4,7 @@
     "width": 1280,
     "height": 800
   },
-  "description": "Setup is a GUI surface: Settings owns a Resources section that reports each bundled component of this installation, keeps optional speech models and the assistant harness behind explicit actions, and exposes the external-tools controls. The journey proves the section is reachable and that no component is installed or downloaded by opening it.",
+  "description": "Setup is a GUI surface: Settings owns a Resources section that reports each bundled component of this installation, names the export formats the linked encoder can actually write, keeps optional speech models and the assistant harness behind explicit actions, and exposes the external-tools controls. The journey proves the section is reachable and that no component is installed or downloaded by opening it.",
   "steps": [
     {
       "op": "shot",
@@ -29,6 +29,14 @@
     {
       "op": "expect",
       "key": "settings-external-tools"
+    },
+    {
+      "op": "expect",
+      "key": "settings-export-formats"
+    },
+    {
+      "op": "expect",
+      "key": "export-capability-summary"
     },
     {
       "op": "shot",

@@ -62,6 +62,13 @@ a product improvement with recorded evidence, not a library addition:
     tests and the export writer run against the pinned FFmpeg 8 through the
     `$HOME/.local/ffmpeg8` shims recorded in
     [local-macos.md](../operations/local-macos.md).
+19. **Export formats are measured, not assumed (owner request, 2026-11-05).**
+    `or_media::describe_export_capability` reports which profiles this build can
+    write and which encoder it would use; the bridge exposes it and the app reads
+    it once per launch. The Export dialog lists only formats whose encoder opens,
+    defaults to the engine's preferred profile, and warns when MP4 is missing;
+    Settings → Resources shows the same Ready/Unavailable list. The `no-h264`
+    widget test and the `resources-setup` journey record both halves.
 
 Blocked, and reported as blocked rather than attempted:
 

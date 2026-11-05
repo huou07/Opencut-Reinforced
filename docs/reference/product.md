@@ -75,7 +75,11 @@ codec whose decoder exists but cannot run on this machine is refused with
 `DECODE_UNAVAILABLE` and the reason. Measured rows per host, including the AV1
 finding on Apple silicon, are in
 [media-capability-matrix.md](media-capability-matrix.md). GIF and TIFF import,
-extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED.
+extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED. Which of the three
+delivered profiles a build can actually write is measured at runtime
+(`describe_export_capability`): the Export dialog offers only those and defaults
+to the engine's preferred one, and Settings → Resources lists them as Ready or
+Unavailable.
 
 ## AI assistance
 

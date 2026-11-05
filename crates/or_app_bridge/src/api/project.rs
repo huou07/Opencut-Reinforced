@@ -1882,6 +1882,24 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
     }
 }
 
+/// Describes the export profiles this build actually carries.
+pub fn export_capabilities() -> ExportCapabilityView {
+    let capability = or_media::describe_export_capability();
+    let preferred_profile = match capability.preferred_profile() {
+        or_media::FfmpegExportProfile::Mp4H264Aac => "mp4_h264_aac",
+        or_media::FfmpegExportProfile::WebmVp9Opus => "webm_vp9_opus",
+        or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le => "matroska_ffv1_pcm_s16le",
+    };
+    ExportCapabilityView {
+        h264_encoder: capability.h264_encoder,
+        h264_hardware: capability.h264_hardware,
+        mp4_available: capability.mp4_available,
+        webm_available: capability.webm_available,
+        lossless_available: capability.lossless_available,
+        preferred_profile: preferred_profile.to_owned(),
+    }
+}
+
 fn text_formatting_view(formatting: TextFormatting) -> ProjectTextFormattingView {
     ProjectTextFormattingView {
         font: match formatting.font {
