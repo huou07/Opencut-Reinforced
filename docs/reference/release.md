@@ -6,15 +6,23 @@ Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
-The published line is **0.1.15** (2026-11-05), the first release cut after
-the parity rule replaced the macOS-only target and the first to carry the
-in-app library and first-run panel. Its four desktop assets —
-`Opencut-Reinforced-0.1.15-arm64.dmg`,
-`Opencut-Reinforced-0.1.15-linux-x64.deb`,
-`Opencut-Reinforced-0.1.15-windows-x64-setup.exe` and
-`Opencut-Reinforced-0.1.15-windows-x64.zip` — plus `SHA256SUMS.txt` were
-produced by one tag run of `desktop-release.yml`, and the code they build
-was merged through one pull request whose `release-gate` went green.
+The published line is **0.1.16** (2026-11-05), cut from one pull request whose
+`release-gate` went green and built by one tag run of `desktop-release.yml`. It
+carries the guided first project, scene typography (schema version 2), the
+shape style with a corner radius and a two-stop gradient (schema version 3),
+measured export capability, machine facts, removable optional components, the
+library's licence credits, the preview/export parity lane, the Windows
+rooted-path fix and the packaged Linux lane fix. Its five assets —
+`Opencut-Reinforced-0.1.16-arm64.dmg` (37,316,834 B),
+`Opencut-Reinforced-0.1.16-linux-x64.deb` (26,095,496 B),
+`Opencut-Reinforced-0.1.16-windows-x64-setup.exe` (28,635,056 B),
+`Opencut-Reinforced-0.1.16-windows-x64.zip` (41,888,533 B) and
+`SHA256SUMS.txt` — were downloaded again after publication, matched their
+recorded SHA-256 values, and each package was opened on its own platform: the
+DMG mounted read-only ran `or version` and `whisper-cli --help`, the `.deb`
+installed with `dpkg -i` and ran `or version` from `/opt/opencut-reinforced`,
+and the `.zip` expanded and ran `or.exe version` next to its bundled FFmpeg
+8.1.3.
 
 
 Stable releases ship three desktop packages from one source tree:
