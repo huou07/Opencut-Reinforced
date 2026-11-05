@@ -318,3 +318,20 @@ What this replaced: on 0.1.17 the same silent uninstall over a running copy exit
 for an uninstall; stopping the process alone then exited 0 with every DLL still
 there, because Windows keeps the image sections mapped after the process object
 is gone.
+
+## Release `v0.1.18` published, and the uninstall fix proven from the published file
+
+`Desktop release` run 42119373982 on `50b4ca3` built the four packages and
+published them (`Publish every desktop asset` success). Every asset was then
+downloaded with `gh release download v0.1.18` and checked:
+
+| Asset | Bytes | SHA-256 (first 16) | Opened on its own host |
+| --- | --- | --- | --- |
+| `Opencut-Reinforced-0.1.18-arm64.dmg` | 37,341,513 | `bd66573fff15b338` | mounted read-only: `or version` → 0.1.18, `whisper-cli --help` prints usage |
+| `Opencut-Reinforced-0.1.18-linux-x64.deb` | 26,097,756 | `cda1139e1b3d1a73` | `dpkg -i` → `Setting up opencut-reinforced`, `/opt/opencut-reinforced/or version` → 0.1.18 |
+| `Opencut-Reinforced-0.1.18-windows-x64-setup.exe` | 28,631,647 | `95f5bdb66fc1424e` | silent install → `or.exe version` 0.1.18 → app started → silent uninstall: exit 0, `files-removed`, log shows `or: InitializeUninstall` and the image wait |
+| `Opencut-Reinforced-0.1.18-windows-x64.zip` | 41,891,248 | `80eac7a33b11c7d5` | expanded earlier in the same lane; the bundled `ffmpeg.exe` reports 8.1.3 |
+
+`shasum -a 256 -c SHA256SUMS.txt` on the downloaded set printed `OK` for all four.
+The uninstall row is the one that matters for this release: the same command
+against the published 0.1.17 setup exited 1 and removed nothing.
