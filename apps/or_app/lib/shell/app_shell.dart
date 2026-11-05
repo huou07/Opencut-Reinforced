@@ -17,6 +17,7 @@ import '../library/project_templates.dart';
 import '../library/sound_library.dart';
 import '../library/text_presets.dart';
 import '../design/or_spacing.dart';
+import '../production/editor_settings.dart';
 import '../project/export_profile.dart';
 import '../support/host_platform.dart';
 import '../project/project_file_picker.dart';
@@ -108,6 +109,7 @@ class AppShell extends StatefulWidget {
     this.soundLibraryDirectory,
     this.welcomeStore,
     this.assistantController,
+    this.editorSettingsStore,
   });
 
   final CoreGateway gateway;
@@ -127,6 +129,10 @@ class AppShell extends StatefulWidget {
 
   /// Injectable so widget tests never spawn a harness process.
   final AssistantController? assistantController;
+
+  /// Editor preferences, shared by the export dialog and the editor. Injectable
+  /// so a test decides the mode instead of reading the user's real file.
+  final EditorSettingsStore? editorSettingsStore;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -186,6 +192,9 @@ const Map<ShortcutActivator, Intent> _editingShortcuts = {
   SingleActivator(LogicalKeyboardKey.delete, shift: true):
       RippleDeleteClipIntent(),
   SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
+  // Guides are a viewing aid, so the shortcut sits with the other editing
+  // verbs and stays out of text fields: `G` types a letter in a title field.
+  SingleActivator(LogicalKeyboardKey.keyG): ToggleGuidesIntent(),
   SingleActivator(LogicalKeyboardKey.digit1): SelectToolIntent('Media'),
   SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
   SingleActivator(LogicalKeyboardKey.digit3): SelectToolIntent('Audio'),
@@ -226,6 +235,8 @@ class _AppShellState extends State<AppShell> {
   bool _welcomeDismissed = false;
   Timer? _welcomeDeadline;
   late final WelcomeStore _welcomeStore = widget.welcomeStore ?? WelcomeStore();
+  late final EditorSettingsStore _editorSettingsStore =
+      widget.editorSettingsStore ?? EditorSettingsStore();
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
@@ -288,6 +299,11 @@ class _AppShellState extends State<AppShell> {
   late final AppLifecycleListener _lifecycleListener;
   bool _textInputFocused = false;
 
+  /// The project instance that has already produced a file in this session, so
+  /// the guided row stops asking for an export the user has done, and starts
+  /// asking again after a different project is opened.
+  String? _exportedProjectInstance;
+
   bool get _hasProjectWorkspace =>
       _destination == AppDestination.editorPreview && _activeSession != null;
 
@@ -302,7 +318,14 @@ class _AppShellState extends State<AppShell> {
       onProjectSummary: (current) {
         if (mounted) setState(() => _activeProject = current);
       },
-      onExported: (path) => unawaited(_showExportReceipt(path)),
+      onExported: (path) {
+        if (mounted) {
+          setState(
+            () => _exportedProjectInstance = _activeProject?.projectInstanceId,
+          );
+        }
+        unawaited(_showExportReceipt(path));
+      },
     )..addListener(_handleExportChanged);
     FocusManager.instance.addListener(_handleFocusChange);
     _autosave = AutosaveController(
@@ -533,6 +556,14 @@ class _AppShellState extends State<AppShell> {
                 onInvoke: (_) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.rippleDeleteSelectedClip();
+                  }
+                  return null;
+                },
+              ),
+              ToggleGuidesIntent: CallbackAction<ToggleGuidesIntent>(
+                onInvoke: (_) {
+                  if (editor && !_textInputFocused) {
+                    _editorKey.currentState?.toggleGuides();
                   }
                   return null;
                 },
@@ -894,6 +925,11 @@ class _AppShellState extends State<AppShell> {
               onDiscardRecovery: _projectNoticeIsStale
                   ? _discardStaleRecovery
                   : null,
+              onExport: () => unawaited(_startExport()),
+              hasExported:
+                  _activeProject?.projectInstanceId != null &&
+                  _exportedProjectInstance ==
+                      _activeProject?.projectInstanceId,
             ),
   };
 
@@ -3322,13 +3358,23 @@ class _AppShellState extends State<AppShell> {
         },
       );
 
-  Future<ExportOptions?> _chooseExportOptions() {
+  Future<ExportOptions?> _chooseExportOptions() async {
     final profiles = ExportProfile.available;
-    if (profiles.isEmpty) return Future.value(null);
+    if (profiles.isEmpty) return null;
+    // The preference is read at open time: the dialog is an occasional surface
+    // and a second copy of the setting in the shell would be one more thing to
+    // keep in sync.
+    final settings = await _editorSettingsStore.load();
+    if (!mounted) return null;
+    final simple = settings.simpleMode;
+    final platformDefault = ExportProfile.defaultForPlatform;
+    // Advanced mode keeps "Match project" (no short side) as the default it has
+    // always had; the guided intents carry their own resolution, and "Share or
+    // upload" deliberately names 1080p so the first file is not a 4K surprise.
     final defaultChoice = (
-      profile: ExportProfile.defaultForPlatform,
+      profile: platformDefault,
       quality: ExportQuality.defaultChoice,
-      shortSide: null as int?,
+      shortSide: simple ? 1080 as int? : null,
     );
     return showDialog<ExportOptions>(
       context: context,
@@ -3336,95 +3382,162 @@ class _AppShellState extends State<AppShell> {
         var selected = defaultChoice.profile;
         var quality = defaultChoice.quality;
         int? shortSide = defaultChoice.shortSide;
+        var advanced = !simple;
+        _ExportIntent? intent = simple
+            ? _intentFor(selected, quality, shortSide, platformDefault)
+            : null;
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Export video'),
-            content: SizedBox(
-              width: OrDialogSizes.width(context, 420),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const ExportDialogSection('Format'),
-                    for (final profile in profiles)
-                      ExportChoiceTile(
-                        title: profile.label,
-                        subtitle: profile.description,
-                        selected: selected == profile,
-                        onTap: () => setDialogState(() => selected = profile),
-                      ),
-                    if (selected.hasQualityChoice) ...[
-                      const ExportDialogSection('Quality'),
-                      for (final option in ExportQuality.values)
-                        ExportChoiceTile(
-                          title: option.label,
-                          subtitle: option.description,
-                          selected: quality == option,
-                          onTap: () => setDialogState(() => quality = option),
+          builder: (context, setDialogState) {
+            void pickIntent(_ExportIntent next) {
+              final options = _intentOptions(next, platformDefault);
+              setDialogState(() {
+                intent = next;
+                selected = options.profile;
+                quality = options.quality;
+                shortSide = options.shortSide;
+              });
+            }
+
+            Widget advancedRows() => Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const ExportDialogSection('Format'),
+                for (final profile in profiles)
+                  ExportChoiceTile(
+                    title: profile.label,
+                    subtitle: profile.description,
+                    selected: selected == profile,
+                    onTap: () => setDialogState(() {
+                      selected = profile;
+                      intent = null;
+                    }),
+                  ),
+                if (selected.hasQualityChoice) ...[
+                  const ExportDialogSection('Quality'),
+                  for (final option in ExportQuality.values)
+                    ExportChoiceTile(
+                      title: option.label,
+                      subtitle: option.description,
+                      selected: quality == option,
+                      onTap: () => setDialogState(() {
+                        quality = option;
+                        intent = null;
+                      }),
+                    ),
+                ],
+                const ExportDialogSection('Resolution'),
+                DropdownButtonFormField<int?>(
+                  key: const ValueKey('export-resolution'),
+                  initialValue: shortSide,
+                  hint: const Text('Match project'),
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    for (final option in exportResolutions)
+                      DropdownMenuItem<int?>(
+                        key: ValueKey(
+                          'export-resolution-${option.$1 ?? 'project'}',
                         ),
-                    ],
-                    const ExportDialogSection('Resolution'),
-                    DropdownButtonFormField<int?>(
-                      key: const ValueKey('export-resolution'),
-                      initialValue: shortSide,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: OutlineInputBorder(),
+                        value: option.$1,
+                        child: Text(option.$2),
                       ),
-                      items: [
-                        for (final option in exportResolutions)
-                          DropdownMenuItem<int?>(
-                            key: ValueKey(
-                              'export-resolution-${option.$1 ?? 'project'}',
-                            ),
-                            value: option.$1,
-                            child: Text(option.$2),
-                          ),
-                      ],
-                      onChanged: (value) =>
-                          setDialogState(() => shortSide = value),
-                    ),
-                    const SizedBox(height: OrSpacing.x2),
-                    Text(
-                      shortSide == null
-                          ? 'The video keeps the shape you chose for the canvas.'
-                          : 'The short side is $shortSide pixels; the other side follows the canvas shape.',
-                      key: const ValueKey('export-resolution-hint'),
-                      style: const TextStyle(
-                        color: OrColors.textSecondary,
-                        fontSize: OrType.metadataSize,
-                      ),
-                    ),
-                    const SizedBox(height: OrSpacing.x3),
-                    Text(
-                      'Next you choose where to save the file.',
-                      key: const ValueKey('export-destination-hint'),
-                      style: const TextStyle(
-                        color: OrColors.textMuted,
-                        fontSize: OrType.metadataSize,
-                      ),
-                    ),
                   ],
+                  onChanged: (value) => setDialogState(() {
+                    shortSide = value;
+                    intent = null;
+                  }),
+                ),
+                const SizedBox(height: OrSpacing.x2),
+                Text(
+                  shortSide == null
+                      ? 'The video keeps the shape you chose for the canvas.'
+                      : 'The short side is $shortSide pixels; the other side follows the canvas shape.',
+                  key: const ValueKey('export-resolution-hint'),
+                  style: const TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataSize,
+                  ),
+                ),
+              ],
+            );
+
+            return AlertDialog(
+              title: const Text('Export video'),
+              content: SizedBox(
+                width: OrDialogSizes.width(context, 420),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (simple) ...[
+                        const ExportDialogSection('What is this for?'),
+                        for (final option in _ExportIntent.values)
+                          ExportChoiceTile(
+                            key: ValueKey('export-intent-${option.name}'),
+                            title: option.title(platformDefault),
+                            subtitle: option.detail(platformDefault),
+                            selected: intent == option,
+                            onTap: () => pickIntent(option),
+                          ),
+                        const SizedBox(height: OrSpacing.x2),
+                        Text(
+                          _exportSummary(selected, quality, shortSide),
+                          key: const ValueKey('export-summary'),
+                          style: const TextStyle(
+                            color: OrColors.textSecondary,
+                            fontSize: OrType.metadataSize,
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            key: const ValueKey('export-advanced-toggle'),
+                            onPressed: () =>
+                                setDialogState(() => advanced = !advanced),
+                            child: Text(
+                              advanced
+                                  ? 'Hide advanced settings'
+                                  : 'Advanced settings',
+                            ),
+                          ),
+                        ),
+                        if (advanced) advancedRows(),
+                      ] else
+                        advancedRows(),
+                      const SizedBox(height: OrSpacing.x3),
+                      Text(
+                        'Next you choose where to save the file.',
+                        key: const ValueKey('export-destination-hint'),
+                        style: const TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: OrType.metadataSize,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop((
-                  profile: selected,
-                  quality: quality,
-                  shortSide: shortSide,
-                )),
-                child: const Text('Continue'),
-              ),
-            ],
-          ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop((
+                    profile: selected,
+                    quality: quality,
+                    shortSide: shortSide,
+                  )),
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -5524,4 +5637,94 @@ void _journeyTrace(String message) {
       flush: true,
     );
   } catch (_) {}
+}
+
+
+/// A beginner-level reason to export, resolved into the ordinary profile,
+/// quality and resolution the export contract already takes.
+///
+/// It is a shortcut over one model, not a second set of options: every value it
+/// produces is one the advanced rows can also produce, and editing an advanced
+/// row simply clears the intent.
+enum _ExportIntent { share, smaller, best, lossless }
+
+extension on _ExportIntent {
+  String title(ExportProfile platformDefault) => switch (this) {
+    _ExportIntent.share => 'Share or upload',
+    _ExportIntent.smaller => 'Smaller file',
+    _ExportIntent.best => 'Highest quality',
+    _ExportIntent.lossless => 'Keep every pixel',
+  };
+
+  /// The copy names the real container and the limitation a beginner will hit,
+  /// rather than promising a format the machine may not encode.
+  String detail(ExportProfile platformDefault) => switch (this) {
+    _ExportIntent.share =>
+      platformDefault == ExportProfile.mp4H264Aac
+          ? 'MP4 at 1080p. Plays in every browser, phone and social app.'
+          : 'WebM at 1080p, because this build has no H.264 encoder. Some apps cannot open it.',
+    _ExportIntent.smaller =>
+      'WebM at 1080p. Much smaller file; some players and TVs cannot open it.',
+    _ExportIntent.best =>
+      'MP4 at the project resolution. Largest widely playable file.',
+    _ExportIntent.lossless =>
+      'Matroska with lossless video. Very large; for archiving or re-editing.',
+  };
+}
+
+({ExportProfile profile, ExportQuality quality, int? shortSide})
+_intentOptions(_ExportIntent intent, ExportProfile platformDefault) =>
+    switch (intent) {
+      _ExportIntent.share => (
+        profile: platformDefault,
+        quality: ExportQuality.quality,
+        shortSide: 1080,
+      ),
+      _ExportIntent.smaller => (
+        profile: ExportProfile.webmVp9Opus,
+        quality: ExportQuality.speed,
+        shortSide: 1080,
+      ),
+      _ExportIntent.best => (
+        profile: ExportProfile.mp4H264Aac,
+        quality: ExportQuality.quality,
+        shortSide: null,
+      ),
+      _ExportIntent.lossless => (
+        profile: ExportProfile.matroskaFfv1PcmS16le,
+        quality: ExportQuality.quality,
+        shortSide: null,
+      ),
+    };
+
+_ExportIntent? _intentFor(
+  ExportProfile profile,
+  ExportQuality quality,
+  int? shortSide,
+  ExportProfile platformDefault,
+) {
+  for (final intent in _ExportIntent.values) {
+    final options = _intentOptions(intent, platformDefault);
+    if (options.profile == profile &&
+        options.quality == quality &&
+        options.shortSide == shortSide) {
+      return intent;
+    }
+  }
+  return null;
+}
+
+/// What the row will actually produce, in one line. It says the container and
+/// the codes rather than the marketing name, because a beginner's failure to
+/// open a file is usually a container they did not expect.
+String _exportSummary(
+  ExportProfile profile,
+  ExportQuality quality,
+  int? shortSide,
+) {
+  final size = shortSide == null ? 'project resolution' : '${shortSide}p';
+  final rate = profile.hasQualityChoice
+      ? (quality == ExportQuality.quality ? 'cleaner picture' : 'faster encode')
+      : 'lossless';
+  return '${profile.label} · $size · $rate';
 }

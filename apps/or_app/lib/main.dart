@@ -11,6 +11,7 @@ import 'project/project_gateway.dart';
 import 'project/recent_projects.dart';
 import 'project/rust_project_gateway.dart';
 import 'rust_core_gateway.dart';
+import 'production/editor_settings.dart';
 import 'shell/app_shell.dart';
 
 Future<void> main() async {
@@ -95,6 +96,7 @@ class OrApp extends StatelessWidget {
     this.projectFilePicker,
     this.recentProjectStore,
     this.audioCleanupDirectory,
+    this.editorSettingsStore,
   });
 
   final CoreGateway gateway;
@@ -104,6 +106,10 @@ class OrApp extends StatelessWidget {
 
   /// Where cleaned audio is written. Injectable so a test does not need a plugin.
   final Future<Directory> Function()? audioCleanupDirectory;
+
+  /// Where editor preferences live. Injectable so a test controls which mode
+  /// the export dialog and the editor open in.
+  final EditorSettingsStore? editorSettingsStore;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +125,7 @@ class OrApp extends StatelessWidget {
         recentProjectStore:
             recentProjectStore ?? PersistentRecentProjectStore(),
         audioCleanupDirectory: audioCleanupDirectory,
+        editorSettingsStore: editorSettingsStore,
       ),
     );
   }

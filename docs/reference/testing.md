@@ -38,6 +38,16 @@ Phase-by-phase historical coverage records are in `docs/archive/legacy/TESTING.m
   different resolution, quality, scheduling and encoders.
 - No wall-clock dependence and no network in deterministic tests.
 
+## Widget-test trap: no real I/O inside `testWidgets`
+
+A `testWidgets` body runs inside fake async, so a real `dart:io` future — reading
+a settings file, writing a temp directory — never completes and the test hangs
+instead of failing. Anything the UI reads before showing a surface takes an
+injected seam: `EditorSettingsStore(loader:, saver:)` exists for exactly that,
+and `apps/or_app/test/widget_test.dart` builds an in-memory store so the export
+dialog opens. Injecting the user's real file, or awaiting `File` APIs in the test
+body, is a defect in the test, not the app.
+
 ## Fixtures
 
 Use generated or lawfully reusable small fixtures. Real-media fixtures are pinned

@@ -37,7 +37,8 @@ Autosave updates a recovery checkpoint and never overwrites the canonical file.
 
 **PLANNED:** pin/archive, project settings, manual snapshots, version history,
 backup, consolidation, offline-media detection and bulk relink, proxies, workspace
-presets, Simple/Advanced modes, recent-project history.
+presets, recent-project history. Simple/Advanced modes ship as the guided-mode
+preference described in [workspace-ui.md](../features/workspace-ui.md).
 
 ## Editor core
 
@@ -54,9 +55,10 @@ deferred until typed semantics and migrations are approved.
 ## Viewer
 
 **MVP:** fit / 25 / 50 / 100 / 200% zoom, exact seek and scrub, playback and frame
-stepping on the explicit sequence frame lattice, no looping.
-**PLANNED:** fullscreen/cinema mode, safe areas, grids, guides, rulers, bounding
-boxes, transform handles.
+stepping on the explicit sequence frame lattice, no looping; composition guides
+(title-safe, action-safe, thirds, centre) as a viewer overlay that never reaches
+an exported frame; transform handles that commit one command per gesture.
+**PLANNED:** fullscreen/cinema mode, rulers, bounding boxes.
 
 ## Media, text, audio, effects
 

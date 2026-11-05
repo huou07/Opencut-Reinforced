@@ -56,7 +56,15 @@ journey. See [operations/verification.md](../operations/verification.md).
   keyboard path is `Space`, arrows, `Shift`+arrows and `Esc`.
 - Pressing play at the content end replays from zero. A speed other than 1× turns
   preview audio off and says so; it never plays pitched or drifting audio.
-- Simple mode is a visibility setting over one state and command model.
+- Simple mode is a visibility setting over one state and command model. Its
+  next-step row names one action derived from the open project, never from a
+  tutorial counter, and disappears once the work exists; dismissing it is a
+  separate preference that Settings can restore. Guided mode changes the export
+  dialog's order, not the export fields: an intent maps onto the same profile,
+  quality and resolution triple, and **Advanced settings** reveals those fields.
+- Composition guides are a preview overlay. They draw after presentation, are
+  never handed to the renderer, and `G` toggles them only when no text field has
+  focus. An exported frame with a guide burned in is a defect.
 - The editor's right rail exposes the Assistant by default and the advanced
   Inspector as an optional second tab over one project state. The Inspector is
   hidden unless the user enables **Show inspector panel** in Settings or opens
@@ -82,7 +90,10 @@ and captions; effect presets; MotionScene render-and-insert; in-app scene
 editing (drag an object, retitle, recolour, resize text, add text, add a library
 object, delete) inline and in the expanded editor; assistant chat edits and
 assistant-driven MotionScene insertion through the real harness; native menus;
-export receipt; pacing recorded from the app.
+export receipt; pacing recorded from the app; the guided next-step row and the
+intent-first export dialog (`guided_steps_test.dart`, `widget_test.dart`
+"guided export dialog"/"codec choice"/"G toggles composition guides"), with the
+macOS run recorded in [ui-harness.md](../operations/ui-harness.md).
 
 Each of these is backed by a named scenario or widget test in
 `scripts/ui_scenarios/` or `apps/or_app/test/`. Re-run the affected one when you

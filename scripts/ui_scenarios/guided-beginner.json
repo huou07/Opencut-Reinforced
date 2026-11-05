@@ -1,0 +1,204 @@
+{
+  "name": "guided-beginner",
+  "harness": "or_ui",
+  "description": "The beginner path in guided mode: Home -> new project -> the next-step row names import, the row's own button imports media, the row then names the first clip and inserts it through the same track-ensure and insert commands a drop uses, the title step creates the text track it needs, and the export dialog leads with intent while Advanced still exposes every codec row. The row must disappear once its step is done, and the guides overlay must be togglable without reaching export.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Guided first video"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key": "editor-guided-bar"
+    },
+    {
+      "op": "expect",
+      "key": "editor-guided-action-importMedia"
+    },
+    {
+      "op": "shot",
+      "name": "guided-empty"
+    },
+    {
+      "op": "tree",
+      "name": "guided-empty"
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-guided-action-importMedia"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "tiny_h264",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect",
+      "key": "editor-guided-action-addFirstClip"
+    },
+    {
+      "op": "wait",
+      "text": "Put your first clip on the timeline",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-guided-action-addFirstClip"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "V1",
+      "budget_ms": 20000
+    },
+    {
+      "op": "expect_absent",
+      "key": "editor-guided-action-addFirstClip"
+    },
+    {
+      "op": "expect",
+      "key": "editor-guided-action-addTitle"
+    },
+    {
+      "op": "shot",
+      "name": "guided-clip"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-guided-action-addTitle"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "timeline-text-content"
+    },
+    {
+      "op": "shot",
+      "name": "guided-title-dialog"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Cancel"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "key": "timeline-text-content"
+    },
+    {
+      "op": "expect",
+      "key": "editor-guided-action-addAudio"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-guides"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "viewer-guides"
+    },
+    {
+      "op": "shot",
+      "name": "guided-guides"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "preview-guides"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "key": "viewer-guides"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "export-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Export video",
+      "budget_ms": 15000
+    },
+    {
+      "op": "expect",
+      "key": "export-intent-share"
+    },
+    {
+      "op": "expect",
+      "key": "export-intent-best"
+    },
+    {
+      "op": "shot",
+      "name": "guided-export"
+    },
+    {
+      "op": "tree",
+      "name": "guided-export"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "export-advanced-toggle"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "export-resolution"
+    },
+    {
+      "op": "shot",
+      "name": "guided-export-advanced"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Cancel"
+      }
+    },
+    {
+      "op": "expect_absent",
+      "text": "Export video"
+    }
+  ]
+}

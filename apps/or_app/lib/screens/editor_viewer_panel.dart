@@ -68,6 +68,8 @@ class EditorViewerPanel extends StatefulWidget {
     this.selectedTextClip,
     this.onCommitTextFormatting,
     this.onProjectChanged,
+    this.showGuides = false,
+    this.onShowGuidesChanged,
   });
 
   final bool compact;
@@ -96,6 +98,11 @@ class EditorViewerPanel extends StatefulWidget {
   final ProjectRationalTime? previewSeekPosition;
   final VoidCallback? onPreviewSeekConsumed;
   final ValueChanged<ProjectPreviewState> onStateChanged;
+
+  /// Title/action safe areas, thirds and the centre over the frame. A preview
+  /// overlay only: the guides are drawn by Flutter and never reach the export.
+  final bool showGuides;
+  final ValueChanged<bool>? onShowGuidesChanged;
 
   @override
   State<EditorViewerPanel> createState() => EditorViewerPanelState();
@@ -721,6 +728,26 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
   ///
   /// The old badge showed the texture size, which looked editable and was not;
   /// it also changed when the window did. This button is the real control.
+  /// Composition guides are a viewing aid, so they live beside the zoom and
+  /// canvas controls rather than in a menu: a beginner finds them while
+  /// looking at the frame they are composing.
+  Widget _guidesButton() {
+    final enabled = widget.onShowGuidesChanged != null;
+    return IconButton(
+      key: const ValueKey('preview-guides'),
+      tooltip: widget.showGuides
+          ? 'Hide composition guides (G)'
+          : 'Show composition guides (G)',
+      visualDensity: VisualDensity.compact,
+      isSelected: widget.showGuides,
+      onPressed: enabled
+          ? () => widget.onShowGuidesChanged!(!widget.showGuides)
+          : null,
+      icon: const Icon(Icons.grid_3x3, size: 18),
+      color: widget.showGuides ? OrColors.selection : null,
+    );
+  }
+
   Widget _canvasButton() => _CanvasPicker(
     buttonKey: const ValueKey('preview-canvas'),
     labelKey: const ValueKey('preview-canvas-label'),
@@ -791,6 +818,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
           onScrubEnd: _seekToSeconds,
           onSpeed: (speed) => unawaited(_setSpeed(speed)),
           onCanvas: (canvas) => unawaited(_setCanvas(canvas)),
+          showGuides: widget.showGuides,
         ),
       ),
     );
@@ -897,6 +925,15 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                         message: hasSession
                             ? 'Viewer texture unavailable'
                             : 'Open a project to preview',
+                      ),
+                    if (widget.showGuides)
+                      const Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            key: ValueKey('viewer-guides'),
+                            painter: _CompositionGuidesPainter(),
+                          ),
+                        ),
                       ),
                     if (widget.selectedTextClip != null &&
                         widget.onCommitTextFormatting != null)
@@ -1008,6 +1045,7 @@ class EditorViewerPanelState extends State<EditorViewerPanel>
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _guidesButton(),
                       _zoomButton(),
                       _canvasButton(),
                       IconButton(
@@ -1433,6 +1471,91 @@ String _timecodeLabel(double seconds, double fps) {
 }
 
 /// One canvas preset, named by where people publish it and by its pixel size.
+/// Title-safe and action-safe areas, rule-of-thirds, and the centre mark.
+///
+/// The same fractions broadcast and film guides use: action safe keeps 5% off
+/// each edge, title safe 10%. They are drawn on top of the video and under the
+/// direct-manipulation handles, so a user composing a title sees both the safe
+/// area and the text box it must fit in.
+class _CompositionGuidesPainter extends CustomPainter {
+  const _CompositionGuidesPainter();
+
+  static const _shadow = Color(0x59000000);
+  static const _safeLine = Color(0x99F5F5F5);
+  static const _thirdsLine = Color(0x40F5F5F5);
+  static const _centreLine = Color(0x8C3FC7FF);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final shadow = Paint()
+      ..color = _shadow
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final safe = Paint()
+      ..color = _safeLine
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final thirds = Paint()
+      ..color = _thirdsLine
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final centre = Paint()
+      ..color = _centreLine
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    void frame(Rect rect, Paint paint) {
+      if (rect.width <= 0 || rect.height <= 0) return;
+      canvas.drawRect(rect, shadow);
+      canvas.drawRect(rect, paint);
+    }
+
+    frame(Rect.fromLTWH(0, 0, size.width, size.height).deflate(0.5), shadow);
+    frame(
+      Rect.fromLTWH(
+        size.width * 0.05,
+        size.height * 0.05,
+        size.width * 0.9,
+        size.height * 0.9,
+      ),
+      safe,
+    );
+    frame(
+      Rect.fromLTWH(
+        size.width * 0.1,
+        size.height * 0.1,
+        size.width * 0.8,
+        size.height * 0.8,
+      ),
+      safe,
+    );
+
+    for (final fraction in const [1 / 3, 2 / 3]) {
+      final x = size.width * fraction;
+      final y = size.height * fraction;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), thirds);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), thirds);
+    }
+
+    final centrePoint = Offset(size.width / 2, size.height / 2);
+    final arm = (size.shortestSide * 0.02).clamp(6.0, 18.0);
+    canvas.drawLine(
+      centrePoint.translate(-arm, 0),
+      centrePoint.translate(arm, 0),
+      centre,
+    );
+    canvas.drawLine(
+      centrePoint.translate(0, -arm),
+      centrePoint.translate(0, arm),
+      centre,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CompositionGuidesPainter oldDelegate) => false;
+}
+
 class _CanvasOption {
   const _CanvasOption(this.label, this.detail, this.width, this.height);
 
@@ -1637,6 +1760,7 @@ class _FullscreenPreview extends StatefulWidget {
     required this.onScrubEnd,
     required this.onSpeed,
     required this.onCanvas,
+    this.showGuides = false,
   });
 
   final int textureId;
@@ -1652,6 +1776,7 @@ class _FullscreenPreview extends StatefulWidget {
   final ValueChanged<double> onScrubEnd;
   final ValueChanged<double> onSpeed;
   final ValueChanged<ProjectSequenceCanvas?> onCanvas;
+  final bool showGuides;
 
   @override
   State<_FullscreenPreview> createState() => _FullscreenPreviewState();
@@ -1773,12 +1898,28 @@ class _FullscreenPreviewState extends State<_FullscreenPreview> {
                                       child: SizedBox(
                                         width: preview.width.toDouble(),
                                         height: preview.height.toDouble(),
-                                        child: Texture(
-                                          key: ValueKey(
-                                            'fullscreen-viewer-texture-${widget.textureId}',
-                                          ),
-                                          textureId: widget.textureId,
-                                          filterQuality: FilterQuality.medium,
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Texture(
+                                              key: ValueKey(
+                                                'fullscreen-viewer-texture-${widget.textureId}',
+                                              ),
+                                              textureId: widget.textureId,
+                                              filterQuality:
+                                                  FilterQuality.medium,
+                                            ),
+                                            if (widget.showGuides)
+                                              const IgnorePointer(
+                                                child: CustomPaint(
+                                                  key: ValueKey(
+                                                    'fullscreen-viewer-guides',
+                                                  ),
+                                                  painter:
+                                                      _CompositionGuidesPainter(),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                     ),

@@ -133,6 +133,9 @@ any other rule to this file.
 - **Security and licensing** — adoption rules, dependency posture, FFmpeg, secrets.
   When: adding a dependency, asset, codec, font or model, or checking licence risk.
   Path: `docs/reference/security-licensing.md`
+- **Technology review** — dated adoption verdicts for the 2026 animation, 3D, video and codec candidates.
+  When: considering a renderer, animation, encoding or design library the review already covered.
+  Path: `docs/reference/technology-review.md`
 - **Release** — Developer Preview pipeline and stable-release requirements.
   When: packaging or distribution work is explicitly in scope.
   Path: `docs/reference/release.md`
