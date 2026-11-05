@@ -249,6 +249,16 @@ One near-term delivery mission for the local macOS app, in this order:
     detection a fresh install uses, and a run harness can name the CLI it built
     (`OR_CLI_PATH`); `assistant-panel` is the part of the assistant a harness can
     judge without a live provider.
+32. **The Windows uninstaller could not uninstall a running copy (2026-11-06).**
+    `PrepareToInstall` closes the app for an install, but Inno's two-phase
+    uninstaller never calls it: a silent uninstall over a running copy exited 1
+    and removed nothing. `InitializeUninstall` now runs the same step, and the
+    step waits until the image is really released by retrying a rename of
+    `or_app.exe` for up to five seconds — stopping the process alone exited 0 with
+    every DLL left behind for the next reboot. Inno still defers the folder itself
+    to a reboot when the uninstaller stub is the last file in it; the program
+    files, the uninstall data and the shortcuts are gone and the user's projects
+    are untouched.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

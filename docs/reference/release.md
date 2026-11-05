@@ -36,7 +36,18 @@ either. An install over a running copy closes it first: `PrepareToInstall` stops
 `or_app.exe`, `or.exe` and `or-whisper-provider.exe`, because the running app
 keeps the bundled FFmpeg DLLs mapped and the silent installer would otherwise
 retry `DeleteFile`, then abort the whole update with exit code 5 and no message
-(`RestartApplications=no` keeps a silent update from relaunching the app). The macOS image is ad-hoc signed, not notarised; the first
+(`RestartApplications=no` keeps a silent update from relaunching the app).
+Uninstalling over a running copy works the same way: Inno's two-phase
+uninstaller never runs `PrepareToInstall`, so `InitializeUninstall` calls the
+same close-app step. Ending the process is not enough on its own — Windows keeps
+the image sections mapped for a moment afterwards — so the step retries a rename
+of `or_app.exe` for up to five seconds and only continues once the image is
+really released. Without that, a silent uninstall over a running copy exited 1
+and removed nothing, and with only the process wait it exited 0 but left every
+DLL behind for the next reboot. When the uninstaller itself cannot be deleted
+(the last file in the folder) Inno defers that folder to the next reboot; the
+program files and the uninstaller are gone, and the empty folder with the
+`unins000.exe` stub is all that remains until then. The macOS image is ad-hoc signed, not notarised; the first
 launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
 Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
 self-contained: FFmpeg 8.1.3, the local speech runtime (`whisper-cli` and the
