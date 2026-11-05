@@ -47,6 +47,11 @@ a product improvement with recorded evidence, not a library addition:
     reports each bundled component, keeps speech models and the harness behind
     explicit actions, and exposes the external-tools controls; the
     `resources-setup` journey records that opening it installs nothing.
+17. **Windows-sized editing (owner request, 2026-11-05).** The editor stacks
+    below 980 px instead of squeezing three panes, and a compact window reaches
+    every tool through the dock sheet; the guided action keeps a 26 px target
+    instead of the 18 px compact density produced. The macOS suite, the Linux
+    suite at the same commit, and the bounded Linux preflight all pass.
 
 Blocked, and reported as blocked rather than attempted:
 

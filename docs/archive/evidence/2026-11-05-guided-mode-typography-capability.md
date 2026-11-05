@@ -96,3 +96,7 @@ item, so nothing moves, and both the widget suite and the Xvfb journey pass.
 - **Screenshots were not visually inspected** in this session; interaction claims
   rest on widget keys and the semantics tree, which is why the journeys above use
   keys and text rather than appearance.
+
+| The editor stacks below 980 px and still reaches every tool | `widget_test.dart` "compact window reaches the tools" (800×600: dock sheet exposes `media-import`), plus the macOS and Linux suites at `d68f03f` |
+| macOS and Linux ran the same commit | macOS: `flutter analyze` clean, 468 widget tests; Debian 13 at `d68f03fb`: `flutter analyze` clean, 463 tests (5 host-skipped), `or_app_bridge`/`or_ipc`/`or_runtime` Rust lanes 53+7+10+4+22, `scripts/run_linux_ui_preflight.py` PASS under Xvfb |
+| The queue-priority gate reports a distribution, not one sample | `crates/or_render/tests/queue_priority.rs` measures 120 frames per phase; three runs after the change: ratio 1.94, 5.99, 2.94 with loaded p95 3.00/9.56/4.56 ms, loaded budget 33.3 ms untouched |
