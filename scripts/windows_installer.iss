@@ -71,6 +71,7 @@ var
   AppPath: String;
   Attempt: Integer;
 begin
+  Log('or: stopping a running copy before touching files');
   Exec('taskkill.exe', '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM or.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('taskkill.exe', '/F /IM or-whisper-provider.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -85,6 +86,7 @@ begin
     Sleep(200);
     if not FileExists(AppPath) then
       Break;
+    Log(Format('or: image still held after attempt %d', [Attempt]));
     if RenameFile(AppPath, AppPath + '.old') then
     begin
       DeleteFile(AppPath + '.old');
@@ -104,6 +106,7 @@ end;
 // copy failed with exit code 1 and left the files in place.
 function InitializeUninstall(): Boolean;
 begin
+  Log('or: InitializeUninstall');
   StopRunningApp();
   Result := True;
 end;
