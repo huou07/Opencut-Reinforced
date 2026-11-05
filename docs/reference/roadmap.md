@@ -23,9 +23,10 @@ a product improvement with recorded evidence, not a library addition:
 12. **Scene typography (owner request, 2026-11-05).** MotionScene schema v2 adds
     family, weight, alignment, line height and tracking inside an explicit text
     box, with the two metrics shared through `or_core::TextFormatting`.
-    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md); the
-    project text dialog cannot set the two metrics yet because the bridge view is
-    not widened.
+    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md). The
+    bridge view was widened afterwards, so the project text dialog sets line
+    height and tracking too (`timeline-text-line-height`, `timeline-text-tracking`)
+    and the `text-typography` journey drives both through the real app.
 13. **Measured media capability (owner request, 2026-11-05).** The capability
     claim is now a measurement: `scripts/probe_media_matrix.py` probes and decodes
     18 fixtures per host, import proves a real decode and refuses an unusable
@@ -79,6 +80,19 @@ a product improvement with recorded evidence, not a library addition:
     rather than a guess. Proven by `flutter test test/system_check_test.dart` and
     the `resources-setup` journey, which reads back
     "macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free".
+
+21. **Removing an optional component is as explicit as installing it (owner
+    request, 2026-11-05).** Installing records exactly which files the app wrote;
+    removal reads that record and deletes only those entries, refusing paths that
+    leave the folder, so a model the user downloaded and a runtime they copied by
+    hand both survive. The action is offered only when the record exists, which
+    keeps a bundled engine from looking removable.
+22. **Every bundled asset states its licence in the app (owner request,
+    2026-11-05).** Library → Guide ends with the credits for both bundled font
+    families and every generated asset: licence, what it permits, and where it
+    came from. The Text and Sound tabs name their licence beside the content, so
+    nobody has to open the repository to learn what they may do with a font or a
+    sound.
 
 Blocked, and reported as blocked rather than attempted:
 

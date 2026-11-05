@@ -12,7 +12,12 @@ unverified. The limits at the end are part of the record.
 | `04c6d7e` | the lane prints the adapter it measured |
 | `7c0cff4` | both adapters recorded in the quality table |
 | `31fdb77` | the text dialog sets line height and tracking |
-| branch head after this receipt | export formats are measured, not assumed |
+| `4fe75d2` | export formats are measured by the engine, not assumed by the UI |
+| `1d56d36` | setup reports the machine the render will happen on |
+| `9ef7027` | the first-run panel states the measured machine |
+| `62d770e` | optional components can be removed, but only what the app installed |
+| `3d43c9c` | the library shows the licence and origin of every bundled asset |
+| branch head after this receipt | `3d43c9c`, macOS and Linux verified from that commit |
 
 ## What was proven, and how
 
