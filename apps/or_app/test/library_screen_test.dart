@@ -187,4 +187,60 @@ void main() {
       );
     }
   });
+
+  testWidgets('the guide ends with the licence of every bundled asset', (
+    tester,
+  ) async {
+    await _pump(tester, initialTab: LibraryTab.guide);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('library-credits')),
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('library-credits')), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('library-credit-licence-inter')),
+          )
+          .data,
+      'SIL Open Font License 1.1',
+    );
+    expect(
+      tester
+          .widget<Text>(
+            find.byKey(const ValueKey('library-credit-licence-sound-effects')),
+          )
+          .data,
+      'Generated on this device',
+    );
+  });
+
+  testWidgets('the text and sound tabs say where their licences are', (
+    tester,
+  ) async {
+    await _pump(tester, initialTab: LibraryTab.text);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('library-text-font-licence')))
+          .data,
+      contains('SIL Open Font License 1.1'),
+    );
+
+    // A new key so the screen state is created fresh; otherwise the previous
+    // tab would survive and the sound tab would never build.
+    await _pump(
+      tester,
+      initialTab: LibraryTab.sound,
+      key: const ValueKey('library-sound-tab'),
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('library-sound-licence')))
+          .data,
+      contains('no third-party audio'),
+    );
+  });
 }

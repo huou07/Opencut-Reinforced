@@ -57,7 +57,11 @@ a sound can be browsed before a project exists. Four tabs:
 - **Guide** — the in-app manual: start, import, edit, text, audio, export,
   shortcuts, files and troubleshooting. Shortcut rows render `Cmd` on macOS and
   `Ctrl` elsewhere from the platform seam, and the list matches the shell's real
-  shortcut map.
+  shortcut map. It ends with **Bundled content and licences**: every bundled font
+  and every generated asset, with the licence as a person reads it, what it
+  permits and where it came from (`library/content_credits.dart` is the one
+  source). The Text tab states the font licence beside the looks and the Sound
+  tab states that the effects are synthesised rather than recorded.
 
 An action that needs a project is visibly unavailable with its reason, never a
 silent no-op: adding a text look or a sound without an open project states what

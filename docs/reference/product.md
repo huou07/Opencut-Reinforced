@@ -141,8 +141,10 @@ for now.
 ## Interchange and extensibility
 
 SRT/WebVTT now; OTIO, Lottie/dotLottie, ASS, audio stems, EDL/XML as bounded
-adapters later. Plugins, templates, themes and community distribution are future
-and default to no code execution.
+adapters later. Plugins, a community template marketplace, themes and community
+distribution are future and default to no code execution. Bundled templates,
+text looks, sound effects and motion scenes ship today and are covered by the
+credits panel in Library → Guide.
 
 ## Accessibility, localisation, platforms
 

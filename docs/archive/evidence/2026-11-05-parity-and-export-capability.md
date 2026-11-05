@@ -28,7 +28,8 @@ unverified. The limits at the end are part of the record.
 | Setup reports the machine it will render on | `flutter test test/system_check_test.dart` → 9 pass (df parse, PowerShell parse, refusing host reports unknown, small-disk warning); the `resources-setup` journey reads back **"macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free"** from the real app |
 | The first-run panel states the measured machine, or omits the line | `flutter test test/home_welcome_test.dart` → 3 pass (measured lines, short-disk warning, no measurement); the live journey cannot show it because this profile has already dismissed `welcome.json` |
 | Removing an optional component deletes only what the app installed | `flutter test test/speech_runtime_removal_test.dart` → 4 pass (recorded files deleted, a user's model survives, a missing record refuses, a record pointing outside the folder is ignored) and `flutter test test/runtime_setup_panel_test.dart` → 5 pass (confirm dialog, count snackbar, install action returns) |
-| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **496 pass** |
+| Every bundled font and generated asset states its licence in the app | `flutter test test/library_screen_test.dart` → 9 pass, including the guide ending with `library-credits` and the per-asset licence keys; `python3 scripts/or_ui.py run scripts/ui_scenarios/library-tour.json` → `RESULT: OR_UI=PASS` with those keys asserted in the running app |
+| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **498 pass** |
 
 ## Limits
 
