@@ -293,6 +293,13 @@ def run_macos(payload: dict, report_dir: Path) -> int:
         OR_UI_ARTIFACT_DIR=str(artifacts),
         GITHUB_WORKSPACE=str(ROOT),
     )
+    # The debug app has no packaged CLI beside it, and its working directory is
+    # not the checkout, so the assistant scenario needs the built CLI named.
+    for candidate in ("target/debug/or", "target/release/or"):
+        built = ROOT / candidate
+        if built.is_file():
+            environment.setdefault("OR_CLI_PATH", str(built))
+            break
     command = ["flutter", "--no-version-check", "test", "--no-pub", "-d", "macos",
                SCENARIO_RUNNER]
     completed = subprocess.run(command, cwd=str(APP), env=environment,

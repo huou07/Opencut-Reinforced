@@ -260,3 +260,20 @@ and one lane that was measuring the wrong thing; the details are in
 
 The worker-priority experiment that preceded the lane fix is not in the tree: it
 measured 33.77 against 29.69 before it, so it was dropped rather than shipped.
+
+## The assistant's saved path, and a scenario a harness can judge
+
+The assistant panel said "The or CLI was not found" on a machine whose CLI was
+present and built. The saved settings named a path from an earlier packaged
+build — `/Applications/Opencut Reinforced.app/Contents/MacOS/or` — and
+`resolveOrCliPath` returned that path's resolution, which was `null`, instead of
+falling through to the detection a fresh install uses. Every later rung (the run
+harness's `OR_CLI_PATH`, the walk up the checkout, the CLI beside the executable)
+was unreachable.
+
+| Evidence | Result |
+| --- | --- |
+| Reproduction | the panel's own copy and the semantics tree: "The or CLI was not found, so the assistant cannot edit the project." while `./target/debug/or version` printed `Opencut Reinforced 0.1.16` |
+| Fix | a stored path that does not resolve now falls through; `apps/or_app/test/assistant_settings_test.dart` covers both a stale saved path and a stale override |
+| Run harness | `scripts/or_ui.py` exports `OR_CLI_PATH` for the build it launches, so the debug app reaches its own CLI |
+| Deterministic assistant scenario | `assistant-panel` (23 steps) connects the panel, opens settings, sends a turn and passes; `assistant-edit` keeps the live-provider half, which a harness cannot judge |

@@ -25,6 +25,10 @@ On this Mac the default target is `macos`: it builds and launches the real
 desktop app through the Flutter integration test and reads artifacts from the
 host filesystem. A 1440x900 window launches in about twenty seconds.
 
+The run also names the CLI the assistant edits through (`OR_CLI_PATH`, the
+checkout's `target/debug/or`), because a debug build has no packaged CLI beside
+it and its working directory is not the checkout.
+
 Run one scenario at a time: every run rewrites `apps/or_app/build/ui-harness/`,
 so two concurrent runs (or a run started while another is finishing) corrupt each
 other's transcript and report. When the tooling fails to foreground the app
@@ -44,6 +48,11 @@ file through the real picker). A `copy:` fixture ending in `.orproj` becomes the
 project the scenario opens (copied to `scenario.orproj` in the scenario
 directory, so a save never writes into the repository fixture); other `copy:`
 fixtures are media.
+
+`assistant-panel` covers the assistant the harness can actually judge: the panel
+connects, the empty state and composer appear, a turn is sent. `assistant-edit`
+adds what only a live provider can answer — the reply and the edit it makes — so
+run it where a model is configured, not as a regression check.
 
 Right-click a clip by its own label rather than a key regex with
 `allow_multiple`: the first clip in the lane is rarely the one under test.

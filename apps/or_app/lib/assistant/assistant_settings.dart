@@ -391,7 +391,20 @@ Future<String?> resolveOrCliPath({
         executablePath: executablePath,
       );
   if (settings.orCliPath.isNotEmpty) {
-    return host.resolveExecutable(settings.orCliPath);
+    final stored = host.resolveExecutable(settings.orCliPath);
+    if (stored != null) return stored;
+    // A stored path outlives the build it named: the app was moved, replaced by
+    // a new version or uninstalled. Returning null here would disable the
+    // assistant for good with no way back but the settings dialog, so a stale
+    // path falls through to the same detection a fresh install uses.
+  }
+  // A developer override, mirroring `OR_FFMPEG_PATH`: an unpackaged run has no
+  // packaged CLI beside the executable, and walking up from the working
+  // directory only works when the app was started from inside the checkout.
+  final override = (environment ?? Platform.environment)['OR_CLI_PATH'];
+  if (override != null && override.trim().isNotEmpty) {
+    final resolved = host.resolveExecutable(override);
+    if (resolved != null) return resolved;
   }
   final executable = executablePath ?? host.executablePath;
   final starts = <Directory>[

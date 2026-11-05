@@ -1,0 +1,127 @@
+{
+  "name": "assistant-panel",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Assistant journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "editor-before"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "assistant-connecting"
+    },
+    {
+      "op": "pump",
+      "ms": 15000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-connect-15s"
+    },
+    {
+      "op": "wait",
+      "text": "Ask for an edit",
+      "budget_ms": 120000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-ready"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-ready"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings"
+      }
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "assistant-settings-dialog"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-auto-approve"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-settings-save"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "assistant-composer"
+      },
+      "value": "Use the or tools. Add a text track (kind text), insert a 3 second text clip at 1 second whose text is Hello from AI, and save the project. Do not ask questions."
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "assistant-send"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 30000
+    },
+    {
+      "op": "tree",
+      "name": "assistant-after-send"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-after-send"
+    },
+    {
+      "op": "tree",
+      "name": "assistant-turn-sent"
+    }
+  ]
+}

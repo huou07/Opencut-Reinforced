@@ -292,8 +292,13 @@ class _Runner {
         'progress.log',
         '${DateTime.now().toIso8601String()} step ${index + 1}/${spec.steps.length} ${step['op']}\n',
       );
+      // A step that asks for a long budget must not be cut off before its own
+      // deadline: the guard only exists to free a run that would otherwise hang
+      // forever, so it sits above the requested budget instead of under it.
+      final budgetMs = (step['budget_ms'] as num?)?.toInt() ?? 8000;
+      final guard = Duration(milliseconds: budgetMs + 40000);
       try {
-        await _executeStep(step).timeout(const Duration(seconds: 90));
+        await _executeStep(step).timeout(guard);
       } on TimeoutException {
         artifacts.appendText(
           'progress.log',
@@ -323,11 +328,10 @@ class _Runner {
     final name = '${spec.name}.json';
     artifacts.writeJson(name, transcript);
     artifacts.close(platform, name);
-    try {
-      await tester.pumpWidget(const SizedBox.shrink());
-    } catch (_) {
-      // A disposal failure is not worth masking the scenario result.
-    }
+    // No teardown pump: a step that hit its deadline can still be inside a
+    // guarded `pump`, and pumping a new tree from here turns that into a
+    // "Guarded function conflict" that reads as a scenario failure. The process
+    // ends with the run, so detaching the tree buys nothing.
   }
 
   // -- execution ---------------------------------------------------------

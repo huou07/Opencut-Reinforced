@@ -245,17 +245,56 @@ void main() {
         ),
         cli.path,
       );
-      expect(
-        await resolveOrCliPath(
-          settings: AssistantSettings(orCliPath: '${root.path}/missing-or'),
-          environment: const {'PATH': ''},
-          currentDirectory: root,
-          executablePath: '${root.path}/or_app',
-        ),
-        isNull,
+      // A missing stored path does not win: it falls through to detection, so
+      // the answer is anything but the path that is not there.
+      final stale = await resolveOrCliPath(
+        settings: AssistantSettings(orCliPath: '${root.path}/missing-or'),
+        environment: const {'PATH': ''},
+        currentDirectory: root,
+        executablePath: '${root.path}/or_app',
       );
+      expect(stale, isNot('${root.path}/missing-or'));
     },
   );
+
+  test('an unpackaged run can point at the CLI it built', () async {
+    final root = await Directory.systemTemp.createTemp('or-cli-override-');
+    addTearDown(() => root.delete(recursive: true));
+    final cli = File('${root.path}/or')..writeAsStringSync('');
+
+    final resolved = await resolveOrCliPath(
+      settings: const AssistantSettings(),
+      environment: {'PATH': '', 'OR_CLI_PATH': cli.path},
+      currentDirectory: root,
+      executablePath: '${root.path}/or_app',
+    );
+    expect(resolved, cli.path);
+
+    // A stale override names nothing and must not block the next rung: the CLI
+    // sitting beside the executable still answers.
+    final besideExecutable = File('${root.path}/beside/app/or');
+    besideExecutable.parent.createSync(recursive: true);
+    besideExecutable.writeAsStringSync('');
+    final stale = await resolveOrCliPath(
+      settings: const AssistantSettings(),
+      environment: {'PATH': '', 'OR_CLI_PATH': '${root.path}/missing-or'},
+      currentDirectory: root,
+      executablePath: '${besideExecutable.parent.path}/or_app',
+    );
+    expect(stale, besideExecutable.path);
+
+    // A saved path can outlive the build it named. It used to disable the
+    // assistant outright; now it falls through to detection.
+    final movedStored = await resolveOrCliPath(
+      settings: AssistantSettings(
+        orCliPath: '/Applications/Opencut Reinforced.app/Contents/MacOS/or',
+      ),
+      environment: {'PATH': ''},
+      currentDirectory: besideExecutable.parent,
+      executablePath: '${besideExecutable.parent.path}/or_app',
+    );
+    expect(movedStored, besideExecutable.path);
+  });
 
   test('no overlay still yields a usable assistant persona patch', () {
     final patch = buildHarnessPatch(

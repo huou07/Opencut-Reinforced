@@ -242,7 +242,13 @@ One near-term delivery mission for the local macOS app, in this order:
     FFmpeg DLLs, `os.access` launching a `.pdb`, and a fixture probe that
     looked for `ffmpeg` without `.exe`. All three hosts now reach a verdict, and
     the Windows single-threaded raster row carries its own recorded baseline
-    (p95 317 ms, 450 ms ceiling) rather than a loosened default.
+31. **A stale saved path disabled the assistant (2026-11-06).** `resolveOrCliPath`
+    returned the stored `orCliPath` even when the file behind it had gone, so a
+    path saved by an earlier packaged build left "The or CLI was not found" with
+    no way back but the settings dialog. It now falls through to the same
+    detection a fresh install uses, and a run harness can name the CLI it built
+    (`OR_CLI_PATH`); `assistant-panel` is the part of the assistant a harness can
+    judge without a live provider.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

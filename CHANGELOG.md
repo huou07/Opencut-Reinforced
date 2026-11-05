@@ -13,6 +13,50 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.17 — 2026-11-06
+
+### Added
+- **The performance budget runs, and reports, on all three desktops.**
+  `scripts/bench_quality.py` reaches a verdict on macOS, Debian and Windows from
+  one commit, prints the host it measured, and gives a row its own baseline
+  instead of a loosened default where the machine's hardware explains the
+  number (the Windows single-threaded raster and save rows).
+
+### Changed
+- **The saturation lane measures OR's pool, not the operating system.** The
+  policy for the artifact worker count lives in `or_core` (the bridge delegates
+  to it), so the app and the lane cannot drift; the lane now saturates that pool
+  with twelve jobs waiting behind it. The same lane reported a 29.7-33.8 ratio on
+  a ten-core Windows laptop before and 1.08 / 1.27 / 1.43 on macOS / Debian /
+  Windows after, with the 6.0 ratio budget unchanged.
+
+### Fixed
+- **A saved CLI path that no longer exists no longer disables the assistant.**
+  The stored path can outlive the build it named; detection now decides instead,
+  and the run harness names the debug CLI it built (`OR_CLI_PATH`), so
+  `assistant-panel` can judge the panel rather than the machine.
+- **The Windows installer can update a running app.** It stops the running
+  executables before it replaces files instead of retrying a locked DLL and
+  rolling back with no message; a fresh install, an upgrade over the running app
+  and an uninstall were all exercised on a Windows 11 host.
+- **A package cannot ship a stale CLI.** The Windows lane rebuilds `or_cli` and
+  the provider before staging, and the stager refuses a staged `or.exe` whose
+  version disagrees with the workspace.
+- **The benchmark crashes on Windows are gone.** No unconditional `pgrep`, the
+  configured FFmpeg `bin` is prepended so the DLLs load, the test binary is
+  filtered to `.exe`, and the clean-up fixture probe looks for `ffmpeg.exe`.
+- **Two scenarios only ran on the machine that wrote them.** `export-long`,
+  `mov-import` and `media-decode-refused` imported files under `/tmp` that nothing
+  generated; they now import small checked-in fixtures whose generating command
+  and SHA-256 are recorded, and `track-reorder` matches the label the track lane
+  really produces.
+- **A complete run is not reported as a failure.** When the macOS tool refuses to
+  bring the window forward during teardown, the harness still passes a run whose
+  transcript is complete, and it writes the runner's exit code into its log.
+- **A command pressed in the frame a dialog closes reaches its action.** The
+  shell no longer treats the focus node of a torn-down text field as owning the
+  keyboard.
+
 ## 0.1.16 — 2026-11-05
 
 ### Added
