@@ -335,6 +335,8 @@ mod tests {
                 text_align: None,
                 line_height: None,
                 letter_spacing: None,
+                corner_radius: None,
+                gradient: None,
             }],
             animations: vec![],
             camera: None,

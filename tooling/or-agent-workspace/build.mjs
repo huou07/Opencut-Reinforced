@@ -9,7 +9,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const BUNDLE_VERSION = 19;
+export const BUNDLE_VERSION = 20;
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const output = path.resolve(

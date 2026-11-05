@@ -11,8 +11,8 @@ MotionScene is a versioned, **declarative, non-executable** data format
 (`.ormotion.json`). It has no script, shader, HTTP, environment, glob, shell,
 provider or hidden font lookup, and evaluation makes **zero** model calls.
 
-Envelope: `format`, `schema_version` (2; a version 1 document still parses and
-renders identically), UUIDv4 `scene_id`, `name`, exact `duration`, `canvas`,
+Envelope: `format`, `schema_version` (3; a version 1 or 2 document still parses
+and renders identically), UUIDv4 `scene_id`, `name`, exact `duration`, `canvas`,
 typed `assets`, `nodes`, `animations`, and an optional `camera`.
 
 - Time is nonnegative finite `RationalTime` on a half-open `[0, duration)` local
@@ -46,6 +46,15 @@ typed `assets`, `nodes`, `animations`, and an optional `camera`.
   `set_font_weight`, `set_text_align`, `set_line_height`,
   `set_letter_spacing` — so a scene is never mutated by hand, and a shape is
   refused with `MOTION_EDIT_NOT_TEXT`.
+- A rectangle may set `corner_radius` (canvas pixels, clamped to half the shorter
+  side when drawn) and any shape may set a two-stop `gradient`
+  (`{from, to, angle_degrees}`) that replaces its flat `fill` across the node's
+  own box (schema version 3, ADR 0013). Absent fields keep the square, flat look
+  of earlier versions. Out-of-range values are refused with
+  `MOTION_INVALID_CORNER_RADIUS` or `MOTION_INVALID_GRADIENT`, and
+  `set_corner_radius` is the typed operation the inspector uses; a non-shape is
+  refused with `MOTION_EDIT_NOT_SHAPE`. A gradient is authored in the scene file
+  or by the agent, not by a picker in the inspector yet.
 - Image nodes draw a decoded PNG asset resolved relative to the scene file, with a
   16 MiB encoded / 64 megapixel bound; a missing image keeps the visible
   placeholder.
@@ -126,7 +135,8 @@ materialised video.
 - `crates/or_render/` — evaluation into the render spine
 - `apps/or_app/lib/` — Motion panel and insertion flow
 - ADR: [docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md](../adr/0007-declarative-motion-scenes-and-procedural-isolation.md),
-  [docs/adr/0012-scene-typography-schema-v2.md](../adr/0012-scene-typography-schema-v2.md)
+  [docs/adr/0012-scene-typography-schema-v2.md](../adr/0012-scene-typography-schema-v2.md),
+  [docs/adr/0013-scene-shape-style-schema-v3.md](../adr/0013-scene-shape-style-schema-v3.md)
 
 ## Related
 

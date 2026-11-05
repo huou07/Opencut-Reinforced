@@ -184,6 +184,50 @@ impl Canvas {
     }
 }
 
+/// Whether a point lies inside a rectangle with rounded corners, in the shape's
+/// own unrotated frame. The signed distance is the usual exact test: a card's
+/// corner arc is a quarter circle, not a bevelled edge.
+fn rounded_rectangle_contains(
+    local_x: f64,
+    local_y: f64,
+    half_width: f64,
+    half_height: f64,
+    radius: f64,
+) -> bool {
+    let qx = local_x.abs() - (half_width - radius);
+    let qy = local_y.abs() - (half_height - radius);
+    let outside = qx.max(0.0).hypot(qy.max(0.0));
+    outside + qx.max(qy).min(0.0) - radius <= 0.0
+}
+
+/// The colour of a two-stop linear gradient at one point of the shape's box. The
+/// projected distance is normalised by the box's own extent along the gradient
+/// direction, so the first stop always touches one edge and the second the other,
+/// whatever the angle.
+fn gradient_color(
+    from: [f64; 4],
+    to: [f64; 4],
+    angle: f64,
+    local_x: f64,
+    local_y: f64,
+    half_width: f64,
+    half_height: f64,
+) -> [f64; 4] {
+    let (sin, cos) = angle.sin_cos();
+    let extent = (cos.abs() * half_width + sin.abs() * half_height) * 2.0;
+    if extent <= f64::EPSILON {
+        return from;
+    }
+    let projected = local_x * cos + local_y * sin;
+    let t = (projected / extent + 0.5).clamp(0.0, 1.0);
+    [
+        from[0] + (to[0] - from[0]) * t,
+        from[1] + (to[1] - from[1]) * t,
+        from[2] + (to[2] - from[2]) * t,
+        from[3] + (to[3] - from[3]) * t,
+    ]
+}
+
 fn rgba(color: MotionColor, opacity: f64) -> [f64; 4] {
     [
         color.red as f64 / 255.0,
@@ -232,6 +276,20 @@ fn draw_instruction(
             let stroke_width = instruction.stroke_width.max(0.0);
             let radius_x = half_width - stroke_width / 2.0;
             let radius_y = half_height - stroke_width / 2.0;
+            // A radius larger than half the shorter side would invert the corner
+            // arcs, so it is clamped rather than rejected: resizing a card keeps the
+            // scene valid and the picture predictable.
+            let corner_radius = instruction
+                .corner_radius
+                .map(|radius| radius.max(0.0).min(half_width.min(half_height)))
+                .unwrap_or(0.0);
+            let gradient = instruction.gradient.map(|gradient| {
+                (
+                    rgba(gradient.from, instruction.opacity),
+                    rgba(gradient.to, instruction.opacity),
+                    gradient.angle_degrees.to_radians(),
+                )
+            });
 
             // The scan covers the shape's circumscribed circle, not its unrotated
             // box: a rotation moves ink outside that box, and scanning only the box
@@ -251,6 +309,15 @@ fn draw_instruction(
                         instruction.rotation_degrees,
                     );
                     let inside = match instruction.kind {
+                        MotionNodeKind::Rectangle if corner_radius > 0.0 => {
+                            rounded_rectangle_contains(
+                                local_x,
+                                local_y,
+                                half_width,
+                                half_height,
+                                corner_radius,
+                            )
+                        }
                         MotionNodeKind::Rectangle => {
                             local_x.abs() <= half_width && local_y.abs() <= half_height
                         }
@@ -272,7 +339,21 @@ fn draw_instruction(
                             || local_y.abs() >= half_height - stroke_width);
                     match (on_stroke, stroke, fill) {
                         (true, Some(stroke), _) => canvas.blend(x, y, stroke),
-                        (false, _, Some(fill)) => canvas.blend(x, y, fill),
+                        (false, _, Some(fill)) => {
+                            let color = match gradient {
+                                Some((from, to, direction)) => gradient_color(
+                                    from,
+                                    to,
+                                    direction,
+                                    local_x,
+                                    local_y,
+                                    half_width,
+                                    half_height,
+                                ),
+                                None => fill,
+                            };
+                            canvas.blend(x, y, color);
+                        }
                         (true, None, Some(fill)) => canvas.blend(x, y, fill),
                         _ => {}
                     }
@@ -1084,6 +1165,85 @@ mod tests {
         let frame =
             or_motion::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap()).unwrap();
         rasterize_motion_frame(&frame).unwrap()
+    }
+
+    fn shape_frame(node: serde_json::Value, width: u32, height: u32) -> RasterizedMotionFrame {
+        let scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 3,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Shape probe",
+            "duration": {"numerator": 4, "denominator": 1},
+            "canvas": {"width": width, "height": height},
+            "assets": [],
+            "nodes": [node],
+            "animations": []
+        });
+        let scene = parse_motion_scene(&serde_json::to_vec(&scene).unwrap()).unwrap();
+        let frame =
+            or_motion::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap()).unwrap();
+        rasterize_motion_frame(&frame).unwrap()
+    }
+
+    #[test]
+    fn a_rounded_rectangle_leaves_its_corner_empty() {
+        let frame = shape_frame(
+            serde_json::json!({
+                "node_id": "card",
+                "kind": "rectangle",
+                "position": {"x": 10, "y": 10},
+                "size": {"width": 40, "height": 40},
+                "fill": {"red": 235, "green": 235, "blue": 235},
+                "corner_radius": 12
+            }),
+            60,
+            60,
+        );
+        // The box's top-left pixel is outside a 12-pixel corner arc and the centre is
+        // inside it; a square corner would have painted all four corners.
+        assert_eq!(
+            frame.pixel(11, 11).map(|pixel| pixel[3]),
+            Some(0),
+            "the corner arc should stay empty"
+        );
+        assert_eq!(
+            frame.pixel(30, 30).map(|pixel| pixel[3]),
+            Some(255),
+            "the card's centre should be filled"
+        );
+        let (min_x, min_y, max_x, max_y, _) = ink_bounds(&frame).expect("expected ink");
+        assert!(
+            min_x >= 10 && min_y >= 10 && max_x <= 49 && max_y <= 49,
+            "ink escaped the box"
+        );
+    }
+
+    #[test]
+    fn a_gradient_changes_colour_across_the_box() {
+        let frame = shape_frame(
+            serde_json::json!({
+                "node_id": "panel",
+                "kind": "rectangle",
+                "position": {"x": 0, "y": 0},
+                "size": {"width": 40, "height": 20},
+                "fill": {"red": 255, "green": 255, "blue": 255},
+                "gradient": {
+                    "from": {"red": 0, "green": 0, "blue": 0},
+                    "to": {"red": 255, "green": 255, "blue": 255},
+                    "angle_degrees": 0
+                }
+            }),
+            40,
+            20,
+        );
+        let left = frame.pixel(0, 10).expect("left edge");
+        let right = frame.pixel(39, 10).expect("right edge");
+        assert!(left[0] < 40, "left edge should be dark, found {:?}", left);
+        assert!(
+            right[0] > 215,
+            "right edge should be light, found {:?}",
+            right
+        );
     }
 
     fn ink_bounds(frame: &RasterizedMotionFrame) -> Option<(u32, u32, u32, u32, u32)> {

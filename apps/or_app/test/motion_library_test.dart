@@ -128,6 +128,13 @@ Map<String, dynamic> _applyFakeEdit(
       } else {
         node['letter_spacing'] = edit['letter_spacing'];
       }
+    case 'set_corner_radius':
+      final node = find(id!)!;
+      if (edit['corner_radius'] == null) {
+        node.remove('corner_radius');
+      } else {
+        node['corner_radius'] = edit['corner_radius'];
+      }
     case 'delete':
       nodes.removeWhere((node) => node['node_id'] == id);
     case 'delete_many':
@@ -1690,4 +1697,61 @@ void main() {
       );
     },
   );
+
+  testWidgets('the inspector rounds a shape without a bridge regeneration', (
+    tester,
+  ) async {
+    late MotionLibraryController controller;
+    late _FakeMotionGateway gateway;
+    await tester.runAsync(() async {
+      (controller, gateway, _) = await buildController();
+      // The fake gateway answers every import with its own scene, so the card is
+      // added there; the import then seeds the draft exactly as a user's scene
+      // file would.
+      (gateway.scene['nodes'] as List).add({
+        'node_id': 'card',
+        'kind': 'rectangle',
+        'position': {'x': 120, 'y': 160},
+        'size': {'width': 520, 'height': 300},
+        'fill': {'red': 32, 'green': 32, 'blue': 36, 'alpha': 255},
+      });
+      await controller.importSceneFile('/tmp/round-cards.ormotion.json');
+    });
+    controller.selectNode('card');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            height: 1200,
+            child: MotionSceneInspector(
+              controller: controller,
+              scope: 'corner',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(controller.nodeCornerRadius('card'), 0);
+    expect(
+      find.byKey(const ValueKey('corner-node-corner-radius-value')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('corner-node-corner-radius-up')),
+    );
+    await tester.pump();
+    expect(gateway.edits.last['op'], 'set_corner_radius');
+    expect(controller.nodeCornerRadius('card'), 4);
+
+    await tester.tap(
+      find.byKey(const ValueKey('corner-node-corner-radius-down')),
+    );
+    await tester.pump();
+    expect(controller.nodeCornerRadius('card'), 0);
+  });
 }

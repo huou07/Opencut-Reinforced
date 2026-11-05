@@ -484,6 +484,8 @@ pub fn scene_from_source(
             text_align: None,
             line_height: None,
             letter_spacing: None,
+            corner_radius: None,
+            gradient: None,
             spans: None,
         },
         MotionNode {
@@ -509,6 +511,8 @@ pub fn scene_from_source(
             text_align: None,
             line_height: None,
             letter_spacing: None,
+            corner_radius: None,
+            gradient: None,
             spans: None,
         },
     ];
@@ -575,6 +579,8 @@ pub fn scene_from_source(
                 text_align: None,
                 line_height: None,
                 letter_spacing: None,
+                corner_radius: None,
+                gradient: None,
             });
 
             if character_ends.is_empty() {
