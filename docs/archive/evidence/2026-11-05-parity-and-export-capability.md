@@ -214,3 +214,27 @@ deleted or re-created, and no version was published twice.
 The panel defect this found is recorded in `docs/reference/roadmap.md` item 25:
 the remove control previously required both halves of the runtime, so a host
 that installed the engine without the adapter offered only a second download.
+
+## The Windows installer, exercised over a running app, 2026-11-06
+
+The published 0.1.16 setup had never been installed on a Windows host, so it was
+built again from the branch and driven through the three transitions a user
+actually performs. The first attempt failed in a way no test had covered: over an
+existing install the silent upgrade retried `DeleteFile` on a mapped
+`avcodec-62.dll`, then reported `User canceled the installation process` and
+exited with code 5, having done nothing.
+
+| Evidence | Result |
+| --- | --- |
+| The failure, from the installer's own log | `C:\orb\tmp\setup.log`: `DeleteFile: The existing file appears to be in use (5). Retrying.` ×4, then `Defaulting to Abort for suppressed message box (Abort/Retry/Ignore)` → exit 5, `Rolling back changes` |
+| The lock came from the app itself | `Get-Process \| Where-Object { $_.Path -like '*Opencut Reinforced*' }` on the host listed `or_app.exe` running from `%LOCALAPPDATA%\Programs\Opencut Reinforced` |
+| A fresh install succeeds | `start /wait setup.exe /VERYSILENT …` → `EXIT1=0`, `or.exe version` = `Opencut Reinforced 0.1.16` |
+| An upgrade over the running app now succeeds | app started, then the same setup → `EXIT2=0`, version still 0.1.16, and `app-closed-by-setup` (the installer stopped it) |
+| The uninstall removes the tree | `unins000.exe /VERYSILENT` → `EXIT3=0`, `removed` |
+| The staged CLI cannot silently disagree with the package | `stage_windows_bundle.ps1` now compares `or.exe version` with `Cargo.toml`; before the guard, a package named 0.1.16 shipped an `or.exe` that printed 0.1.15 because the lane reused a stale `target/release` |
+
+Both defects are recorded as `docs/reference/roadmap.md` items 26 and 27. The
+installer change is `scripts/windows_installer.iss` `PrepareToInstall` plus
+`RestartApplications=no`; the staging change is the release build of `or_cli` and
+`or_whisper_provider` in `scripts/run_windows_lane.ps1` and the version guard in
+`scripts/stage_windows_bundle.ps1`.

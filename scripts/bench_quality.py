@@ -79,7 +79,22 @@ _RUNTIME_ENV = _runtime_env(_configured_prefix())
 # The shared helper also prepends the FFmpeg prefix's `bin` to PATH. That would
 # shadow the host's own `ffmpeg` for rows that need a general-purpose helper
 # (the clean-up fixture), so keep the caller's PATH and only add libraries.
-_RUNTIME_ENV["PATH"] = os.environ.get("PATH", _RUNTIME_ENV.get("PATH", ""))
+_runtime_path = os.environ.get("PATH", _RUNTIME_ENV.get("PATH", ""))
+if os.name == "nt":
+    # Windows resolves DLLs through PATH and has no LD_LIBRARY_PATH equivalent, so
+    # the FFmpeg prefix has to stay reachable or the test binaries fail with
+    # STATUS_DLL_NOT_FOUND. It is appended, so a general-purpose `ffmpeg` earlier
+    # on the caller's PATH still wins for the rows that need one.
+    _configured = _configured_prefix()
+    _ffmpeg_bin = str(_configured / "bin") if _configured is not None else ""
+    if _ffmpeg_bin and _ffmpeg_bin not in _runtime_path:
+        # Prepended, not appended: a toolchain directory earlier on PATH can carry a
+        # different `avcodec-*.dll`, and the loader then finds the wrong soname set
+        # first and fails with STATUS_DLL_NOT_FOUND.
+        _runtime_path = (
+            _ffmpeg_bin + os.pathsep + _runtime_path if _runtime_path else _ffmpeg_bin
+        )
+_RUNTIME_ENV["PATH"] = _runtime_path
 _forced_dyld = _RUNTIME_ENV.pop("DYLD_LIBRARY_PATH", "")
 if _forced_dyld:
     _existing = _RUNTIME_ENV.get("DYLD_FALLBACK_LIBRARY_PATH", "")
@@ -362,16 +377,22 @@ def host_notes() -> list[str]:
             if line.startswith("MemAvailable:"):
                 notes.append(f"MemAvailable {int(line.split()[1]) / 1048576:.2f} GiB")
                 break
-    daemons = subprocess.run(["pgrep", "-af", "GradleDaemon|KotlinCompileDaemon"],
-                             capture_output=True, text=True, check=False)
-    for line in daemons.stdout.splitlines():
-        notes.append("foreign build process: " + line.strip()[:120])
+    # `pgrep` is a Unix tool: on Windows the probe would raise FileNotFoundError
+    # and take the whole budget run down before a single row was measured.
+    pgrep = shutil.which("pgrep")
+    if pgrep is not None:
+        daemons = subprocess.run([pgrep, "-af", "GradleDaemon|KotlinCompileDaemon"],
+                                 capture_output=True, text=True, check=False)
+        for line in daemons.stdout.splitlines():
+            notes.append("foreign build process: " + line.strip()[:120])
     return notes
 
 
 # -- shared helpers --------------------------------------------------------
 def build_cli_if_missing() -> Path:
-    binary = ROOT / "target" / "debug" / "or"
+    # Windows builds carry the suffix, and `os.access(..., os.X_OK)` is a plain
+    # existence check there, so the name has to be right before it is asked about.
+    binary = ROOT / "target" / "debug" / ("or.exe" if os.name == "nt" else "or")
     if os.access(binary, os.X_OK):
         return binary
     cargo = shutil.which("cargo")
@@ -400,10 +421,17 @@ def find_test_binary(prefix: str, row_id: str, settle: str) -> Path:
     usable is the acceptance lane's decision, and a benchmark must not surprise a
     host with a compile.
     """
+    # Windows writes the executable, a `.pdb`, and sometimes a `.d` beside it, and
+    # `os.access(..., os.X_OK)` is a plain existence check there, so the suffix has
+    # to be part of the filter or the loader is handed a program database.
+    executable_suffix = ".exe" if os.name == "nt" else ""
     candidates = [
         Path(path)
         for path in glob.glob(str(ROOT / "target" / "debug" / "deps" / f"{prefix}-*"))
-        if not path.endswith(".d") and os.access(path, os.X_OK)
+        if not path.endswith(".d")
+        and path.endswith(executable_suffix or path)
+        and Path(path).is_file()
+        and os.access(path, os.X_OK)
     ]
     if not candidates:
         raise Unmeasurable(row_id, f"no prebuilt {prefix} test binary", settle)

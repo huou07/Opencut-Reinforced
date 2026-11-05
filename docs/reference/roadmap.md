@@ -151,6 +151,20 @@ Blocked, and reported as blocked rather than attempted:
     and the adapter, so a build that installed only the engine offered a second
     download and no way back. Fixed by keying the control off the install
     record and hiding Install once an engine is present.
+26. **The Windows installer could not update a running app** — found on 2026-11-05
+    while proving the `.setup.exe`: over an existing 0.1.13 install the silent
+    upgrade retried `DeleteFile` on a mapped `avcodec-62.dll`, then aborted with
+    exit code 5 and no message at all, so a user with the app open would see the
+    installer fail without a reason. `PrepareToInstall` now stops
+    `or_app.exe`/`or.exe`/`or-whisper-provider.exe` first and
+    `RestartApplications=no` stops a silent update from relaunching the app; a
+    fresh install, an upgrade over a running app and the uninstall were re-run on
+    the Windows host (exit 0 each, `or version` 0.1.16).
+27. **A staged runtime could carry a stale CLI** — found the same day: a package
+    named for 0.1.16 shipped an `or.exe` reporting 0.1.15 because the local lane
+    staged whatever was in `target/release`. The lane now builds `or_cli` and
+    `or_whisper_provider` before staging, and staging refuses a staged `or.exe`
+    whose version disagrees with `Cargo.toml`.
 
 ## Previous focus (owner restatement, 2026-10-21)
 

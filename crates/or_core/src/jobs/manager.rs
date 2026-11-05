@@ -408,7 +408,34 @@ impl Drop for JobManager {
     }
 }
 
+/// Runs a pooled worker at a lower scheduling class than the caller.
+///
+/// The pool only carries opportunistic work (thumbnails, waveforms, proxies,
+/// analysis); playback, decode and rendering never enter it. Windows gives a
+/// thread no `nice`-style equivalent and its scheduler will happily starve a
+/// render thread behind a full set of spinning workers, which is exactly the
+/// failure `crates/or_render/tests/queue_priority.rs` measured on Windows 11
+/// (loaded p95 49 ms against a 1.7 ms idle p95). Below-normal keeps the pool
+/// first to yield without leaving the machine idle when nothing else runs.
+#[cfg(windows)]
+fn lower_worker_priority() {
+    use windows_sys::Win32::System::Threading::{
+        GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+    };
+    // SAFETY: both calls take this thread's own handle and have no memory
+    // contract. A refused request only means the worker keeps the default class.
+    unsafe {
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+    }
+}
+
+/// No-op elsewhere: macOS and Linux already ran the same lane well inside the
+/// ratio budget, so there is nothing to change and no measured reason to change it.
+#[cfg(not(windows))]
+fn lower_worker_priority() {}
+
 fn worker_loop(shared: Arc<Shared>) {
+    lower_worker_priority();
     loop {
         let work = {
             let mut state = lock(&shared);

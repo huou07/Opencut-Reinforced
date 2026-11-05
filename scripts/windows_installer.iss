@@ -41,7 +41,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
-RestartApplications=yes
+RestartApplications=no
 UninstallDisplayIcon={app}\{#AppExe}
 MinVersion=10.0
 
@@ -57,3 +57,27 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// The app keeps the bundled FFmpeg DLLs mapped for its whole lifetime, so an
+// upgrade over a running copy cannot replace them: Setup retries, then reports
+// "DeleteFile failed; code 5" and, with /VERYSILENT, aborts the install with
+// exit code 5 and no message at all. Closing the app first makes the upgrade
+// behave like the macOS one. Setup cannot prompt in silent mode, so it is done
+// here rather than left to CloseApplications.
+procedure StopRunningApp();
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM {#AppExe}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM or.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec('taskkill.exe', '/F /IM or-whisper-provider.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // Give the window server a moment to release the image sections.
+  Sleep(400);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  StopRunningApp();
+  Result := '';
+end;
