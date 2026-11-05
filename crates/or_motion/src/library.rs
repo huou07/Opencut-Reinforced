@@ -427,6 +427,11 @@ impl MotionLibrary {
             asset_id: Some(asset_id.clone()),
             opacity: Some(1.0),
             rotation_degrees: Some(0.0),
+            font: None,
+            font_weight: None,
+            text_align: None,
+            line_height: None,
+            letter_spacing: None,
             spans: None,
         };
         let parameter =
@@ -992,6 +997,11 @@ mod tests {
                     asset_id: Some("logo".to_owned()),
                     opacity: Some(1.0),
                     rotation_degrees: Some(0.0),
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                     spans: None,
                 }],
                 animations: vec![],

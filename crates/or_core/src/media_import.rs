@@ -17,6 +17,13 @@ pub enum MediaImportError {
     DecoderUnavailable {
         codec: String,
     },
+    /// The build carries a decoder for the stream, but decoding it failed on
+    /// this machine, so admitting the file would create a clip that cannot
+    /// play. The reason is kept because it is the only actionable detail.
+    DecodeUnavailable {
+        codec: String,
+        reason: String,
+    },
 }
 
 impl MediaImportError {
@@ -33,6 +40,7 @@ impl MediaImportError {
             Self::InvalidSourceUri(MediaSourceUriError::TooLong) => "SOURCE_URI_TOO_LONG",
             Self::InvalidMetadata(_) => "INVALID_MEDIA_METADATA",
             Self::DecoderUnavailable { .. } => "UNSUPPORTED_CODEC",
+            Self::DecodeUnavailable { .. } => "DECODE_UNAVAILABLE",
         }
     }
 
@@ -53,6 +61,9 @@ impl MediaImportError {
             Self::DecoderUnavailable { .. } => {
                 "this build has no decoder for one of the file's media codecs"
             }
+            Self::DecodeUnavailable { .. } => {
+                "this machine could not decode the file's video stream"
+            }
         }
     }
 
@@ -60,6 +71,7 @@ impl MediaImportError {
         match self {
             Self::Probe(error) => error.diagnostic(),
             Self::DecoderUnavailable { codec } => Some(codec),
+            Self::DecodeUnavailable { reason, .. } => Some(reason),
             _ => None,
         }
     }
@@ -72,6 +84,11 @@ impl fmt::Display for MediaImportError {
             Self::DecoderUnavailable { codec } => {
                 write!(formatter, "no decoder for codec {codec} in this build")
             }
+            Self::DecodeUnavailable { codec, reason } => write!(
+                formatter,
+                "This machine cannot decode {codec} video ({reason}). \
+                 Import the file as H.264 or VP9 instead."
+            ),
             _ => formatter.write_str(self.message()),
         }
     }
@@ -83,9 +100,10 @@ impl Error for MediaImportError {
             Self::Probe(error) => Some(error),
             Self::InvalidSourceUri(error) => Some(error),
             Self::InvalidMetadata(error) => Some(error),
-            Self::SourceNotFound | Self::SourceUnavailable | Self::DecoderUnavailable { .. } => {
-                None
-            }
+            Self::SourceNotFound
+            | Self::SourceUnavailable
+            | Self::DecoderUnavailable { .. }
+            | Self::DecodeUnavailable { .. } => None,
         }
     }
 }
@@ -190,6 +208,29 @@ mod tests {
         let error = super::prepare_media_import_with_probe(&path, unsupported).unwrap_err();
         assert_eq!(error.code_str(), "UNSUPPORTED_CODEC");
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn a_decoder_that_cannot_run_on_this_machine_is_refused_with_the_reason() {
+        let error = MediaImportError::DecodeUnavailable {
+            codec: "av1".to_owned(),
+            reason: "FFmpeg operation failed: Function not implemented".to_owned(),
+        };
+        assert_eq!(error.code_str(), "DECODE_UNAVAILABLE");
+        assert_eq!(
+            error.message(),
+            "this machine could not decode the file's video stream"
+        );
+        assert_eq!(
+            error.diagnostic(),
+            Some("FFmpeg operation failed: Function not implemented")
+        );
+        let rendered = error.to_string();
+        // The import summary keeps the first 180 characters of a failure, so the
+        // advice has to live inside that budget.
+        assert!(rendered.len() < 180, "{rendered}");
+        assert!(rendered.contains("cannot decode av1 video"));
+        assert!(rendered.ends_with("Import the file as H.264 or VP9 instead."));
     }
 
     #[test]

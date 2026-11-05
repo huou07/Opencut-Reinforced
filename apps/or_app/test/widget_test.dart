@@ -16,6 +16,7 @@ import 'package:or_app/design/or_colors.dart';
 import 'package:or_app/design/or_spacing.dart';
 import 'package:or_app/design/or_theme.dart';
 import 'package:or_app/main.dart';
+import 'package:or_app/production/editor_settings.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
@@ -989,7 +990,35 @@ void main() {
     expect(gateway.illustrationRequests, isEmpty);
   });
 
+  testWidgets('a compact window reaches the tools through the dock sheet', (
+    tester,
+  ) async {
+    // Below the editor breakpoint the three panes stack, so the media panel is
+    // not on screen; the dock must still open it, or a small window would
+    // silently lose the import path.
+    _setViewport(tester, const Size(800, 600));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/or-compact-tools.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Compact tools');
+
+    expect(
+      find.byKey(const ValueKey('mobile-editor-tool-dock')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('media-import')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('mobile-editor-tool-media')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('media-import')), findsOneWidget);
+  });
+
   testWidgets('a first page failure still offers a retry', (tester) async {
+    // The media panel is a desktop pane; a compact window reaches it through
+    // the tool sheet instead, so this test states the layout it exercises.
+    _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()..savePath = '/tmp/or-first-page.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
@@ -1001,6 +1030,7 @@ void main() {
   });
 
   testWidgets('the media error retry shows a reload state', (tester) async {
+    _setViewport(tester, const Size(1440, 900));
     final gateway = _FakeProjectGateway();
     final picker = _FakeProjectPicker()..savePath = '/tmp/or-held-retry.orproj';
     await _mount(tester, gateway: gateway, picker: picker);
@@ -3246,7 +3276,12 @@ void main() {
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
       ..exportPath = '/tmp/export-project.mkv';
-    await _mount(tester, gateway: gateway, picker: picker);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+    );
     await _createProject(tester, 'Export project');
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
@@ -3297,7 +3332,12 @@ void main() {
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
       ..exportPath = destination;
-    await _mount(tester, gateway: gateway, picker: picker);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+    );
     await _createProject(tester, 'Export project');
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
@@ -3321,7 +3361,12 @@ void main() {
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
       ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
-    await _mount(tester, gateway: gateway, picker: picker);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+    );
     await _createProject(tester, 'Export project');
 
     // The default profile is lossy on this host, so the surface offers the choice
@@ -3348,7 +3393,12 @@ void main() {
     final picker = _FakeProjectPicker()
       ..savePath = '/tmp/export-project.orproj'
       ..exportPath = '/tmp/export-project.${defaultProfile.extension}';
-    await _mount(tester, gateway: gateway, picker: picker);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+    );
     await _createProject(tester, 'Export project');
 
     await tester.tap(find.byKey(const ValueKey('export-project')));
@@ -3371,7 +3421,14 @@ void main() {
       final picker = _FakeProjectPicker()
         ..savePath = '/tmp/export-project.orproj'
         ..exportPath = '/tmp/export-project.mkv';
-      await _mount(tester, gateway: gateway, picker: picker);
+      await _mount(
+        tester,
+        gateway: gateway,
+        picker: picker,
+        // The dialog reads the preference before it opens, and a real file read
+        // cannot finish inside a testWidgets body.
+        editorSettingsStore: _editorSettings(),
+      );
       await _createProject(tester, 'Export project');
 
       await tester.tap(find.byKey(const ValueKey('export-project')));
@@ -7018,7 +7075,12 @@ void main() {
       ..savePath = '/tmp/export-720.orproj'
       ..exportPath = '/tmp/export-720.mp4';
     _setViewport(tester, const Size(1280, 800));
-    await _mount(tester, gateway: gateway, picker: picker);
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(),
+    );
     await _createProject(tester, 'Resolution choice');
     await tester.pumpAndSettle();
 
@@ -7026,7 +7088,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Export video'), findsOneWidget);
     expect(find.byKey(const ValueKey('export-resolution')), findsOneWidget);
-
     await tester.tap(find.text('Match project'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('export-resolution-720')).last);
@@ -7039,6 +7100,134 @@ void main() {
       720,
       reason: 'the chosen resolution must reach the export request',
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the guided export dialog asks what the file is for', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/guided-export.orproj'
+      ..exportPath = '/tmp/guided-export.${defaultProfile.extension}';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(simpleMode: true),
+    );
+    await _createProject(tester, 'Guided export');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pumpAndSettle();
+    expect(find.text('Export video'), findsOneWidget);
+    for (final key in ['share', 'smaller', 'best', 'lossless']) {
+      expect(
+        find.byKey(ValueKey('export-intent-$key')),
+        findsOneWidget,
+        reason: 'a beginner picks an intent, not a container',
+      );
+    }
+    expect(find.text(defaultProfile.label), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('export-intent-share')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(picker.lastExportProfile, defaultProfile);
+    expect(gateway.lastExportQuality, ExportQuality.quality.wireName);
+    expect(
+      gateway.lastExportShortSide,
+      1080,
+      reason: 'sharing should not hand a beginner a 4K file',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the guided dialog still gives every codec choice', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final defaultProfile = ExportProfile.defaultForPlatform;
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/guided-advanced.orproj'
+      ..exportPath = '/tmp/guided-advanced.${defaultProfile.extension}';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(simpleMode: true),
+    );
+    await _createProject(tester, 'Guided advanced');
+
+    await tester.tap(find.byKey(const ValueKey('export-project')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('export-resolution')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('export-advanced-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('export-resolution')), findsOneWidget);
+    expect(find.text('Matroska lossless'), findsOneWidget);
+    await tester.tap(find.text('Matroska lossless'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continue'));
+    await tester.pump();
+    await tester.pump();
+    expect(picker.lastExportProfile, ExportProfile.matroskaFfv1PcmS16le);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('G toggles composition guides and they never reach export', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/guides.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Guides');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('viewer-guides')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('preview-guides')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('viewer-guides')), findsOneWidget);
+
+    // The shortcut and the header button read the same preference.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('viewer-guides')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('viewer-guides')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the guided bar names the next step and stops after export', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/guided-bar.orproj';
+    await _mount(
+      tester,
+      gateway: gateway,
+      picker: picker,
+      editorSettingsStore: _editorSettings(simpleMode: true),
+    );
+    await _createProject(tester, 'Guided bar');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('editor-guided-bar')), findsOneWidget);
+    expect(find.text('Import media'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey('editor-guided-dismiss')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('editor-guided-bar')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -7276,6 +7465,7 @@ Future<void> _mount(
   _FakeProjectPicker? picker,
   RecentProjectStore? recentProjectStore,
   Future<Directory> Function()? audioCleanupDirectory,
+  EditorSettingsStore? editorSettingsStore,
 }) async {
   await tester.pumpWidget(
     OrApp(
@@ -7284,9 +7474,21 @@ Future<void> _mount(
       projectFilePicker: picker ?? _FakeProjectPicker(),
       recentProjectStore: recentProjectStore ?? InMemoryRecentProjectStore(),
       audioCleanupDirectory: audioCleanupDirectory,
+      editorSettingsStore: editorSettingsStore,
     ),
   );
   await tester.pumpAndSettle();
+}
+
+/// Editor preferences a test owns instead of the user's real settings file.
+/// An in-memory settings store. Real file I/O cannot complete inside a
+/// `testWidgets` body, so both directions resolve on a microtask here.
+EditorSettingsStore _editorSettings({bool simpleMode = false}) {
+  var current = EditorSettings(simpleMode: simpleMode);
+  return EditorSettingsStore(
+    loader: () async => current,
+    saver: (settings) async => current = settings,
+  );
 }
 
 Future<void> _createProject(WidgetTester tester, String name) async {

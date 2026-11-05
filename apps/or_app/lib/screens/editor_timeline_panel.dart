@@ -29,6 +29,7 @@ class EditorTimelinePanel extends StatefulWidget {
   const EditorTimelinePanel({
     super.key,
     required this.compact,
+    this.guidance,
     this.onMotionAssetDropped,
     required this.previewState,
     this.onScrubTo,
@@ -92,6 +93,10 @@ class EditorTimelinePanel extends StatefulWidget {
   });
 
   final bool compact;
+
+  /// The guided next step, rendered as the first toolbar item so it can
+  /// never change a pane's height.
+  final Widget? guidance;
 
   /// Accepts a dragged motion asset anywhere on the timeline and appends the
   /// materialised clip. Placement is deliberately the track end, not the drop
@@ -1355,6 +1360,14 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
                   ),
                 ],
               ),
+            ],
+            // The guided step trails the tools so it can never push an
+            // existing control out of reach or change a pane's height.
+            if (widget.guidance != null) ...[
+              const SizedBox(width: OrSpacing.x2),
+              Container(width: 1, height: 18, color: OrColors.border),
+              const SizedBox(width: OrSpacing.x2),
+              widget.guidance!,
             ],
           ],
         ),

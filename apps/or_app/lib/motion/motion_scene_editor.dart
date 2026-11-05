@@ -780,6 +780,10 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
           ),
           const SizedBox(height: OrSpacing.x1),
           _fontSizeRow(node),
+          if (node.kind == 'text') ...[
+            const SizedBox(height: OrSpacing.x1),
+            _typographyRows(node),
+          ],
         ],
         const SizedBox(height: OrSpacing.x1),
         _colorRow(node),
@@ -860,6 +864,228 @@ class _MotionSceneInspectorState extends State<MotionSceneInspector> {
             ],
           ),
         ],
+      ],
+    );
+  }
+
+  /// The type controls that schema version 2 added. They are read from the draft
+  /// document rather than the generated node view, so a scene written by the CLI or
+  /// an agent shows the same values the renderer will use.
+  Widget _typographyRows(MotionSceneNodeView node) {
+    final typography = controller.nodeTypography(node.nodeId);
+    final lineHeight = typography?.effectiveLineHeight ?? 1.32;
+    final tracking = typography?.effectiveLetterSpacing ?? 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _typeChoiceRow(
+          label: 'Font',
+          keyPrefix: '${widget.scope}-node-font',
+          selected: typography?.font,
+          options: const [
+            (null, 'Auto'),
+            ('inter', 'Inter'),
+            ('be_vietnam_pro', 'Be Vietnam'),
+          ],
+          onSelected: (value) =>
+              unawaited(controller.setNodeFontFamily(node.nodeId, value)),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        _typeChoiceRow(
+          label: 'Weight',
+          keyPrefix: '${widget.scope}-node-weight',
+          selected: typography?.effectiveWeight ?? 'regular',
+          options: const [
+            ('regular', 'Regular'),
+            ('medium', 'Medium'),
+            ('semibold', 'Semi'),
+            ('bold', 'Bold'),
+          ],
+          onSelected: (value) =>
+              unawaited(controller.setNodeFontWeight(node.nodeId, value!)),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        Row(
+          children: [
+            const Text(
+              'Align',
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            for (final (value, icon, tip) in const [
+              ('start', Icons.format_align_left, 'Align left'),
+              ('center', Icons.format_align_center, 'Align centre'),
+              ('end', Icons.format_align_right, 'Align right'),
+            ])
+              IconButton(
+                key: ValueKey('${widget.scope}-node-align-$value'),
+                iconSize: 14,
+                visualDensity: VisualDensity.compact,
+                tooltip: tip,
+                color: (typography?.effectiveAlign ?? 'start') == value
+                    ? OrColors.selection
+                    : OrColors.textMuted,
+                onPressed: () =>
+                    unawaited(controller.setNodeTextAlign(node.nodeId, value)),
+                icon: Icon(icon),
+              ),
+          ],
+        ),
+        Row(
+          children: [
+            const Text(
+              'Line height',
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            Expanded(
+              child: Text(
+                lineHeight.toStringAsFixed(2),
+                key: ValueKey('${widget.scope}-node-line-height-value'),
+                style: const TextStyle(
+                  color: OrColors.text,
+                  fontSize: OrType.tinySize,
+                ),
+              ),
+            ),
+            IconButton(
+              key: ValueKey('${widget.scope}-node-line-height-down'),
+              iconSize: 14,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Tighter lines',
+              onPressed: () => unawaited(
+                controller.setNodeLineHeight(
+                  node.nodeId,
+                  math.max(0.8, lineHeight - 0.06),
+                ),
+              ),
+              icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              key: ValueKey('${widget.scope}-node-line-height-up'),
+              iconSize: 14,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Airier lines',
+              onPressed: () => unawaited(
+                controller.setNodeLineHeight(
+                  node.nodeId,
+                  math.min(3, lineHeight + 0.06),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            const Text(
+              'Tracking',
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.tinySize,
+              ),
+            ),
+            const SizedBox(width: OrSpacing.x2),
+            Expanded(
+              child: Text(
+                tracking.toStringAsFixed(1),
+                key: ValueKey('${widget.scope}-node-tracking-value'),
+                style: const TextStyle(
+                  color: OrColors.text,
+                  fontSize: OrType.tinySize,
+                ),
+              ),
+            ),
+            IconButton(
+              key: ValueKey('${widget.scope}-node-tracking-down'),
+              iconSize: 14,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Tighter letters',
+              onPressed: () => unawaited(
+                controller.setNodeLetterSpacing(
+                  node.nodeId,
+                  math.max(-5, tracking - 0.5),
+                ),
+              ),
+              icon: const Icon(Icons.remove),
+            ),
+            IconButton(
+              key: ValueKey('${widget.scope}-node-tracking-up'),
+              iconSize: 14,
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Looser letters',
+              onPressed: () => unawaited(
+                controller.setNodeLetterSpacing(
+                  node.nodeId,
+                  math.min(20, tracking + 0.5),
+                ),
+              ),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// One row of small exclusive choices. A `null` value means "no override", which
+  /// the renderer resolves from the content.
+  Widget _typeChoiceRow({
+    required String label,
+    required String keyPrefix,
+    required String? selected,
+    required List<(String?, String)> options,
+    required ValueChanged<String?> onSelected,
+  }) {
+    return Wrap(
+      spacing: OrSpacing.x1,
+      runSpacing: OrSpacing.x1,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+          ),
+        ),
+        for (final (value, text) in options)
+          GestureDetector(
+            key: ValueKey('$keyPrefix-${value ?? 'auto'}'),
+            onTap: () => onSelected(value),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: OrSpacing.x1,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: selected == value
+                    ? OrColors.selection.withValues(alpha: 0.16)
+                    : OrColors.backgroundRecessed,
+                borderRadius: BorderRadius.circular(OrRadii.small),
+                border: Border.all(
+                  color: selected == value
+                      ? OrColors.selection
+                      : OrColors.border,
+                ),
+              ),
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: selected == value
+                      ? OrColors.selection
+                      : OrColors.textSecondary,
+                  fontSize: OrType.tinySize,
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }

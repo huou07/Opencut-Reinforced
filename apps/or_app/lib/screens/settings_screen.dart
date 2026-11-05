@@ -90,8 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setShowInspector(bool show) async {
-    final next = _editorSettings.copyWith(showInspector: show);
+  Future<void> _saveEditor(EditorSettings next) async {
     setState(() => _editorSettings = next);
     try {
       await _editorStore.save(next);
@@ -101,6 +100,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
+
+  Future<void> _setShowInspector(bool show) =>
+      _saveEditor(_editorSettings.copyWith(showInspector: show));
 
   /// The voice surface is app-level, so it is reachable without an open
   /// project; the same file is what `tools/voiceover.mjs` follows.
@@ -201,7 +203,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SettingsSection.resources => _resourcesSection(),
     SettingsSection.assistant => _assistantSection(),
     SettingsSection.appearance => _appearanceSection(),
-    SettingsSection.general => _generalSection(),
+    SettingsSection.general => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _generalSection(),
+        const SizedBox(height: OrSpacing.x3),
+        _editorPanel(),
+      ],
+    ),
     SettingsSection.advanced => _advancedSection(),
   };
 
@@ -419,7 +428,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
             settings: narration ?? const NarrationSettings(),
             onChanged: (settings) => unawaited(_saveNarration(settings)),
           ),
-          const Divider(height: OrSpacing.x6),
+        ],
+      ),
+    );
+  }
+
+  /// The switches that change the editor itself live with the editor, not
+  /// inside the narration panel they used to trail: a preference is easier to
+  /// find under the name of the thing it changes.
+  Widget _editorPanel() {
+    return OrPanel(
+      key: const ValueKey('settings-editor'),
+      title: 'Editor',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              key: const ValueKey('settings-guided-mode'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Guided mode'),
+              subtitle: const Text(
+                'The editor names the next useful step and the export dialog '
+                'asks what the file is for instead of which codec to use. '
+                'Every advanced control stays available.',
+              ),
+              value: _editorSettings.simpleMode,
+              onChanged: (value) => unawaited(
+                _saveEditor(_editorSettings.copyWith(simpleMode: value)),
+              ),
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              key: const ValueKey('settings-next-step-tips'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Next-step tips'),
+              subtitle: const Text(
+                'The row above the timeline that suggests the next action. '
+                'Turning it off keeps the rest of guided mode.',
+              ),
+              value: !_editorSettings.tipsDismissed,
+              onChanged: _editorSettings.simpleMode
+                  ? (value) => unawaited(
+                      _saveEditor(
+                        _editorSettings.copyWith(tipsDismissed: !value),
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile(
+              key: const ValueKey('settings-composition-guides'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Composition guides'),
+              subtitle: const Text(
+                'Title and action safe areas, thirds and the centre mark over '
+                'the viewer. Guides are a preview aid and never exported.',
+              ),
+              value: _editorSettings.showGuides,
+              onChanged: (value) => unawaited(
+                _saveEditor(_editorSettings.copyWith(showGuides: value)),
+              ),
+            ),
+          ),
           Material(
             type: MaterialType.transparency,
             child: SwitchListTile(

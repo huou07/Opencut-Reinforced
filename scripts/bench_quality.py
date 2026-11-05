@@ -54,6 +54,7 @@ import argparse
 import glob
 import json
 import os
+import platform
 import shutil
 import statistics
 import subprocess
@@ -63,10 +64,55 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# The prebuilt test binaries link FFmpeg dynamically and carry no rpath, so a
+# run started outside `cargo test` needs the build prefix on the library search
+# path. Reuse the resolution `bench_export.py` already owns instead of keeping a
+# second copy of the prefix rules.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bench_export import _configured_prefix, _runtime_env  # noqa: E402
+
+_RUNTIME_ENV = _runtime_env(_configured_prefix())
+# A row may launch a *different* ffmpeg (the clean-up fixture generator), and
+# forcing our prefix through DYLD_LIBRARY_PATH would make that child load the
+# wrong libav set. A fallback path satisfies our own test binaries without
+# overriding a child's own resolution.
+# The shared helper also prepends the FFmpeg prefix's `bin` to PATH. That would
+# shadow the host's own `ffmpeg` for rows that need a general-purpose helper
+# (the clean-up fixture), so keep the caller's PATH and only add libraries.
+_RUNTIME_ENV["PATH"] = os.environ.get("PATH", _RUNTIME_ENV.get("PATH", ""))
+_forced_dyld = _RUNTIME_ENV.pop("DYLD_LIBRARY_PATH", "")
+if _forced_dyld:
+    _existing = _RUNTIME_ENV.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    _RUNTIME_ENV["DYLD_FALLBACK_LIBRARY_PATH"] = _forced_dyld + (
+        os.pathsep + _existing if _existing else ""
+    )
+
+# The calibration host is still the Debian box the thresholds were first set on.
+# A budget that only ever names that machine would either mislabel a Mac run as
+# a Debian one or fail a Mac for being a Mac, so the report states the host it
+# actually ran on and rows may carry a per-platform threshold.
 HOST_CLASS = (
     "Debian 13 (trixie) x86_64 OptiPlex-class workstation "
     "(13th Gen Intel Core i5-13500T, 15 GiB RAM, NVMe SSD, Intel UHD 770/Vulkan)"
 )
+HOST_PLATFORM = platform.system()
+HOST_MEASURED = (
+    f"{platform.platform()} · {platform.machine()} · "
+    f"{os.cpu_count() or 0} logical cores · Python {platform.python_version()}"
+)
+
+
+def row_threshold(row: dict, key: str) -> float:
+    """Read one threshold, preferring a value measured on this platform.
+
+    A row may carry e.g. ``threshold_p95_ms_by_host = {"Darwin": 12.0}`` when the
+    cost is dominated by the host's filesystem or timer rather than by OR's own
+    work. The default stays the calibration-host figure; the override records
+    its own measured baseline, and both are printed with the verdict so the
+    difference is auditable instead of hidden.
+    """
+    overrides = row.get(f"{key}_by_host") or {}
+    return float(overrides.get(HOST_PLATFORM, row[key]))
 
 # One entry per enforced row. `baseline` records the measurement the threshold
 # was set from, so the margin is auditable rather than folklore.
@@ -97,7 +143,15 @@ ROWS = {
     "command.create": {
         "description": "project create on a fresh path",
         "threshold_p95_ms": 5.0,
+        # APFS costs ~8 ms of atomic publish for the same command that costs
+        # 0.09 ms on the Debian calibration host. Measured twice: 8.07 ms on this
+        # branch and 8.03 ms on unmodified main at 2cf1b96, so the 12 ms ceiling
+        # is this host class's own baseline with headroom, not a loosened one.
+        "threshold_p95_ms_by_host": {"Darwin": 12.0},
         "baseline": {"date": "2026-10-18", "p50_ms": 0.052, "p95_ms": 0.089},
+        "baseline_by_host": {
+            "Darwin": {"date": "2026-11-05", "p50_ms": 8.03, "p95_ms": 8.20}
+        },
     },
     "command.import": {
         "description": "media.add after a real ffprobe of a 1 s clip",
@@ -358,7 +412,7 @@ def find_test_binary(prefix: str, row_id: str, settle: str) -> Path:
 
 def wall_time_ms(argv: list[str]) -> float:
     start = time.perf_counter()
-    subprocess.run(argv, cwd=ROOT, capture_output=True, check=True)
+    subprocess.run(argv, cwd=ROOT, capture_output=True, check=True, env=_RUNTIME_ENV)
     return (time.perf_counter() - start) * 1000.0
 
 
@@ -373,6 +427,7 @@ def bench_json(binary: Path, test_name: str, row_id: str, settle: str,
     completed = subprocess.run(
         [str(binary), "--ignored", "--exact", test_name, "--test-threads=1", "--nocapture"],
         cwd=ROOT, capture_output=True, text=True, timeout=timeout, check=False,
+        env=_RUNTIME_ENV,
     )
     if completed.returncode != 0:
         tail = (completed.stderr or completed.stdout or "").strip().splitlines()[-6:]
@@ -469,11 +524,14 @@ def command_latency_rows() -> list[RowResult]:
                                      f"measured p95 {entry['p95_ms']:.3f} ms but has no budget",
                                      reason="no threshold is declared for this measured row"))
             continue
-        limit = budget(float(row["threshold_p95_ms"]))
+        limit = budget(row_threshold(row, "threshold_p95_ms"))
         verdict = "PASS" if entry["p95_ms"] <= limit else "FAIL"
+        host_baseline = (row.get("baseline_by_host") or {}).get(HOST_PLATFORM)
+        baseline = host_baseline or row["baseline"]
         detail = (f"p50 {entry['p50_ms']:.3f} ms / p95 {entry['p95_ms']:.3f} ms "
-                  f"(budget p95 {limit:.3f} ms; baseline p95 {row['baseline']['p95_ms']:.3f} ms "
-                  f"on {row['baseline']['date']})")
+                  f"(budget p95 {limit:.3f} ms; baseline p95 {baseline['p95_ms']:.3f} ms "
+                  f"on {baseline['date']}"
+                  + (f", {HOST_PLATFORM} row" if host_baseline else "") + ")")
         results.append(RowResult(row_id, verdict, detail, {
             "min_ms": entry["min_ms"], "p50_ms": entry["p50_ms"], "p95_ms": entry["p95_ms"],
             "max_ms": entry["max_ms"], "count": entry["count"], "threshold_p95_ms": limit,
@@ -490,7 +548,7 @@ def render_frame_time_row() -> RowResult:
     binary = find_test_binary("render_frame_time", "render-frame-time", settle)
     payload = bench_json(binary, RENDER_TEST, "render-frame-time", settle)
     row = ROWS["render-frame-time"]
-    limit = budget(float(row["threshold_p95_ms"]))
+    limit = budget(row_threshold(row, "threshold_p95_ms"))
     verdict = "PASS" if payload["p95_ms"] <= limit else "FAIL"
     detail = (f"p50 {payload['p50_ms']:.3f} ms / p95 {payload['p95_ms']:.3f} ms over "
               f"{payload['frames']} frames (budget p95 {limit:.1f} ms; baseline p95 "
@@ -510,7 +568,7 @@ def motion_rasterize_row() -> RowResult:
     binary = find_test_binary("motion_raster_time", "motion-rasterize-frame", settle)
     payload = bench_json(binary, MOTION_RASTER_TEST, "motion-rasterize-frame", settle)
     row = ROWS["motion-rasterize-frame"]
-    limit = budget(float(row["threshold_p95_ms"]))
+    limit = budget(row_threshold(row, "threshold_p95_ms"))
     verdict = "PASS" if payload["raster_p95_ms"] <= limit else "FAIL"
     detail = (f"p50 {payload['raster_p50_ms']:.3f} ms / p95 {payload['raster_p95_ms']:.3f} ms "
               f"over {payload['frames']} frames of {payload['nodes']} nodes at "
@@ -580,6 +638,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("== Performance budget (local, bounded) ==")
     print(f"host class : {HOST_CLASS}")
+    print(f"host run   : {HOST_MEASURED}")
     for note in host_notes():
         print(f"host note  : {note}")
 

@@ -14,9 +14,12 @@
 //! right and y down, matching the RGBA buffer's own layout.
 
 use crate::motion_image::{MotionImage, draw_motion_image};
-use or_core::{FontIdentity, TextAlignment, TextColor, TextFormatting, TextWeight};
+use or_core::{
+    FontIdentity, TextAlignment, TextColor, TextFormatting, TextVerticalAnchor, TextWeight,
+};
 use or_motion::{
-    MotionColor, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene, evaluate_scene,
+    MotionColor, MotionFontFamily, MotionFrame, MotionInstruction, MotionNodeKind, MotionScene,
+    MotionTextAlignment, MotionTextWeight, evaluate_scene,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -382,54 +385,93 @@ fn draw_instruction(
             }
             let requested_size = instruction.font_size.unwrap_or(32.0).max(1.0);
             let mut size = requested_size;
-            let max_width = (canvas.width as f64 - instruction.position.x - 16.0)
-                .clamp(32.0, canvas.width as f64) as f32;
+            // A node may name its own box. That is what makes alignment mean
+            // something and what keeps a two-line title from reflowing per frame;
+            // without a box the node keeps the historical behaviour of one line
+            // measured to the canvas edge.
+            let explicit_box = instruction.size.filter(|size| {
+                size.width > 0.0
+                    && size.height > 0.0
+                    && size.width.is_finite()
+                    && size.height.is_finite()
+            });
+            let max_width = match explicit_box {
+                Some(box_size) => (canvas.width as f64 - instruction.position.x)
+                    .min(box_size.width)
+                    .clamp(16.0, canvas.width as f64) as f32,
+                None => (canvas.width as f64 - instruction.position.x - 16.0)
+                    .clamp(32.0, canvas.width as f64) as f32,
+            };
+            let max_height = explicit_box
+                .map(|box_size| box_size.height.clamp(8.0, canvas.height as f64) as f32);
             let mut milli_points = (size * 750.0).round();
             if !(1.0..=1_000_000.0).contains(&milli_points) {
                 return Err(MotionRasterError::InvalidTextSize);
             }
             let mut formatting = TextFormatting {
-                // Vietnamese text gets the display face designed for its stacked
-                // marks; plain Latin stays on the neutral UI face.
-                font: if !content.is_ascii() {
-                    FontIdentity::BeVietnamPro
-                } else {
-                    FontIdentity::BundledInter
+                // An explicit family wins. Without one, Vietnamese text gets the
+                // display face designed for its stacked marks and plain Latin stays
+                // on the neutral UI face.
+                font: match instruction.font {
+                    Some(MotionFontFamily::Inter) => FontIdentity::BundledInter,
+                    Some(MotionFontFamily::BeVietnamPro) => FontIdentity::BeVietnamPro,
+                    None if content.is_ascii() => FontIdentity::BundledInter,
+                    None => FontIdentity::BeVietnamPro,
                 },
                 size_milli_points: milli_points as u32,
-                weight: TextWeight::Regular,
-                alignment: TextAlignment::Start,
-                color: instruction
-                    .fill
-                    .map(|color| TextColor {
-                        red: color.red,
-                        green: color.green,
-                        blue: color.blue,
-                        alpha: color.alpha,
-                    })
-                    .unwrap_or(TextColor::WHITE),
+                weight: match instruction.font_weight.unwrap_or_default() {
+                    MotionTextWeight::Regular => TextWeight::Regular,
+                    MotionTextWeight::Medium => TextWeight::Medium,
+                    MotionTextWeight::Semibold => TextWeight::Semibold,
+                    MotionTextWeight::Bold => TextWeight::Bold,
+                },
+                alignment: match instruction.text_align.unwrap_or_default() {
+                    MotionTextAlignment::Start => TextAlignment::Start,
+                    MotionTextAlignment::Center => TextAlignment::Center,
+                    MotionTextAlignment::End => TextAlignment::End,
+                },
+                line_height_permille: (instruction.line_height.unwrap_or(1.32) * 1_000.0)
+                    .round()
+                    .clamp(500.0, 3_000.0) as u16,
+                letter_spacing_milli_points: (instruction.letter_spacing.unwrap_or(0.0) * 750.0)
+                    .round()
+                    .clamp(-50_000.0, 200_000.0)
+                    as i32,
                 ..TextFormatting::DEFAULT
             };
-            // Fit the line to the canvas instead of letting a long sentence run
-            // off it: shrink the type down to 60 % of the requested size, then
-            // allow wrapping if even that does not fit. Vietnamese diacritics need
-            // the extra line height, so the box is measured, not guessed.
+            // Fit the text to its box instead of letting a long sentence run off
+            // the frame. A node that names a box is allowed to wrap and is only
+            // shrunk when the block would overflow the box height; without a box the
+            // historical rule holds: shrink to fit one line, then wrap.
+            if explicit_box.is_some() {
+                formatting.anchor = TextVerticalAnchor::Top;
+            }
             let mut measured = text.measure(content, formatting, max_width);
             let minimum_size = (requested_size * 0.6).max(10.0);
-            while (measured.width > max_width || measured.lines > 1) && size > minimum_size {
+            loop {
+                let overflow = match max_height {
+                    Some(box_height) => measured.height > box_height,
+                    None => measured.width > max_width || measured.lines > 1,
+                };
+                if !overflow || size <= minimum_size {
+                    break;
+                }
                 size = (size - 1.0).max(minimum_size);
                 milli_points = (size * 750.0).round();
                 formatting.size_milli_points = milli_points as u32;
                 measured = text.measure(content, formatting, max_width);
             }
             let box_width = max_width.ceil() as u32;
-            let box_height = measured
-                .height
-                .max((size * 1.35) as f32)
-                .ceil()
-                .clamp(8.0, canvas.height as f32) as u32;
-            // Highlighted runs go through the same layout with more than one colour;
-            // a node without spans takes the single-colour path.
+            let box_height = match max_height {
+                Some(box_height) => box_height.ceil() as u32,
+                None => measured
+                    .height
+                    .max((size * 1.35) as f32)
+                    .ceil()
+                    .clamp(8.0, canvas.height as f32) as u32,
+            };
+            // Highlighted runs go through the same layout with more than one
+            // colour; a node without spans takes the single-colour path.
             let spans = instruction
                 .spans
                 .iter()
@@ -1024,6 +1066,142 @@ mod tests {
         assert!(inked > 10, "expected glyph ink, found {inked} pixels");
         // Away from every node there is no ink.
         assert_eq!(canvas.pixel(2, 2), Some([0, 0, 0, 0]));
+    }
+
+    fn text_frame(node: serde_json::Value, width: u32, height: u32) -> RasterizedMotionFrame {
+        let scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 2,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Text probe",
+            "duration": {"numerator": 4, "denominator": 1},
+            "canvas": {"width": width, "height": height},
+            "assets": [],
+            "nodes": [node],
+            "animations": []
+        });
+        let scene = parse_motion_scene(&serde_json::to_vec(&scene).unwrap()).unwrap();
+        let frame =
+            or_motion::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap()).unwrap();
+        rasterize_motion_frame(&frame).unwrap()
+    }
+
+    fn ink_bounds(frame: &RasterizedMotionFrame) -> Option<(u32, u32, u32, u32, u32)> {
+        let mut bounds: Option<(u32, u32, u32, u32)> = None;
+        let mut count = 0;
+        for y in 0..frame.height() {
+            for x in 0..frame.width() {
+                if frame.pixel(x, y).is_some_and(|pixel| pixel[3] > 0) {
+                    count += 1;
+                    bounds = Some(match bounds {
+                        None => (x, y, x, y),
+                        Some((min_x, min_y, max_x, max_y)) => {
+                            (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+                        }
+                    });
+                }
+            }
+        }
+        bounds.map(|(min_x, min_y, max_x, max_y)| (min_x, min_y, max_x, max_y, count))
+    }
+
+    #[test]
+    fn a_boxed_text_node_wraps_inside_its_box_instead_of_overflowing_it() {
+        let text = "Story that keeps going past the box edge";
+        let boxed = text_frame(
+            serde_json::json!({
+                "node_id": "title",
+                "kind": "text",
+                "text": text,
+                "position": {"x": 4, "y": 4},
+                "size": {"width": 60, "height": 80},
+                "font_size": 12,
+                "fill": {"red": 255, "green": 255, "blue": 255}
+            }),
+            120,
+            100,
+        );
+        let (min_x, _, max_x, max_y, ink) = ink_bounds(&boxed).expect("expected ink");
+        assert!(min_x >= 4, "ink starts at {min_x}");
+        // A 60-pixel box may not paint past x = 64, whatever the sentence length.
+        assert!(max_x <= 64, "ink ends at {max_x}");
+        // Wrapping is what lets a two-line block fit, so the block is taller than one
+        // line of 12-pixel type and stays inside the box.
+        assert!(max_y > 20, "ink ends at {max_y}");
+        assert!(max_y < 4 + 80, "ink ends at {max_y}");
+        assert!(ink > 40, "expected real glyph ink, found {ink}");
+    }
+
+    #[test]
+    fn alignment_moves_the_ink_inside_the_box() {
+        let node = |align: &str| {
+            serde_json::json!({
+                "node_id": "title",
+                "kind": "text",
+                "text": "Short",
+                "position": {"x": 4, "y": 4},
+                "size": {"width": 112, "height": 40},
+                "font_size": 16,
+                "text_align": align,
+                "fill": {"red": 255, "green": 255, "blue": 255}
+            })
+        };
+        let start = text_frame(node("start"), 120, 48);
+        let centre = text_frame(node("center"), 120, 48);
+        let end = text_frame(node("end"), 120, 48);
+        let start_x = ink_bounds(&start).unwrap().0;
+        let centre_x = ink_bounds(&centre).unwrap().0;
+        let end_x = ink_bounds(&end).unwrap().0;
+        assert!(
+            start_x < centre_x && centre_x < end_x,
+            "start {start_x} centre {centre_x} end {end_x}"
+        );
+    }
+
+    #[test]
+    fn tracking_widens_the_same_words() {
+        let node = |spacing: f64| {
+            serde_json::json!({
+                "node_id": "title",
+                "kind": "text",
+                "text": "WIDE",
+                "position": {"x": 2, "y": 4},
+                "font_size": 16,
+                "letter_spacing": spacing,
+                "fill": {"red": 255, "green": 255, "blue": 255}
+            })
+        };
+        let tight = text_frame(node(0.0), 200, 40);
+        let loose = text_frame(node(3.0), 200, 40);
+        assert!(
+            ink_bounds(&loose).unwrap().2 > ink_bounds(&tight).unwrap().2,
+            "loose {:#?} tight {:#?}",
+            ink_bounds(&loose),
+            ink_bounds(&tight)
+        );
+    }
+
+    #[test]
+    fn a_bolder_weight_lays_down_more_ink() {
+        let node = |weight: &str| {
+            serde_json::json!({
+                "node_id": "title",
+                "kind": "text",
+                "text": "Weight",
+                "position": {"x": 2, "y": 4},
+                "font_size": 18,
+                "font_weight": weight,
+                "fill": {"red": 255, "green": 255, "blue": 255}
+            })
+        };
+        let regular = text_frame(node("regular"), 160, 40);
+        let bold = text_frame(node("bold"), 160, 40);
+        assert!(
+            ink_bounds(&bold).unwrap().4 > ink_bounds(&regular).unwrap().4,
+            "bold {:?} regular {:?}",
+            ink_bounds(&bold),
+            ink_bounds(&regular)
+        );
     }
 
     #[test]

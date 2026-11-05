@@ -89,6 +89,30 @@ DYLD_FALLBACK_LIBRARY_PATH="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-
 
 Without it the test binary aborts with `Library not loaded: @rpath/libavutil.60.dylib`.
 `cargo test -p or_core` needs no such variable.
+Without it the test binary aborts with `Library not loaded: @rpath/libavutil.60.dylib`.
+`cargo test -p or_core` needs no such variable.
+
+## FFmpeg 8 for the acceptance gate
+
+`scripts/acceptance.sh` looks for the media toolchain at `$HOME/.local/ffmpeg8`
+and expects an executable at `<dir>/ffmpeg`. The cached prefix ships bare
+binaries with no `LC_RPATH`, so a symlink alone fails with
+`Library not loaded: @rpath/libavfilter.11.dylib`. Two shims that set the loader
+fallback work:
+
+```sh
+PREFIX="$HOME/Library/Caches/OpencutReinforced/ffmpeg-8.1.3-macos-image-support/ffmpeg-install"
+mkdir -p "$HOME/.local/ffmpeg8"
+for tool in ffmpeg ffprobe; do
+  printf '#!/bin/sh\nexport DYLD_FALLBACK_LIBRARY_PATH="%s/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"\nexec "%s/bin/%s" "$@"\n' \
+    "$PREFIX" "$PREFIX" "$tool" > "$HOME/.local/ffmpeg8/$tool"
+  chmod +x "$HOME/.local/ffmpeg8/$tool"
+done
+```
+
+The packaged build deliberately carries no `lavfi` input device, so the two
+lanes that generate their own fixtures report `UNVERIFIED` with that reason
+while the media crate tests and the export writer still run against FFmpeg 8.
 
 ## Trap: microphone permission and the bundle identity
 

@@ -23,6 +23,9 @@ is the fallback when the CLI cannot act. This file is an index, not a handbook.
 - **CLI-first operation** — read and mutation order, the CLI/MCP split, failure policy.
   When: choosing how to read or change the project.
   Path: `docs/cli-first.md`
+- **Capability and setup** — what this machine can decode, encode and run, refusal codes, and where the user installs optional pieces.
+  When: before promising a codec, encoder, voice or 3D scene, or when an import or export was refused.
+  Path: `docs/capability-and-setup.md`
 - **Timeline editing** — tracks, clips, exact times, trims, splits, markers, canvas, clip settings, frame rate.
   When: changing anything on the timeline.
   Path: `docs/timeline-editing.md`
@@ -32,6 +35,9 @@ is the fallback when the CLI cannot act. This file is an index, not a handbook.
 - **Motion scenes** — scene format, validation, render, publish, motion assets.
   When: authoring or rendering one deterministic scene.
   Path: `docs/motion-scenes.md`
+- **Design and type** — hierarchy, type scale, layout, contrast, motion timing, captions, chart and 3D rules.
+  When: authoring a title, lower third, infographic or any scene's animation timing.
+  Path: `docs/design-and-type.md`
 - **Motion production** — splitting scenes into parallel streams and background render jobs.
   When: producing several scenes or a multi-scene sequence.
   Path: `docs/motion-production.md`

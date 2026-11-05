@@ -712,45 +712,56 @@ fn measure_audio_cleanup(workspace: &Path) -> Result<Vec<f64>, String> {
     // The resolver's fallback is the *name* `ffmpeg`, which `is_file` cannot see, so
     // each candidate is asked for its version instead of being stat-ed.
     let resolved = or_core::ffmpeg_executable();
-    let candidates: Vec<PathBuf> = if resolved.is_file() {
-        vec![resolved]
-    } else {
-        vec![resolved, PathBuf::from("ffmpeg")]
+    // Every `ffmpeg` on PATH is a candidate, not just the first one: a trimmed
+    // runtime build can sit beside a general-purpose one, and only the second
+    // can write a lavfi fixture.
+    let candidates = {
+        let mut paths: Vec<PathBuf> = Vec::new();
+        if resolved.is_file() {
+            paths.push(resolved);
+        } else {
+            paths.push(PathBuf::from("ffmpeg"));
+        }
+        if let Some(search) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&search) {
+                let candidate = dir.join("ffmpeg");
+                if candidate.is_file() && !paths.contains(&candidate) {
+                    paths.push(candidate);
+                }
+            }
+        }
+        paths
     };
-    let helper = candidates
-        .into_iter()
-        .find(|candidate| {
-            std::process::Command::new(candidate)
-                .arg("-version")
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .map(|status| status.success())
-                .unwrap_or(false)
-        })
-        .ok_or_else(|| {
-            "no ffmpeg helper on this host: the clean-up row needs one for its fixture".to_owned()
-        })?;
     let source = workspace.join("cleanup-source.wav");
-    let generated_ok = std::process::Command::new(&helper)
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "anoisesrc=d=3:c=white:a=0.12:r=48000",
-            "-ac",
-            "1",
-        ])
-        .arg(&source)
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false);
+    // The build under test is a decode-oriented bundle with no lavfi sources, so
+    // answering `-version` is not enough: a helper earns the row by actually
+    // writing the fixture. The packaged binary is tried first so the row still
+    // measures the helper the product would use when it can.
+    let generated_ok = candidates.into_iter().any(|candidate| {
+        std::process::Command::new(&candidate)
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "anoisesrc=d=3:c=white:a=0.12:r=48000",
+                "-ac",
+                "1",
+            ])
+            .arg(&source)
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    });
     if !generated_ok {
-        return Err("the helper could not generate the clean-up fixture".to_owned());
+        return Err(
+            "no ffmpeg helper on this host can generate the clean-up fixture: the row needs \
+             one with lavfi support"
+                .to_owned(),
+        );
     }
 
     let mut samples = Vec::with_capacity(ITERATIONS.min(8));

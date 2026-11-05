@@ -116,6 +116,10 @@ class AddMarkerIntent extends Intent {
   const AddMarkerIntent();
 }
 
+class ToggleGuidesIntent extends Intent {
+  const ToggleGuidesIntent();
+}
+
 class ExportProjectIntent extends Intent {
   const ExportProjectIntent();
 }

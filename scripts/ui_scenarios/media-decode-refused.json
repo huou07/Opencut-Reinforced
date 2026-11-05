@@ -1,0 +1,67 @@
+{
+ "name": "media-decode-refused",
+ "harness": "or_ui",
+ "description": "Imports an AV1 file this machine's pinned FFmpeg cannot decode, and proves the import refuses it with a cause instead of admitting a clip that would not play.",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "fixtures": [
+  "copy:/tmp/or-av1-refused.mkv"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "home-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Undecodable import"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-import-media"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "cannot decode av1 video",
+   "budget_ms": 30000
+  },
+  {
+   "op": "shot",
+   "name": "decode-refused"
+  },
+  {
+   "op": "tree",
+   "name": "decode-refused"
+  },
+  {
+   "op": "expect_absent",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  }
+ ]
+}

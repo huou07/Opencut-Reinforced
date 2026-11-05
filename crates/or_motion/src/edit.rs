@@ -16,9 +16,11 @@
 //! the UI uses to draw its handles.
 
 use crate::{
-    MAX_MOTION_KEYFRAMES, MAX_MOTION_NODES, MAX_MOTION_TEXT_BYTES, MotionAnimation, MotionCanvas,
-    MotionColor, MotionEasing, MotionKeyframe, MotionNode, MotionNodeKind, MotionPoint,
-    MotionProperty, MotionScene, MotionSize, validate_scene,
+    MAX_MOTION_KEYFRAMES, MAX_MOTION_LETTER_SPACING, MAX_MOTION_LINE_HEIGHT, MAX_MOTION_NODES,
+    MAX_MOTION_TEXT_BYTES, MIN_MOTION_LETTER_SPACING, MIN_MOTION_LINE_HEIGHT, MotionAnimation,
+    MotionCanvas, MotionColor, MotionEasing, MotionFontFamily, MotionKeyframe, MotionNode,
+    MotionNodeKind, MotionPoint, MotionProperty, MotionScene, MotionSize, MotionTextAlignment,
+    MotionTextWeight, validate_scene,
 };
 use or_core::RationalTime;
 use serde::{Deserialize, Serialize};
@@ -92,6 +94,37 @@ pub enum MotionSceneEdit {
     },
     /// Sets a text node's type size in canvas pixels.
     SetFontSize { node_id: String, font_size: f64 },
+    /// Sets or clears the type family a text node asks for. Absent keeps the
+    /// automatic choice: Vietnamese on the display face, plain Latin on Inter.
+    SetFontFamily {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        font: Option<MotionFontFamily>,
+    },
+    /// Sets or clears the weight of a text node.
+    SetFontWeight {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        weight: Option<MotionTextWeight>,
+    },
+    /// Sets or clears the horizontal alignment inside a text node's box.
+    SetTextAlign {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        align: Option<MotionTextAlignment>,
+    },
+    /// Sets or clears the line height as a multiple of the type size.
+    SetLineHeight {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        line_height: Option<f64>,
+    },
+    /// Sets or clears the tracking in points; negative tightens.
+    SetLetterSpacing {
+        node_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        letter_spacing: Option<f64>,
+    },
     /// Removes a node, its children and the animations that targeted it.
     Delete { node_id: String },
     /// Removes a whole selection.
@@ -320,6 +353,20 @@ fn track_offset(scene: &MotionScene, node_id: &str) -> TrackOffset {
 /// before calling, and an edit is meaningless on a scene the renderer refuses. The
 /// result is always validated, so an edit can never produce a scene that renders
 /// differently than it previews.
+/// Resolves a node that a typography edit targets, refusing anything that is not
+/// text so a rectangle can never carry a font family.
+fn text_node<'a>(
+    scene: &'a mut MotionScene,
+    node_id: &str,
+) -> Result<&'a mut MotionNode, MotionSceneEditError> {
+    let node = find_node_mut(&mut scene.nodes, node_id)
+        .ok_or_else(|| MotionSceneEditError::UnknownNode(node_id.to_owned()))?;
+    if node.kind != MotionNodeKind::Text {
+        return Err(MotionSceneEditError::NotText(node_id.to_owned()));
+    }
+    Ok(node)
+}
+
 pub fn apply_scene_edit(
     scene: &MotionScene,
     edit: &MotionSceneEdit,
@@ -477,6 +524,48 @@ pub fn apply_scene_edit(
             }
             node.font_size = Some(*font_size);
         }
+        MotionSceneEdit::SetFontFamily { node_id, font } => {
+            let node = text_node(&mut next, node_id)?;
+            node.font = *font;
+        }
+        MotionSceneEdit::SetFontWeight { node_id, weight } => {
+            let node = text_node(&mut next, node_id)?;
+            node.font_weight = *weight;
+        }
+        MotionSceneEdit::SetTextAlign { node_id, align } => {
+            let node = text_node(&mut next, node_id)?;
+            node.text_align = *align;
+        }
+        MotionSceneEdit::SetLineHeight {
+            node_id,
+            line_height,
+        } => {
+            if let Some(value) = line_height
+                && (!value.is_finite()
+                    || !(MIN_MOTION_LINE_HEIGHT..=MAX_MOTION_LINE_HEIGHT).contains(value))
+            {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "line_height must be between {MIN_MOTION_LINE_HEIGHT} and {MAX_MOTION_LINE_HEIGHT}"
+                )));
+            }
+            let node = text_node(&mut next, node_id)?;
+            node.line_height = *line_height;
+        }
+        MotionSceneEdit::SetLetterSpacing {
+            node_id,
+            letter_spacing,
+        } => {
+            if let Some(value) = letter_spacing
+                && (!value.is_finite()
+                    || !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING).contains(value))
+            {
+                return Err(MotionSceneEditError::InvalidValue(format!(
+                    "letter_spacing must be between {MIN_MOTION_LETTER_SPACING} and {MAX_MOTION_LETTER_SPACING}"
+                )));
+            }
+            let node = text_node(&mut next, node_id)?;
+            node.letter_spacing = *letter_spacing;
+        }
         MotionSceneEdit::Delete { node_id } => {
             if !remove_node(&mut next.nodes, node_id) {
                 return Err(MotionSceneEditError::UnknownNode(node_id.clone()));
@@ -562,6 +651,11 @@ pub fn apply_scene_edit(
                 asset_id: None,
                 opacity: None,
                 rotation_degrees: None,
+                font: None,
+                font_weight: None,
+                text_align: None,
+                line_height: None,
+                letter_spacing: None,
                 spans: None,
             });
         }
@@ -899,6 +993,11 @@ mod tests {
                     asset_id: None,
                     opacity: None,
                     rotation_degrees: None,
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                     spans: None,
                 },
                 MotionNode {
@@ -922,6 +1021,11 @@ mod tests {
                         asset_id: None,
                         opacity: None,
                         rotation_degrees: None,
+                        font: None,
+                        font_weight: None,
+                        text_align: None,
+                        line_height: None,
+                        letter_spacing: None,
                         spans: None,
                     }]),
                     text: None,
@@ -935,6 +1039,11 @@ mod tests {
                     asset_id: None,
                     opacity: None,
                     rotation_degrees: None,
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                     spans: None,
                 },
             ],
@@ -1353,6 +1462,76 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(zero.code(), "MOTION_EDIT_INVALID_VALUE");
+    }
+
+    #[test]
+    fn typography_operations_set_clear_and_refuse_out_of_range_values() {
+        let start = scene();
+        let styled = apply_scene_edit_json(
+            &start,
+            br#"{
+                "op": "set_font_family",
+                "node_id": "title",
+                "font": "be_vietnam_pro"
+            }"#,
+        )
+        .expect("family");
+        let styled = apply_scene_edit_json(
+            &styled,
+            br#"{
+                "op": "set_font_weight",
+                "node_id": "title",
+                "weight": "bold"
+            }"#,
+        )
+        .expect("weight");
+        let styled = apply_scene_edit_json(
+            &styled,
+            br#"{"op": "set_text_align", "node_id": "title", "align": "end"}"#,
+        )
+        .expect("align");
+        let styled = apply_scene_edit_json(
+            &styled,
+            br#"{"op": "set_line_height", "node_id": "title", "line_height": 1.4}"#,
+        )
+        .expect("line height");
+        let styled = apply_scene_edit_json(
+            &styled,
+            br#"{"op": "set_letter_spacing", "node_id": "title", "letter_spacing": 1.5}"#,
+        )
+        .expect("tracking");
+        assert_eq!(styled.nodes[0].font, Some(MotionFontFamily::BeVietnamPro));
+        assert_eq!(styled.nodes[0].font_weight, Some(MotionTextWeight::Bold));
+        assert_eq!(styled.nodes[0].text_align, Some(MotionTextAlignment::End));
+        assert_eq!(styled.nodes[0].line_height, Some(1.4));
+        assert_eq!(styled.nodes[0].letter_spacing, Some(1.5));
+
+        // Omitting the value clears the override, returning the node to the automatic
+        // family and the historical metrics.
+        let cleared =
+            apply_scene_edit_json(&styled, br#"{"op": "set_font_family", "node_id": "title"}"#)
+                .expect("clear");
+        assert_eq!(cleared.nodes[0].font, None);
+
+        let too_loose = apply_scene_edit_json(
+            &start,
+            br#"{"op": "set_line_height", "node_id": "title", "line_height": 8}"#,
+        )
+        .unwrap_err();
+        assert_eq!(too_loose.code(), "MOTION_EDIT_INVALID_VALUE");
+        let too_wide = apply_scene_edit_json(
+            &start,
+            br#"{"op": "set_letter_spacing", "node_id": "title", "letter_spacing": 900}"#,
+        )
+        .unwrap_err();
+        assert_eq!(too_wide.code(), "MOTION_EDIT_INVALID_VALUE");
+        // A shape has no type, so a typography operation cannot target it.
+        let shape = apply_scene_edit_json(
+            &start,
+            br#"{"op": "set_font_weight", "node_id": "card-body", "weight": "bold"}"#,
+        )
+        .unwrap_err();
+        assert_eq!(shape.code(), "MOTION_EDIT_NOT_TEXT");
     }
 
     #[test]

@@ -37,8 +37,15 @@ use std::fmt;
 
 /// The `format` value every scene carries.
 pub const MOTION_SCENE_FORMAT: &str = "opencut-reinforced-motion-scene";
-/// The schema version this crate reads and writes.
-pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 1;
+/// The schema version this crate writes.
+///
+/// Version 2 added the optional text-style keys (family, weight, alignment, line
+/// height, tracking) and the optional text box. They are additive: a version 1
+/// document parses unchanged and renders exactly as it did, which is why the
+/// upgrade needs no migration step.
+pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 2;
+/// The oldest schema this crate still reads.
+pub const MIN_MOTION_SCENE_SCHEMA_VERSION: u32 = 1;
 /// The largest scene this accepts. A scene is authored text, not media, so this is
 /// generous for a hand-written file and still bounded.
 pub const MAX_MOTION_SCENE_BYTES: usize = 4 * 1024 * 1024;
@@ -53,6 +60,14 @@ pub const MAX_MOTION_ANIMATIONS: usize = 4096;
 pub const MAX_MOTION_KEYFRAMES: usize = 4096;
 /// The most bytes one text node's string may hold.
 pub const MAX_MOTION_TEXT_BYTES: usize = 64 * 1024;
+/// The tightest baseline distance a text node may ask for, as a multiple of the
+/// type size. Below this, lines collide; above it, a two-line block fills a frame.
+pub const MIN_MOTION_LINE_HEIGHT: f64 = 0.5;
+pub const MAX_MOTION_LINE_HEIGHT: f64 = 3.0;
+/// The tracking range in canvas pixels. Negative tightens a display line, positive
+/// opens a label; both are bounded so a scene stays legible.
+pub const MIN_MOTION_LETTER_SPACING: f64 = -50.0;
+pub const MAX_MOTION_LETTER_SPACING: f64 = 200.0;
 
 /// The whole scene document.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -174,6 +189,37 @@ pub enum MotionNodeKind {
     Image,
 }
 
+/// The bundled families a text node may name. A locked set: the renderer ships
+/// these two faces, and a scene cannot ask for a font the product does not carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MotionFontFamily {
+    Inter,
+    BeVietnamPro,
+}
+
+/// The weights the bundled families carry. Absent means regular.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MotionTextWeight {
+    #[default]
+    Regular,
+    Medium,
+    Semibold,
+    Bold,
+}
+
+/// Horizontal alignment of a text node inside its box. Absent means start, the
+/// historical behaviour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MotionTextAlignment {
+    #[default]
+    Start,
+    Center,
+    End,
+}
+
 /// One highlighted run of a text node's string, by byte offset. Spans are typed
 /// values, never markup: there is no inline syntax to parse and nothing to execute.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -228,6 +274,23 @@ pub struct MotionNode {
     /// node's `fill` colours the whole string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spans: Option<Vec<MotionTextSpan>>,
+    /// The bundled family a text node draws with. Absent keeps the automatic rule:
+    /// Vietnamese text takes the display face, plain Latin the neutral one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<MotionFontFamily>,
+    /// The weight a text node draws with. Absent means regular.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<MotionTextWeight>,
+    /// Where a text node sits inside its box. Absent means start-aligned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_align: Option<MotionTextAlignment>,
+    /// Baseline distance as a multiple of the type size. Absent means 1.32, the
+    /// line height every version 1 scene rendered with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_height: Option<f64>,
+    /// Tracking in canvas pixels, added to every glyph advance. Absent means zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub letter_spacing: Option<f64>,
 }
 
 /// The animatable properties V1 supports. A locked set: there is no expression
@@ -369,7 +432,11 @@ pub fn parse_motion_scene(bytes: &[u8]) -> Result<MotionScene, MotionSceneError>
     if scene.format != MOTION_SCENE_FORMAT {
         return Err(MotionSceneError::UnsupportedFormat);
     }
-    if scene.schema_version != MOTION_SCENE_SCHEMA_VERSION {
+    // Version 2 only adds optional node fields, so a version 1 scene means the same
+    // thing here as it did there; a future version would not.
+    if !(MIN_MOTION_SCENE_SCHEMA_VERSION..=MOTION_SCENE_SCHEMA_VERSION)
+        .contains(&scene.schema_version)
+    {
         return Err(MotionSceneError::UnsupportedSchemaVersion);
     }
     Ok(scene)
@@ -387,11 +454,15 @@ pub fn validate_scene(scene: &MotionScene) -> MotionValidation {
             format!("format must be {MOTION_SCENE_FORMAT}"),
         ));
     }
-    if scene.schema_version != MOTION_SCENE_SCHEMA_VERSION {
+    if !(MIN_MOTION_SCENE_SCHEMA_VERSION..=MOTION_SCENE_SCHEMA_VERSION)
+        .contains(&scene.schema_version)
+    {
         errors.push(MotionDiagnostic::new(
             "MOTION_UNSUPPORTED_SCHEMA_VERSION",
             "/schema_version",
-            format!("schema_version must be {MOTION_SCENE_SCHEMA_VERSION}"),
+            format!(
+                "schema_version must be between {MIN_MOTION_SCENE_SCHEMA_VERSION} and {MOTION_SCENE_SCHEMA_VERSION}"
+            ),
         ));
     }
     if !is_uuid_v4(&scene.scene_id) {
@@ -726,6 +797,28 @@ fn walk_nodes(
                         "font_size must be greater than zero",
                     ));
                 }
+                if let Some(line_height) = node.line_height
+                    && !(MIN_MOTION_LINE_HEIGHT..=MAX_MOTION_LINE_HEIGHT).contains(&line_height)
+                {
+                    errors.push(MotionDiagnostic::new(
+                        "MOTION_INVALID_LINE_HEIGHT",
+                        format!("{node_path}/line_height"),
+                        format!(
+                            "line_height must be between {MIN_MOTION_LINE_HEIGHT} and                              {MAX_MOTION_LINE_HEIGHT}"
+                        ),
+                    ));
+                }
+                if let Some(spacing) = node.letter_spacing
+                    && !(MIN_MOTION_LETTER_SPACING..=MAX_MOTION_LETTER_SPACING).contains(&spacing)
+                {
+                    errors.push(MotionDiagnostic::new(
+                        "MOTION_INVALID_LETTER_SPACING",
+                        format!("{node_path}/letter_spacing"),
+                        format!(
+                            "letter_spacing must be between {MIN_MOTION_LETTER_SPACING} and                              {MAX_MOTION_LETTER_SPACING} canvas pixels"
+                        ),
+                    ));
+                }
             }
             MotionNodeKind::Rectangle | MotionNodeKind::Ellipse => {
                 if let Some(size) = node.size
@@ -835,6 +928,139 @@ fn is_remote_reference(path: &str) -> bool {
 }
 
 #[cfg(test)]
+mod schema_version_tests {
+    //! Version 1 scenes must keep parsing and version 2 styling must reach the
+    //! resolved instruction; anything else is a schema break, not an edit.
+
+    fn styled_document(style: serde_json::Value) -> Vec<u8> {
+        let mut node = serde_json::json!({
+            "node_id": "title",
+            "kind": "text",
+            "text": "Title",
+            "position": {"x": 10, "y": 10},
+            "size": {"width": 400, "height": 120},
+            "font_size": 48
+        });
+        for (key, value) in style.as_object().expect("style object") {
+            node[key] = value.clone();
+        }
+        let scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 2,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Styled",
+            "duration": {"numerator": 2, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [node],
+            "animations": []
+        });
+        serde_json::to_vec(&scene).unwrap()
+    }
+
+    #[test]
+    fn a_version_one_scene_still_parses_and_validates() {
+        let scene = serde_json::json!({
+            "format": "opencut-reinforced-motion-scene",
+            "schema_version": 1,
+            "scene_id": "6f1c2f5e-3a4b-4c5d-8e9f-0a1b2c3d4e5f",
+            "name": "Historical",
+            "duration": {"numerator": 2, "denominator": 1},
+            "canvas": {"width": 1920, "height": 1080},
+            "assets": [],
+            "nodes": [{
+                "node_id": "title",
+                "kind": "text",
+                "text": "Title",
+                "position": {"x": 10, "y": 10},
+                "font_size": 48
+            }],
+            "animations": []
+        });
+        let bytes = serde_json::to_vec(&scene).unwrap();
+        let scene = crate::parse_motion_scene(&bytes).unwrap();
+        assert_eq!(scene.schema_version, 1);
+        assert!(crate::validate_scene(&scene).errors.is_empty());
+        // Unstyled, so the resolver leaves every style to the renderer's fallback.
+        let frame = crate::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap())
+            .expect("evaluate");
+        let text = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.node_id == "title")
+            .expect("text instruction");
+        assert!(text.font.is_none());
+        assert!(text.font_weight.is_none());
+        assert!(text.text_align.is_none());
+        assert!(text.line_height.is_none());
+        assert!(text.letter_spacing.is_none());
+    }
+
+    #[test]
+    fn version_two_styles_reach_the_resolved_instruction() {
+        let bytes = styled_document(serde_json::json!({
+            "font": "be_vietnam_pro",
+            "font_weight": "semibold",
+            "text_align": "end",
+            "line_height": 1.5,
+            "letter_spacing": -0.5
+        }));
+        let scene = crate::parse_motion_scene(&bytes).unwrap();
+        assert!(crate::validate_scene(&scene).errors.is_empty());
+        let frame = crate::evaluate_scene(&scene, or_core::RationalTime::new(0, 1).unwrap())
+            .expect("evaluate");
+        let text = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.node_id == "title")
+            .expect("text instruction");
+        assert_eq!(text.font, Some(crate::MotionFontFamily::BeVietnamPro));
+        assert_eq!(text.font_weight, Some(crate::MotionTextWeight::Semibold));
+        assert_eq!(text.text_align, Some(crate::MotionTextAlignment::End));
+        assert_eq!(text.line_height, Some(1.5));
+        assert_eq!(text.letter_spacing, Some(-0.5));
+    }
+
+    #[test]
+    fn a_future_schema_version_is_refused_rather_than_guessed() {
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&styled_document(serde_json::json!({}))).unwrap();
+        value["schema_version"] = serde_json::json!(3);
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            crate::parse_motion_scene(&bytes).unwrap_err(),
+            crate::MotionSceneError::UnsupportedSchemaVersion
+        );
+    }
+
+    #[test]
+    fn an_unknown_style_key_is_refused() {
+        let bytes = styled_document(serde_json::json!({ "font_stretch": 120 }));
+        assert_eq!(
+            crate::parse_motion_scene(&bytes).unwrap_err(),
+            crate::MotionSceneError::InvalidJson
+        );
+    }
+
+    #[test]
+    fn out_of_range_typography_is_reported_with_a_location() {
+        for style in [
+            serde_json::json!({ "line_height": 9.0 }),
+            serde_json::json!({ "letter_spacing": 400.0 }),
+        ] {
+            let scene = crate::parse_motion_scene(&styled_document(style)).unwrap();
+            let validation = crate::validate_scene(&scene);
+            assert_eq!(validation.errors.len(), 1, "{:?}", validation.errors);
+            assert!(
+                validation.errors[0].path.starts_with("/nodes/0"),
+                "{:?}",
+                validation.errors
+            );
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -878,6 +1104,11 @@ mod tests {
                     opacity: None,
                     rotation_degrees: None,
                     spans: None,
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                 },
                 MotionNode {
                     node_id: "callout".to_owned(),
@@ -903,6 +1134,11 @@ mod tests {
                         opacity: Some(1.0),
                         rotation_degrees: None,
                         spans: None,
+                        font: None,
+                        font_weight: None,
+                        text_align: None,
+                        line_height: None,
+                        letter_spacing: None,
                     }]),
                     text: None,
                     position: None,
@@ -916,6 +1152,11 @@ mod tests {
                     opacity: None,
                     rotation_degrees: None,
                     spans: None,
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                 },
                 MotionNode {
                     node_id: "diagram".to_owned(),
@@ -936,6 +1177,11 @@ mod tests {
                     opacity: Some(0.9),
                     rotation_degrees: None,
                     spans: None,
+                    font: None,
+                    font_weight: None,
+                    text_align: None,
+                    line_height: None,
+                    letter_spacing: None,
                 },
             ],
             animations: vec![MotionAnimation {
@@ -1070,7 +1316,9 @@ mod tests {
     #[test]
     fn a_future_schema_version_is_refused_rather_than_guessed_at() {
         let mut value = serde_json::to_value(scene()).unwrap();
-        value["schema_version"] = serde_json::json!(2);
+        // One past whatever this build writes: the number itself is not the point,
+        // refusing an unknown shape is.
+        value["schema_version"] = serde_json::json!(MOTION_SCENE_SCHEMA_VERSION + 1);
         assert_eq!(
             parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap_err(),
             MotionSceneError::UnsupportedSchemaVersion
@@ -1475,6 +1723,17 @@ pub struct MotionInstruction {
     /// `fill` colours the whole string.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub spans: Vec<MotionTextSpan>,
+    /// The family a text node draws with, already resolved from the node's choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<MotionFontFamily>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_weight: Option<MotionTextWeight>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_align: Option<MotionTextAlignment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_height: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub letter_spacing: Option<f64>,
 }
 
 /// Everything a renderer draws for one exact time.
@@ -1768,6 +2027,11 @@ fn resolve_node(
         font_size,
         asset_id: node.asset_id.clone(),
         spans: node.spans.clone().unwrap_or_default(),
+        font: node.font,
+        font_weight: node.font_weight,
+        text_align: node.text_align,
+        line_height: node.line_height,
+        letter_spacing: node.letter_spacing,
     }
 }
 

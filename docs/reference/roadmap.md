@@ -6,7 +6,80 @@ Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
 [features/](../features/).
 
-## Current focus (owner restatement, 2026-10-21)
+## Current focus (owner restatement, 2026-11-05)
+
+The owner's 2026-11-05 mission turns OR into a professional, beginner-usable
+video platform on one shared codebase. The work is organised so each increment is
+a product improvement with recorded evidence, not a library addition:
+
+11. **Guided first video (owner request, 2026-11-05).** A beginner's next step is
+    always one click away in the timeline toolbar, the export dialog asks what
+    the file is for instead of which codec, and composition guides show the safe
+    areas. Delivered with `apps/or_app/lib/screens/editor_guided_bar.dart`, the
+    intent-first export dialog, `_CompositionGuidesPainter`, and the
+    `guided-beginner` journey through the real app. Settings exposes guided mode,
+    next-step tips, guides and the inspector as preferences over the same state,
+    in their own **Editor** panel rather than trailing the narration settings.
+12. **Scene typography (owner request, 2026-11-05).** MotionScene schema v2 adds
+    family, weight, alignment, line height and tracking inside an explicit text
+    box, with the two metrics shared through `or_core::TextFormatting`.
+    Delivered per [ADR 0012](../adr/0012-scene-typography-schema-v2.md); the
+    project text dialog cannot set the two metrics yet because the bridge view is
+    not widened.
+13. **Measured media capability (owner request, 2026-11-05).** The capability
+    claim is now a measurement: `scripts/probe_media_matrix.py` probes and decodes
+    18 fixtures per host, import proves a real decode and refuses an unusable
+    decoder with `DECODE_UNAVAILABLE`, and
+    [media-capability-matrix.md](media-capability-matrix.md) records the rows.
+    The AV1 finding on Apple silicon is the reason the gate exists.
+14. **Technology adoption review (owner request, 2026-11-05).** Twenty candidate
+    repositories were checked against their real licences; no runtime dependency
+    was adopted and the reasons are recorded in
+    [technology-review.md](technology-review.md).
+15. **Linux verification of the same branch (owner request, 2026-11-05).** The
+    Debian 13 host built and tested the branch with a user-space Flutter and Rust
+    toolchain: `flutter analyze` clean, 462 widget tests, the bridge/IPC/runtime
+    Rust lanes, a CLI journey on a real project, and the semantic editor journey
+    under bounded Xvfb (`scripts/run_linux_ui_preflight.py`). That run is what
+    diagnosed the six failing widget tests and the failing `editor` workflow: the
+    guided band took 46 px from the panes. The step is now a toolbar item.
+16. **Setup is a GUI surface (owner request, 2026-11-05).** Settings → Resources
+    reports each bundled component, keeps speech models and the harness behind
+    explicit actions, and exposes the external-tools controls; the
+    `resources-setup` journey records that opening it installs nothing.
+17. **Windows-sized editing (owner request, 2026-11-05).** The editor stacks
+    below 980 px instead of squeezing three panes, and a compact window reaches
+    every tool through the dock sheet; the guided action keeps a 26 px target
+    instead of the 18 px compact density produced. The macOS suite, the Linux
+    suite at the same commit, and the bounded Linux preflight all pass.
+18. **The local acceptance gate states its own environment (owner request,
+    2026-11-05).** `bash scripts/acceptance.sh` now passes every lane it can
+    select on this host (`PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)`):
+    the Linux-only preflight is UNVERIFIED off Linux instead of a traceback, the
+    two media lanes that synthesise fixtures with `-f lavfi` are UNVERIFIED with
+    that reason when the packaged build omits the device, and `command.create`
+    carries a measured Darwin baseline beside the Debian ceiling. The media crate
+    tests and the export writer run against the pinned FFmpeg 8 through the
+    `$HOME/.local/ffmpeg8` shims recorded in
+    [local-macos.md](../operations/local-macos.md).
+
+Blocked, and reported as blocked rather than attempted:
+
+- **Windows build/test from one revision.** The Windows 11 host has cargo and
+  rustc, the VS 2022 Build Tools, Python and git, but no Flutter SDK, no FFmpeg,
+  no cmake/ninja and no libclang; this mission's permission boundary forbids
+  installing that toolchain there. macOS and Linux are verified from the same
+  commit; Windows stays labelled unverified rather than inferred from shared
+  code, and the exact missing pieces are listed so the owner can decide.
+- **Installer-level parity on Linux and Windows.** No packaged install was
+  exercised on either host. The Linux journey runs from a developer build under
+  Xvfb; packaging and install remain a separate, unclaimed step.
+- **An optional download installed and removed through the GUI.** The
+  `resources-setup` journey proves the surface is reachable and inert until a
+  user acts; it does not download a model or an update, so that path is not
+  claimed as verified.
+
+## Previous focus (owner restatement, 2026-10-21)
 
 One near-term delivery mission for the local macOS app, in this order:
 

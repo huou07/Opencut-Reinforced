@@ -1,6 +1,6 @@
 # Feature — MotionScene (Deterministic Code-to-Video)
 
-Last reviewed: 2026-10-28
+Last reviewed: 2026-11-05
 
 Scope: turning source code into a short, deterministic illustration that can be
 previewed, materialised, inserted into an ordinary timeline and exported.
@@ -11,9 +11,9 @@ MotionScene is a versioned, **declarative, non-executable** data format
 (`.ormotion.json`). It has no script, shader, HTTP, environment, glob, shell,
 provider or hidden font lookup, and evaluation makes **zero** model calls.
 
-V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
-`duration`, `canvas`, typed `assets`, `nodes`, `animations`, and an optional
-`camera`.
+Envelope: `format`, `schema_version` (2; a version 1 document still parses and
+renders identically), UUIDv4 `scene_id`, `name`, exact `duration`, `canvas`,
+typed `assets`, `nodes`, `animations`, and an optional `camera`.
 
 - Time is nonnegative finite `RationalTime` on a half-open `[0, duration)` local
   timeline with exact-time random access.
@@ -30,11 +30,22 @@ V1 envelope: `format`, `schema_version`, UUIDv4 `scene_id`, `name`, exact
 - Any randomness must be explicit and seeded from scene/source identity; V1 is
   otherwise deterministic.
 - Text uses the shared `cosmic-text` bundled-font path — not a second text engine.
-  ASCII lines use Inter; a line containing non-ASCII (Vietnamese) uses Be Vietnam
-  Pro, so stacked marks get the display face. Each line is measured against the
-  canvas and shrunk (down to 60 % of the
-  requested size) or wrapped before it is rasterised, so a long Vietnamese title
-  cannot run off the frame.
+  By default ASCII lines use Inter and a line containing non-ASCII (Vietnamese)
+  uses Be Vietnam Pro, so stacked marks get the display face.
+- A text node may set its own typography (schema version 2, ADR 0012): `font`,
+  `font_weight`, `text_align`, `line_height` (a multiple of the type size) and
+  `letter_spacing` (points). Absent fields mean the version 1 behaviour, so old
+  documents render unchanged. Only the two bundled OFL faces exist; a scene cannot
+  name a font it does not ship.
+- `size` on a text node is an explicit box: its width caps the measured line, its
+  height bounds the block, and the block anchors at the box's top. Alignment is
+  meaningful only inside a box. Without a box a line is measured against the
+  canvas and shrunk (down to 60 % of the requested size) or wrapped before it is
+  rasterised, so a long Vietnamese title cannot run off the frame.
+- Typography is edited through typed operations — `set_font_family`,
+  `set_font_weight`, `set_text_align`, `set_line_height`,
+  `set_letter_spacing` — so a scene is never mutated by hand, and a shape is
+  refused with `MOTION_EDIT_NOT_TEXT`.
 - Image nodes draw a decoded PNG asset resolved relative to the scene file, with a
   16 MiB encoded / 64 megapixel bound; a missing image keeps the visible
   placeholder.
@@ -114,7 +125,8 @@ materialised video.
 - `crates/or_app_bridge/src/api/motion.rs` — bridge surface
 - `crates/or_render/` — evaluation into the render spine
 - `apps/or_app/lib/` — Motion panel and insertion flow
-- ADR: [docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md](../adr/0007-declarative-motion-scenes-and-procedural-isolation.md)
+- ADR: [docs/adr/0007-declarative-motion-scenes-and-procedural-isolation.md](../adr/0007-declarative-motion-scenes-and-procedural-isolation.md),
+  [docs/adr/0012-scene-typography-schema-v2.md](../adr/0012-scene-typography-schema-v2.md)
 
 ## Related
 

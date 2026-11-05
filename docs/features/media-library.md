@@ -1,6 +1,6 @@
 # Feature — Media Library and Import
 
-Last reviewed: 2026-11-01
+Last reviewed: 2026-11-05
 
 Scope: bringing media into a project, showing it, replacing it, and telling the
 user precisely what is wrong when it cannot be used.
@@ -36,8 +36,16 @@ AC-3/E-AC-3 and PCM audio; MOV/MP4/M4V with H.264/H.265/AAC; WAV, MP3, Ogg, FLAC
 AIFF and AVI single-container files; PNG, JPEG and WebP stills. Rejected
 containers stay named, and a codec the *running build* cannot decode is refused at
 import with `UNSUPPORTED_CODEC` rather than admitted and failing at the first
-preview frame; the release bundle links the approved LGPL media-interchange build
-while a local debug build may link a different, smaller set. See
+preview frame.
+
+The codec list is the shared matrix; it is not a promise that every host decodes
+every codec in it. Import opens one real decoder and decodes the first video
+frame, so a codec whose decoder exists but which this machine cannot run is
+refused with `DECODE_UNAVAILABLE` and the reason. Measured rows per host, the
+exact command that produced them and the AV1 finding on Apple silicon are in
+[reference/media-capability-matrix.md](../reference/media-capability-matrix.md).
+The release bundle links the approved LGPL media-interchange build while a local
+debug build may link a different, smaller set. See
 [architecture/media-pipeline.md](../architecture/media-pipeline.md).
 
 ## Library surface

@@ -16,6 +16,7 @@ import 'editor_viewer_panel.dart';
 import 'editor_inspector_panel.dart';
 import 'editor_panel_header.dart';
 import 'editor_timeline_dialogs.dart';
+import 'editor_guided_bar.dart';
 import 'editor_timeline_panel.dart';
 import 'editor_tool_actions.dart';
 import '../motion/motion_library_controller.dart';
@@ -73,6 +74,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.pickMotionScene,
     this.onImportCaptions,
     this.onExportCaptions,
+    this.onExport,
+    this.hasExported = false,
     this.onGenerateCaptions,
     this.onManageSpeechModel,
     this.onRetryMediaPreview,
@@ -181,6 +184,14 @@ class EditorShellPreviewScreen extends StatefulWidget {
   final Future<String?> Function()? pickMotionScene;
   final VoidCallback? onImportCaptions;
   final VoidCallback? onExportCaptions;
+
+  /// Starts the shell's ordinary export flow. The guided row's last step calls
+  /// this rather than opening a second export path.
+  final VoidCallback? onExport;
+
+  /// Whether this session has already produced a file. The guided row stops at
+  /// that point instead of repeating a step the user has finished.
+  final bool hasExported;
   final Future<void> Function(ProjectMediaItem media)? onGenerateCaptions;
   final VoidCallback? onManageSpeechModel;
   final ValueChanged<ProjectMediaItem>? onRetryMediaPreview;
@@ -412,6 +423,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   _RightPanelTab _rightPanelTab = _RightPanelTab.inspector;
   final EditorSettingsStore _editorSettings = EditorSettingsStore();
   bool _showInspectorPreference = false;
+  bool _simpleMode = true;
+  bool _showGuides = false;
+  bool _tipsDismissed = false;
   bool _inspectorRevealed = false;
   bool _assistantReady = false;
   bool _userChoseInspector = false;
@@ -448,7 +462,201 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   Future<void> _loadEditorSettings() async {
     final settings = await _editorSettings.load();
     if (!mounted) return;
-    setState(() => _showInspectorPreference = settings.showInspector);
+    setState(() {
+      _showInspectorPreference = settings.showInspector;
+      _simpleMode = settings.simpleMode;
+      _showGuides = settings.showGuides;
+      _tipsDismissed = settings.tipsDismissed;
+    });
+  }
+
+  /// Presentation preferences change from three places — Settings, the viewer
+  /// header and the guided row itself — so they are written through one method.
+  /// A failed write keeps the in-session value and says so; it never silently
+  /// pretends the preference stuck.
+  Future<void> _saveEditorSettings(EditorSettings next) async {
+    setState(() {
+      _showInspectorPreference = next.showInspector;
+      _simpleMode = next.simpleMode;
+      _showGuides = next.showGuides;
+      _tipsDismissed = next.tipsDismissed;
+    });
+    try {
+      await _editorSettings.save(next);
+    } catch (_) {
+      if (mounted && context.mounted) {
+        OrSnackBar.show(
+          context,
+          'The editor preference could not be saved; it applies to this session.',
+        );
+      }
+    }
+  }
+
+  EditorSettings get _currentSettings => EditorSettings(
+    showInspector: _showInspectorPreference,
+    simpleMode: _simpleMode,
+    showGuides: _showGuides,
+    tipsDismissed: _tipsDismissed,
+  );
+
+  /// The loaded pages can be shorter than the timeline, so a track whose count
+  /// is positive but whose clips have not been paged in still counts as filled.
+  bool get _timelineHasText =>
+      widget.timelineClipPages.values.any(
+        (page) => page.items.any(
+          (clip) => clip.contentKind == ProjectTimelineClipContentKind.text,
+        ),
+      ) ||
+      (widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]).any(
+        (track) =>
+            track.kind == ProjectTimelineTrackKind.text ||
+            track.kind == ProjectTimelineTrackKind.caption,
+      );
+
+  bool get _timelineHasAudio {
+    final pages = widget.timelineClipPages;
+    final tracks =
+        widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[];
+    for (final track in tracks) {
+      if (track.kind != ProjectTimelineTrackKind.audio) continue;
+      if ((pages[track.trackId]?.totalCount ?? 0) > 0) return true;
+    }
+    return false;
+  }
+
+  Widget? _guidedBar() {
+    if (!widget.isProjectWorkspace || widget.busy) return null;
+    if (!_simpleMode || _tipsDismissed) return null;
+    final clipCount = widget.timelineClipPages.values.fold<int>(
+      0,
+      (total, page) => total + page.totalCount,
+    );
+    final step = guidedNextStep(
+      hasMedia: (widget.mediaPage?.totalCount ?? 0) > 0,
+      clipCount: clipCount,
+      hasText: _timelineHasText,
+      hasAudio: _timelineHasAudio,
+      hasExported: widget.hasExported,
+    );
+    if (step == null) return null;
+    return EditorGuidedBar(
+      step: step,
+      onAction: () => unawaited(_runGuidedStep(step)),
+      onDismiss: () => unawaited(
+        _saveEditorSettings(_currentSettings.copyWith(tipsDismissed: true)),
+      ),
+    );
+  }
+
+  Future<void> _runGuidedStep(GuidedStep step) async {
+    switch (step.kind) {
+      case GuidedStepKind.importMedia:
+        widget.onImportMedia?.call();
+      case GuidedStepKind.addFirstClip:
+        await _addFirstMediaToTimeline();
+      case GuidedStepKind.addTitle:
+        await _addGuidedTitle();
+      case GuidedStepKind.addAudio:
+        setState(() => _selectedTool = 'Audio');
+        widget.onImportMedia?.call();
+      case GuidedStepKind.exportVideo:
+        widget.onExport?.call();
+    }
+  }
+
+  /// The guided row's second step. It runs the same ensure-track and insert
+  /// commands the timeline's drag uses, so the result is an ordinary clip and
+  /// the row disappears because the state proves the step is done.
+  Future<void> _addFirstMediaToTimeline() async {
+    final items = widget.mediaPage?.items ?? const <ProjectMediaItem>[];
+    final project = widget.project;
+    final ensure = widget.onEnsureTrack;
+    final insert = widget.onAddMediaToTimeline;
+    if (items.isEmpty || project == null || ensure == null || insert == null) {
+      return;
+    }
+    final media = items.first;
+    final isStillImage = media.formatNames.any(
+      (format) => const {
+        'image2',
+        'image2pipe',
+        'jpeg_pipe',
+        'png_pipe',
+        'webp_pipe',
+      }.contains(format),
+    );
+    final audioOnly =
+        media.firstAudioDuration != null && media.firstVideoDuration == null;
+    final kind = audioOnly
+        ? ProjectTimelineTrackKind.audio
+        : ProjectTimelineTrackKind.video;
+    final ensured = await ensure(kind);
+    if (!mounted || ensured == null) return;
+    ProjectTimelineTrack? track;
+    for (final candidate in ensured.$2.items) {
+      if (candidate.kind == kind && !candidate.state.locked) {
+        track = candidate;
+        break;
+      }
+    }
+    if (track == null) return;
+    final duration = isStillImage && kind == ProjectTimelineTrackKind.video
+        ? ProjectRationalTime(BigInt.from(5), 1)
+        : (kind == ProjectTimelineTrackKind.audio
+              ? (media.firstAudioDuration ?? media.containerDuration)
+              : (media.firstVideoDuration ?? media.containerDuration));
+    if (duration == null || !duration.isPositive) {
+      if (mounted) {
+        OrSnackBar.show(
+          context,
+          'This media has no usable duration, so it was not added. Re-import it '
+          'and check that it plays in the media panel.',
+        );
+      }
+      return;
+    }
+    await insert(
+      ensured.$1,
+      media,
+      track.trackId,
+      ProjectRationalTime(BigInt.zero, 1),
+      ProjectRationalTime(BigInt.zero, 1),
+      duration,
+      'insert',
+    );
+  }
+
+  /// The guided row's title step. It creates the text track the dialog needs
+  /// instead of failing with "add a text track first", which is the one thing a
+  /// beginner cannot be expected to work out on their own.
+  Future<void> _addGuidedTitle() async {
+    final ensure = widget.onEnsureTrack;
+    ProjectTimelineTrack? track;
+    for (final candidate
+        in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+      if (candidate.kind == ProjectTimelineTrackKind.text &&
+          !candidate.state.locked) {
+        track = candidate;
+        break;
+      }
+    }
+    if (track == null && ensure != null) {
+      final ensured = await ensure(ProjectTimelineTrackKind.text);
+      if (!mounted || ensured == null) return;
+      for (final candidate in ensured.$2.items) {
+        if (candidate.kind == ProjectTimelineTrackKind.text &&
+            !candidate.state.locked) {
+          track = candidate;
+          break;
+        }
+      }
+    }
+    if (!mounted) return;
+    await _showAddTimelineTextClip(
+      ProjectTimelineClipContentKind.text,
+      track: track,
+    );
   }
 
   /// The inspector is the pre-connection fallback: while the harness starts,
@@ -921,12 +1129,18 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
 
   void addMarkerAtPlayhead() => _showAddTimelineMarker();
 
+  /// The viewer header and the `G` shortcut both flip the same preference, so
+  /// the guide overlay and Settings cannot disagree about whether it is on.
+  void toggleGuides() => unawaited(
+    _saveEditorSettings(_currentSettings.copyWith(showGuides: !_showGuides)),
+  );
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       key: const ValueKey('editor-shell-preview'),
       builder: (context, constraints) {
-        final compact = OrBreakpoints.isCompact(constraints.maxWidth);
+        final compact = OrBreakpoints.isEditorCompact(constraints.maxWidth);
         return ColoredBox(
           color: OrColors.background,
           child: Column(
@@ -956,6 +1170,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   Widget _desktopLayout(bool wide) {
+    final guided = _guidedBar();
     return Column(
       children: [
         Expanded(
@@ -1045,6 +1260,12 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                   onCommitTransform: _commitSelectedTransform,
                   selectedTextClip: _selectedTextClip,
                   onCommitTextFormatting: _commitTextFormatting,
+                  showGuides: _showGuides,
+                  onShowGuidesChanged: (value) => unawaited(
+                    _saveEditorSettings(
+                      _currentSettings.copyWith(showGuides: value),
+                    ),
+                  ),
                   hasTimelineContent: widget.timelineClipPages.values.any(
                     (page) => page.totalCount > 0,
                   ),
@@ -1133,6 +1354,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
         Expanded(
           flex: 2,
           child: EditorTimelinePanel(
+            guidance: guided,
             onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: false,
@@ -1209,6 +1431,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   Widget _compactLayout() {
+    final guided = _guidedBar();
     return Column(
       children: [
         Expanded(
@@ -1225,11 +1448,16 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onProjectChanged: widget.onProjectChanged,
             selectedTextClip: _selectedTextClip,
             onCommitTextFormatting: _commitTextFormatting,
+            showGuides: _showGuides,
+            onShowGuidesChanged: (value) => unawaited(
+              _saveEditorSettings(_currentSettings.copyWith(showGuides: value)),
+            ),
           ),
         ),
         Expanded(
           flex: 2,
           child: EditorTimelinePanel(
+            guidance: guided,
             onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: true,
@@ -1460,8 +1688,9 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
   }
 
   Future<void> _showAddTimelineTextClip(
-    ProjectTimelineClipContentKind contentKind,
-  ) async {
+    ProjectTimelineClipContentKind contentKind, {
+    ProjectTimelineTrack? track,
+  }) async {
     final project = widget.project;
     final onInsert = widget.onInsertTimelineTextClip;
     if (!widget.isProjectWorkspace ||
@@ -1474,14 +1703,15 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     final trackKind = contentKind == ProjectTimelineClipContentKind.text
         ? ProjectTimelineTrackKind.text
         : ProjectTimelineTrackKind.caption;
-    ProjectTimelineTrack? track;
-    for (final candidate
-        in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
-      if (candidate.kind == trackKind && !candidate.state.locked) {
-        track = candidate;
-        break;
+    track ??= () {
+      for (final candidate
+          in widget.timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+        if (candidate.kind == trackKind && !candidate.state.locked) {
+          return candidate;
+        }
       }
-    }
+      return null;
+    }();
     if (track == null) {
       _showTimelineEditError(
         'Add an unlocked ${contentKind == ProjectTimelineClipContentKind.text ? 'text' : 'caption'} track first.',

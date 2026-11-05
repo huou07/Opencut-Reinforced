@@ -1,6 +1,6 @@
 # Product Requirements Inventory
 
-Last reviewed: 2026-10-29
+Last reviewed: 2026-11-05
 
 Scope: what OR is meant to be, area by area, with maturity labels. This is the
 requirement inventory, not implemented status — current work is selected by
@@ -37,7 +37,8 @@ Autosave updates a recovery checkpoint and never overwrites the canonical file.
 
 **PLANNED:** pin/archive, project settings, manual snapshots, version history,
 backup, consolidation, offline-media detection and bulk relink, proxies, workspace
-presets, Simple/Advanced modes, recent-project history.
+presets, recent-project history. Simple/Advanced modes ship as the guided-mode
+preference described in [workspace-ui.md](../features/workspace-ui.md).
 
 ## Editor core
 
@@ -54,9 +55,10 @@ deferred until typed semantics and migrations are approved.
 ## Viewer
 
 **MVP:** fit / 25 / 50 / 100 / 200% zoom, exact seek and scrub, playback and frame
-stepping on the explicit sequence frame lattice, no looping.
-**PLANNED:** fullscreen/cinema mode, safe areas, grids, guides, rulers, bounding
-boxes, transform handles.
+stepping on the explicit sequence frame lattice, no looping; composition guides
+(title-safe, action-safe, thirds, centre) as a viewer overlay that never reaches
+an exported frame; transform handles that commit one command per gesture.
+**PLANNED:** fullscreen/cinema mode, rulers, bounding boxes.
 
 ## Media, text, audio, effects
 
@@ -65,6 +67,15 @@ See [media-library.md](../features/media-library.md), [text-captions.md](../feat
 for the contracts. Product-level expectations: useful metadata and errors,
 thumbnails/waveforms, offline/relink, captions and subtitle interchange, typed
 transform and effect parameters, coherent preview/export parity.
+
+**MVP FOUNDATION (delivered):** the import codec list and the three export
+profiles are shared Rust rules, and whether a *given host* can decode a codec is
+measured at import rather than assumed: the first video frame is decoded, and a
+codec whose decoder exists but cannot run on this machine is refused with
+`DECODE_UNAVAILABLE` and the reason. Measured rows per host, including the AV1
+finding on Apple silicon, are in
+[media-capability-matrix.md](media-capability-matrix.md). GIF and TIFF import,
+extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED.
 
 ## AI assistance
 
@@ -105,7 +116,11 @@ app-level JSON library with deterministic name/tag classification
 (background, people, nature, animal, vehicle, ...) and a manual override; PNG
 import and rendering; a Motion panel with search, previews, parameter editing
 and a composition; drag to the timeline; `or mcp` and `or motion asset` tools.
-See [motion-assets.md](../features/motion-assets.md).
+A composed scene's text can be set with its own family, weight, alignment, line
+height and tracking inside an explicit text box (schema version 2, ADR 0012), so
+titles can carry hierarchy instead of one uniform weight. See
+[motion-assets.md](../features/motion-assets.md) and
+[motionscene.md](../features/motionscene.md).
 
 **DEFERRED:** a live timeline MotionClip that stays editable in place; motion
 presets applied to an existing node; a marketplace. Placement stays materialised

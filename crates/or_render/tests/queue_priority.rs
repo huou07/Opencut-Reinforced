@@ -38,7 +38,11 @@ use std::{
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 360;
 const WARMUP: usize = 5;
-const FRAMES: usize = 40;
+/// Forty frames made the p95 of a 1.5 ms idle sample swing enough that a ratio
+/// between two noisy numbers could breach on a busy host while the loaded p95
+/// stayed inside its own 33 ms budget. A hundred and twenty frames costs about
+/// three seconds and reports the distribution instead of an artefact.
+const FRAMES: usize = 120;
 /// Opportunistic workers: two per available parallelism, so the pool is
 /// oversubscribed exactly as a burst of analysis jobs would make it.
 fn opportunistic_workers() -> usize {

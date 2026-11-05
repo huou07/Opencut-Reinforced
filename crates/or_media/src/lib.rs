@@ -89,6 +89,33 @@ fn loaded_avutil_path() -> Option<String> {
     }
 }
 
+/// Decodes the first frame of `source`, proving this host can actually play it.
+///
+/// `decoder_available` only proves the linked build carries a decoder. Some
+/// decoders are unusable on a host anyway: the AV1 decoder in the pinned LGPL
+/// build hands frames to VideoToolbox and fails on a machine without AV1
+/// hardware decode. Import asks this question once so a file is never admitted
+/// and then found unplayable at the first preview frame.
+pub fn video_frame_decodes(source: &or_core::MediaSourceRef) -> Result<(), String> {
+    // One session and its first frame are two in-flight leases, and the decode
+    // itself wants room for a decoded frame, so a single-lease budget refuses
+    // its own open. These limits match the decode tests: four leases and 64 MiB
+    // are enough to prove one frame without competing with the preview runtime,
+    // which owns its own budgets.
+    let limits = or_runtime::BudgetLimits::new(4, 64 * 1024 * 1024)
+        .map_err(|error| format!("decode budget is invalid: {error}"))?;
+    let budgets = or_runtime::RuntimeBudgets::new(limits, limits, limits);
+    let decoder = SoftwareMediaDecoder::new(source, budgets).map_err(|error| error.to_string())?;
+    let cancellation = or_runtime::CancellationToken::new();
+    let mut session = decoder
+        .open_video_session(&cancellation)
+        .map_err(|error| error.to_string())?;
+    session
+        .frame_at(or_core::RationalTime::ZERO, &cancellation)
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

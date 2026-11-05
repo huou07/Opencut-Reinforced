@@ -30,15 +30,23 @@ importing is a project mutation and is saved like any other edit.
 
 ## What can be imported
 
-- The supported profile is Matroska (FFV1/PCM S16LE, VP9/Opus, H.264/AAC), WAV
-  PCM S16LE, MP3 audio and WebM VP9/Opus. MP4-family H.264/AAC import is a
-  candidate profile; H.265 and AV1 are not supported.
+- Containers: Matroska and WebM; MOV/MP4/M4V/M4A/3GP/3G2; WAV, MP3, OGG, FLAC,
+  AIFF, AVI; single PNG, JPEG and WebP stills. GIF and TIFF are refused by design.
+- Codecs in the shared profile: H.264, HEVC, VP9, AV1, VP8, FFV1, ProRes, MJPEG,
+  MPEG-4 and similar video; AAC, Opus, Vorbis, FLAC, ALAC, AC-3/E-AC-3 and PCM
+  audio. Being in the list is not a promise that this host can decode it.
+- Import proves a decode of the first video frame. A codec outside the profile is
+  refused as `UNSUPPORTED_CODEC`; a codec whose decoder exists but cannot run here
+  is refused as `DECODE_UNAVAILABLE` with the reason. `DECODE_UNAVAILABLE` is the
+  one to expect on Apple silicon for AV1. See
+  [capability-and-setup.md](capability-and-setup.md) for the codes and the fix to
+  give the user.
 - A file must exist and be readable when `media add` runs; the library records a
   source path, not a copy.
 - Importing the same path twice is allowed; use the id the new call returns.
 - An unsupported file is reported as unsupported, not corrupt. A probe that the
   packaged `ffprobe` cannot complete falls back to the libavformat the app links,
-  so a QuickTime file the helper rejects can still import.
+  and the identical matrix is applied.
 
 ## Paths
 

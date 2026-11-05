@@ -1,6 +1,6 @@
 # Feature — Text and Captions
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-05
 
 Scope: title/text clips, manual captions, subtitle interchange, and the font and
 rendering rules they share with MotionScene.
@@ -25,6 +25,19 @@ defaulted so every project written before them renders unchanged:
   colour (including alpha) and padding in milli-points.
 - `opacity_basis_points` — whole-block opacity, independent of the clip's visual
   opacity.
+- `line_height_permille` — the baseline distance as a thousandth of the type size,
+  1320 by default and clamped to 800–3000, so a multi-line block can be set
+  tighter or airier than the historical constant.
+- `letter_spacing_milli_points` — tracking in milli-points, 0 by default and
+  clamped to -5000–20000; negative tightens display type.
+
+The two metrics are serialized and honoured by the renderer through the same
+`TextFormatting` value MotionScene uses (ADR 0012), and both are omitted from the
+document when they hold their defaults, so a project written before them is
+byte-identical. **They are not editable from the text dialog yet:** the Flutter
+bridge view that dialog writes through does not mirror the two fields, and
+widening that view is a separate generated-code change. A text clip therefore
+keeps the historical metrics, and the dialog cannot silently change them.
 
 The Edit Title/Caption dialog writes all of these through the existing
 `timeline.clip.update` command; the renderer measures the shaped text, so the

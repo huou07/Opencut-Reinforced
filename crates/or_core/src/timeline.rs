@@ -374,6 +374,26 @@ const fn is_zero_i16(value: &i16) -> bool {
     *value == 0
 }
 
+/// 1.32 line height, the value every project written before the field existed
+/// rendered with. Type that leaves it out stays pixel-identical.
+pub const DEFAULT_TEXT_LINE_HEIGHT_PERMILLE: u16 = 1_320;
+pub const MIN_TEXT_LINE_HEIGHT_PERMILLE: u16 = 800;
+pub const MAX_TEXT_LINE_HEIGHT_PERMILLE: u16 = 3_000;
+pub const MIN_TEXT_LETTER_SPACING_MILLI_POINTS: i32 = -5_000;
+pub const MAX_TEXT_LETTER_SPACING_MILLI_POINTS: i32 = 20_000;
+
+const fn default_text_line_height_permille() -> u16 {
+    DEFAULT_TEXT_LINE_HEIGHT_PERMILLE
+}
+
+const fn is_default_line_height(value: &u16) -> bool {
+    *value == DEFAULT_TEXT_LINE_HEIGHT_PERMILLE
+}
+
+const fn is_zero_i32(value: &i32) -> bool {
+    *value == 0
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TextFormatting {
@@ -400,6 +420,17 @@ pub struct TextFormatting {
         skip_serializing_if = "is_full_text_opacity"
     )]
     pub opacity_basis_points: u16,
+    /// Distance between baselines as a fraction of the type size, in permille.
+    /// Absent means the 1.32 the renderer has always used.
+    #[serde(
+        default = "default_text_line_height_permille",
+        skip_serializing_if = "is_default_line_height"
+    )]
+    pub line_height_permille: u16,
+    /// Tracking, in milli-points, added to every glyph advance. Negative tightens
+    /// a display line; positive opens a small-caps label. Absent means zero.
+    #[serde(default, skip_serializing_if = "is_zero_i32")]
+    pub letter_spacing_milli_points: i32,
 }
 
 impl TextFormatting {
@@ -414,6 +445,8 @@ impl TextFormatting {
         offset_y_basis_points: 0,
         background: None,
         opacity_basis_points: 10_000,
+        line_height_permille: DEFAULT_TEXT_LINE_HEIGHT_PERMILLE,
+        letter_spacing_milli_points: 0,
     };
 
     /// Captions start where a viewer expects them: low on the frame, still
@@ -428,6 +461,10 @@ impl TextFormatting {
             && (-10_000..=10_000).contains(&self.offset_x_basis_points)
             && (-10_000..=10_000).contains(&self.offset_y_basis_points)
             && self.opacity_basis_points <= 10_000
+            && (MIN_TEXT_LINE_HEIGHT_PERMILLE..=MAX_TEXT_LINE_HEIGHT_PERMILLE)
+                .contains(&self.line_height_permille)
+            && (MIN_TEXT_LETTER_SPACING_MILLI_POINTS..=MAX_TEXT_LETTER_SPACING_MILLI_POINTS)
+                .contains(&self.letter_spacing_milli_points)
             && self
                 .background
                 .is_none_or(|background| background.padding_milli_points <= 200_000)
@@ -1689,6 +1726,58 @@ mod tests {
             }
             .is_valid()
         );
+    }
+
+    #[test]
+    fn advanced_typography_serializes_only_when_it_differs_from_the_default() {
+        // A formatting written before these fields existed decodes into the
+        // historical metrics, so old projects keep rendering byte for byte.
+        let historical: TextFormatting = serde_json::from_value(serde_json::json!({
+            "font": "bundled_inter",
+            "size_milli_points": 48000,
+            "weight": "regular",
+            "alignment": "center",
+            "color": {"red": 255, "green": 255, "blue": 255, "alpha": 255}
+        }))
+        .unwrap();
+        assert_eq!(historical.line_height_permille, 1_320);
+        assert_eq!(historical.letter_spacing_milli_points, 0);
+        assert!(historical.is_valid());
+
+        let encoded = serde_json::to_value(TextFormatting::DEFAULT).unwrap();
+        assert!(encoded.get("line_height_permille").is_none());
+        assert!(encoded.get("letter_spacing_milli_points").is_none());
+
+        let styled = TextFormatting {
+            line_height_permille: 1_500,
+            letter_spacing_milli_points: 1_200,
+            ..TextFormatting::DEFAULT
+        };
+        let decoded: TextFormatting =
+            serde_json::from_value(serde_json::to_value(styled).unwrap()).unwrap();
+        assert_eq!(decoded, styled);
+        assert!(styled.is_valid());
+
+        for broken in [
+            TextFormatting {
+                line_height_permille: 4_000,
+                ..TextFormatting::DEFAULT
+            },
+            TextFormatting {
+                line_height_permille: 400,
+                ..TextFormatting::DEFAULT
+            },
+            TextFormatting {
+                letter_spacing_milli_points: 30_000,
+                ..TextFormatting::DEFAULT
+            },
+            TextFormatting {
+                letter_spacing_milli_points: -9_000,
+                ..TextFormatting::DEFAULT
+            },
+        ] {
+            assert!(!broken.is_valid(), "{broken:?}");
+        }
     }
 
     #[test]

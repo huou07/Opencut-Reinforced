@@ -479,6 +479,11 @@ pub fn scene_from_source(
             asset_id: None,
             opacity: None,
             rotation_degrees: None,
+            font: None,
+            font_weight: None,
+            text_align: None,
+            line_height: None,
+            letter_spacing: None,
             spans: None,
         },
         MotionNode {
@@ -499,6 +504,11 @@ pub fn scene_from_source(
             asset_id: None,
             opacity: None,
             rotation_degrees: None,
+            font: None,
+            font_weight: None,
+            text_align: None,
+            line_height: None,
+            letter_spacing: None,
             spans: None,
         },
     ];
@@ -558,6 +568,13 @@ pub fn scene_from_source(
                 opacity: None,
                 rotation_degrees: None,
                 spans: if spans.is_empty() { None } else { Some(spans) },
+                // Code scenes carry their own layout metrics; the automatic family
+                // rule and the historical line height stay in charge.
+                font: None,
+                font_weight: None,
+                text_align: None,
+                line_height: None,
+                letter_spacing: None,
             });
 
             if character_ends.is_empty() {

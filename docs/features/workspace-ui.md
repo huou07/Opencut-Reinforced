@@ -113,6 +113,41 @@ is missing.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 
+## Guided mode
+
+Guided mode is the beginner surface and it is a preference, not a second
+editor. It is stored in `editor-settings.json` beside the inspector preference
+and changes only what is shown, never what a command does or what a project
+file holds. A version-1 settings file opens in guided mode.
+
+- **Next-step step.** The step trails the timeline toolbar as one compact item
+  that names the next useful action and offers it as a single button: import
+  media, add the first clip, add a title, add sound, then export. It lives in
+  the toolbar rather than its own band so it can never change a pane's height,
+  push an existing control out of reach, or place a clip under a transient
+  snackbar; the toolbar already scrolls, so a narrow window still reaches every
+  tool. The step is derived from the open project's read model (media count,
+  clip count, whether a text or audio clip exists, and whether this session has
+  exported), so it disappears on its own as the work is done instead of
+  tracking a tutorial. It can be dismissed on its own; that is a separate
+  preference from guided mode, and Settings owns the switch that brings it
+  back.
+- **Export by intent.** The same export command and the same three output
+  profiles back a dialog that leads with what the file is for — share or
+  upload, smaller file, highest quality, keep every pixel — and states the real
+  container and limitation under each choice. A choice maps onto the existing
+  profile, quality and resolution fields; **Advanced settings** reveals those
+  fields unchanged. Nothing about the job, staging or validation path differs.
+- **Composition guides.** Title-safe (10%), action-safe (5%), thirds and centre
+  draw over the preview only, for the program frame and for fullscreen. They
+  are painted in Flutter after presentation, never handed to a renderer, and
+  never appear in an exported frame. `G` toggles them when no text field has
+  focus and the viewer guide button toggles the same preference.
+- **Settings** carries the three switches in its own **Editor** panel, beside
+  the narration settings that own the voice: guided mode, next-step tips,
+  composition guides, plus the inspector preference. Each writes the shared
+  store, so the shell, the editor and the next launch agree.
+
 ## Interaction rules
 
 - Keyboard and pointer have parity: every transport, timeline and edit verb is
@@ -125,6 +160,10 @@ is missing.
   commands. Hiding a control never forks or removes project data.
 - Mobile/compact layout exposes the same semantics as the desktop rail, with
   selection carried by fill and border, not colour alone.
+- The editor stacks below 980 px (earlier than the 760 px shell breakpoint) and
+  reaches every tool through the dock sheet: a small window keeps the viewer at
+  a usable width instead of squeezing three panes, and losing a pane never means
+  losing a feature.
 - The menu bar renders from one description of the verbs: macOS draws the
   native bar, Windows and Linux draw an in-window bar in the same shell. Both
   disable the same entries under the same conditions, so a verb added once

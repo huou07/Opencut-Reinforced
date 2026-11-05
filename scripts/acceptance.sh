@@ -91,10 +91,23 @@ if [[ -x "$FFMPEG8_DIR/ffmpeg" && -x "$FFMPEG8_DIR/ffprobe" ]]; then
   export PATH="$FFMPEG8_DIR:$PATH"
   printf '\n== Media codec toolchain ==\n'
   printf 'using FFmpeg 8 from %s (%s)\n' "$FFMPEG8_DIR" "$("$FFMPEG8_DIR/ffmpeg" -version | head -n1)"
-  run 'Media probe integration tests (real FFmpeg 8)' \
-    cargo test -p or_core --test media_probe_integration --locked -- --ignored
-  run 'Media artifact integration tests (real FFmpeg 8)' \
-    cargo test -p or_core --test media_artifacts_integration --locked -- --ignored
+  # Two lanes generate their own fixtures with `-f lavfi`. A trimmed runtime
+  # build can carry every decoder and encoder and still omit that input device,
+  # so the fixture lanes are reported as UNVERIFIED with that reason rather than
+  # failing as if the product were broken.
+  if "$FFMPEG8_DIR/ffmpeg" -hide_banner -f lavfi -i testsrc=size=16x16:rate=2 \
+      -frames:v 1 -c:v ffv1 -f matroska -y /dev/null >/dev/null 2>&1; then
+    run 'Media probe integration tests (real FFmpeg 8)' \
+      cargo test -p or_core --test media_probe_integration --locked -- --ignored
+    run 'Media artifact integration tests (real FFmpeg 8)' \
+      cargo test -p or_core --test media_artifacts_integration --locked -- --ignored
+  else
+    printf 'note: this FFmpeg 8 build has no lavfi input device, so the fixture-generating lanes are listed as UNVERIFIED\n'
+    unverified_lane 'Media probe integration tests (synthetic fixtures)' \
+      "the FFmpeg 8 build on this host has no lavfi input device, and the lane generates its own fixtures"
+    unverified_lane 'Media artifact integration tests (synthetic fixtures)' \
+      "the FFmpeg 8 build on this host has no lavfi input device, and the lane generates its own fixtures"
+  fi
   run 'Media crate tests' \
     cargo test -p or_media --locked
   run 'Media crate codec-enabled export writer' \
@@ -189,19 +202,27 @@ fi
 # and on insufficient RAM/disk so its temporary toolchain rewrite stays
 # attributable; those preconditions are UNVERIFIED, not failures.
 printf '\n== Bounded Linux UI preflight (native editor journey under Xvfb) ==\n'
-preflight_rc=0
-timeout --signal=TERM --kill-after=30 "${CHECK_TIMEOUT}s" \
-  python3 scripts/run_linux_ui_preflight.py || preflight_rc=$?
-case "$preflight_rc" in
-  0) printf 'RESULT: PASS — Bounded Linux UI preflight\n' ;;
-  3)
-    printf 'RESULT: UNVERIFIED — the bounded preflight reported a host precondition (clean tree, RAM, disk or tool availability)\n'
-    unverified+=("Bounded Linux UI preflight: host precondition not met; see its report")
-    not_run_checks+=("Bounded Linux UI preflight"$'\t'"host precondition not met (clean tree, RAM, disk or tool availability); see its report")
-    ;;
-  124|137) printf 'RESULT: FAIL (timeout %ss) — Bounded Linux UI preflight\n' "$CHECK_TIMEOUT"; failed=1 ;;
-  *) printf 'RESULT: FAIL (exit %s) — Bounded Linux UI preflight\n' "$preflight_rc"; failed=1 ;;
-esac
+if [ "$(uname -s)" != "Linux" ]; then
+  # The lane builds and drives a Linux bundle; on any other host it can only
+  # report a precondition, so it is not evidence and must not read as a failure.
+  printf 'RESULT: UNVERIFIED — this lane builds a Linux app, so it runs on the Linux host only\n'
+  unverified+=("Bounded Linux UI preflight: run it on the Debian host")
+  not_run_checks+=("Bounded Linux UI preflight"$'\t'"Linux host lane; run it on Debian")
+else
+  preflight_rc=0
+  timeout --signal=TERM --kill-after=30 "${CHECK_TIMEOUT}s" \
+    python3 scripts/run_linux_ui_preflight.py || preflight_rc=$?
+  case "$preflight_rc" in
+    0) printf 'RESULT: PASS — Bounded Linux UI preflight\n' ;;
+    3)
+      printf 'RESULT: UNVERIFIED — the bounded preflight reported a host precondition (clean tree, RAM, disk or tool availability)\n'
+      unverified+=("Bounded Linux UI preflight: host precondition not met; see its report")
+      not_run_checks+=("Bounded Linux UI preflight"$'\t'"host precondition not met (clean tree, RAM, disk or tool availability); see its report")
+      ;;
+    124|137) printf 'RESULT: FAIL (timeout %ss) — Bounded Linux UI preflight\n' "$CHECK_TIMEOUT"; failed=1 ;;
+    *) printf 'RESULT: FAIL (exit %s) — Bounded Linux UI preflight\n' "$preflight_rc"; failed=1 ;;
+  esac
+fi
 
 if command -v gitleaks >/dev/null 2>&1; then
   # The repository has GitHub's hosted secret scanning and push protection, but

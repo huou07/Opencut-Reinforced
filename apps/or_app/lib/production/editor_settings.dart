@@ -8,31 +8,78 @@ import 'package:path_provider/path_provider.dart';
 /// These are not project state: hiding a control never changes an edit, and the
 /// same project opens identically on a machine with a different preference.
 class EditorSettings {
-  const EditorSettings({this.showInspector = false});
+  const EditorSettings({
+    this.showInspector = false,
+    this.simpleMode = true,
+    this.showGuides = false,
+    this.tipsDismissed = false,
+  });
 
   /// The inspector is an advanced surface. The toolbar and clip dialogs carry
   /// the frequent controls, so the rail tab starts hidden.
   final bool showInspector;
 
-  EditorSettings copyWith({bool? showInspector}) =>
-      EditorSettings(showInspector: showInspector ?? this.showInspector);
+  /// Guided mode, the product's "Simple mode": the editor keeps one extra row
+  /// that names the next useful action, and the export dialog leads with what
+  /// the file is for instead of codec choices. It is a visibility preference —
+  /// every command stays reachable and the project format does not change.
+  final bool simpleMode;
+
+  /// Title/action safe areas, thirds and centre drawn over the viewer. They are
+  /// a preview overlay only and never reach the exported frame.
+  final bool showGuides;
+
+  /// The next-step row can be hidden on its own, without turning off the rest
+  /// of guided mode. Settings owns the switch that brings it back.
+  final bool tipsDismissed;
+
+  EditorSettings copyWith({
+    bool? showInspector,
+    bool? simpleMode,
+    bool? showGuides,
+    bool? tipsDismissed,
+  }) => EditorSettings(
+    showInspector: showInspector ?? this.showInspector,
+    simpleMode: simpleMode ?? this.simpleMode,
+    showGuides: showGuides ?? this.showGuides,
+    tipsDismissed: tipsDismissed ?? this.tipsDismissed,
+  );
 
   Map<String, Object?> toJson() => {
-    'version': 1,
+    'version': 2,
     'show_inspector': showInspector,
+    'simple_mode': simpleMode,
+    'show_guides': showGuides,
+    'tips_dismissed': tipsDismissed,
   };
 
+  /// A version-1 file predates guided mode and guides. Guided mode is on by
+  /// default, so an upgrade opens in the beginner surface rather than silently
+  /// keeping the dense one.
   static EditorSettings fromJson(Object? value) {
     if (value is! Map<String, Object?>) return const EditorSettings();
-    return EditorSettings(showInspector: value['show_inspector'] == true);
+    return EditorSettings(
+      showInspector: value['show_inspector'] == true,
+      simpleMode: value['simple_mode'] != false,
+      showGuides: value['show_guides'] == true,
+      tipsDismissed: value['tips_dismissed'] == true,
+    );
   }
 }
 
 class EditorSettingsStore {
-  EditorSettingsStore({Future<Directory> Function()? supportDirectory})
-    : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
+  /// [loader] and [saver] replace the file with an in-memory value. Widget tests
+  /// need that: a `testWidgets` body runs inside fake async, where a real file
+  /// read never completes, so the store must resolve on a microtask instead.
+  EditorSettingsStore({
+    Future<Directory> Function()? supportDirectory,
+    this.loader,
+    this.saver,
+  }) : _supportDirectory = supportDirectory ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDirectory;
+  final Future<EditorSettings> Function()? loader;
+  final Future<void> Function(EditorSettings settings)? saver;
   Future<void> _pending = Future<void>.value();
 
   Future<File> settingsFile() async {
@@ -41,6 +88,14 @@ class EditorSettingsStore {
   }
 
   Future<EditorSettings> load() async {
+    final read = loader;
+    if (read != null) {
+      try {
+        return await read();
+      } catch (_) {
+        return const EditorSettings();
+      }
+    }
     try {
       final file = await settingsFile();
       if (!await file.exists()) return const EditorSettings();
@@ -51,6 +106,10 @@ class EditorSettingsStore {
   }
 
   Future<void> save(EditorSettings settings) {
+    final write0 = saver;
+    if (write0 != null) {
+      return _pending = write0(settings);
+    }
     final write = _pending.then((_) async {
       final file = await settingsFile();
       await file.parent.create(recursive: true);
