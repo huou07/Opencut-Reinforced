@@ -96,15 +96,17 @@ a product improvement with recorded evidence, not a library addition:
 
 Blocked, and reported as blocked rather than attempted:
 
-- **Windows build/test from one revision.** The Windows 11 host has cargo and
-  rustc, the VS 2022 Build Tools, Python and git, but no Flutter SDK, no FFmpeg,
-  no cmake/ninja and no libclang; this mission's permission boundary forbids
-  installing that toolchain there. macOS and Linux are verified from the same
-  commit; Windows stays labelled unverified rather than inferred from shared
-  code, and the exact missing pieces are listed so the owner can decide.
-- **Installer-level parity on Linux and Windows.** No packaged install was
-  exercised on either host. The Linux journey runs from a developer build under
-  Xvfb; packaging and install remain a separate, unclaimed step.
+- **The Windows installer (.setup.exe).** The Windows ZIP package is built,
+  installed, replaced, launched and uninstalled on a real Windows 11 host from
+  the same commit as macOS and Linux (`WINDOWS_LANE=PASS`, SHA-256
+  `d24a1bd2…`, see the parity receipt). The Inno Setup definition is not
+  exercised locally because Inno Setup 6 is not installed on that host; the
+  `.zip` is the tested artifact and `.setup.exe` remains a CI-produced,
+  locally-unproven package.
+- **Installer-level parity on Linux.** No `.deb` was built or installed on the
+  Debian host in this round; the Linux journey runs from a developer build under
+  Xvfb. The Windows ZIP install/uninstall journey and the macOS bundle are
+  recorded in the parity receipt.
 - **An optional download installed and removed through the GUI.** The
   `resources-setup` journey proves the surface is reachable and inert until a
   user acts; it does not download a model or an update, so that path is not

@@ -71,11 +71,42 @@ $stager = Join-Path $RepoRoot 'scripts/stage_desktop_runtime.py'
 # opens the Store. Pick the first candidate that actually starts Python: the
 # stager is mandatory, so a stub must not be mistaken for an interpreter.
 $python = $null
-foreach ($candidate in @(Get-Command python3, python -ErrorAction SilentlyContinue)) {
-  & $candidate.Source -c "import sys" 2>$null | Out-Null
-  if ($LASTEXITCODE -eq 0) { $python = $candidate; break }
+$pythonArgs = @()
+if ($env:OR_PYTHON -and (Test-Path $env:OR_PYTHON -PathType Leaf)) {
+  # An explicit interpreter always wins: a machine whose PATH is dominated by
+  # Store aliases can name the real one without editing the machine.
+  $python = [pscustomobject]@{ Source = (Resolve-Path $env:OR_PYTHON).Path }
 }
-if ($null -eq $python) { throw 'Python 3 is required to stage the runtime' }
+# A Store alias named python3.exe or python.exe can sit first on PATH and only
+# opens the Store. It reports failure through a native stderr record, and this
+# script runs with ErrorActionPreference = Stop, so ask each candidate with the
+# preference relaxed and trust the exit code. The py launcher is tried last
+# because its real interpreter is the one that actually ships Python.
+foreach ($candidate in @(
+    @{ Name = 'python3'; Args = @() },
+    @{ Name = 'python'; Args = @() },
+    @{ Name = 'py'; Args = @('-3') })) {
+  $command = Get-Command $candidate.Name -ErrorAction SilentlyContinue
+  if ($null -eq $command -or $null -ne $python) { continue }
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $probe = & $command.Source @($candidate.Args) -c "import sys" 2>&1
+    $ok = ($LASTEXITCODE -eq 0) -and ($probe -notmatch 'App execution alias')
+  }
+  catch {
+    $ok = $false
+  }
+  finally {
+    $ErrorActionPreference = $previous
+  }
+  if ($ok) {
+    $python = $command
+    $pythonArgs = @($candidate.Args)
+    break
+  }
+}
+if ($null -eq $python) { throw 'Python 3 is required to stage the runtime; set OR_PYTHON to its executable' }
 $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'amd64' }
 $required = ''
 $download = @()
@@ -83,8 +114,20 @@ if ($env:OR_REQUIRE_RUNTIME -eq '1') {
   $required = 'whisper,provider,or'
   $download = @('--download-whisper')
 }
-& $python.Source $stager --os windows --arch $arch --runtime-dir $runtimeDir `
-  --repo-root $RepoRoot --require $required @download
+# An empty --require loses its value when PowerShell unrolls the array, so the
+# arguments are built explicitly instead of passed positionally.
+$stagerArgs = @(
+  '--os', 'windows',
+  '--arch', $arch,
+  '--runtime-dir', $runtimeDir,
+  '--repo-root', $RepoRoot
+)
+# The stager defaults --require to "whisper,provider", so an unchecked local
+# package has to say "nothing is required" explicitly; a bare --require with an
+# empty value is dropped by PowerShell before the process starts.
+$stagerArgs += @("--require=$required")
+$stagerArgs += $download
+& $python.Source @pythonArgs $stager @stagerArgs
 if ($LASTEXITCODE -ne 0) { throw 'the shared runtime stager failed' }
 
 # A staged engine that cannot start is a broken package, so prove it runs on
