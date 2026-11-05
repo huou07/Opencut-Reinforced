@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -50,10 +49,10 @@ class _CannedResponse extends Stream<List<int>> implements HttpClientResponse {
 }
 
 class _CannedClient implements HttpClient {
-  _CannedClient(this.bytes, {this.requests = 0});
+  _CannedClient(this.bytes);
 
   final List<int> bytes;
-  int requests;
+  int requests = 0;
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
