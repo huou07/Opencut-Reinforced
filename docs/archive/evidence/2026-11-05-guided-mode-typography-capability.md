@@ -27,6 +27,7 @@ unverified. The limits at the end are part of the record.
 | Historical text JSON decodes to the same metrics | `cargo test -p or_core --lib` → 375 pass; `advanced_typography_serializes_only_when_it_differs_from_the_default` |
 | An undecodable-on-this-host codec is refused with the reason and no media row | `scripts/ui_scenarios/media-decode-refused.json` → PASS, 10 steps, tree artifact holds the refusal text |
 | The refusal message keeps its advice inside the import-summary budget | `cargo test -p or_core --lib media_import` → 5 pass |
+| The guided export dialog really encodes, and the file plays | `scripts/ui_scenarios/export-encode.json` → PASS; its inner measure step waits for **Export complete** (p50 3066 ms) and the produced `export.mp4` probes as `h264` 1440×1080 at 30/1 with `aac` 48 kHz stereo, 15 frames, then decodes fully: video to ffv1 and audio to WAV |
 | Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → 467 pass |
 | Repository gates | `scripts/check-repo.sh` → pass (858 tracked files), `check_doc_links.py` → pass (155 files), `check_doc_freshness.sh` → pass |
 
