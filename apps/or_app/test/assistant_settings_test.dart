@@ -281,7 +281,11 @@ void main() {
       currentDirectory: root,
       executablePath: '${besideExecutable.parent.path}/or_app',
     );
-    expect(stale, besideExecutable.path);
+    expect(
+      stale != null && p.equals(stale, besideExecutable.path),
+      isTrue,
+      reason: 'resolved $stale',
+    );
 
     // A saved path can outlive the build it named. It used to disable the
     // assistant outright; now it falls through to detection.
@@ -293,7 +297,11 @@ void main() {
       currentDirectory: besideExecutable.parent,
       executablePath: '${besideExecutable.parent.path}/or_app',
     );
-    expect(movedStored, besideExecutable.path);
+    expect(
+      movedStored != null && p.equals(movedStored, besideExecutable.path),
+      isTrue,
+      reason: 'resolved $movedStored',
+    );
   });
 
   test('no overlay still yields a usable assistant persona patch', () {
