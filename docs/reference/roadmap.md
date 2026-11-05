@@ -102,6 +102,17 @@ a product improvement with recorded evidence, not a library addition:
     rooted asset path such as `\Users\me\pic.png` is not `is_absolute()` there,
     so scene image loading now refuses `has_root()` as well.
 
+24. **0.1.16 is published for all three desktops (owner request, 2026-11-05).**
+    One pull request and one tag run produced the macOS `.dmg`, the Linux
+    `.deb`, the Windows `.setup.exe` and the portable `.zip`, plus
+    `SHA256SUMS.txt`; each asset was then downloaded again, matched its recorded
+    checksum, and opened on its own platform. The first tag run failed while
+    staging the Windows runtime because the stager's Python probe compared a
+    `$null` success against `-notmatch`, so no interpreter looked usable; the fix
+    starts each candidate instead of reading its banner, the release job installs
+    Python explicitly, and the tag was moved once onto the merged fix. Details in
+    [release.md](release.md) and the parity receipt.
+
 Blocked, and reported as blocked rather than attempted:
 
 - **The Windows installer (.setup.exe).** The Windows ZIP package is built,
@@ -109,8 +120,10 @@ Blocked, and reported as blocked rather than attempted:
   the same commit as macOS and Linux (`WINDOWS_LANE=PASS`, SHA-256
   `d24a1bd2…`, see the parity receipt). The Inno Setup definition is not
   exercised locally because Inno Setup 6 is not installed on that host; the
-  `.zip` is the tested artifact and `.setup.exe` remains a CI-produced,
-  locally-unproven package.
+  `.zip` is the tested artifact. The published 0.1.16 `.setup.exe` was produced
+  by the tag run and its checksum verified after download; it has not been
+  installed on the local Windows host, so the installer itself stays
+  locally-unproven.
 - **Installer-level parity on Linux.** Closed on 2026-11-05: the pinned LGPL
   FFmpeg 8.1.3 build and the codec prefix (Opus, libvpx, x264, nv-codec-headers)
   were compiled in user space on the Debian host, and
