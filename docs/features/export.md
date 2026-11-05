@@ -70,9 +70,10 @@ the selected profile's muxer and encoders.
   inspection: `crates/or_render/tests/preview_export_parity.rs` renders one
   snapshot twice, as RGBA for the viewer and as NV12 for the hardware encoder,
   decodes the planes back to RGB and compares pictures (PSNR, ink centroid, black
-  level). Measured on this host: **62.60 dB** at 320×180; mutating the expected
-  limited-range black level to full range drops it to 23.96 dB, which is the
-  failure the lane exists to catch.
+  level). Measured at 320×180: **62.60 dB** on Apple M5 via Metal and the same
+  62.60 dB on Debian's Intel UHD 770 via Mesa, so the agreement is not one
+  driver's accident; mutating the expected limited-range black level to full
+  range drops it to 23.96 dB, which is the failure the lane exists to catch.
 - A clip that covers the whole canvas with no effect, transition, transform,
   crop or text on top is decoded straight to NV12 at the output size, so that
   frame never becomes an RGBA texture or a readback: the decoder runs one
