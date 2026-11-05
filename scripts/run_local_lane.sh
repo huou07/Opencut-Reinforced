@@ -430,8 +430,8 @@ packaged_build_deb() {
   fi
   # Beside the app binary, where the bridge looks first; the bridge itself stays
   # in lib/ with its own $ORIGIN RUNPATH.
-  python3 "$ROOT/scripts/stage_desktop_runtime.py" --os linux \
-    --runtime-dir "$bundle" --repo-root "$ROOT" --require "$required" \
+  python3 "$root/scripts/stage_desktop_runtime.py" --os linux \
+    --runtime-dir "$bundle" --repo-root "$root" --require "$required" \
     "${download[@]}" || exit 1
 
   mkdir -p "$(dirname "$deb")"
