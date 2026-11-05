@@ -7,7 +7,7 @@
     "height": 800
   },
   "fixtures": [
-    "copy:/tmp/or-fallback-tiny.mov"
+    "copy:crates/or_media/tests/fixtures/or-fallback-tiny.mov"
   ],
   "steps": [
     {

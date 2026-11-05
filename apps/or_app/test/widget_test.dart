@@ -306,6 +306,39 @@ void main() {
     },
   );
 
+  testWidgets(
+    'Cmd+S saves right after the create dialog closes, even while the field '
+    'still owns the keyboard for that frame',
+    (tester) async {
+      _setViewport(tester, const Size(1440, 900));
+      final gateway = _FakeProjectGateway();
+      final picker = _FakeProjectPicker()
+        ..savePath = '/tmp/or-cmd-s-after-dialog';
+      await _mount(tester, gateway: gateway, picker: picker);
+
+      await tester.tap(find.byKey(const ValueKey('home-new-project')));
+      await tester.pumpAndSettle();
+      final nameField = find.byKey(const ValueKey('new-project-name'));
+      await tester.enterText(nameField, 'Save right away');
+      await tester.showKeyboard(nameField);
+      await tester.pump();
+      expect(orTextFieldHasFocus(), isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+      // One frame only: the dialog is gone but the field's node has not been
+      // torn down yet, which is exactly the window the shell used to swallow.
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+
+      expect(gateway.createCalls, 1);
+      expect(gateway.saveCalls, 1);
+    },
+  );
+
   testWidgets('new project asks for a name and opens the created workspace', (
     tester,
   ) async {

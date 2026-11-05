@@ -197,3 +197,102 @@ deleted or re-created, and no version was published twice.
   not loaded would write.
 - The CLI has no `capabilities` verb yet; the measurement is reachable through
   the app and through the Rust API only.
+
+## The optional speech runtime, installed and removed through the GUI, `0c7f269`
+
+| Claim | Evidence |
+|---|---|
+| The install control is only offered when nothing is installed | `scripts/ui_scenarios/speech-runtime-install.json` step 4 (`expect tools-speech-install`) on the Debian host, in a build whose engine folder had just been deleted |
+| A real download, checksum and unpack happen from the running app | the journey tapped `tools-speech-install` on Debian and `~/.local/share/opencut-reinforced/speech-runtime/` held 37 files 7 s later, with `.or-speech-install.json` listing every one |
+| The same bytes pass the pinned check on every host | `python3 scripts/verify_pinned_assets.py` → `PINNED_ASSETS=PASS (4 asset(s))` on macOS, `--only ubuntu-x64` `PASS` on Debian, all four `PASS` on Windows from `0c7f269` |
+| Removal is offered for a recorded copy even when the adapter is missing | the journey saw `Remove copy` in a dev build with no `or-whisper-provider` beside the binary; the panel now keys the control off the install record, not off "both halves present" |
+| Removal deletes exactly the manifest and nothing else | after the confirmed removal the folder held `0` entries and the snackbar read "Removed 37 files the setup installed." |
+| The control returns to "Install" once the folder is empty | journey steps 15–16 (`wait_label_absent "Remove copy"`, `expect tools-speech-install`), `RESULT: OR_UI=PASS` (18 steps) |
+| A tampered archive installs nothing | `apps/or_app/test/speech_runtime_install_test.dart` "a tampered download is refused and installs nothing": checksum `f…f` → `GithubReleaseException` "checksum does not match", empty target, no manifest |
+| The installer path itself is covered without the network | the same test file drives the real download/verify/unpack code over a canned `HttpClient` and asserts one request, the installed files, the manifest and a clean removal |
+
+The panel defect this found is recorded in `docs/reference/roadmap.md` item 25:
+the remove control previously required both halves of the runtime, so a host
+that installed the engine without the adapter offered only a second download.
+
+## The Windows installer, exercised over a running app, 2026-11-06
+
+The published 0.1.16 setup had never been installed on a Windows host, so it was
+built again from the branch and driven through the three transitions a user
+actually performs. The first attempt failed in a way no test had covered: over an
+existing install the silent upgrade retried `DeleteFile` on a mapped
+`avcodec-62.dll`, then reported `User canceled the installation process` and
+exited with code 5, having done nothing.
+
+| Evidence | Result |
+| --- | --- |
+| The failure, from the installer's own log | `C:\orb\tmp\setup.log`: `DeleteFile: The existing file appears to be in use (5). Retrying.` ×4, then `Defaulting to Abort for suppressed message box (Abort/Retry/Ignore)` → exit 5, `Rolling back changes` |
+| The lock came from the app itself | `Get-Process \| Where-Object { $_.Path -like '*Opencut Reinforced*' }` on the host listed `or_app.exe` running from `%LOCALAPPDATA%\Programs\Opencut Reinforced` |
+| A fresh install succeeds | `start /wait setup.exe /VERYSILENT …` → `EXIT1=0`, `or.exe version` = `Opencut Reinforced 0.1.16` |
+| An upgrade over the running app now succeeds | app started, then the same setup → `EXIT2=0`, version still 0.1.16, and `app-closed-by-setup` (the installer stopped it) |
+| The uninstall removes the tree | `unins000.exe /VERYSILENT` → `EXIT3=0`, `removed` |
+| The staged CLI cannot silently disagree with the package | `stage_windows_bundle.ps1` now compares `or.exe version` with `Cargo.toml`; before the guard, a package named 0.1.16 shipped an `or.exe` that printed 0.1.15 because the lane reused a stale `target/release` |
+
+Both defects are recorded as `docs/reference/roadmap.md` items 26 and 27. The
+installer change is `scripts/windows_installer.iss` `PrepareToInstall` plus
+`RestartApplications=no`; the staging change is the release build of `or_cli` and
+`or_whisper_provider` in `scripts/run_windows_lane.ps1` and the version guard in
+`scripts/stage_windows_bundle.ps1`.
+
+## The performance budget on three hosts, 2026-11-06
+
+`scripts/bench_quality.py` reached a verdict on macOS, Debian and Windows from
+the same commit for the first time. Getting there exposed four harness defects
+and one lane that was measuring the wrong thing; the details are in
+`docs/reference/quality.md` under "Performance budget on all three hosts".
+
+| Evidence | Result |
+| --- | --- |
+| macOS, branch `4ee97f0` | `PERFORMANCE_BUDGET=PASS`; `queue-priority` ratio 1.08 with 16 jobs on 4 workers, `motion-rasterize-frame` p95 66.6 ms, `render-frame-time` p95 1.71 ms on Metal |
+| Debian 13, same commit | `PERFORMANCE_BUDGET=PASS`; ratio 1.27, `motion-rasterize-frame` p95 60.5 ms, `command.import` p95 40.7 ms |
+| Windows 11, same commit | every row has a verdict: ratio 1.39 with the re-modelled lane against 29.69-33.77 before it, `render-frame-time` p95 1.87 ms on Intel Graphics/Vulkan |
+| The lane was measuring an operating system | it spun two threads per logical core while the product pool is four workers; `or_core::artifact_worker_count` now owns the policy and the lane saturates that pool |
+| A clean machine could not run `export-long` | the scenario imported `/tmp/long720.mp4`, which nothing generated; it now imports the checked-in generated fixture and the run measures `export-720p-5s` p50 3436 ms |
+| A stale label kept `track-reorder` red | the track lane says `active`, not `enabled`; the scenario now matches the wording the app produces |
+| Windows single-threaded raster is a clock class, not a regression | firmware `MaxClockSpeed 1400` MHz with no boost, PNG encode 400 ms against 105 ms on the M5; the row carries a Windows baseline (p95 317 ms) and a 450 ms Windows ceiling, Debian stays 250 ms |
+| Windows save cost is host class too | 256 KiB flush-and-rename probe on the same volume: p50 4.0 ms, p95 20.7 ms, on top of a 1400 MHz CPU; the row records a Windows baseline (p95 102 ms) and a 160 ms ceiling, Debian stays 80 ms |
+| `command.*` on Windows | verified once a general-purpose FFmpeg was installed: `command.import` p95 36.2/33.9 ms, `caption_import` 37.0 ms, `audio_cleanup` 239.6 ms, all inside their budgets |
+
+The worker-priority experiment that preceded the lane fix is not in the tree: it
+measured 33.77 against 29.69 before it, so it was dropped rather than shipped.
+
+## The assistant's saved path, and a scenario a harness can judge
+
+The assistant panel said "The or CLI was not found" on a machine whose CLI was
+present and built. The saved settings named a path from an earlier packaged
+build — `/Applications/Opencut Reinforced.app/Contents/MacOS/or` — and
+`resolveOrCliPath` returned that path's resolution, which was `null`, instead of
+falling through to the detection a fresh install uses. Every later rung (the run
+harness's `OR_CLI_PATH`, the walk up the checkout, the CLI beside the executable)
+was unreachable.
+
+| Evidence | Result |
+| --- | --- |
+| Reproduction | the panel's own copy and the semantics tree: "The or CLI was not found, so the assistant cannot edit the project." while `./target/debug/or version` printed `Opencut Reinforced 0.1.16` |
+| Fix | a stored path that does not resolve now falls through; `apps/or_app/test/assistant_settings_test.dart` covers both a stale saved path and a stale override |
+| Run harness | `scripts/or_ui.py` exports `OR_CLI_PATH` for the build it launches, so the debug app reaches its own CLI |
+| Deterministic assistant scenario | `assistant-panel` (23 steps) connects the panel, opens settings, sends a turn and passes; `assistant-edit` keeps the live-provider half, which a harness cannot judge |
+
+## 0.1.17, one commit on three hosts
+
+Every lane below ran on `64e0f723` from the same source revision, transferred by
+`git bundle`.
+
+| Lane | macOS (M5, arm64) | Debian 13 (x86_64) | Windows 11 (x86_64) |
+| --- | --- | --- | --- |
+| `flutter analyze` | No issues found | No issues found | No issues found |
+| `flutter test` | 503 passed | 498 passed, 5 host-skipped | 498 passed, 5 host-skipped |
+| Rust library tests | 376 / 99 / 45 / 22 passed | 376 / 99 / 45 passed | `or_core` 374 passed |
+| Lock files | 2 workspaces resolve without a write | same, after the probe's registry cache was warmed once | `--locked` build and tests |
+| Local gates | `PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)` | `run_linux_ui_preflight.py` PASS in an earlier run of the same tree | Windows lane `PASS` for the installer, ZIP and packaged runtime |
+| Performance budget | `PASS` (ratio 1.08, raster p95 66.6 ms) | `PASS` (ratio 1.27, raster p95 60.5 ms) | `PASS` after the lane fix (ratio 1.30) |
+
+Two host-only frictions are recorded rather than hidden: the Debian host needed
+one online `cargo metadata` to populate the registry cache before
+`check-locks.sh` could run offline, and the Windows suite reports the same five
+skips the Linux suite does.

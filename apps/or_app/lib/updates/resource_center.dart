@@ -211,12 +211,19 @@ class ResourceCenterService {
   }
 
   /// Downloads, verifies and installs the pinned Whisper engine for this host.
+  ///
+  /// `asset` exists so an integration check can drive this exact path — the
+  /// trusted-host rule, the size cap, the checksum and the unpack — with the
+  /// bytes it controls, instead of the app only ever being tested against the
+  /// whole GitHub release.
   Future<Directory> installSpeechRuntime({
     void Function(int received, int total)? onProgress,
+    SpeechRuntimeAsset? asset,
   }) async {
     final host = HostPlatform.current();
-    final asset = speechRuntimeAssetFor(host, await hostArchitecture());
-    if (asset == null) {
+    final chosen =
+        asset ?? speechRuntimeAssetFor(host, await hostArchitecture());
+    if (chosen == null) {
       throw const GithubReleaseException(
         'This build does not have a downloadable speech engine for this '
         'platform. Reinstall the application package to restore it.',
@@ -225,16 +232,16 @@ class ResourceCenterService {
     final temporary = await Directory.systemTemp.createTemp('or-speech-');
     try {
       final archive = File(
-        '${temporary.path}${Platform.pathSeparator}${asset.fileName}',
+        '${temporary.path}${Platform.pathSeparator}${chosen.fileName}',
       );
       await _downloadAsset(
-        url: asset.url,
-        sizeBytes: asset.sizeBytes,
-        sha256: asset.sha256,
+        url: chosen.url,
+        sizeBytes: chosen.sizeBytes,
+        sha256: chosen.sha256,
         destination: archive,
         onProgress: onProgress,
       );
-      await _extractArchive(archive, temporary, zip: asset.zip);
+      await _extractArchive(archive, temporary, zip: chosen.zip);
       final binary = await _findFile(
         temporary,
         'whisper-cli${host.executableSuffix}',

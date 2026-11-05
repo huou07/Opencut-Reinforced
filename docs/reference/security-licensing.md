@@ -32,6 +32,14 @@ Local speech engines (for example VieNeu-TTS, Apache-2.0) are user-installed
 servers the app reaches only over loopback with no credential; the app ships no
 weights and no server.
 
+A download the app performs must name one URL, one byte count and one SHA-256,
+and the client refuses anything that is not a trusted HTTPS GitHub host, exceeds
+the advertised size, arrives short, or hashes differently. The speech engine is
+that path: `scripts/verify_pinned_assets.py` re-checks every pinned archive
+against the release it names, and `apps/or_app/test/speech_runtime_install_test.dart`
+drives the same code with a fixture over a faked HTTPS transport, so a broken
+checksum fails a check rather than a user's install.
+
 When the app does install an optional component itself, it records exactly what
 it wrote in an install manifest inside that component's folder. Removal reads
 that manifest and deletes only those entries, refusing paths that escape the

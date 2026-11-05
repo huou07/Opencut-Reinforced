@@ -43,13 +43,21 @@ const WARMUP: usize = 5;
 /// stayed inside its own 33 ms budget. A hundred and twenty frames costs about
 /// three seconds and reports the distribution instead of an artefact.
 const FRAMES: usize = 120;
-/// Opportunistic workers: two per available parallelism, so the pool is
-/// oversubscribed exactly as a burst of analysis jobs would make it.
+/// Opportunistic workers: the pool the app itself would build for artifacts.
+///
+/// An earlier version spun two threads per logical core, which models a burst that
+/// OR cannot produce — the artifact pool is bounded by `or_core::artifact_worker_count`
+/// (four workers once a host has six threads, two below that) with a thirty-two deep
+/// queue. Saturating every core instead made the lane measure the operating system's
+/// scheduler under an artificial denial of service, and on a ten-core Windows laptop
+/// it reported a 29-33x ratio that no user workload can reach. The burst here is now
+/// queue depth on top of the real pool: the pool is full and twelve more jobs wait.
 fn opportunistic_workers() -> usize {
-    thread::available_parallelism()
-        .map(|value| value.get())
-        .unwrap_or(4)
+    or_core::artifact_worker_count()
 }
+
+/// Jobs submitted per run: the pool's own workers plus a full queue behind them.
+const BURST_BEHIND_POOL: usize = 12;
 
 #[test]
 #[ignore]
@@ -96,11 +104,15 @@ fn playback_critical_frame_time_survives_a_saturated_job_pool() {
     let stop = Arc::new(AtomicBool::new(false));
     let workers = opportunistic_workers();
     let manager = JobManager::new(
-        JobManagerConfig::new(workers, workers * 2, workers * 2 + 8)
-            .expect("valid job manager configuration"),
+        JobManagerConfig::new(
+            workers,
+            workers + BURST_BEHIND_POOL,
+            workers + BURST_BEHIND_POOL + 8,
+        )
+        .expect("valid job manager configuration"),
     );
     let mut submitted = 0usize;
-    for _ in 0..(workers * 2) {
+    for _ in 0..(workers + BURST_BEHIND_POOL) {
         let stop = Arc::clone(&stop);
         if manager
             .submit(JobKind::WaveformGenerate, move |_context| {

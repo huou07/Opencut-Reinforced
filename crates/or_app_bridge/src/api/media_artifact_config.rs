@@ -6,21 +6,19 @@ use std::path::PathBuf;
 
 // The artifact cache location and worker pool are configured once per host.
 
-/// How many artifact jobs may run at once.
+/// The pool size the app asks the artifact service for.
 ///
-/// Two jobs keep playback responsive on small machines; wider machines halve
-/// the cold-import fill time instead of leaving cores idle. Measured on this
-/// host with `crates/or_core/tests/artifact_throughput.rs` (16 artifacts):
-/// 34.4 ms each at one worker, 15.3 ms at two, 8.7 ms at four, 5.9 ms at eight.
+/// The policy itself lives in `or_core` so the app and the performance lanes share
+/// one answer; this wrapper only keeps the call sites in this crate short.
 pub(crate) fn media_artifact_worker_count() -> usize {
-    let parallelism = std::thread::available_parallelism()
-        .map(|value| value.get())
-        .unwrap_or(2);
-    media_artifact_worker_count_for(parallelism)
+    or_core::artifact_worker_count()
 }
 
+// Only the tests pick a thread count by hand; the app reads the host's, so
+// this wrapper exists for the test modules alone.
+#[cfg(test)]
 pub(crate) fn media_artifact_worker_count_for(parallelism: usize) -> usize {
-    if parallelism >= 6 { 4 } else { 2 }
+    or_core::artifact_worker_count_for(parallelism)
 }
 
 pub(crate) fn create_media_artifact_service() -> Option<MediaArtifactService> {

@@ -35,6 +35,7 @@ class _FakeService extends ResourceCenterService {
   @override
   Future<Directory> installSpeechRuntime({
     void Function(int received, int total)? onProgress,
+    SpeechRuntimeAsset? asset,
   }) async {
     installed++;
     onProgress?.call(1024, 2048);
@@ -72,6 +73,10 @@ class _FakeService extends ResourceCenterService {
   @override
   Future<int> removeSpeechRuntime() async {
     removed++;
+    // The real service re-reads the host after deleting the recorded files, so
+    // the engine is gone as well; a fake that kept it would report a state the
+    // app can never reach.
+    record = false;
     runtime = const RuntimeSnapshot(
       packaged: true,
       ffmpeg: true,
@@ -79,6 +84,8 @@ class _FakeService extends ResourceCenterService {
       assistantPath: null,
       bundlePath: '/Applications/Opencut Reinforced.app',
       speechRuntime: false,
+      whisperEngine: false,
+      whisperProvider: false,
     );
     return 3;
   }

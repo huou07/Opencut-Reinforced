@@ -133,10 +133,38 @@ Blocked, and reported as blocked rather than attempted:
   1920×1080 24 fps VP9+Opus WebM that the pinned `ffprobe` decodes. The debug
   package is what was proven; a `--build-mode release` `.deb` is still produced
   only by the release workflow.
-- **An optional download installed and removed through the GUI.** The
-  `resources-setup` journey proves the surface is reachable and inert until a
-  user acts; it does not download a model or an update, so that path is not
-  claimed as verified.
+- **An optional download installed and removed through the GUI.** Closed on
+  2026-11-05 at `0c7f269`: the `speech-runtime-install` journey
+  (`RESULT: OR_UI=PASS`, 18 steps) tapped Install in the running Debian build,
+  which downloaded the pinned 10.4 MB archive, checked its SHA-256, unpacked 37
+  files and wrote the install manifest; the same journey then removed the copy
+  after confirmation and saw the Install control return. The pinned archives are
+  re-checked by `scripts/verify_pinned_assets.py` on macOS, Debian and Windows,
+  and the tampered-checksum case fails a widget test instead of a user's
+  install. macOS ships the engine with the app, so it has no Install control to
+  exercise — that is the packaging decision, not an untested path. What remains
+  unmeasured on Windows is only the `.setup.exe` itself (Inno Setup 6 is not
+  installed on that host).
+
+25. **A removable optional component keyed off the wrong state** — found by the
+    Debian journey on 2026-11-05: the remove control required both the engine
+    and the adapter, so a build that installed only the engine offered a second
+    download and no way back. Fixed by keying the control off the install
+    record and hiding Install once an engine is present.
+26. **The Windows installer could not update a running app** — found on 2026-11-05
+    while proving the `.setup.exe`: over an existing 0.1.13 install the silent
+    upgrade retried `DeleteFile` on a mapped `avcodec-62.dll`, then aborted with
+    exit code 5 and no message at all, so a user with the app open would see the
+    installer fail without a reason. `PrepareToInstall` now stops
+    `or_app.exe`/`or.exe`/`or-whisper-provider.exe` first and
+    `RestartApplications=no` stops a silent update from relaunching the app; a
+    fresh install, an upgrade over a running app and the uninstall were re-run on
+    the Windows host (exit 0 each, `or version` 0.1.16).
+27. **A staged runtime could carry a stale CLI** — found the same day: a package
+    named for 0.1.16 shipped an `or.exe` reporting 0.1.15 because the local lane
+    staged whatever was in `target/release`. The lane now builds `or_cli` and
+    `or_whisper_provider` before staging, and staging refuses a staged `or.exe`
+    whose version disagrees with `Cargo.toml`.
 
 ## Previous focus (owner restatement, 2026-10-21)
 
@@ -196,6 +224,32 @@ One near-term delivery mission for the local macOS app, in this order:
    track (`scripts/ui_scenarios/existing-project-import.json`,
    `crates/or_core/tests/fixtures/null-rate-project.orproj`); the harness fixture
    picker now copies `.orproj` fixtures into the scenario directory.
+28. **The saturation lane measured an operating system, not OR (2026-11-06).**
+    `crates/or_render/tests/queue_priority.rs` spun two threads per logical core
+    while the product's artifact pool is bounded at four workers, so the lane
+    reported a 29.69-33.77 ratio on a ten-core Windows laptop against 1.24 on
+    macOS. The pool policy now lives in `or_core::artifact_worker_count`, the
+    bridge delegates to it, and the lane saturates the real pool: 1.08 / 1.27 /
+    1.43 on macOS / Debian / Windows with the 6.0 ratio budget unchanged.
+29. **A checked-in scenario only ran on the machine that wrote it (2026-11-06).**
+    `scripts/ui_scenarios/export-long.json` imported `/tmp/long720.mp4`, which
+    nothing generated, so it could not pass on a fresh checkout; it now imports
+    `crates/or_media/tests/fixtures/long720_h264_aac.mp4`, generated and
+    documented with its exact command and SHA-256. `track-reorder.json` waited
+    for the retired "enabled" wording and now matches "active".
+30. **The Windows budget crashed instead of measuring (2026-11-06).** Four
+    portability defects — unconditional `pgrep`, a reset `PATH` that hid the
+    FFmpeg DLLs, `os.access` launching a `.pdb`, and a fixture probe that
+    looked for `ffmpeg` without `.exe`. All three hosts now reach a verdict, and
+    the Windows single-threaded raster row carries its own recorded baseline
+31. **A stale saved path disabled the assistant (2026-11-06).** `resolveOrCliPath`
+    returned the stored `orCliPath` even when the file behind it had gone, so a
+    path saved by an earlier packaged build left "The or CLI was not found" with
+    no way back but the settings dialog. It now falls through to the same
+    detection a fresh install uses, and a run harness can name the CLI it built
+    (`OR_CLI_PATH`); `assistant-panel` is the part of the assistant a harness can
+    judge without a live provider.
+
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
     row naming the last render, with **Render again** which re-materialises the

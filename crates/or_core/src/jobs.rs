@@ -5,6 +5,26 @@ pub use manager::{
     JobManagerConfigError, JobProgress, JobSnapshot, JobSubmitError,
 };
 
+/// How many media artifact jobs may run at once on this host.
+///
+/// Every caller that builds an artifact pool uses this one policy, so the app, the
+/// throughput lane and the playback-starvation lane cannot drift apart. Measured on
+/// the calibration host with `crates/or_core/tests/artifact_throughput.rs` (16
+/// artifacts): 34.4 ms each at one worker, 15.3 ms at two, 8.7 ms at four, 5.9 ms at
+/// eight — four is where a small machine still keeps playback responsive and a wide
+/// machine stops leaving cores idle.
+pub fn artifact_worker_count() -> usize {
+    let parallelism = std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(2);
+    artifact_worker_count_for(parallelism)
+}
+
+/// The same policy for a caller that already knows the host's parallelism.
+pub fn artifact_worker_count_for(parallelism: usize) -> usize {
+    if parallelism >= 6 { 4 } else { 2 }
+}
+
 use crate::UuidV4ParseError;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};

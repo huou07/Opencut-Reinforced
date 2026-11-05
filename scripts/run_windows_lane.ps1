@@ -110,6 +110,12 @@ if ($Steps -contains 'probe') {
 }
 
 if ($Steps -contains 'stage') {
+  # The packaged runtime is copied from `target/release`, so a stale build would
+  # ship a CLI that reports the previous version. Building them here keeps a
+  # local `stage,installer` run as honest as the hosted one.
+  Invoke-Step 'build the packaged CLI and provider' {
+    cargo build --locked --release -p or_cli -p or_whisper_provider
+  }
   Invoke-Step 'stage packaged runtime' {
     & (Join-Path $PSScriptRoot 'stage_windows_bundle.ps1') -Bundle $bundle -Mode $Mode -RepoRoot $RepoRoot
   }

@@ -32,7 +32,11 @@ and Ubuntu 24.04, both amd64), and **Windows x86_64** as an Inno Setup
 `huou07/Opencut-Reinforced`. The Windows installer is per-user
 (`{localappdata}\Programs\Opencut Reinforced`, `PrivilegesRequired=lowest`), so
 it needs no administrator prompt and an in-place update never asks for one
-either. The macOS image is ad-hoc signed, not notarised; the first
+either. An install over a running copy closes it first: `PrepareToInstall` stops
+`or_app.exe`, `or.exe` and `or-whisper-provider.exe`, because the running app
+keeps the bundled FFmpeg DLLs mapped and the silent installer would otherwise
+retry `DeleteFile`, then abort the whole update with exit code 5 and no message
+(`RestartApplications=no` keeps a silent update from relaunching the app). The macOS image is ad-hoc signed, not notarised; the first
 launch needs the standard right-click → Open step. The app is Apple Silicon only, and the release build pins `ARCHS = arm64` so the
 Rust bridge is not also compiled for x86_64 against an arm64 FFmpeg. It is
 self-contained: FFmpeg 8.1.3, the local speech runtime (`whisper-cli` and the
@@ -60,6 +64,12 @@ the MSVC tools that carry `dumpbin.exe` (VS 2022 Build Tools), a Python 3 that
 `python3` does not shadow with the Store alias, `LIBCLANG_PATH` pointing at the
 folder with `libclang.dll` (msys64 clang64), and `FFMPEG_INSTALL_PREFIX` with
 `FFMPEG_DIR` pointing at the pinned FFmpeg install.
+
+The lane builds `or_cli` and `or_whisper_provider` in release before it stages,
+and staging refuses a staged `or.exe` whose `version` disagrees with the
+workspace version in `Cargo.toml`. Both exist because a stale
+`target/release/or` once produced a setup package whose name said 0.1.16 while
+`or version` printed 0.1.15.
 
 Run the lane with PowerShell 7 (`pwsh -File scripts/run_windows_lane.ps1 …`).
 Windows PowerShell 5.1 cannot load `System.Runtime.InteropServices.NativeLibrary`,

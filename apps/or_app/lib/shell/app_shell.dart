@@ -417,19 +417,19 @@ class _AppShellState extends State<AppShell> {
                   ),
               SaveProjectIntent: CallbackAction<SaveProjectIntent>(
                 onInvoke: (_) {
-                  if (!_textInputFocused) unawaited(_saveProject());
+                  if (!orTextFieldHasFocus()) unawaited(_saveProject());
                   return null;
                 },
               ),
               UndoProjectIntent: CallbackAction<UndoProjectIntent>(
                 onInvoke: (_) {
-                  if (!_textInputFocused) unawaited(_undoProject());
+                  if (!orTextFieldHasFocus()) unawaited(_undoProject());
                   return null;
                 },
               ),
               RedoProjectIntent: CallbackAction<RedoProjectIntent>(
                 onInvoke: (_) {
-                  if (!_textInputFocused) unawaited(_redoProject());
+                  if (!orTextFieldHasFocus()) unawaited(_redoProject());
                   return null;
                 },
               ),
@@ -768,8 +768,20 @@ class _AppShellState extends State<AppShell> {
   void _handleFocusChange() {
     if (!mounted) return;
     final focused = orTextFieldHasFocus();
-    if (focused == _textInputFocused) return;
-    setState(() => _textInputFocused = focused);
+    if (focused != _textInputFocused) {
+      setState(() => _textInputFocused = focused);
+    }
+    // A dialog can hand focus back one frame after it pops, so the value read
+    // during the notification is not always the value that will be true once
+    // the frame is done. Re-read it after the frame: a stale `true` here is a
+    // shortcut that silently stops working until the user clicks another field.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final settled = orTextFieldHasFocus();
+      if (settled != _textInputFocused) {
+        setState(() => _textInputFocused = settled);
+      }
+    });
   }
 
   TimelineClipClipboard? _clipboardClip;

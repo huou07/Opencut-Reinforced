@@ -85,6 +85,12 @@ mod tests {
         std::env::temp_dir().join("or-no-such-helper-directory-9b1")
     }
 
+    /// The bare program name a `PATH` lookup would use on this host: Windows
+    /// appends `.exe`, so the expectation has to as well.
+    fn path_lookup_name(binary_name: &str) -> PathBuf {
+        PathBuf::from(super::helper_file_name(binary_name))
+    }
+
     #[test]
     fn environment_override_wins_over_a_packaged_sibling() {
         let directory =
@@ -119,9 +125,9 @@ mod tests {
     #[test]
     fn missing_packaged_sibling_falls_back_to_path_lookup() {
         let resolved = resolve_helper_executable("ffprobe", None, Some(&missing_directory()));
-        assert_eq!(resolved, PathBuf::from("ffprobe"));
+        assert_eq!(resolved, path_lookup_name("ffprobe"));
         let resolved = resolve_helper_executable("ffprobe", None, None);
-        assert_eq!(resolved, PathBuf::from("ffprobe"));
+        assert_eq!(resolved, path_lookup_name("ffprobe"));
     }
 
     #[test]
@@ -131,7 +137,7 @@ mod tests {
             Some(std::ffi::OsString::from("")),
             Some(&missing_directory()),
         );
-        assert_eq!(resolved, PathBuf::from("ffmpeg"));
+        assert_eq!(resolved, path_lookup_name("ffmpeg"));
     }
 
     #[test]

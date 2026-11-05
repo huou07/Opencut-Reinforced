@@ -70,7 +70,14 @@ class SeekPreviewIntent extends Intent {
 /// EditableText's focus node is attached to a descendant Focus widget, so the
 /// primary focus context is not itself an EditableText.
 bool orTextFieldHasFocus() {
-  final context = FocusManager.instance.primaryFocus?.context;
+  // `primaryFocus` can still point at the node of a field that was just torn
+  // down: the node keeps its context after the widget is unmounted, but it no
+  // longer holds focus. Treating that as "a field owns the keyboard" made the
+  // shell swallow Cmd+S (and every editing verb) after a dialog closed, with no
+  // feedback at all, until the next genuine focus change.
+  final node = FocusManager.instance.primaryFocus;
+  if (node == null || !node.hasFocus) return false;
+  final context = node.context;
   if (context == null) return false;
 
   final widget = context.widget;

@@ -157,6 +157,22 @@ if (Test-Path $stagedWhisper -PathType Leaf) {
   if ($LASTEXITCODE -ne 0) { throw "the staged speech engine failed to start (exit $LASTEXITCODE)" }
 }
 
+# The packaged CLI carries a version the user can read: a stale
+# `target/release/or` once produced a 0.1.16 installer whose `or version` said
+# 0.1.15. Compare the staged binary with the workspace version before the
+# package is written, so a mislabelled build cannot leave this machine.
+$stagedCli = Join-Path $runtimeDir 'or.exe'
+if (Test-Path $stagedCli -PathType Leaf) {
+  $cargoToml = Get-Content (Join-Path $RepoRoot 'Cargo.toml') -Raw
+  $versionMatch = [regex]::Match($cargoToml, '(?m)^version\s*=\s*"([^"]+)"')
+  if (-not $versionMatch.Success) { throw 'Cargo.toml has no workspace version' }
+  $expectedVersion = $versionMatch.Groups[1].Value
+  $reportedVersion = ((& $stagedCli version) | Out-String).Trim()
+  if (-not $reportedVersion.Contains($expectedVersion)) {
+    throw "the staged or.exe reports '$reportedVersion' but the workspace version is $expectedVersion; rebuild it with cargo build --locked --release -p or_cli"
+  }
+}
+
 $dumpbin = (Get-Command dumpbin.exe -ErrorAction Stop).Source
 & $dumpbin /dependents (Join-Path $runtimeDir 'ffmpeg-link-probe.exe')
 $helperDependencies = & $dumpbin /dependents (Join-Path $Bundle 'ffmpeg.exe') | Out-String
