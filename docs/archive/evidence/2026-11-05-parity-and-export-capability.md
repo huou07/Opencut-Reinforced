@@ -197,3 +197,20 @@ deleted or re-created, and no version was published twice.
   not loaded would write.
 - The CLI has no `capabilities` verb yet; the measurement is reachable through
   the app and through the Rust API only.
+
+## The optional speech runtime, installed and removed through the GUI, `0c7f269`
+
+| Claim | Evidence |
+|---|---|
+| The install control is only offered when nothing is installed | `scripts/ui_scenarios/speech-runtime-install.json` step 4 (`expect tools-speech-install`) on the Debian host, in a build whose engine folder had just been deleted |
+| A real download, checksum and unpack happen from the running app | the journey tapped `tools-speech-install` on Debian and `~/.local/share/opencut-reinforced/speech-runtime/` held 37 files 7 s later, with `.or-speech-install.json` listing every one |
+| The same bytes pass the pinned check on every host | `python3 scripts/verify_pinned_assets.py` → `PINNED_ASSETS=PASS (4 asset(s))` on macOS, `--only ubuntu-x64` `PASS` on Debian, all four `PASS` on Windows from `0c7f269` |
+| Removal is offered for a recorded copy even when the adapter is missing | the journey saw `Remove copy` in a dev build with no `or-whisper-provider` beside the binary; the panel now keys the control off the install record, not off "both halves present" |
+| Removal deletes exactly the manifest and nothing else | after the confirmed removal the folder held `0` entries and the snackbar read "Removed 37 files the setup installed." |
+| The control returns to "Install" once the folder is empty | journey steps 15–16 (`wait_label_absent "Remove copy"`, `expect tools-speech-install`), `RESULT: OR_UI=PASS` (18 steps) |
+| A tampered archive installs nothing | `apps/or_app/test/speech_runtime_install_test.dart` "a tampered download is refused and installs nothing": checksum `f…f` → `GithubReleaseException` "checksum does not match", empty target, no manifest |
+| The installer path itself is covered without the network | the same test file drives the real download/verify/unpack code over a canned `HttpClient` and asserts one request, the installed files, the manifest and a clean removal |
+
+The panel defect this found is recorded in `docs/reference/roadmap.md` item 25:
+the remove control previously required both halves of the runtime, so a host
+that installed the engine without the adapter offered only a second download.

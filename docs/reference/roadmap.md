@@ -133,10 +133,24 @@ Blocked, and reported as blocked rather than attempted:
   1920×1080 24 fps VP9+Opus WebM that the pinned `ffprobe` decodes. The debug
   package is what was proven; a `--build-mode release` `.deb` is still produced
   only by the release workflow.
-- **An optional download installed and removed through the GUI.** The
-  `resources-setup` journey proves the surface is reachable and inert until a
-  user acts; it does not download a model or an update, so that path is not
-  claimed as verified.
+- **An optional download installed and removed through the GUI.** Closed on
+  2026-11-05 at `0c7f269`: the `speech-runtime-install` journey
+  (`RESULT: OR_UI=PASS`, 18 steps) tapped Install in the running Debian build,
+  which downloaded the pinned 10.4 MB archive, checked its SHA-256, unpacked 37
+  files and wrote the install manifest; the same journey then removed the copy
+  after confirmation and saw the Install control return. The pinned archives are
+  re-checked by `scripts/verify_pinned_assets.py` on macOS, Debian and Windows,
+  and the tampered-checksum case fails a widget test instead of a user's
+  install. macOS ships the engine with the app, so it has no Install control to
+  exercise — that is the packaging decision, not an untested path. What remains
+  unmeasured on Windows is only the `.setup.exe` itself (Inno Setup 6 is not
+  installed on that host).
+
+25. **A removable optional component keyed off the wrong state** — found by the
+    Debian journey on 2026-11-05: the remove control required both the engine
+    and the adapter, so a build that installed only the engine offered a second
+    download and no way back. Fixed by keying the control off the install
+    record and hiding Install once an engine is present.
 
 ## Previous focus (owner restatement, 2026-10-21)
 

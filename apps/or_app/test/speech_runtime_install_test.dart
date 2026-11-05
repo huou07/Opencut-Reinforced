@@ -5,6 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/updates/github_release.dart';
 import 'package:or_app/updates/resource_center.dart';
 
+/// The engine folder is copied wholesale and the app looks for the command
+/// under the host's own executable suffix, so fixtures carry the names a real
+/// archive uses on this platform.
+String get _suffixName => Platform.isWindows ? '.exe' : '';
+String get _engineName => 'whisper-cli$_suffixName';
+String get _providerName => 'or-whisper-provider$_suffixName';
+
 /// The pinned URL the app ships, so the trusted-host rule is exercised for real.
 const _url =
     'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/'
@@ -104,8 +111,14 @@ void main() {
     home = await Directory.systemTemp.createTemp('or-speech-home-');
     final stage = Directory('${home.path}/stage/whisper-bin-ubuntu-x64');
     await stage.create(recursive: true);
-    await File('${stage.path}/whisper-cli').writeAsString('engine');
-    await File('${stage.path}/or-whisper-provider').writeAsString('adapter');
+    // The engine folder is copied wholesale, and the app looks for the
+    // command under the host's own executable suffix, so the fixture has to
+    // carry the same names a real archive uses on this platform.
+    final suffix = Platform.isWindows ? '.exe' : '';
+    final engine = 'whisper-cli$suffix';
+    await File('${stage.path}/$engine').writeAsString('engine');
+    await File('${stage.path}/or-whisper-provider$suffix')
+        .writeAsString('adapter');
     await File('${stage.path}/README.md').writeAsString('release notes');
     archive = File('${home.path}/fixture.tar.gz');
     final tar = await Process.run('tar', [
@@ -150,13 +163,13 @@ void main() {
 
       expect(client.requests, 1);
       expect(installed.path, root.path);
-      expect(File('${root.path}/whisper-cli').readAsStringSync(), 'engine');
-      expect(File('${root.path}/or-whisper-provider').existsSync(), isTrue);
+      expect(File('${root.path}/$_engineName').readAsStringSync(), 'engine');
+      expect(File('${root.path}/$_providerName').existsSync(), isTrue);
       expect(await service.hasSpeechInstallRecord(), isTrue);
 
       final removed = await service.removeSpeechRuntime();
       expect(removed, greaterThanOrEqualTo(3));
-      expect(File('${root.path}/whisper-cli').existsSync(), isFalse);
+      expect(File('${root.path}/$_engineName').existsSync(), isFalse);
       expect(await service.hasSpeechInstallRecord(), isFalse);
       // The temporary copy of the archive never survives the install.
       expect(
