@@ -32,6 +32,19 @@ Measured media rows, per host, are in
 adoption verdicts for the twenty candidate repositories are in
 [technology-review.md](../../reference/technology-review.md).
 
+## Correction, same day
+
+The guided first-video scenario caught a real defect the narrower refusal
+scenario could not: `video_frame_decodes` asked for a single in-flight lease and
+so refused its own session, which made every import report `DECODE_UNAVAILABLE`.
+`apps/or_app/build/ui-harness/artifacts` and the `OR_IMPORT_TRACE_FILE` trace
+showed `import-done ok=false code=DECODE_UNAVAILABLE msg=… runtime in-flight
+budget exceeded (limit 1)`. Fixed by sizing the gate at four leases and 64 MiB,
+and pinned by `crates/or_media/tests/software_decode.rs::the_import_decode_gate_admits_a_frame_it_can_decode`
+plus the guided journey itself, which now asserts the media row and the first
+clip appear. The refusal scenario still passes, and its trace shows the AV1
+reason rather than a budget reason.
+
 ## Limits, stated plainly
 
 - **Cross-platform verification did not happen.** The Debian host has no

@@ -134,3 +134,15 @@ because both come from shared Rust code, not from a per-platform build.
 
 The last case is why import opens one real decoder. Capability detection is a
 measurement, not a lookup table.
+
+## The gate sizes its own budget
+
+`or_media::video_frame_decodes` opens one decoder, one session and one frame, so
+it needs four in-flight leases and 64 MiB. A single-lease budget refuses its own
+open, and then every import reports `DECODE_UNAVAILABLE` — which is what the
+guided first-video journey caught on 2026-11-05. That journey is the positive
+control for this row: it imports a phone H.264 file and asserts the media row
+and the first clip appear, and
+`crates/or_media/tests/software_decode.rs::the_import_decode_gate_admits_a_frame_it_can_decode`
+pins the same behaviour in Rust. Without those, a gate that refuses everything
+would look like a working refusal.

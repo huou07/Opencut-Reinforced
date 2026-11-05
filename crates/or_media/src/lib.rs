@@ -97,7 +97,12 @@ fn loaded_avutil_path() -> Option<String> {
 /// hardware decode. Import asks this question once so a file is never admitted
 /// and then found unplayable at the first preview frame.
 pub fn video_frame_decodes(source: &or_core::MediaSourceRef) -> Result<(), String> {
-    let limits = or_runtime::BudgetLimits::new(1, 16 * 1024 * 1024)
+    // One session and its first frame are two in-flight leases, and the decode
+    // itself wants room for a decoded frame, so a single-lease budget refuses
+    // its own open. These limits match the decode tests: four leases and 64 MiB
+    // are enough to prove one frame without competing with the preview runtime,
+    // which owns its own budgets.
+    let limits = or_runtime::BudgetLimits::new(4, 64 * 1024 * 1024)
         .map_err(|error| format!("decode budget is invalid: {error}"))?;
     let budgets = or_runtime::RuntimeBudgets::new(limits, limits, limits);
     let decoder = SoftwareMediaDecoder::new(source, budgets).map_err(|error| error.to_string())?;

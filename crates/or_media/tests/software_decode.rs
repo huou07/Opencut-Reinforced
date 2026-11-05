@@ -80,6 +80,15 @@ fn file_uri(path: &Path) -> String {
     uri
 }
 
+/// The import gate must admit media the build can really decode. It sizes its
+/// own budgets, so a budget that refuses its own session would turn every
+/// import into `DECODE_UNAVAILABLE` — which is what the guided journey caught.
+#[test]
+fn the_import_decode_gate_admits_a_frame_it_can_decode() {
+    let source = phone_fixture_source();
+    or_media::video_frame_decodes(&source).expect("a phone H.264 file must decode its first frame");
+}
+
 #[test]
 fn software_video_seek_produces_an_owned_exact_time_rgba_frame() {
     let snapshot = snapshot(time(1, 4), time(1, 4));
