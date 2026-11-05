@@ -75,6 +75,7 @@ required_files=(
   docs/reference/tooling.md
   docs/reference/security-licensing.md
   docs/reference/technology-review.md
+  docs/reference/media-capability-matrix.md
   docs/reference/release.md
   docs/reference/developer-preview-install.md
   docs/evidence/claims/README.md

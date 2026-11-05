@@ -1439,6 +1439,7 @@ pub(crate) fn prepare_import_source(source: &str) -> Result<MediaItem, or_core::
 /// "unsupported codec" at the first preview frame into an import-time message
 /// the person can act on.
 fn ensure_decoders_available(item: &MediaItem) -> Result<(), or_core::MediaImportError> {
+    let mut first_video_codec = None;
     for stream in item.metadata().streams() {
         let codec = match stream {
             or_core::MediaStreamMetadata::Video(stream) => stream.codec_name(),
@@ -1451,7 +1452,23 @@ fn ensure_decoders_available(item: &MediaItem) -> Result<(), or_core::MediaImpor
             });
         }
     }
-    Ok(())
+    for stream in item.metadata().streams() {
+        if let or_core::MediaStreamMetadata::Video(stream) = stream {
+            first_video_codec = stream.codec_name().map(str::to_owned);
+            break;
+        }
+    }
+    let Some(codec) = first_video_codec else {
+        return Ok(());
+    };
+    // Carrying a decoder is not the same as being able to decode: the pinned
+    // AV1 decoder routes through VideoToolbox and fails on a Mac without AV1
+    // hardware support. Prove it once here instead of admitting a clip that
+    // cannot play.
+    match or_media::video_frame_decodes(item.source()) {
+        Ok(()) => Ok(()),
+        Err(reason) => Err(or_core::MediaImportError::DecodeUnavailable { codec, reason }),
+    }
 }
 
 fn probe_import_source(source: &str) -> Result<MediaItem, or_core::MediaImportError> {

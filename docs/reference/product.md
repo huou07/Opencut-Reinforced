@@ -68,6 +68,15 @@ for the contracts. Product-level expectations: useful metadata and errors,
 thumbnails/waveforms, offline/relink, captions and subtitle interchange, typed
 transform and effect parameters, coherent preview/export parity.
 
+**MVP FOUNDATION (delivered):** the import codec list and the three export
+profiles are shared Rust rules, and whether a *given host* can decode a codec is
+measured at import rather than assumed: the first video frame is decoded, and a
+codec whose decoder exists but cannot run on this machine is refused with
+`DECODE_UNAVAILABLE` and the reason. Measured rows per host, including the AV1
+finding on Apple silicon, are in
+[media-capability-matrix.md](media-capability-matrix.md). GIF and TIFF import,
+extra export profiles (HEVC, AV1, MOV) and HDR stay PLANNED.
+
 ## AI assistance
 
 **MVP FOUNDATION (external harness):** an in-editor assistant panel that connects

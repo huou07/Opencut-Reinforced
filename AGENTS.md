@@ -136,6 +136,9 @@ any other rule to this file.
 - **Technology review** — dated adoption verdicts for the 2026 animation, 3D, video and codec candidates.
   When: considering a renderer, animation, encoding or design library the review already covered.
   Path: `docs/reference/technology-review.md`
+- **Media capability matrix** — measured import/decode/encode rows per host, and the command that produced them.
+  When: claiming a container, codec or export capability, or diagnosing an import refusal.
+  Path: `docs/reference/media-capability-matrix.md`
 - **Release** — Developer Preview pipeline and stable-release requirements.
   When: packaging or distribution work is explicitly in scope.
   Path: `docs/reference/release.md`
