@@ -18,6 +18,9 @@ unverified. The limits at the end are part of the record.
 | `62d770e` | optional components can be removed, but only what the app installed |
 | `3d43c9c` | the library shows the licence and origin of every bundled asset |
 | `ea8cb31` | Windows 11 builds, tests and packages the ZIP from the same tree |
+| `9676ef3` | the Windows stager works on a real host, not only in CI |
+| `c64a128d` | the DMG is built and opened on all three hosts' evidence in one place |
+| `018b5ab` | scene shapes carry a corner radius and a two-stop gradient |
 | branch head after this receipt | `ea8cb31`, macOS, Linux and Windows verified from that commit |
 
 ## What was proven, and how
@@ -91,12 +94,29 @@ Not verified: the Inno Setup `.setup.exe` (Inno Setup 6 is absent on the Windows
 host) and the speech engine inside the Windows package (the local stage skipped
 the optional runtime).
 
+## MotionScene shapes, schema version 3, same commit
+
+| Claim | Evidence |
+|---|---|
+| A rectangle draws rounded corners | `cargo test -p or_render --lib a_rounded_rectangle_leaves_its_corner_empty` — pixel (11,11) of a 40×40 card at (10,10) with radius 12 has alpha 0, the centre is opaque, ink stays inside the box |
+| A gradient varies across the box | `a_gradient_changes_colour_across_the_box` — 0° black→white over 40 px gives red < 40 at x=0 and > 215 at x=39 |
+| Version 1 and 2 documents still parse and render identically | `cargo test -p or_motion --lib version_one_document_still_resolves_with_the_classic_look`; every new field defaults to the old behaviour |
+| Bad shape style is refused with a location | `an_out_of_range_corner_radius_is_reported_with_a_location` (`MOTION_INVALID_CORNER_RADIUS`, `/nodes/0/corner_radius`), `an_unknown_gradient_key_is_refused` (`InvalidJson`) |
+| Only shapes can be rounded | `corner_radius_edits_shapes_and_refuses_text` — `MOTION_EDIT_INVALID_VALUE` for −1, `MOTION_EDIT_NOT_SHAPE` for a text node |
+| The inspector steps the radius | `flutter test test/motion_library_test.dart` — `the inspector rounds a shape without a bridge regeneration` |
+| The scene journey still inserts a motion clip | `python3 scripts/or_ui.py run scripts/ui_scenarios/motion-scene-edit.json` → `RESULT: OR_UI=PASS`, 63 steps, ends "Motion clip added to the timeline." |
+| Local gates | `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, or_core 376 / or_motion 99 / or_render 45, `flutter analyze --no-pub`, `flutter test` **499 pass**, `check-repo.sh` OK (875 files), doc links PASS (159), doc freshness PASS |
+
+Not verified for this increment: a gradient chosen in the app's inspector (a
+scene file or the agent sets it), and any materialised render of a rounded,
+gradient-filled card beyond the rasteriser tests above.
+
 ## Limits
 
-- Windows: no Flutter, no FFmpeg and no C toolchain on that host, and
-  `docs/operations/permissions.md` forbids installing system tooling. The
-  Windows export row therefore remains a claim about the package, not a
-  measurement on that machine.
+- Windows: Flutter 3.47.5, rustup 1.98.0, FFmpeg 8.1.3 and the MSVC toolchain do
+  exist on that host, so the Windows analyse/test/build rows above were measured
+  there. What stays unmeasured is the `.setup.exe` (Inno Setup 6 is not
+  installed) and the optional speech runtime inside the package.
 - The parity lane renders a 320×180 composition. It compares the two writer
   paths on the same snapshot; it does not sweep every resolution or every
   adapter.
