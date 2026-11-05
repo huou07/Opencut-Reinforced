@@ -236,6 +236,7 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
 
   Widget _speechRuntimeSection(RuntimeSnapshot? runtime) {
     final ready = runtime?.speechRuntime ?? false;
+    final engineInstalled = runtime?.whisperEngine ?? false;
     final detail = ready
         ? 'The Whisper engine and its adapter are installed.'
         : runtime != null && runtime.whisperEngine && !runtime.whisperProvider
@@ -275,14 +276,19 @@ class _RuntimeSetupPanelState extends State<RuntimeSetupPanel> {
               runSpacing: OrSpacing.x2,
               alignment: WrapAlignment.end,
               children: [
-                if (!ready)
+                // Installing again would download the same engine over an
+                // engine that is already on disk, and a recorded copy has to
+                // stay removable even when the adapter it needs is missing —
+                // otherwise the panel offers the same download forever and the
+                // files this setup wrote can never be taken back.
+                if (!ready && !_canRemoveSpeech && !engineInstalled)
                   FilledButton.icon(
                     key: const ValueKey('tools-speech-install'),
                     onPressed: _installSpeechRuntime,
                     icon: const Icon(Icons.download_outlined, size: 16),
                     label: const Text('Install engine'),
                   ),
-                if (ready && _canRemoveSpeech)
+                if (_canRemoveSpeech)
                   TextButton.icon(
                     key: const ValueKey('tools-speech-remove'),
                     onPressed: _removingSpeech ? null : _removeSpeechRuntime,
