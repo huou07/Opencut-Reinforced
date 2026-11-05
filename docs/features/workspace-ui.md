@@ -125,6 +125,12 @@ is missing.
   **Export formats** (MP4/WebM/lossless as Ready or Unavailable, naming the
   encoder this build would use). Both read the engine and the host; neither
   keeps its own list of what "should" work.
+  Optional components follow one lifecycle: **install** downloads a pinned asset
+  after showing its source, version, licence, size and checksum; **repair**
+  reinstalls over a half-installed folder; **remove** deletes only the files the
+  setup recorded in `<runtime>/.or-speech-install.json` and leaves anything the
+  user put there by hand, which is why a hand-copied runtime refuses removal
+  instead of guessing.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

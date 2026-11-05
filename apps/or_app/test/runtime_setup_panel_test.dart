@@ -13,6 +13,8 @@ class _FakeService extends ResourceCenterService {
   int inspected = 0;
   int installed = 0;
   int added = 0;
+  int removed = 0;
+  bool record = false;
   String? savedHarness;
   final openedUrls = <String>[];
 
@@ -62,6 +64,23 @@ class _FakeService extends ResourceCenterService {
   @override
   Future<void> saveHarnessPath(String path) async {
     savedHarness = path;
+  }
+
+  @override
+  Future<bool> hasSpeechInstallRecord() async => record;
+
+  @override
+  Future<int> removeSpeechRuntime() async {
+    removed++;
+    runtime = const RuntimeSnapshot(
+      packaged: true,
+      ffmpeg: true,
+      orCli: true,
+      assistantPath: null,
+      bundlePath: '/Applications/Opencut Reinforced.app',
+      speechRuntime: false,
+    );
+    return 3;
   }
 
   @override
@@ -192,5 +211,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('adapter'), findsOneWidget);
+  });
+
+  testWidgets('an installed speech runtime can be removed after confirming', (
+    tester,
+  ) async {
+    final service = _FakeService(
+      runtime: const RuntimeSnapshot(
+        packaged: true,
+        ffmpeg: true,
+        orCli: true,
+        assistantPath: null,
+        bundlePath: '/Applications/Opencut Reinforced.app',
+        speechRuntime: true,
+      ),
+    );
+    service.record = true;
+    final manager = LocalTtsServerManager(
+      supportDirectory: () async => Directory.systemTemp,
+    );
+    addTearDown(manager.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: RuntimeSetupPanel(service: service, manager: manager),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('tools-speech-install')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('tools-speech-remove')));
+    await tester.pumpAndSettle();
+    expect(service.removed, 0);
+    expect(find.text('Remove the speech engine?'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('tools-speech-remove-confirm')));
+    await tester.pumpAndSettle();
+
+    expect(service.removed, 1);
+    expect(find.text('Removed 3 files the setup installed.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tools-speech-install')), findsOneWidget);
   });
 }
