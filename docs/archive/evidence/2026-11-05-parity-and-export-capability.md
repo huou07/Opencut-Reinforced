@@ -277,3 +277,22 @@ was unreachable.
 | Fix | a stored path that does not resolve now falls through; `apps/or_app/test/assistant_settings_test.dart` covers both a stale saved path and a stale override |
 | Run harness | `scripts/or_ui.py` exports `OR_CLI_PATH` for the build it launches, so the debug app reaches its own CLI |
 | Deterministic assistant scenario | `assistant-panel` (23 steps) connects the panel, opens settings, sends a turn and passes; `assistant-edit` keeps the live-provider half, which a harness cannot judge |
+
+## 0.1.17, one commit on three hosts
+
+Every lane below ran on `64e0f723` from the same source revision, transferred by
+`git bundle`.
+
+| Lane | macOS (M5, arm64) | Debian 13 (x86_64) | Windows 11 (x86_64) |
+| --- | --- | --- | --- |
+| `flutter analyze` | No issues found | No issues found | No issues found |
+| `flutter test` | 503 passed | 498 passed, 5 host-skipped | 498 passed, 5 host-skipped |
+| Rust library tests | 376 / 99 / 45 / 22 passed | 376 / 99 / 45 passed | `or_core` 374 passed |
+| Lock files | 2 workspaces resolve without a write | same, after the probe's registry cache was warmed once | `--locked` build and tests |
+| Local gates | `PROJECT_ACCEPTANCE=PASS with 10 UNVERIFIED lane(s)` | `run_linux_ui_preflight.py` PASS in an earlier run of the same tree | Windows lane `PASS` for the installer, ZIP and packaged runtime |
+| Performance budget | `PASS` (ratio 1.08, raster p95 66.6 ms) | `PASS` (ratio 1.27, raster p95 60.5 ms) | `PASS` after the lane fix (ratio 1.30) |
+
+Two host-only frictions are recorded rather than hidden: the Debian host needed
+one online `cargo metadata` to populate the registry cache before
+`check-locks.sh` could run offline, and the Windows suite reports the same five
+skips the Linux suite does.
