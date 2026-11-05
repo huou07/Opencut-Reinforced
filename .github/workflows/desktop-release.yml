@@ -165,7 +165,7 @@ jobs:
           ls -lh dist/*.dmg dist/SHA256SUMS.txt
 
       - name: Upload the disk image
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: opencut-reinforced-macos-arm64
           path: |
@@ -406,7 +406,7 @@ jobs:
           bash scripts/test_linux_deb_install.sh "$RUNNER_TEMP/Opencut-Reinforced-linux-x64.deb"
 
       - name: Upload the Debian package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: opencut-reinforced-linux-x64
           path: ${{ runner.temp }}/Opencut-Reinforced-linux-x64.deb
@@ -505,7 +505,7 @@ jobs:
         run: ./scripts/run_windows_lane.ps1 -Mode release -Steps probe,build,stage,zip,installer
 
       - name: Upload the Windows artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: opencut-reinforced-windows-x64
           path: |
