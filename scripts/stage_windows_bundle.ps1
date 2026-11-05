@@ -82,17 +82,35 @@ if ($env:OR_PYTHON -and (Test-Path $env:OR_PYTHON -PathType Leaf)) {
 # script runs with ErrorActionPreference = Stop, so ask each candidate with the
 # preference relaxed and trust the exit code. The py launcher is tried last
 # because its real interpreter is the one that actually ships Python.
-foreach ($candidate in @(
+$candidates = @(
     @{ Name = 'python3'; Args = @() },
     @{ Name = 'python'; Args = @() },
-    @{ Name = 'py'; Args = @('-3') })) {
+    @{ Name = 'py'; Args = @('-3') })
+# A hosted runner may keep Python out of PATH (the tool cache installs it under
+# a versioned folder), so the search also looks at the places a Windows machine
+# actually keeps an interpreter before giving up.
+$roots = @()
+if ($env:RUNNER_TOOL_CACHE) { $roots += (Join-Path $env:RUNNER_TOOL_CACHE 'Python') }
+if ($env:LOCALAPPDATA) { $roots += (Join-Path $env:LOCALAPPDATA 'Programs\Python') }
+$roots += @('C:\Python313', 'C:\Python312', 'C:\Python311')
+foreach ($root in $roots) {
+  if (-not (Test-Path $root)) { continue }
+  foreach ($found in @(Get-ChildItem -Path $root -Filter 'python.exe' -Recurse -File -ErrorAction SilentlyContinue)) {
+    $candidates += @{ Name = $found.FullName; Args = @() }
+  }
+}
+foreach ($candidate in $candidates) {
   $command = Get-Command $candidate.Name -ErrorAction SilentlyContinue
   if ($null -eq $command -or $null -ne $python) { continue }
   $previous = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
-    $probe = & $command.Source @($candidate.Args) -c "import sys" 2>&1
-    $ok = ($LASTEXITCODE -eq 0) -and ($probe -notmatch 'App execution alias')
+    # `2>&1` can yield $null on success, and a comparison against $null is not
+    # a boolean, so the output is flattened to a string before it is inspected.
+    $probe = ((& $command.Source @($candidate.Args) -c "import sys" 2>&1) | Out-String)
+    $ok = ($LASTEXITCODE -eq 0) -and
+      (-not ($probe -match 'App execution alias')) -and
+      (-not ($probe -match 'was not found'))
   }
   catch {
     $ok = $false
@@ -106,7 +124,7 @@ foreach ($candidate in @(
     break
   }
 }
-if ($null -eq $python) { throw 'Python 3 is required to stage the runtime; set OR_PYTHON to its executable' }
+if ($null -eq $python) { throw 'Python 3 is required to stage the runtime; set OR_PYTHON to its executable (tried: ' + (($candidates | ForEach-Object { $_.Name }) -join ', ') + ')' }
 $arch = if ($env:PROCESSOR_ARCHITECTURE -match 'ARM64') { 'arm64' } else { 'amd64' }
 $required = ''
 $download = @()
