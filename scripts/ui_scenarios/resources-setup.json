@@ -32,6 +32,14 @@
     },
     {
       "op": "expect",
+      "key": "settings-system-check"
+    },
+    {
+      "op": "expect",
+      "key": "system-check-summary"
+    },
+    {
+      "op": "expect",
       "key": "settings-export-formats"
     },
     {

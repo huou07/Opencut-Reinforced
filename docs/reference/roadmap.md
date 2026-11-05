@@ -70,6 +70,16 @@ a product improvement with recorded evidence, not a library addition:
     Settings → Resources shows the same Ready/Unavailable list. The `no-h264`
     widget test and the `resources-setup` journey record both halves.
 
+20. **Setup reports the machine it will render on (owner request, 2026-11-05).**
+    Settings → Resources opens with a measured **This machine** panel —
+    platform, processors, memory and free space on the volume that will hold an
+    export — and warns with the consequence when the disk is short of the 4 GB
+    staging headroom. `df`/`sysctl`/PowerShell are the only host commands, each
+    behind one seam (`readHostFacts`), and a host that refuses reports "unknown"
+    rather than a guess. Proven by `flutter test test/system_check_test.dart` and
+    the `resources-setup` journey, which reads back
+    "macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free".
+
 Blocked, and reported as blocked rather than attempted:
 
 - **Windows build/test from one revision.** The Windows 11 host has cargo and

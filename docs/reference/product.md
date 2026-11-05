@@ -68,6 +68,12 @@ for the contracts. Product-level expectations: useful metadata and errors,
 thumbnails/waveforms, offline/relink, captions and subtitle interchange, typed
 transform and effect parameters, coherent preview/export parity.
 
+**Onboarding (delivered):** first run offers a guided first video, and
+Settings → Resources measures what this installation can do instead of
+promising: the machine's processors, memory and free space, the export formats
+the linked encoder opens, the external tools that are optional, and the one
+warning worth showing when the disk cannot stage an export.
+
 **MVP FOUNDATION (delivered):** the import codec list and the three export
 profiles are shared Rust rules, and whether a *given host* can decode a codec is
 measured at import rather than assumed: the first video frame is decoded, and a

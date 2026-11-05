@@ -110,6 +110,12 @@ is missing.
   project is open, and checks the public GitHub release. A newer DMG downloads to
   Downloads and opens for the user to drag into Applications; the app never
   replaces itself silently. Optional model and harness downloads stay explicit.
+  The section opens with two measured panels, not prose: **This machine**
+  (platform, processors, memory, free space on the volume that will hold an
+  export, with a warning naming the staging headroom when the disk is short) and
+  **Export formats** (MP4/WebM/lossless as Ready or Unavailable, naming the
+  encoder this build would use). Both read the engine and the host; neither
+  keeps its own list of what "should" work.
 - Status/snackbar feedback goes through the shared snackbar so shell and editor
   cannot diverge.
 

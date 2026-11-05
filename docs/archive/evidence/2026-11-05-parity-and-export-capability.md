@@ -25,7 +25,8 @@ unverified. The limits at the end are part of the record.
 | The Settings panel reports the encoder this build would use | `python3 scripts/or_ui.py run scripts/ui_scenarios/resources-setup.json` → `RESULT: OR_UI=PASS`, 18 steps; the tree artifact holds "This build exports MP4 (VideoToolbox, hardware), WebM (VP9), Lossless (FFV1)." |
 | The capability comes from the engine, not a Dart list | `cargo test -p or_media --lib` → 22 pass, including `the_described_profiles_match_the_encoders_this_build_links` |
 | Formatting is honest when no encoder is present | `flutter test test/export_capability_test.dart` → 7 pass (hardware, software, no-H.264, lossless-only, none, assumption, fixed cache) |
-| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **479 pass** |
+| Setup reports the machine it will render on | `flutter test test/system_check_test.dart` → 9 pass (df parse, PowerShell parse, refusing host reports unknown, small-disk warning); the `resources-setup` journey reads back **"macOS Version 27.2 (Build 26B123) · 10 cores · 16 GB RAM · 102 GB free"** from the real app |
+| Flutter surface stays green | `flutter analyze --no-pub` → no issues; `flutter test` → **488 pass** |
 
 ## Limits
 

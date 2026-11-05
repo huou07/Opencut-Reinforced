@@ -15,6 +15,7 @@ import '../assistant/assistant_settings_dialog.dart';
 import '../assistant/assistant_settings.dart';
 import '../project/project_gateway.dart';
 import '../updates/export_capability_panel.dart';
+import '../updates/system_check_panel.dart';
 import '../updates/resource_center_panel.dart';
 import '../updates/runtime_setup_panel.dart';
 import '../widgets/or_widgets.dart';
@@ -243,6 +244,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               currentVersion: version,
               onManageSpeechModels: widget.onManageSpeechModels,
             ),
+            const SizedBox(height: OrSpacing.x3),
+            const SystemCheckPanel(),
             const SizedBox(height: OrSpacing.x3),
             const ExportCapabilityPanel(),
             const SizedBox(height: OrSpacing.x3),
