@@ -75,7 +75,7 @@
     },
     {
       "op": "wait_label",
-      "label_regex": "Audio track A1, 0 clips, enabled",
+      "label_regex": "Audio track A1, 0 clips, active",
       "budget_ms": 20000
     },
     {

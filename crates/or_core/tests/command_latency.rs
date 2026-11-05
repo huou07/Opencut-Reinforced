@@ -723,8 +723,11 @@ fn measure_audio_cleanup(workspace: &Path) -> Result<Vec<f64>, String> {
             paths.push(PathBuf::from("ffmpeg"));
         }
         if let Some(search) = std::env::var_os("PATH") {
+            // The suffix matters: on Windows the helper is `ffmpeg.exe`, and a probe
+            // that only stats `ffmpeg` finds nothing and reports the row unverified.
+            let name = format!("ffmpeg{}", std::env::consts::EXE_SUFFIX);
             for dir in std::env::split_paths(&search) {
-                let candidate = dir.join("ffmpeg");
+                let candidate = dir.join(&name);
                 if candidate.is_file() && !paths.contains(&candidate) {
                     paths.push(candidate);
                 }

@@ -15,6 +15,16 @@ silence, used only to exercise stream decode and surround-to-stereo downmix.
 The fixture has 1920×1080 H.264 video at 24 fps and 5.1 AAC audio at 48 kHz.
 Its SHA-256 is `7b88ad19dc59986f59a59033e3d7a51d16d5cb3e454796ae6556c61e642b057a`.
 
+`long720_h264_aac.mp4` is generated on a development machine, not
+downloaded: `ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=24:duration=6 \
+-f lavfi -i sine=frequency=440:sample_rate=48000:duration=6 -c:v libx264 \
+-preset veryfast -crf 30 -pix_fmt yuv420p -c:a aac -b:a 64k -movflags \
++faststart`. The pattern and tone carry no third-party authorship, so the file
+needs no attribution. It exists so `scripts/ui_scenarios/export-long.json` can
+run on any machine instead of a hand-made `/tmp/long720.mp4`, and it has
+1280x720 H.264 at 24 fps with stereo AAC at 48 kHz. Its SHA-256 is
+`4aead26118183d24eeae903c6bb12480df2e5bcfa16b94d645434f33c48c5aef`.
+
 The packaged desktop product journey fetches the same 30-second source MP4
 from the immutable upstream revision above and verifies its size
 (`22718509` bytes) and SHA-256
