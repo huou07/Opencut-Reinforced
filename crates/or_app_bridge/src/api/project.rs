@@ -1060,6 +1060,8 @@ impl ProjectHostHandle {
         destination: String,
         quality: Option<String>,
         short_side: Option<u32>,
+        performance_profile: Option<String>,
+        preferred_h264_encoder: Option<String>,
     ) -> ProjectExportJobView {
         // An optional argument keeps every existing generated caller compiling and
         // gives an old client the quality preference rather than the fastest mode.
@@ -1089,6 +1091,29 @@ impl ProjectHostHandle {
                 "choose a destination ending in .mp4, .mkv, or .webm",
             ));
         };
+        // The profile is a preference from Settings, resolved here so the export
+        // job carries a typed decision instead of re-reading the setting later.
+        let performance = match performance_profile
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            None => or_core::ExportPerformance::default(),
+            Some(value) => match or_core::PerformanceProfile::parse(value) {
+                Some(profile) => or_core::ExportPerformance {
+                    profile,
+                    preferred_h264_encoder: preferred_h264_encoder
+                        .map(|name| name.trim().to_owned())
+                        .filter(|name| !name.is_empty()),
+                },
+                None => {
+                    return export_job_view(ExportResponse::failure(
+                        "INVALID_EXPORT_PERFORMANCE",
+                        "unknown performance profile; use recommended, maximum_performance,                          balanced, or compatibility",
+                    ));
+                }
+            },
+        };
         let (project_id, project_instance_id, expected_project_revision) =
             match parse_session_identity(&project_id, &project_instance_id, expected_revision) {
                 Ok(identity) => identity,
@@ -1104,6 +1129,7 @@ impl ProjectHostHandle {
             profile,
             quality,
             short_side,
+            performance,
         })
     }
 

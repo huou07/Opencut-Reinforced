@@ -1431,6 +1431,8 @@ abstract interface class ProjectGateway {
     String destination, {
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   });
   Future<ProjectExportJob> exportStatus(
     ProjectSessionHandle session,

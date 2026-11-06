@@ -7764,6 +7764,36 @@ class _FakeCoreGateway implements CoreGateway {
     Capability(id: 'core.health', version: 3),
     Capability(id: 'core.capabilities', version: 4),
   ];
+
+  @override
+  Future<PerformanceReportView> performanceReport() async =>
+      const PerformanceReportView(
+        cpuArch: 'arm64',
+        logicalCores: 8,
+        gpuName: 'Fixture GPU',
+        gpuBackend: 'metal',
+        gpuDeviceType: 'integrated',
+        gpuDriver: 'fixture',
+        gpuDriverInfo: '',
+        gpuCompiledBackends: ['metal'],
+        h264Encoders: [],
+        decoders: [],
+        plans: [],
+      );
+
+  @override
+  Future<EncodingPlanView> encodingPlan({
+    required String profile,
+    String? preferredH264Encoder,
+  }) async => EncodingPlanView(
+    profile: profile,
+    quality: 'quality',
+    h264Encoder: 'libx264',
+    hardware: false,
+    software: true,
+    notes: const [],
+    summary: 'libx264 (software)',
+  );
 }
 
 class _FakeProjectPicker implements ProjectFilePicker {
@@ -7990,6 +8020,8 @@ class _FakeProjectGateway implements ProjectGateway {
   double? lastPreviewSpeed;
   ProjectSequenceCanvas? lastSequenceCanvas;
   int? lastExportShortSide;
+  String? lastExportPerformanceProfile;
+  String? lastExportPreferredH264Encoder;
   List<ProjectMediaItem> initialMedia = [];
   List<ProjectTimelineTrack> initialTimelineTracks = [];
   Map<String, List<ProjectTimelineClip>> initialTimelineClips = {};
@@ -9817,11 +9849,15 @@ class _FakeProjectGateway implements ProjectGateway {
     String destination, {
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   }) async {
     exportCalls++;
     lastExportDestination = destination;
     lastExportQuality = quality;
     lastExportShortSide = shortSide;
+    lastExportPerformanceProfile = performanceProfile;
+    lastExportPreferredH264Encoder = preferredH264Encoder;
     _exportJob = ProjectExportJob(
       succeeded: true,
       errorCode: '',

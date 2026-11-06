@@ -29,7 +29,7 @@
 
 use crate::api::project::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1433193701;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -355963884;
 
 // Section: executor
 
@@ -3883,6 +3883,8 @@ fn wire__crate__api__project__ProjectHostHandle_start_export_impl(
             let api_destination = <String>::sse_decode(&mut deserializer);
             let api_quality = <Option<String>>::sse_decode(&mut deserializer);
             let api_short_side = <Option<u32>>::sse_decode(&mut deserializer);
+            let api_performance_profile = <Option<String>>::sse_decode(&mut deserializer);
+            let api_preferred_h264_encoder = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -3909,6 +3911,8 @@ fn wire__crate__api__project__ProjectHostHandle_start_export_impl(
                             api_destination,
                             api_quality,
                             api_short_side,
+                            api_performance_profile,
+                            api_preferred_h264_encoder,
                         ))?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -4935,6 +4939,44 @@ fn wire__crate__api__project__discard_recovery_impl(
         },
     )
 }
+fn wire__crate__api__performance__encoding_plan_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "encoding_plan",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_profile = <String>::sse_decode(&mut deserializer);
+            let api_preferred_h264_encoder = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::views::ProjectBridgeError>((move || {
+                    let output_ok = crate::api::performance::encoding_plan(
+                        api_profile,
+                        api_preferred_h264_encoder,
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
+}
 fn wire__crate__api__project__export_capabilities_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5829,6 +5871,38 @@ fn wire__crate__api__project__open_project_impl(
         },
     )
 }
+fn wire__crate__api__performance__performance_report_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "performance_report",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(crate::api::performance::performance_report())?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -5945,6 +6019,60 @@ impl SseDecode for crate::api::views::CaptionFileFormatView {
     }
 }
 
+impl SseDecode for crate::api::performance::DecoderProbeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_present = <bool>::sse_decode(deserializer);
+        return crate::api::performance::DecoderProbeView {
+            name: var_name,
+            present: var_present,
+        };
+    }
+}
+
+impl SseDecode for crate::api::performance::EncoderProbeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_present = <bool>::sse_decode(deserializer);
+        let mut var_opens = <bool>::sse_decode(deserializer);
+        let mut var_hardware = <bool>::sse_decode(deserializer);
+        let mut var_note = <Option<String>>::sse_decode(deserializer);
+        return crate::api::performance::EncoderProbeView {
+            name: var_name,
+            present: var_present,
+            opens: var_opens,
+            hardware: var_hardware,
+            note: var_note,
+        };
+    }
+}
+
+impl SseDecode for crate::api::performance::EncodingPlanView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_profile = <String>::sse_decode(deserializer);
+        let mut var_quality = <String>::sse_decode(deserializer);
+        let mut var_h264Encoder = <Option<String>>::sse_decode(deserializer);
+        let mut var_hardware = <bool>::sse_decode(deserializer);
+        let mut var_software = <bool>::sse_decode(deserializer);
+        let mut var_fallback = <Option<String>>::sse_decode(deserializer);
+        let mut var_notes = <Vec<String>>::sse_decode(deserializer);
+        let mut var_summary = <String>::sse_decode(deserializer);
+        return crate::api::performance::EncodingPlanView {
+            profile: var_profile,
+            quality: var_quality,
+            h264_encoder: var_h264Encoder,
+            hardware: var_hardware,
+            software: var_software,
+            fallback: var_fallback,
+            notes: var_notes,
+            summary: var_summary,
+        };
+    }
+}
+
 impl SseDecode for crate::api::views::ExportCapabilityView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -6039,6 +6167,48 @@ impl SseDecode for Vec<crate::api::Capability> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::Capability>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::performance::DecoderProbeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::performance::DecoderProbeView>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::performance::EncoderProbeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::performance::EncoderProbeView>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::performance::EncodingPlanView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::performance::EncodingPlanView>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -6776,6 +6946,41 @@ impl SseDecode for Option<u64> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for crate::api::performance::PerformanceReportView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_cpuArch = <String>::sse_decode(deserializer);
+        let mut var_logicalCores = <u32>::sse_decode(deserializer);
+        let mut var_gpuName = <String>::sse_decode(deserializer);
+        let mut var_gpuBackend = <String>::sse_decode(deserializer);
+        let mut var_gpuDeviceType = <String>::sse_decode(deserializer);
+        let mut var_gpuDriver = <String>::sse_decode(deserializer);
+        let mut var_gpuDriverInfo = <String>::sse_decode(deserializer);
+        let mut var_gpuCompiledBackends = <Vec<String>>::sse_decode(deserializer);
+        let mut var_gpuError = <Option<String>>::sse_decode(deserializer);
+        let mut var_h264Encoders =
+            <Vec<crate::api::performance::EncoderProbeView>>::sse_decode(deserializer);
+        let mut var_decoders =
+            <Vec<crate::api::performance::DecoderProbeView>>::sse_decode(deserializer);
+        let mut var_plans =
+            <Vec<crate::api::performance::EncodingPlanView>>::sse_decode(deserializer);
+        return crate::api::performance::PerformanceReportView {
+            cpu_arch: var_cpuArch,
+            logical_cores: var_logicalCores,
+            gpu_name: var_gpuName,
+            gpu_backend: var_gpuBackend,
+            gpu_device_type: var_gpuDeviceType,
+            gpu_driver: var_gpuDriver,
+            gpu_driver_info: var_gpuDriverInfo,
+            gpu_compiled_backends: var_gpuCompiledBackends,
+            gpu_error: var_gpuError,
+            h264_encoders: var_h264Encoders,
+            decoders: var_decoders,
+            plans: var_plans,
+        };
     }
 }
 
@@ -8268,117 +8473,124 @@ fn pde_ffi_dispatcher_primary_impl(
         84 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
         85 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
         86 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        87 => {
+        87 => wire__crate__api__performance__encoding_plan_impl(port, ptr, rust_vec_len, data_len),
+        88 => {
             wire__crate__api__project__export_capabilities_impl(port, ptr, rust_vec_len, data_len)
         }
-        88 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__motion__materialize_motion_scene_impl(
+        89 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__motion__materialize_motion_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
+        92 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__motion_library__motion_asset_import_image_impl(
+        93 => wire__crate__api__motion_library__motion_asset_import_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__motion_library__motion_asset_load_impl(
+        94 => wire__crate__api__motion_library__motion_asset_load_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__motion_library__motion_asset_materialize_impl(
+        95 => wire__crate__api__motion_library__motion_asset_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__motion_library__motion_asset_remove_impl(
+        96 => wire__crate__api__motion_library__motion_asset_remove_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__motion_library__motion_asset_save_impl(
+        97 => wire__crate__api__motion_library__motion_asset_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__motion_library__motion_asset_scene_impl(
+        98 => wire__crate__api__motion_library__motion_asset_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => {
+        99 => {
             wire__crate__api__motion_library__motion_library_impl(port, ptr, rust_vec_len, data_len)
         }
-        99 => wire__crate__api__motion_library__motion_scene_append_impl(
+        100 => wire__crate__api__motion_library__motion_scene_append_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__api__motion_library__motion_scene_compose_impl(
+        101 => wire__crate__api__motion_library__motion_scene_compose_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__motion_library__motion_scene_edit_impl(
+        102 => wire__crate__api__motion_library__motion_scene_edit_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
+        103 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__motion_library__motion_scene_materialize_impl(
+        104 => wire__crate__api__motion_library__motion_scene_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__motion_library__motion_scene_new_impl(
+        105 => wire__crate__api__motion_library__motion_scene_new_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__motion_library__motion_scene_preview_impl(
+        106 => wire__crate__api__motion_library__motion_scene_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__motion_library__motion_scene_read_impl(
+        107 => wire__crate__api__motion_library__motion_scene_read_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__motion_library__motion_scene_save_impl(
+        108 => wire__crate__api__motion_library__motion_scene_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        109 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__performance__performance_report_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -8463,6 +8675,78 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::views::CaptionFileFormatView>
     for crate::api::views::CaptionFileFormatView
 {
     fn into_into_dart(self) -> crate::api::views::CaptionFileFormatView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::performance::DecoderProbeView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.present.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::performance::DecoderProbeView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::performance::DecoderProbeView>
+    for crate::api::performance::DecoderProbeView
+{
+    fn into_into_dart(self) -> crate::api::performance::DecoderProbeView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::performance::EncoderProbeView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.present.into_into_dart().into_dart(),
+            self.opens.into_into_dart().into_dart(),
+            self.hardware.into_into_dart().into_dart(),
+            self.note.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::performance::EncoderProbeView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::performance::EncoderProbeView>
+    for crate::api::performance::EncoderProbeView
+{
+    fn into_into_dart(self) -> crate::api::performance::EncoderProbeView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::performance::EncodingPlanView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.profile.into_into_dart().into_dart(),
+            self.quality.into_into_dart().into_dart(),
+            self.h264_encoder.into_into_dart().into_dart(),
+            self.hardware.into_into_dart().into_dart(),
+            self.software.into_into_dart().into_dart(),
+            self.fallback.into_into_dart().into_dart(),
+            self.notes.into_into_dart().into_dart(),
+            self.summary.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::performance::EncodingPlanView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::performance::EncodingPlanView>
+    for crate::api::performance::EncodingPlanView
+{
+    fn into_into_dart(self) -> crate::api::performance::EncodingPlanView {
         self
     }
 }
@@ -8957,6 +9241,37 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::motion_library::MotionSceneVi
     for crate::api::motion_library::MotionSceneView
 {
     fn into_into_dart(self) -> crate::api::motion_library::MotionSceneView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::performance::PerformanceReportView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.cpu_arch.into_into_dart().into_dart(),
+            self.logical_cores.into_into_dart().into_dart(),
+            self.gpu_name.into_into_dart().into_dart(),
+            self.gpu_backend.into_into_dart().into_dart(),
+            self.gpu_device_type.into_into_dart().into_dart(),
+            self.gpu_driver.into_into_dart().into_dart(),
+            self.gpu_driver_info.into_into_dart().into_dart(),
+            self.gpu_compiled_backends.into_into_dart().into_dart(),
+            self.gpu_error.into_into_dart().into_dart(),
+            self.h264_encoders.into_into_dart().into_dart(),
+            self.decoders.into_into_dart().into_dart(),
+            self.plans.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::performance::PerformanceReportView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::performance::PerformanceReportView>
+    for crate::api::performance::PerformanceReportView
+{
+    fn into_into_dart(self) -> crate::api::performance::PerformanceReportView {
         self
     }
 }
@@ -10227,6 +10542,39 @@ impl SseEncode for crate::api::views::CaptionFileFormatView {
     }
 }
 
+impl SseEncode for crate::api::performance::DecoderProbeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <bool>::sse_encode(self.present, serializer);
+    }
+}
+
+impl SseEncode for crate::api::performance::EncoderProbeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <bool>::sse_encode(self.present, serializer);
+        <bool>::sse_encode(self.opens, serializer);
+        <bool>::sse_encode(self.hardware, serializer);
+        <Option<String>>::sse_encode(self.note, serializer);
+    }
+}
+
+impl SseEncode for crate::api::performance::EncodingPlanView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.profile, serializer);
+        <String>::sse_encode(self.quality, serializer);
+        <Option<String>>::sse_encode(self.h264_encoder, serializer);
+        <bool>::sse_encode(self.hardware, serializer);
+        <bool>::sse_encode(self.software, serializer);
+        <Option<String>>::sse_encode(self.fallback, serializer);
+        <Vec<String>>::sse_encode(self.notes, serializer);
+        <String>::sse_encode(self.summary, serializer);
+    }
+}
+
 impl SseEncode for crate::api::views::ExportCapabilityView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -10313,6 +10661,36 @@ impl SseEncode for Vec<crate::api::Capability> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::Capability>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::performance::DecoderProbeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::performance::DecoderProbeView>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::performance::EncoderProbeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::performance::EncoderProbeView>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::performance::EncodingPlanView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::performance::EncodingPlanView>::sse_encode(item, serializer);
         }
     }
 }
@@ -10842,6 +11220,27 @@ impl SseEncode for Option<u64> {
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::performance::PerformanceReportView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.cpu_arch, serializer);
+        <u32>::sse_encode(self.logical_cores, serializer);
+        <String>::sse_encode(self.gpu_name, serializer);
+        <String>::sse_encode(self.gpu_backend, serializer);
+        <String>::sse_encode(self.gpu_device_type, serializer);
+        <String>::sse_encode(self.gpu_driver, serializer);
+        <String>::sse_encode(self.gpu_driver_info, serializer);
+        <Vec<String>>::sse_encode(self.gpu_compiled_backends, serializer);
+        <Option<String>>::sse_encode(self.gpu_error, serializer);
+        <Vec<crate::api::performance::EncoderProbeView>>::sse_encode(
+            self.h264_encoders,
+            serializer,
+        );
+        <Vec<crate::api::performance::DecoderProbeView>>::sse_encode(self.decoders, serializer);
+        <Vec<crate::api::performance::EncodingPlanView>>::sse_encode(self.plans, serializer);
     }
 }
 
@@ -11577,7 +11976,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

@@ -9,12 +9,12 @@ mod snapshot_queue;
 pub use decoder::SeekableMediaIoCapability;
 pub use decoder::{
     AudioChunk, DecodeError, DecodeOutput, SoftwareMediaDecoder, VideoDecodeSession,
-    VideoDecodeSessionMetrics, VideoFrame,
+    VideoDecodeSessionMetrics, VideoFrame, probe_decoders,
 };
 pub use encoder::{
-    ExportCapability, ExportEncodeError, FfmpegExportProfile, FfmpegExportWriter,
-    FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter, SoftwareExportProfile,
-    describe_export_capability,
+    ExportCapability, ExportEncodeError, ExportWriterOptions, FfmpegExportProfile,
+    FfmpegExportWriter, FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter,
+    SoftwareExportProfile, describe_export_capability, probe_h264_encoders,
 };
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 

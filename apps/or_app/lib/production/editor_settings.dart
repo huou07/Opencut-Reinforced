@@ -13,6 +13,8 @@ class EditorSettings {
     this.simpleMode = true,
     this.showGuides = false,
     this.tipsDismissed = false,
+    this.performanceProfile = 'recommended',
+    this.preferredH264Encoder,
   });
 
   /// The inspector is an advanced surface. The toolbar and clip dialogs carry
@@ -33,24 +35,49 @@ class EditorSettings {
   /// of guided mode. Settings owns the switch that brings it back.
   final bool tipsDismissed;
 
+  /// How exports should use this machine, by wire name: `recommended`,
+  /// `maximum_performance`, `balanced`, or `compatibility`. The engine still
+  /// refuses an encoder that does not open here; the profile is a preference,
+  /// not a promise.
+  final String performanceProfile;
+
+  /// An H.264 encoder the person chose by name, or null to let the profile
+  /// decide. A name this build does not carry falls back and says why.
+  final String? preferredH264Encoder;
+
   EditorSettings copyWith({
     bool? showInspector,
     bool? simpleMode,
     bool? showGuides,
     bool? tipsDismissed,
+    String? performanceProfile,
   }) => EditorSettings(
     showInspector: showInspector ?? this.showInspector,
     simpleMode: simpleMode ?? this.simpleMode,
     showGuides: showGuides ?? this.showGuides,
     tipsDismissed: tipsDismissed ?? this.tipsDismissed,
+    performanceProfile: performanceProfile ?? this.performanceProfile,
+    preferredH264Encoder: preferredH264Encoder,
+  );
+
+  /// Sets or clears the encoder override without touching the other fields.
+  EditorSettings withPreferredH264Encoder(String? encoder) => EditorSettings(
+    showInspector: showInspector,
+    simpleMode: simpleMode,
+    showGuides: showGuides,
+    tipsDismissed: tipsDismissed,
+    performanceProfile: performanceProfile,
+    preferredH264Encoder: encoder,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 2,
+    'version': 3,
     'show_inspector': showInspector,
     'simple_mode': simpleMode,
     'show_guides': showGuides,
     'tips_dismissed': tipsDismissed,
+    'performance_profile': performanceProfile,
+    'preferred_h264_encoder': preferredH264Encoder,
   };
 
   /// A version-1 file predates guided mode and guides. Guided mode is on by
@@ -63,6 +90,16 @@ class EditorSettings {
       simpleMode: value['simple_mode'] != false,
       showGuides: value['show_guides'] == true,
       tipsDismissed: value['tips_dismissed'] == true,
+      performanceProfile:
+          value['performance_profile'] ==
+              'maximum_performance' ||
+          value['performance_profile'] == 'balanced' ||
+          value['performance_profile'] == 'compatibility'
+      ? value['performance_profile'] as String
+      : 'recommended',
+      preferredH264Encoder: value['preferred_h264_encoder'] is String
+          ? value['preferred_h264_encoder'] as String
+          : null,
     );
   }
 }

@@ -6,6 +6,7 @@
 import 'api.dart';
 import 'api/motion.dart';
 import 'api/motion_library.dart';
+import 'api/performance.dart';
 import 'api/project.dart';
 import 'api/views.dart';
 
@@ -138,6 +139,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CaptionFileFormatView dco_decode_caption_file_format_view(dynamic raw);
 
   @protected
+  DecoderProbeView dco_decode_decoder_probe_view(dynamic raw);
+
+  @protected
+  EncoderProbeView dco_decode_encoder_probe_view(dynamic raw);
+
+  @protected
+  EncodingPlanView dco_decode_encoding_plan_view(dynamic raw);
+
+  @protected
   ExportCapabilityView dco_decode_export_capability_view(dynamic raw);
 
   @protected
@@ -166,6 +176,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Capability> dco_decode_list_capability(dynamic raw);
+
+  @protected
+  List<DecoderProbeView> dco_decode_list_decoder_probe_view(dynamic raw);
+
+  @protected
+  List<EncoderProbeView> dco_decode_list_encoder_probe_view(dynamic raw);
+
+  @protected
+  List<EncodingPlanView> dco_decode_list_encoding_plan_view(dynamic raw);
 
   @protected
   List<MotionAssetEntryView> dco_decode_list_motion_asset_entry_view(
@@ -326,6 +345,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  PerformanceReportView dco_decode_performance_report_view(dynamic raw);
 
   @protected
   PreviewFrameStepView dco_decode_preview_frame_step_view(dynamic raw);
@@ -654,6 +676,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  DecoderProbeView sse_decode_decoder_probe_view(SseDeserializer deserializer);
+
+  @protected
+  EncoderProbeView sse_decode_encoder_probe_view(SseDeserializer deserializer);
+
+  @protected
+  EncodingPlanView sse_decode_encoding_plan_view(SseDeserializer deserializer);
+
+  @protected
   ExportCapabilityView sse_decode_export_capability_view(
     SseDeserializer deserializer,
   );
@@ -684,6 +715,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Capability> sse_decode_list_capability(SseDeserializer deserializer);
+
+  @protected
+  List<DecoderProbeView> sse_decode_list_decoder_probe_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EncoderProbeView> sse_decode_list_encoder_probe_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<EncodingPlanView> sse_decode_list_encoding_plan_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<MotionAssetEntryView> sse_decode_list_motion_asset_entry_view(
@@ -886,6 +932,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  PerformanceReportView sse_decode_performance_report_view(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PreviewFrameStepView sse_decode_preview_frame_step_view(
@@ -1279,6 +1330,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_decoder_probe_view(
+    DecoderProbeView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_encoder_probe_view(
+    EncoderProbeView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_encoding_plan_view(
+    EncodingPlanView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_export_capability_view(
     ExportCapabilityView self,
     SseSerializer serializer,
@@ -1314,6 +1383,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_capability(
     List<Capability> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_decoder_probe_view(
+    List<DecoderProbeView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_encoder_probe_view(
+    List<EncoderProbeView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_encoding_plan_view(
+    List<EncodingPlanView> self,
     SseSerializer serializer,
   );
 
@@ -1562,6 +1649,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_performance_report_view(
+    PerformanceReportView self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_preview_frame_step_view(

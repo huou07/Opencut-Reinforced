@@ -3,6 +3,7 @@ use serde::Serialize;
 mod application;
 mod audio_cleanup;
 mod cache;
+mod hardware;
 mod jobs;
 mod media;
 mod media_artifacts;
@@ -20,7 +21,8 @@ mod timeline;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
-    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportProfile, ExportQuality,
+    CommandCall, CommandDescriptor, CommandEnvelope, CommandResult, ExportPerformance,
+    ExportProfile, ExportQuality,
     ExportRequest, ExportResponse, LegacyTimelineClipState, MAX_MEDIA_PAGE_SIZE,
     MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MediaListPage,
     MotionMaterializeRequest, MotionMaterializeResponse, OperationError, OperationErrorCode,
@@ -36,6 +38,10 @@ pub use audio_cleanup::{
     AudioCleanupError, AudioCleanupErrorCode, AudioCleanupRequest, AudioCleanupResult,
     audio_cleanup_arguments, clean_audio, clean_audio_file, measure_noise_floor,
     measure_noise_floor_db, percentile, window_rms_dbfs,
+};
+pub use hardware::{
+    DecoderCandidate, EncoderCandidate, ExportEncodingPlan, PerformanceProfile,
+    plan_h264_encoding,
 };
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,

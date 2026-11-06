@@ -33,6 +33,8 @@ class _FakeGateway implements ProjectGateway {
   String? destination;
   String? quality;
   int? lastShortSide;
+  String? lastPerformanceProfile;
+  String? lastPreferredH264Encoder;
   ProjectExportJob status = _job('succeeded');
   int statusFailuresRemaining = 0;
 
@@ -49,11 +51,15 @@ class _FakeGateway implements ProjectGateway {
     String destination, {
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   }) async {
     startCalls += 1;
     this.destination = destination;
     this.quality = quality;
     lastShortSide = shortSide;
+    lastPerformanceProfile = performanceProfile;
+    lastPreferredH264Encoder = preferredH264Encoder;
     return _job('running');
   }
 
@@ -167,6 +173,8 @@ ExportFlow _flow({
         profile: ExportProfile.defaultForPlatform,
         quality: ExportQuality.defaultChoice,
         shortSide: null,
+        performanceProfile: null,
+        preferredH264Encoder: null,
       ),
   onProjectSummary: onProjectSummary ?? (_) {},
   onExported: onExported ?? (_) {},

@@ -40,6 +40,14 @@ pub(crate) enum PreviewPreparationAction {
     Tick,
 }
 
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub(crate) use desktop::render_adapter_info;
+
 pub(crate) struct PreviewPreparation {
     pub request_id: Option<u64>,
     pub sources: Vec<String>,
@@ -226,6 +234,7 @@ mod desktop {
                     profile,
                     quality,
                     short_side,
+                    performance,
                 } => {
                     if project_id != session.project_id()
                         || project_instance_id != session.project_instance_id()
@@ -341,6 +350,7 @@ mod desktop {
                             destination,
                             profile,
                             quality,
+                            performance,
                             output_size,
                             frame_count,
                             frame_rate,
@@ -2664,6 +2674,16 @@ mod desktop {
         Ok(())
     }
 
+    /// The adapter the shared renderer actually opened.
+    ///
+    /// Opening it here is intentional: the report describes the device the
+    /// preview and the export will use, not a list of devices that might work.
+    pub(crate) fn render_adapter_info() -> Result<or_render::RenderAdapterInfo, String> {
+        renderer()
+            .map(|device| device.adapter_info().clone())
+            .map_err(|error| error.to_string())
+    }
+
     fn renderer() -> Result<&'static RenderDevice, PreviewError> {
         RENDER_DEVICE
             .get_or_init(|| block_on(RenderDevice::new()).map_err(|error| error.to_string()))
@@ -2824,6 +2844,7 @@ mod desktop {
         destination: std::path::PathBuf,
         profile: ExportProfile,
         quality: ExportQuality,
+        performance: or_core::ExportPerformance,
         output_size: (u32, u32),
         frame_count: u64,
         frame_rate: RationalRate,
@@ -2854,16 +2875,21 @@ mod desktop {
             ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
             ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
         };
-        let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
-            destination,
-            media_profile,
-            quality,
-            output_size.0,
-            output_size.1,
-            frame_rate.numerator(),
-            frame_rate.denominator(),
-        )
-        .map_err(|error| error.to_string())?;
+        let mut writer =
+            or_media::FfmpegExportWriter::create_with_options(
+                destination,
+                or_media::ExportWriterOptions {
+                    profile: media_profile,
+                    quality,
+                    performance: performance.profile,
+                    preferred_h264_encoder: performance.preferred_h264_encoder.as_deref(),
+                    width: output_size.0,
+                    height: output_size.1,
+                    frame_rate_numerator: frame_rate.numerator(),
+                    frame_rate_denominator: frame_rate.denominator(),
+                },
+            )
+            .map_err(|error| error.to_string())?;
         let mut audio_cursor = 0_u64;
         job.report_progress(0, frame_count);
 
@@ -4500,6 +4526,7 @@ mod desktop {
                     target,
                     ExportProfile::Mp4H264Aac,
                     ExportQuality::Quality,
+                    or_core::ExportPerformance::default(),
                     (1920, 1080),
                     120,
                     rate,
@@ -4590,6 +4617,7 @@ mod desktop {
                         target,
                         ExportProfile::WebmVp9Opus,
                         quality,
+                        or_core::ExportPerformance::default(),
                         (640, 360),
                         60,
                         rate,
@@ -4676,6 +4704,7 @@ mod desktop {
                     target,
                     ExportProfile::MatroskaFfv1PcmS16le,
                     ExportQuality::Quality,
+                    or_core::ExportPerformance::default(),
                     (1920, 1080),
                     FRAMES,
                     rate,
@@ -4931,6 +4960,7 @@ mod desktop {
                     target,
                     export_profile,
                     quality,
+                    or_core::ExportPerformance::default(),
                     (width, height),
                     frames,
                     rate,
@@ -5094,6 +5124,7 @@ mod desktop {
                     target,
                     profile,
                     quality,
+                    or_core::ExportPerformance::default(),
                     (width, height),
                     frames,
                     rate,

@@ -18,6 +18,7 @@ import '../library/sound_library.dart';
 import '../library/text_presets.dart';
 import '../design/or_spacing.dart';
 import '../production/editor_settings.dart';
+import '../updates/performance_options.dart';
 import '../updates/system_check.dart';
 import '../project/export_capability.dart';
 import '../project/export_profile.dart';
@@ -3439,6 +3440,16 @@ class _AppShellState extends State<AppShell> {
         },
       );
 
+  /// The measured plan, or null when this build cannot answer. The dialog then
+  /// keeps its format and quality rows and leaves the profile alone.
+  Future<PerformanceReportView?> _performanceReport() async {
+    try {
+      return await widget.gateway.performanceReport();
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<ExportOptions?> _chooseExportOptions() async {
     // The preference is read at open time: the dialog is an occasional surface
     // and a second copy of the setting in the shell would be one more thing to
@@ -3448,6 +3459,10 @@ class _AppShellState extends State<AppShell> {
     // operating system: a package without an H.264 encoder must offer WebM as
     // the default instead of starting an export that cannot run.
     final capability = await _exportCapability.load();
+    // The plan names the encoder this machine will actually open, so the dialog
+    // shows the outcome of the profile instead of asking the person to trust a
+    // label. A failed measurement hides the section rather than blocking export.
+    final performance = await _performanceReport();
     if (!mounted) return null;
     final simple = settings.simpleMode;
     final profiles = ExportProfile.available
@@ -3470,6 +3485,7 @@ class _AppShellState extends State<AppShell> {
         var quality = defaultChoice.quality;
         int? shortSide = defaultChoice.shortSide;
         var advanced = !simple;
+        var performanceProfile = settings.performanceProfile;
         _ExportIntent? intent = simple
             ? _intentFor(selected, quality, shortSide, platformDefault)
             : null;
@@ -3483,6 +3499,13 @@ class _AppShellState extends State<AppShell> {
                 quality = options.quality;
                 shortSide = options.shortSide;
               });
+            }
+
+            EncodingPlanView? planFor(String wire) {
+              for (final plan in performance?.plans ?? const <EncodingPlanView>[]) {
+                if (plan.profile == wire) return plan;
+              }
+              return null;
             }
 
             Widget advancedRows() => Column(
@@ -3538,6 +3561,49 @@ class _AppShellState extends State<AppShell> {
                     intent = null;
                   }),
                 ),
+                if (performance != null) ...[
+                  const ExportDialogSection('Performance'),
+                  for (final option in performanceProfileOptions)
+                    ExportChoiceTile(
+                      key: ValueKey('export-performance-${option.wire}'),
+                      title: option.title,
+                      subtitle: option.description,
+                      selected: performanceProfile == option.wire,
+                      onTap: () {
+                        setDialogState(() => performanceProfile = option.wire);
+                        unawaited(
+                          _editorSettingsStore.save(
+                            settings.copyWith(
+                              performanceProfile: option.wire,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  if (settings.preferredH264Encoder != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: OrSpacing.x1),
+                      child: Text(
+                        'Encoder override: ${settings.preferredH264Encoder}. '
+                        'Change it in Settings → Performance.',
+                        key: const ValueKey('export-performance-override'),
+                        style: const TextStyle(
+                          color: OrColors.textMuted,
+                          fontSize: OrType.metadataSize,
+                        ),
+                      ),
+                    )
+                  else if (planFor(performanceProfile) != null)
+                    Text(
+                      'This export encodes with '
+                      '${planFor(performanceProfile)!.summary}.',
+                      key: const ValueKey('export-performance-summary'),
+                      style: const TextStyle(
+                        color: OrColors.textSecondary,
+                        fontSize: OrType.metadataSize,
+                      ),
+                    ),
+                ],
                 if (capability.caveat.isNotEmpty) ...[
                   const SizedBox(height: OrSpacing.x2),
                   Text(
@@ -3630,6 +3696,8 @@ class _AppShellState extends State<AppShell> {
                     profile: selected,
                     quality: quality,
                     shortSide: shortSide,
+                    performanceProfile: performanceProfile,
+                    preferredH264Encoder: settings.preferredH264Encoder,
                   )),
                   child: const Text('Continue'),
                 ),

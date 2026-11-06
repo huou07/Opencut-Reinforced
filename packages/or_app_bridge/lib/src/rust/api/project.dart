@@ -480,6 +480,8 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String destination,
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   });
 
   Future<ProjectTranscriptionJobView> startTranscription({

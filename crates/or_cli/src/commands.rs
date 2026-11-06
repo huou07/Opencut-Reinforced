@@ -4468,6 +4468,7 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             profile,
             quality,
             short_side,
+            performance: or_core::ExportPerformance::default(),
         },
         json,
     )?;

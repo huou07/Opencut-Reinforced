@@ -13,4 +13,17 @@ class RustCoreGateway implements CoreGateway {
 
   @override
   Future<List<rust.Capability>> capabilities() => rust.capabilities();
+
+  @override
+  Future<rust.PerformanceReportView> performanceReport() =>
+      rust.performanceReport();
+
+  @override
+  Future<rust.EncodingPlanView> encodingPlan({
+    required String profile,
+    String? preferredH264Encoder,
+  }) => rust.encodingPlan(
+    profile: profile,
+    preferredH264Encoder: preferredH264Encoder,
+  );
 }

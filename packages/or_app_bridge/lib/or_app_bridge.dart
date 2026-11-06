@@ -1,5 +1,13 @@
 export 'src/rust/api.dart'
     show AppInfo, Capability, HealthStatus, appInfo, capabilities, health;
+export 'src/rust/api/performance.dart'
+    show
+        DecoderProbeView,
+        EncoderProbeView,
+        EncodingPlanView,
+        PerformanceReportView,
+        encodingPlan,
+        performanceReport;
 export 'src/rust/api/motion.dart'
     show
         MotionMaterializationView,

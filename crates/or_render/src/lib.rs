@@ -259,6 +259,7 @@ pub struct RenderAdapterInfo {
     driver: String,
     driver_info: String,
     backend: wgpu::Backend,
+    device_type: wgpu::DeviceType,
 }
 
 impl RenderAdapterInfo {
@@ -276,6 +277,32 @@ impl RenderAdapterInfo {
 
     pub const fn backend(&self) -> wgpu::Backend {
         self.backend
+    }
+
+    pub const fn device_type(&self) -> wgpu::DeviceType {
+        self.device_type
+    }
+
+    /// Wire name for reports and logs, e.g. `metal`.
+    pub const fn backend_name(&self) -> &'static str {
+        match self.backend {
+            wgpu::Backend::Metal => "metal",
+            wgpu::Backend::Vulkan => "vulkan",
+            wgpu::Backend::Dx12 => "dx12",
+            wgpu::Backend::Gl => "gles",
+            _ => "other",
+        }
+    }
+
+    /// Wire name for reports, e.g. `integrated` or `discrete`.
+    pub const fn device_type_name(&self) -> &'static str {
+        match self.device_type {
+            wgpu::DeviceType::IntegratedGpu => "integrated",
+            wgpu::DeviceType::DiscreteGpu => "discrete",
+            wgpu::DeviceType::VirtualGpu => "virtual",
+            wgpu::DeviceType::Cpu => "cpu",
+            _ => "other",
+        }
     }
 }
 
@@ -461,6 +488,23 @@ impl RenderDevice {
     /// Returns the backends compiled into this crate for the current target.
     pub const fn compiled_backends() -> wgpu::Backends {
         wgpu::Instance::enabled_backend_features()
+    }
+
+    /// Names of the native backends this build can open, in report order.
+    ///
+    /// The Settings report and the logs share these names instead of letting
+    /// each caller format `wgpu::Backend` its own way.
+    pub fn compiled_backend_names() -> Vec<&'static str> {
+        let backends = Self::compiled_backends();
+        [
+            (wgpu::Backends::METAL, "metal"),
+            (wgpu::Backends::VULKAN, "vulkan"),
+            (wgpu::Backends::DX12, "dx12"),
+            (wgpu::Backends::GL, "gles"),
+        ]
+        .into_iter()
+        .filter_map(|(flag, name)| backends.contains(flag).then_some(name))
+        .collect()
     }
 
     /// Creates a device using the compiled native backends.
@@ -812,6 +856,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 driver: adapter_info.driver,
                 driver_info: adapter_info.driver_info,
                 backend: adapter_info.backend,
+                device_type: adapter_info.device_type,
             },
             limits,
         })
@@ -3038,7 +3083,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn a_scissored_layer_paints_only_inside_its_ink_rectangle_when_adapter_is_available() {
         let renderer = match block_on(RenderDevice::new()) {
             Ok(renderer) => renderer,
@@ -3071,6 +3115,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn nv12_layers_composite_through_the_shared_pipeline_when_adapter_is_available() {
         let renderer = match block_on(RenderDevice::new()) {
             Ok(renderer) => renderer,

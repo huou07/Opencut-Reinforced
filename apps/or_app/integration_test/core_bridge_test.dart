@@ -2475,19 +2475,22 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   ) => _gateway.autosaveCheckpoint(session);
 
   @override
-  @override
   Future<ProjectExportJob> startExport(
     ProjectSessionHandle session,
     ProjectReadModel current,
     String destination, {
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   }) => _gateway.startExport(
     session,
     current,
     destination,
     quality: quality,
     shortSide: shortSide,
+    performanceProfile: performanceProfile,
+    preferredH264Encoder: preferredH264Encoder,
   );
 
   @override

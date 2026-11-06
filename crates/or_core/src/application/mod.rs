@@ -122,6 +122,7 @@ mod export_profile_tests {
             profile: ExportProfile::WebmVp9Opus,
             quality: ExportQuality::default(),
             short_side: None,
+            performance: crate::ExportPerformance::default(),
         })
         .unwrap();
         assert_eq!(value["request"]["quality"], "quality");

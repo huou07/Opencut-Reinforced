@@ -15,12 +15,13 @@ import '../assistant/assistant_settings_dialog.dart';
 import '../assistant/assistant_settings.dart';
 import '../project/project_gateway.dart';
 import '../updates/export_capability_panel.dart';
+import '../updates/performance_panel.dart';
 import '../updates/system_check_panel.dart';
 import '../updates/resource_center_panel.dart';
 import '../updates/runtime_setup_panel.dart';
 import '../widgets/or_widgets.dart';
 
-enum SettingsSection { resources, assistant, appearance, general, advanced }
+enum SettingsSection { resources, performance, assistant, appearance, general, advanced }
 
 typedef _Diagnostics = ({
   AppInfo appInfo,
@@ -203,6 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _sectionContent() => switch (_selected) {
     SettingsSection.resources => _resourcesSection(),
+    SettingsSection.performance => _performanceSection(),
     SettingsSection.assistant => _assistantSection(),
     SettingsSection.appearance => _appearanceSection(),
     SettingsSection.general => Column(
@@ -215,6 +217,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
     SettingsSection.advanced => _advancedSection(),
   };
+
+  Widget _performanceSection() => PerformancePanel(
+    gateway: widget.gateway,
+    settings: _editorSettings,
+    onSettingsChanged: _saveEditor,
+  );
 
   Widget _resourcesSection() {
     return FutureBuilder<_Diagnostics>(
@@ -658,6 +666,7 @@ class _SectionButton extends StatelessWidget {
 
   String get _label => switch (section) {
     SettingsSection.resources => 'Resources & updates',
+    SettingsSection.performance => 'Performance',
     SettingsSection.assistant => 'Assistant',
     SettingsSection.appearance => 'Appearance',
     SettingsSection.general => 'General',

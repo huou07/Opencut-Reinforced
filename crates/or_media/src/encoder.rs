@@ -289,41 +289,32 @@ fn encoder_answers(encoder: codec::Codec) -> bool {
     context.open().is_ok()
 }
 
-/// The first H.264 encoder this build carries and this machine can run, or a
-/// failure naming the gap.
-fn pick_h264_encoder() -> Result<H264Pick, ExportEncodeError> {
-    for name in H264_ENCODER_CANDIDATES {
-        let Some(encoder) = codec::encoder::find_by_name(name) else {
-            continue;
-        };
-        if *name == "h264_vaapi" {
-            if vaapi_answers() {
-                return Ok(H264Pick {
-                    encoder,
-                    vaapi: true,
-                });
-            }
-            continue;
+/// Opens the encoder a plan selected, or fails with the gap the plan found.
+fn pick_h264_encoder(
+    plan: &or_core::ExportEncodingPlan,
+) -> Result<H264Pick, ExportEncodeError> {
+    let Some(name) = plan.h264_encoder.as_deref() else {
+        let mut message = format!(
+            "this machine has no usable H.264 encoder (looked for {}), so MP4 \
+             cannot be encoded here. Export WebM instead, or install a package \
+             that links a hardware H.264 encoder for this platform.",
+            H264_ENCODER_CANDIDATES.join(", ")
+        );
+        if !plan.notes.is_empty() {
+            message.push_str(" Probes: ");
+            message.push_str(&plan.notes.join("; "));
         }
-        if !hardware_device_available(name) {
-            continue;
-        }
-        // libx264 is the guaranteed tail: it needs no device and the real open
-        // reports its own failure if the build is misconfigured.
-        if *name != "libx264" && !encoder_answers(encoder) {
-            continue;
-        }
-        return Ok(H264Pick {
-            encoder,
-            vaapi: false,
-        });
-    }
-    Err(ExportEncodeError(format!(
-        "this FFmpeg build carries no H.264 encoder (looked for {}), so MP4 \
-         cannot be encoded here. Export WebM instead, or install a package that \
-         links a hardware H.264 encoder for this platform.",
-        H264_ENCODER_CANDIDATES.join(", ")
-    )))
+        return Err(ExportEncodeError(message));
+    };
+    let encoder = codec::encoder::find_by_name(name).ok_or_else(|| {
+        ExportEncodeError(format!(
+            "internal: the plan chose {name}, which this build does not carry"
+        ))
+    })?;
+    Ok(H264Pick {
+        encoder,
+        vaapi: name == "h264_vaapi",
+    })
 }
 
 /// Turns an H.264 open failure into a sentence the choosing writer can act on.
@@ -432,6 +423,74 @@ pub fn describe_export_capability() -> ExportCapability {
     }
 }
 
+/// The H.264 encoders this build carries, with the result of the exact open
+/// probe an MP4 export performs.
+///
+/// Presence alone is not capability: a Linux package can carry NVENC on a
+/// machine with no NVIDIA driver, and Media Foundation can exist without a
+/// hardware MFT. Reporting `present` and `opens` separately lets the settings
+/// surface say "carried, but this machine cannot open it" instead of offering
+/// an encoder that would fail on its first frame.
+pub fn probe_h264_encoders() -> Vec<or_core::EncoderCandidate> {
+    H264_ENCODER_CANDIDATES
+        .iter()
+        .map(|name| {
+            let encoder = codec::encoder::find_by_name(name);
+            let present = encoder.is_some();
+            let hardware = matches!(
+                *name,
+                "h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi" | "h264_open"
+            );
+            let (opens, note) = if let Some(encoder) = encoder {
+                if *name == "h264_vaapi" {
+                    let opens = vaapi_answers();
+                    (
+                        opens,
+                        (!opens).then(|| {
+                            "the VAAPI device or its frame pool did not open".to_owned()
+                        }),
+                    )
+                } else if !hardware_device_available(name) {
+                    (
+                        false,
+                        Some("the device this encoder needs did not open".to_owned()),
+                    )
+                } else {
+                    let opens = encoder_answers(encoder);
+                    (
+                        opens,
+                        (!opens).then(|| "the encoder did not open on this machine".to_owned()),
+                    )
+                }
+            } else {
+                (false, None)
+            };
+            or_core::EncoderCandidate {
+                name: (*name).to_owned(),
+                present,
+                opens,
+                hardware,
+                note,
+            }
+        })
+        .collect()
+}
+
+/// What an export writer needs, in one value.
+pub struct ExportWriterOptions<'a> {
+    pub profile: FfmpegExportProfile,
+    pub quality: ExportQuality,
+    /// The machine's chosen performance profile; decides which encoder opens
+    /// when no explicit one is requested.
+    pub performance: or_core::PerformanceProfile,
+    /// An encoder the person picked explicitly. It wins whenever it opens.
+    pub preferred_h264_encoder: Option<&'a str>,
+    pub width: u32,
+    pub height: u32,
+    pub frame_rate_numerator: u32,
+    pub frame_rate_denominator: u32,
+}
+
 /// Compatibility name for the previous software-only profile type.
 pub type SoftwareExportProfile = FfmpegExportProfile;
 
@@ -513,7 +572,6 @@ impl FfmpegExportWriter {
     /// `Quality` spends encoding time and bytes on a cleaner picture; `Speed`
     /// spends as little as possible. A lossless profile ignores the preference
     /// because it has no rate control to trade.
-    #[allow(clippy::too_many_arguments)]
     pub fn create_with_profile_and_quality(
         destination: impl AsRef<Path>,
         profile: FfmpegExportProfile,
@@ -523,6 +581,41 @@ impl FfmpegExportWriter {
         frame_rate_numerator: u32,
         frame_rate_denominator: u32,
     ) -> Result<Self, ExportEncodeError> {
+        Self::create_with_options(
+            destination,
+            ExportWriterOptions {
+                profile,
+                quality,
+                performance: or_core::PerformanceProfile::Recommended,
+                preferred_h264_encoder: None,
+                width,
+                height,
+                frame_rate_numerator,
+                frame_rate_denominator,
+            },
+        )
+    }
+
+    /// Opens a destination with the machine's performance profile and an
+    /// optional encoder the person chose.
+    ///
+    /// The encoder decision happens here, once per job. Nothing in the frame
+    /// loop asks the hardware again, so a slow probe never turns into a
+    /// per-frame tax.
+    pub fn create_with_options(
+        destination: impl AsRef<Path>,
+        options: ExportWriterOptions<'_>,
+    ) -> Result<Self, ExportEncodeError> {
+        let ExportWriterOptions {
+            profile,
+            quality,
+            performance,
+            preferred_h264_encoder,
+            width,
+            height,
+            frame_rate_numerator,
+            frame_rate_denominator,
+        } = options;
         ffmpeg::init().map_err(ExportEncodeError::from)?;
         if width == 0 || height == 0 || frame_rate_numerator == 0 || frame_rate_denominator == 0 {
             return Err(ExportEncodeError(
@@ -549,10 +642,19 @@ impl FfmpegExportWriter {
         // The MP4 arm needs two things from one pick: the encoder to open and
         // whether it wants a device surface pool. Resolving it here keeps the
         // probe out of the tuple below.
-        let h264_pick = if profile == FfmpegExportProfile::Mp4H264Aac {
-            Some(pick_h264_encoder()?)
+        let encoding_plan = if profile == FfmpegExportProfile::Mp4H264Aac {
+            let plan = or_core::plan_h264_encoding(
+                performance,
+                preferred_h264_encoder,
+                &probe_h264_encoders(),
+            );
+            Some(plan)
         } else {
             None
+        };
+        let h264_pick = match &encoding_plan {
+            Some(plan) => Some(pick_h264_encoder(plan)?),
+            None => None,
         };
         let (container, staging_name, video_codec, audio_codec, pixel_format, video_scaler) =
             match profile {

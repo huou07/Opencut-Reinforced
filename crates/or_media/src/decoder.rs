@@ -2409,3 +2409,20 @@ mod tests {
         ));
     }
 }
+
+/// Software decoders the linked FFmpeg carries.
+pub const DECODER_CANDIDATES: &[&str] = &[
+    "h264", "hevc", "vp9", "av1", "aac", "opus", "vorbis", "mp3", "flac", "pcm_s16le",
+];
+
+/// Reports which decoders this build carries. OR decodes in software, so the
+/// answer says whether a format can be read here at all.
+pub fn probe_decoders() -> Vec<or_core::DecoderCandidate> {
+    DECODER_CANDIDATES
+        .iter()
+        .map(|name| or_core::DecoderCandidate {
+            name: (*name).to_owned(),
+            present: codec::decoder::find_by_name(name).is_some(),
+        })
+        .collect()
+}

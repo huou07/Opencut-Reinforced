@@ -1506,6 +1506,8 @@ class RustProjectGateway implements ProjectGateway {
     String destination, {
     String? quality,
     int? shortSide,
+    String? performanceProfile,
+    String? preferredH264Encoder,
   }) async => _exportJob(
     await _host(session).startExport(
       projectId: current.projectId,
@@ -1514,6 +1516,8 @@ class RustProjectGateway implements ProjectGateway {
       destination: destination,
       quality: quality,
       shortSide: shortSide,
+      performanceProfile: performanceProfile,
+      preferredH264Encoder: preferredH264Encoder,
     ),
   );
 

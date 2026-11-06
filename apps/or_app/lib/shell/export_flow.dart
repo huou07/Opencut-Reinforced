@@ -12,6 +12,8 @@ typedef ExportOptions = ({
   ExportProfile profile,
   ExportQuality quality,
   int? shortSide,
+  String? performanceProfile,
+  String? preferredH264Encoder,
 });
 
 /// One export: options, the job, its polling timer, the chosen destination and
@@ -89,6 +91,8 @@ class ExportFlow extends ChangeNotifier {
             ? choice.quality.wireName
             : null,
         shortSide: choice.shortSide,
+        performanceProfile: choice.performanceProfile,
+        preferredH264Encoder: choice.preferredH264Encoder,
       );
       if (!_isCurrent(session)) {
         await _discard(destination);

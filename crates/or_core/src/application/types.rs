@@ -2333,6 +2333,10 @@ pub enum ExportRequest {
         /// natural source size. Values are rounded down to an even dimension.
         #[serde(default)]
         short_side: Option<u32>,
+        /// Which encoder path the job should take, chosen from the machine's
+        /// measured capability. Resolved once when the job starts.
+        #[serde(default)]
+        performance: ExportPerformance,
     },
     Status {
         project_id: ProjectId,
@@ -2344,6 +2348,18 @@ pub enum ExportRequest {
         project_instance_id: ProjectInstanceId,
         job_id: crate::JobId,
     },
+}
+
+/// How an export job should use the machine, as the settings and the export
+/// dialog settle it. The profile steers encoder choice; an explicit encoder
+/// name overrides it when that encoder opened on this machine.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExportPerformance {
+    #[serde(default)]
+    pub profile: crate::PerformanceProfile,
+    #[serde(default)]
+    pub preferred_h264_encoder: Option<String>,
 }
 
 /// Container and codec combination used for a rendered video export.
