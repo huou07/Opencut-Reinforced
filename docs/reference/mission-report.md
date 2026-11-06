@@ -93,6 +93,8 @@ frame waits 13–14 ms in the synchronous NV12 readback while the CPU submit is
   session.
 - **PASS** — applying Slide up writes ordinary keyframes and the chip reads back
   (`0.00s · 0.12 · Ease out`) on all three hosts in the same journey.
+- **PASS** — one undo removes a motion preset's keyframes, checked in the
+  `keyframes` journey after the Slide up chip appears.
 - **PASS** — a composited timeline (video + title) exports an MP4 through the
   real dialog on all three hosts (`scripts/ui_scenarios/export-text.json`, 30
   steps, receipt screenshot): macOS, Debian under Weston on the Intel UHD 770 and
