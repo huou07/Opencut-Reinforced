@@ -208,7 +208,16 @@ Debian only a few percent moved. That means the Debian compositor spends most of
 its frame somewhere other than text fragments — the same host runs the no-text
 direct path at ~700 fps and any composited frame at ~50 fps, so the cost is in
 the composited path itself (plane upload, pass, readback), not in the text layer.
-The cause is recorded as unresolved rather than guessed at.
+The cause is recorded as unresolved rather than guessed at, but two probes
+narrow it. Render-only with one text layer at a series of canvas sizes on Debian
+runs 355 fps at 160x90, 206 at 320x180, 158 at 640x360, 68.8 at 1280x720 and 53.6
+at 1920x1080, while `OR_BENCH_MODE=decode` stays flat at ~270 fps — so the cost
+tracks canvas memory traffic, not frame count. And lossless `MKV`, which reads
+back 8.3 MiB of RGBA instead of 3.1 MiB of NV12, measures 55.5 fps against MP4's
+53.4 fps at 1080p, so the readback is not the constraint. That leaves the plane
+upload into the compositor (about 225 MB/s effective on this host) as the likely
+term, which is exactly what importing hardware decoder frames instead of
+software planes would remove.
 
 ## Stage concurrency (2026-11-06)
 
