@@ -3319,3 +3319,94 @@ pub use motion_image::{
     decode_motion_image, load_motion_scene_images,
 };
 pub use text::{TextInkBounds, TextRasterError, TextRasterizer};
+
+#[cfg(test)]
+mod readback_probe {
+    //! Temporary measurement used during the 2026-11-07 export audit.
+    use super::*;
+
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        use std::task::{Context, Poll};
+        let mut future = std::pin::pin!(future);
+        let mut context = Context::from_waker(std::task::Waker::noop());
+        loop {
+            match future.as_mut().poll(&mut context) {
+                Poll::Ready(value) => return value,
+                Poll::Pending => std::thread::park_timeout(std::time::Duration::from_millis(1)),
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn readback_cost_by_size() {
+        let renderer = block_on(RenderDevice::new()).expect("render device");
+        for (width, height) in [(64_u32, 64_u32), (640, 360), (1920, 1080)] {
+            let texture = renderer
+                .device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some("or_render.readback_probe"),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::COPY_SRC
+                        | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                });
+            let bytes_per_row = width * 4;
+            let buffer = renderer.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("or_render.readback_probe"),
+                size: u64::from(bytes_per_row) * u64::from(height),
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            let runs = 10_u128;
+            let mut total = 0_u128;
+            for _ in 0..runs {
+                let started = std::time::Instant::now();
+                let mut encoder = renderer
+                    .device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("or_render.readback_probe"),
+                    });
+                encoder.copy_texture_to_buffer(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::TexelCopyBufferInfo {
+                        buffer: &buffer,
+                        layout: wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(bytes_per_row),
+                            rows_per_image: Some(height),
+                        },
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                renderer.queue.submit(Some(encoder.finish()));
+                renderer
+                    .device
+                    .poll(wgpu::PollType::Wait)
+                    .expect("poll");
+                total += started.elapsed().as_micros();
+            }
+            println!(
+                "READBACK_PROBE {width}x{height} avg_us={}",
+                total / runs
+            );
+        }
+    }
+}

@@ -4238,6 +4238,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an animated clip shows a diamond on the timeline', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    ProjectTimelineClip clip(String id, {bool animated = false}) =>
+        ProjectTimelineClip(
+          clipId: id,
+          mediaId: '$id-media',
+          timelineStart: ProjectRationalTime(BigInt.zero, 1),
+          sourceStart: ProjectRationalTime(BigInt.zero, 1),
+          timelineDuration: ProjectRationalTime(BigInt.from(4), 1),
+          animated: animated,
+        );
+    final gateway = _FakeProjectGateway()
+      ..initialTimelineTracks = const [
+        ProjectTimelineTrack(
+          trackId: 'animated-track',
+          kind: ProjectTimelineTrackKind.video,
+          clipCount: 2,
+        ),
+      ]
+      ..initialTimelineClips = {
+        'animated-track': [
+          clip('animated-clip', animated: true),
+          clip('still-clip'),
+        ],
+      };
+    final picker = _FakeProjectPicker()..savePath = '/tmp/animated.orproj';
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Animated badge');
+
+    expect(
+      find.byKey(const ValueKey('timeline-clip-animated-animated-clip')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('timeline-clip-animated-still-clip')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selected audio clip volume is adjustable from the timeline', (
     tester,
   ) async {

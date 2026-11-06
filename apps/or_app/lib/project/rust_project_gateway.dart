@@ -404,6 +404,7 @@ class RustProjectGateway implements ProjectGateway {
                     ? null
                     : _projectTextFormatting(clip.formatting!),
                 reversed: clip.reversed,
+                animated: clip.animated,
                 frozen: clip.frozen,
                 timelineStart: _projectRationalTime(clip.timelineStart),
                 timelineDuration: _projectRationalTime(clip.timelineDuration),

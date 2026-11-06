@@ -7766,8 +7766,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectTimelineClipView dco_decode_project_timeline_clip_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return ProjectTimelineClipView(
       clipId: dco_decode_String(arr[0]),
       contentKind: dco_decode_timeline_clip_content_kind_view(arr[1]),
@@ -7782,6 +7782,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timelineStart: dco_decode_rational_time_view(arr[8]),
       timelineDuration: dco_decode_rational_time_view(arr[9]),
       sourceStart: dco_decode_opt_box_autoadd_rational_time_view(arr[10]),
+      animated: dco_decode_bool(arr[11]),
     );
   }
 
@@ -9869,6 +9870,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sourceStart = sse_decode_opt_box_autoadd_rational_time_view(
       deserializer,
     );
+    var var_animated = sse_decode_bool(deserializer);
     return ProjectTimelineClipView(
       clipId: var_clipId,
       contentKind: var_contentKind,
@@ -9881,6 +9883,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       timelineStart: var_timelineStart,
       timelineDuration: var_timelineDuration,
       sourceStart: var_sourceStart,
+      animated: var_animated,
     );
   }
 
@@ -11786,6 +11789,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_rational_time_view(self.timelineStart, serializer);
     sse_encode_rational_time_view(self.timelineDuration, serializer);
     sse_encode_opt_box_autoadd_rational_time_view(self.sourceStart, serializer);
+    sse_encode_bool(self.animated, serializer);
   }
 
   @protected

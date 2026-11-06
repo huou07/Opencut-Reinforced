@@ -476,6 +476,8 @@ pub struct ProjectTimelineClipView {
     pub timeline_start: RationalTimeView,
     pub timeline_duration: RationalTimeView,
     pub source_start: Option<RationalTimeView>,
+    /// True when the clip carries keyframes on any transform or opacity channel.
+    pub animated: bool,
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 {
  "name": "keyframes",
  "harness": "or_ui",
- "description": "Adds an opacity keyframe at the playhead, edits its value in the dialog, applies the Slide up motion preset on the same clip, and confirms both the chip and the preset keyframe are read back. A passing run means the Animation section is reachable in the real inspector, manual and preset keyframes are written through the ordinary clip command, and the panel re-reads them.",
+ "description": "Adds an opacity keyframe at the playhead, edits its value in the dialog, applies the Slide up motion preset on the same clip, and confirms both the chip and the preset keyframe are read back. A passing run means the Animation section is reachable in the real inspector, manual and preset keyframes are written through the ordinary clip command, and the panel re-reads them, and the timeline clip shows the animated diamond after the edit.",
  "viewport": {
   "width": 1440,
   "height": 900
@@ -168,6 +168,12 @@
   {
    "op": "expect",
    "key": "animation-keyframe-opacity-0"
+  },
+  {
+   "op": "expect",
+   "selector": {
+    "key_regex": "^timeline-clip-animated-.*$"
+   }
   },
   {
    "op": "tree",

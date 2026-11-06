@@ -379,6 +379,14 @@ NV12 conversion passes and two texture-to-buffer copies, then a blocking
 also why the same workload beats 300 fps on the M5 (≈3 ms for the same path).
 Asynchronous or GPU-resident readback is the next step, and it is not part of
 this revision.
+
+A readback probe (`cargo test -p or_render --release readback_cost_by_size
+-- --ignored --nocapture`) separates the fixed part from the size part on the
+same host: a plain RGBA texture copy to host memory costs 0.56 ms at 64x64,
+1.13 ms at 640x360 and **6.15 ms at 1920x1080** (~1.3 GB/s). The composited
+NV12 readback costs about twice that because it adds two full-frame conversion
+passes and one copy per plane, which is the 13–14 ms seen above: the ceiling is
+the host copy plus conversion, not a fixed driver stall.
 ### Windows rows at `37f39a67`
 
 Measured on the Windows 11 host (Intel Graphics through Vulkan, Media Foundation

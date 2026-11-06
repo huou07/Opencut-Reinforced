@@ -28,6 +28,9 @@ host, and what remains unverified. Revision `bacf5cff`; branch
 - **Motion presets.** Fade in, Slide up, Zoom in and Pop write ordinary
   keyframes through the same animation command, so a preset is a starting point
   whose chips stay editable and the project file never stores a preset name.
+- **Timeline discoverability.** A clip with keyframes shows a diamond badge in
+  its timeline block and says "animated" in its accessibility label, so the
+  feature is visible without opening the inspector.
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.

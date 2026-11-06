@@ -1904,6 +1904,10 @@ fn timeline_clip_view(clip: &TimelineClipState) -> ProjectTimelineClipView {
         media_id,
         text,
         formatting,
+        animated: matches!(
+            &clip.settings,
+            ClipSettings::Visual(visual) if !visual.animation.is_empty()
+        ),
         timeline_start: rational_time_view(clip.timeline_start),
         timeline_duration: rational_time_view(clip.timeline_duration),
         source_start,

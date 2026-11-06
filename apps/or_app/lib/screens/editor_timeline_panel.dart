@@ -3546,7 +3546,8 @@ class _TimelineTrackLane extends StatelessWidget {
           label:
               '$title, starts ${clip.timelineStart.canonical}, duration $durationLabel, '
               'spans ${clip.timelineStart.canonical} to ${clip.timelineEnd.canonical}'
-              '${clip.sourceStart == null ? '' : ', source ${clip.sourceStart!.canonical}'}',
+              '${clip.sourceStart == null ? '' : ', source ${clip.sourceStart!.canonical}'}'
+              '${clip.animated ? ', animated' : ''}',
           hint: 'Drag to move. Right-click or use Clip actions for more.',
           child: Tooltip(
             key: ValueKey('timeline-clip-tooltip-${clip.clipId}'),
@@ -3569,6 +3570,32 @@ class _TimelineTrackLane extends StatelessWidget {
                       child: body,
                     ),
                   ),
+                  if (clip.animated)
+                    Positioned(
+                      left: 3,
+                      top: 3,
+                      child: IgnorePointer(
+                        child: Container(
+                          key: ValueKey('timeline-clip-animated-${clip.clipId}'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 3,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: OrColors.background.withValues(alpha: 0.74),
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Text(
+                            '◆',
+                            style: TextStyle(
+                              color: OrColors.textMuted,
+                              fontSize: OrType.tinySize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (speedLabel != null)
                     Positioned(
                       right: 3,

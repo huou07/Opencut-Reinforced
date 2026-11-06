@@ -33,7 +33,11 @@ Four motion presets write ordinary keyframes through the same command: Fade in
 (opacity), Slide up (position), Zoom in (scale) and Pop (a short scale bump).
 A preset replaces the keyframes on the channels it animates and leaves the rest
 alone, so it is a starting point that the chips can then be edited or cleared;
-the project file stores keyframes, never a preset name.
+the project file stores keyframes, never a preset name. Copy and Paste in the
+same header move the channels that have keyframes onto another clip without
+touching that clip's static fields. A clip with any keyframe shows a diamond in
+the top-left corner of its timeline block, so an animated clip is visible
+without selecting it, and its accessibility label says "animated".
 
 Copy animation and Paste animation carry a clip's keyframes to another clip.
 Paste replaces only the channels the copied animation has, so a slide can be

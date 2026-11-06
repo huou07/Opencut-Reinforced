@@ -621,6 +621,7 @@ class ProjectTimelineClip {
     required this.timelineStart,
     required this.timelineDuration,
     this.sourceStart,
+    this.animated = false,
   });
 
   final String clipId;
@@ -638,6 +639,9 @@ class ProjectTimelineClip {
   final ProjectRationalTime timelineStart;
   final ProjectRationalTime timelineDuration;
   final ProjectRationalTime? sourceStart;
+
+  /// Whether the clip carries keyframes on a transform or opacity channel.
+  final bool animated;
 
   ProjectRationalTime get timelineEnd => timelineStart.add(timelineDuration);
 }

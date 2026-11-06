@@ -871,6 +871,9 @@ class ProjectTimelineClipView {
   final RationalTimeView timelineDuration;
   final RationalTimeView? sourceStart;
 
+  /// True when the clip carries keyframes on any transform or opacity channel.
+  final bool animated;
+
   const ProjectTimelineClipView({
     required this.clipId,
     required this.contentKind,
@@ -883,6 +886,7 @@ class ProjectTimelineClipView {
     required this.timelineStart,
     required this.timelineDuration,
     this.sourceStart,
+    required this.animated,
   });
 
   @override
@@ -897,7 +901,8 @@ class ProjectTimelineClipView {
       formatting.hashCode ^
       timelineStart.hashCode ^
       timelineDuration.hashCode ^
-      sourceStart.hashCode;
+      sourceStart.hashCode ^
+      animated.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -914,7 +919,8 @@ class ProjectTimelineClipView {
           formatting == other.formatting &&
           timelineStart == other.timelineStart &&
           timelineDuration == other.timelineDuration &&
-          sourceStart == other.sourceStart;
+          sourceStart == other.sourceStart &&
+          animated == other.animated;
 }
 
 class ProjectTimelineMarkerPageView {

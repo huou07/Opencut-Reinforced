@@ -29,7 +29,7 @@
 
 use crate::api::project::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -7587,6 +7587,7 @@ impl SseDecode for crate::api::views::ProjectTimelineClipView {
             <crate::api::views::RationalTimeView>::sse_decode(deserializer);
         let mut var_sourceStart =
             <Option<crate::api::views::RationalTimeView>>::sse_decode(deserializer);
+        let mut var_animated = <bool>::sse_decode(deserializer);
         return crate::api::views::ProjectTimelineClipView {
             clip_id: var_clipId,
             content_kind: var_contentKind,
@@ -7599,6 +7600,7 @@ impl SseDecode for crate::api::views::ProjectTimelineClipView {
             timeline_start: var_timelineStart,
             timeline_duration: var_timelineDuration,
             source_start: var_sourceStart,
+            animated: var_animated,
         };
     }
 }
@@ -10026,6 +10028,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectTimelineClipVie
             self.timeline_start.into_into_dart().into_dart(),
             self.timeline_duration.into_into_dart().into_dart(),
             self.source_start.into_into_dart().into_dart(),
+            self.animated.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -11842,6 +11845,7 @@ impl SseEncode for crate::api::views::ProjectTimelineClipView {
         <crate::api::views::RationalTimeView>::sse_encode(self.timeline_start, serializer);
         <crate::api::views::RationalTimeView>::sse_encode(self.timeline_duration, serializer);
         <Option<crate::api::views::RationalTimeView>>::sse_encode(self.source_start, serializer);
+        <bool>::sse_encode(self.animated, serializer);
     }
 }
 
@@ -12313,7 +12317,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
