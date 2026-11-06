@@ -291,6 +291,8 @@ pub struct RenderDevice {
     nv12_bind_group_layout: wgpu::BindGroupLayout,
     nv12_luma_pipeline: wgpu::RenderPipeline,
     nv12_chroma_pipeline: wgpu::RenderPipeline,
+    nv12_layer_bind_group_layout: wgpu::BindGroupLayout,
+    nv12_layer_pipeline: wgpu::RenderPipeline,
     /// Reusable NV12 targets and readback buffer for the last picture size.
     ///
     /// An export renders hundreds of frames at one size. Creating two textures
@@ -299,6 +301,14 @@ pub struct RenderDevice {
     /// One entry keyed by size keeps a delivery export's steady state to a
     /// single submit and a single wait per frame.
     nv12_scratch: Mutex<Option<Nv12Scratch>>,
+    /// Compositor targets and source textures reused across frames.
+    ///
+    /// A frame used to allocate a fresh target, one texture per layer and a
+    /// uniform buffer per layer, then drop them. The pool keeps the steady state
+    /// of an export to uploads, one submit and one readback. Entries are
+    /// checked out of the pool, so concurrent preview and export renders never
+    /// share a texture.
+    compositor_pool: Mutex<CompositorPool>,
     adapter_info: RenderAdapterInfo,
     limits: wgpu::Limits,
 }
@@ -358,6 +368,92 @@ fn fs_chroma(input: VertexOutput) -> @location(0) vec4<f32> {
     let u = (128.0 + 224.0 * (rgb.b - luma) / 1.8556) / 255.0;
     let v = (128.0 + 224.0 * (rgb.r - luma) / 1.5748) / 255.0;
     return vec4<f32>(u, v, 0.0, 1.0);
+}
+"#;
+
+/// Converts an NV12 source layer to RGB while it is composited.
+///
+/// Decoding straight to NV12 and converting in the layer shader keeps the
+/// software decode out of RGBA: a covering 1080p clip uploads 3.1 MB of planes
+/// instead of 8.3 MB of pixels, and the encoder receives the composition in the
+/// same BT.709 limited-range form it already expects.
+/// Composites one NV12 layer the same way the RGBA layer shader composites
+/// pixels, so a decoded video plane stack can join the text composition without
+/// an RGBA decode on the CPU.
+///
+/// The decode side uses the BT.601 limited-range matrix. Frames carry no colour
+/// metadata (`FrameColorInfo::default()` is unknown), and the software decoder
+/// converts with libswscale's default matrix, which is BT.601. Matching it keeps
+/// an export's picture identical to the pre-NV12 path instead of shifting every
+/// saturated colour; the encode side converts back with BT.709 and tags it, as it
+/// already did. A source that spells out BT.709 in its container needs the
+/// metadata plumbed through before this inverse can follow it.
+const NV12_LAYER_SHADER: &str = r#"
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>,
+}
+
+struct LayerSettings {
+    translation_scale: vec4<f32>,
+    rotation_anchor_aspect: vec4<f32>,
+    crop: vec4<f32>,
+    opacity: vec4<f32>,
+}
+
+@group(0) @binding(0) var luma: texture_2d<f32>;
+@group(0) @binding(1) var chroma: texture_2d<f32>;
+@group(0) @binding(2) var source_sampler: sampler;
+@group(0) @binding(3) var<uniform> settings: LayerSettings;
+
+@vertex
+fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
+    let positions = array<vec2<f32>, 3>(
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(3.0, -1.0),
+        vec2<f32>(-1.0, 3.0),
+    );
+    let point = positions[index];
+    let anchor = vec2<f32>(
+        settings.rotation_anchor_aspect.y * 2.0 - 1.0,
+        1.0 - settings.rotation_anchor_aspect.z * 2.0,
+    );
+    let aspect = settings.rotation_anchor_aspect.w;
+    let aspect_scale = vec2<f32>(aspect, 1.0);
+    let delta = (point - anchor) * aspect_scale;
+    let scaled = delta * settings.translation_scale.zw;
+    let angle = settings.rotation_anchor_aspect.x;
+    let cosine = cos(angle);
+    let sine = sin(angle);
+    let rotated = vec2<f32>(
+        cosine * scaled.x + sine * scaled.y,
+        -sine * scaled.x + cosine * scaled.y,
+    );
+    var output: VertexOutput;
+    output.position = vec4<f32>(
+        anchor + rotated / aspect_scale + settings.translation_scale.xy,
+        0.0,
+        1.0,
+    );
+    output.uv = vec2<f32>((point.x + 1.0) * 0.5, (1.0 - point.y) * 0.5);
+    return output;
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    let crop_size = vec2<f32>(1.0) - settings.crop.xy - settings.crop.zw;
+    let source_uv = settings.crop.xy + input.uv * crop_size;
+    let luma_sample = textureSample(luma, source_sampler, source_uv).r;
+    let chroma_sample = textureSample(chroma, source_sampler, source_uv).rg;
+    let y = (luma_sample * 255.0 - 16.0) / 219.0;
+    let u = (chroma_sample.x * 255.0 - 128.0) / 224.0;
+    let v = (chroma_sample.y * 255.0 - 128.0) / 224.0;
+    let rgb = vec3<f32>(
+        y + 1.4020 * v,
+        y - 0.3441 * u - 0.7141 * v,
+        y + 1.7720 * u,
+    );
+    return vec4<f32>(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), settings.opacity.x);
 }
 "#;
 
@@ -618,6 +714,84 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             wgpu::TextureFormat::Rg8Unorm,
         );
 
+        let nv12_layer_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("or_render.nv12_layer_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let nv12_layer_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("or_render.nv12_layer_shader"),
+            source: wgpu::ShaderSource::Wgsl(NV12_LAYER_SHADER.into()),
+        });
+        let nv12_layer_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("or_render.nv12_layer_pipeline_layout"),
+                bind_group_layouts: &[&nv12_layer_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let nv12_layer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("or_render.nv12_layer_pipeline"),
+            layout: Some(&nv12_layer_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &nv12_layer_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &nv12_layer_shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
         Ok(Self {
             _instance: instance,
             _adapter: adapter,
@@ -629,7 +803,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             nv12_bind_group_layout,
             nv12_luma_pipeline,
             nv12_chroma_pipeline,
+            nv12_layer_bind_group_layout,
+            nv12_layer_pipeline,
             nv12_scratch: Mutex::new(None),
+            compositor_pool: Mutex::new(CompositorPool::default()),
             adapter_info: RenderAdapterInfo {
                 name: adapter_info.name,
                 driver: adapter_info.driver,
@@ -662,8 +839,19 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if frame.surface.target() != PreviewSurfaceTarget::Offscreen {
             return Err(RenderError::ViewerSurfaceNotImplemented);
         }
+        let pixels = self.readback_texture(&frame.target.texture, frame.surface.size())?;
+        Ok(OffscreenReadback {
+            surface: frame.surface,
+            pixels,
+        })
+    }
 
-        let size = frame.surface.size();
+    /// Copies one offscreen texture into a tightly-packed CPU buffer.
+    fn readback_texture(
+        &self,
+        texture: &wgpu::Texture,
+        size: RenderSize,
+    ) -> Result<Vec<u8>, RenderError> {
         let unpadded_bytes_per_row = size
             .width()
             .checked_mul(4)
@@ -685,7 +873,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             });
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &frame.target.texture,
+                texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
@@ -738,11 +926,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
         drop(mapped);
         staging_buffer.unmap();
-
-        Ok(OffscreenReadback {
-            surface: frame.surface,
-            pixels,
-        })
+        Ok(pixels)
     }
 
     /// Composites software-decoded RGBA layers through wgpu and reads back the
@@ -778,7 +962,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if frame.surface.target() != PreviewSurfaceTarget::Offscreen {
             return Err(RenderError::ViewerSurfaceNotImplemented);
         }
-        let size = frame.surface.size();
+        self.readback_texture_nv12(&frame.target.texture, frame.surface.size())
+    }
+
+    /// Converts one offscreen RGBA texture into NV12 and reads back both planes.
+    fn readback_texture_nv12(
+        &self,
+        texture: &wgpu::Texture,
+        size: RenderSize,
+    ) -> Result<Nv12Planes, RenderError> {
         let width = size.width();
         let height = size.height();
         if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
@@ -786,10 +978,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
         let (chroma_width, chroma_height) = (width / 2, height / 2);
 
-        let source_view = frame
-            .target
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let source_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("or_render.nv12_sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -946,6 +1135,408 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             luma,
             chroma,
         })
+    }
+
+    /// Composites a mixed RGBA/NV12 layer stack and reads the result back as
+    /// RGBA. Targets and source textures come from the pool, so a long export
+    /// stops allocating a texture per layer per frame.
+    pub fn composite_layers(
+        &self,
+        size: RenderSize,
+        layers: &[CompositorLayer<'_>],
+    ) -> Result<OffscreenReadback, RenderError> {
+        let target = self.checkout_target(size)?;
+        let pixels = self
+            .compose_into(size, layers, &target.view)
+            .and_then(|()| self.readback_texture(&target.texture, size));
+        self.return_target(target);
+        Ok(OffscreenReadback {
+            surface: PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
+            pixels: pixels?,
+        })
+    }
+
+    /// Composites the same stack and reads it back as NV12 planes.
+    pub fn composite_layers_nv12(
+        &self,
+        size: RenderSize,
+        layers: &[CompositorLayer<'_>],
+    ) -> Result<Nv12Planes, RenderError> {
+        let target = self.checkout_target(size)?;
+        let planes = self
+            .compose_into(size, layers, &target.view)
+            .and_then(|()| self.readback_texture_nv12(&target.texture, size));
+        self.return_target(target);
+        planes
+    }
+
+    /// Renders `layers` into a freshly allocated target owned by the frame.
+    fn compose_layers_into_frame(
+        &self,
+        snapshot: RenderSnapshot,
+        size: RenderSize,
+        layers: &[CompositorLayer<'_>],
+    ) -> Result<RenderedFrame, RenderError> {
+        let target = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.viewer_target"),
+            size: wgpu::Extent3d {
+                width: size.width(),
+                height: size.height(),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            // TEXTURE_BINDING so an NV12 export can sample the composited target
+            // for its colour conversion instead of reading it back to the CPU.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        self.compose_into(size, layers, &view)?;
+        let descriptor = FrameDescriptor::new(
+            FrameMemoryDomain::HardwareSurface,
+            size.width(),
+            size.height(),
+            FramePixelFormat::Rgba8,
+            FrameColorInfo::default(),
+            FrameTiming::at(snapshot.requested_range().start()),
+            FrameAccess::ReadOnly,
+        )
+        .map_err(|error| RenderError::FrameDescriptor {
+            message: error.to_string(),
+        })?;
+        Ok(RenderedFrame {
+            snapshot,
+            surface: PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
+            descriptor,
+            target: RenderTarget { texture: target },
+        })
+    }
+
+    /// Draws every layer into `target_view`: one pass, one submit.
+    fn compose_into(
+        &self,
+        size: RenderSize,
+        layers: &[CompositorLayer<'_>],
+        target_view: &wgpu::TextureView,
+    ) -> Result<(), RenderError> {
+        if size.width() > self.limits.max_texture_dimension_2d
+            || size.height() > self.limits.max_texture_dimension_2d
+        {
+            return Err(RenderError::SizeExceedsDeviceLimit {
+                size,
+                limit: self.limits.max_texture_dimension_2d,
+            });
+        }
+
+        let mut sources: Vec<SourceTexture> = Vec::with_capacity(layers.len() * 2);
+        let mut uniforms: Vec<wgpu::Buffer> = Vec::with_capacity(layers.len());
+        let mut draws: Vec<(bool, wgpu::BindGroup)> = Vec::with_capacity(layers.len());
+        let outcome = (|| -> Result<(), RenderError> {
+            for layer in layers {
+                layer.validate()?;
+                let (width, height) = layer.source_size();
+                if width > self.limits.max_texture_dimension_2d
+                    || height > self.limits.max_texture_dimension_2d
+                {
+                    return Err(RenderError::SourceSizeExceedsDeviceLimit {
+                        width,
+                        height,
+                        limit: self.limits.max_texture_dimension_2d,
+                    });
+                }
+                let uniform = self
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("or_render.viewer_layer_settings"),
+                        contents: &layer.settings_uniform(size),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                let (nv12, bind_group) = match *layer {
+                    CompositorLayer::Rgba(rgba) => {
+                        let mut source = self.checkout_source(
+                            rgba.width,
+                            rgba.height,
+                            wgpu::TextureFormat::Rgba8Unorm,
+                            rgba.cache_key,
+                        );
+                        if rgba.cache_key.is_none() || source.cache_key != rgba.cache_key {
+                            self.queue.write_texture(
+                                source.texture.as_image_copy(),
+                                rgba.pixels,
+                                wgpu::TexelCopyBufferLayout {
+                                    offset: 0,
+                                    bytes_per_row: Some(rgba.width * 4),
+                                    rows_per_image: Some(rgba.height),
+                                },
+                                wgpu::Extent3d {
+                                    width: rgba.width,
+                                    height: rgba.height,
+                                    depth_or_array_layers: 1,
+                                },
+                            );
+                        }
+                        source.cache_key = rgba.cache_key;
+                        let bind_group = self.create_layer_bind_group(
+                            &self.video_bind_group_layout,
+                            &source.view,
+                            &uniform,
+                        );
+                        sources.push(source);
+                        (false, bind_group)
+                    }
+                    CompositorLayer::Nv12(nv12) => {
+                        let (chroma_width, chroma_height) = (nv12.width / 2, nv12.height / 2);
+                        let mut luma = self.checkout_source(
+                            nv12.width,
+                            nv12.height,
+                            wgpu::TextureFormat::R8Unorm,
+                            None,
+                        );
+                        let mut chroma = self.checkout_source(
+                            chroma_width,
+                            chroma_height,
+                            wgpu::TextureFormat::Rg8Unorm,
+                            None,
+                        );
+                        self.queue.write_texture(
+                            luma.texture.as_image_copy(),
+                            nv12.luma,
+                            wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(nv12.width),
+                                rows_per_image: Some(nv12.height),
+                            },
+                            wgpu::Extent3d {
+                                width: nv12.width,
+                                height: nv12.height,
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                        self.queue.write_texture(
+                            chroma.texture.as_image_copy(),
+                            nv12.chroma,
+                            wgpu::TexelCopyBufferLayout {
+                                offset: 0,
+                                bytes_per_row: Some(chroma_width * 2),
+                                rows_per_image: Some(chroma_height),
+                            },
+                            wgpu::Extent3d {
+                                width: chroma_width,
+                                height: chroma_height,
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                        luma.cache_key = None;
+                        chroma.cache_key = None;
+                        let bind_group =
+                            self.create_nv12_layer_bind_group(&luma.view, &chroma.view, &uniform);
+                        sources.push(luma);
+                        sources.push(chroma);
+                        (true, bind_group)
+                    }
+                };
+                uniforms.push(uniform);
+                draws.push((nv12, bind_group));
+            }
+
+            let attachments = [Some(wgpu::RenderPassColorAttachment {
+                view: target_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(SyntheticColor::BLACK.wgpu()),
+                    store: wgpu::StoreOp::Store,
+                },
+            })];
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("or_render.viewer_encoder"),
+                });
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("or_render.viewer_pass"),
+                    color_attachments: &attachments,
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                for (nv12, bind_group) in &draws {
+                    pass.set_pipeline(if *nv12 {
+                        &self.nv12_layer_pipeline
+                    } else {
+                        &self.video_pipeline
+                    });
+                    pass.set_bind_group(0, bind_group, &[]);
+                    pass.draw(0..3, 0..1);
+                }
+            }
+            self.queue.submit(Some(encoder.finish()));
+            Ok(())
+        })();
+        for source in sources.drain(..) {
+            self.return_source(source);
+        }
+        outcome
+    }
+
+    fn create_layer_bind_group(
+        &self,
+        layout: &wgpu::BindGroupLayout,
+        source: &wgpu::TextureView,
+        uniform: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("or_render.viewer_layer"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.video_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform.as_entire_binding(),
+                },
+            ],
+        })
+    }
+
+    fn create_nv12_layer_bind_group(
+        &self,
+        luma: &wgpu::TextureView,
+        chroma: &wgpu::TextureView,
+        uniform: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("or_render.nv12_layer"),
+            layout: &self.nv12_layer_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(luma),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(chroma),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.video_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: uniform.as_entire_binding(),
+                },
+            ],
+        })
+    }
+
+    fn checkout_target(&self, size: RenderSize) -> Result<TargetTexture, RenderError> {
+        {
+            let mut pool = self
+                .compositor_pool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(index) = pool
+                .targets
+                .iter()
+                .position(|target| target.width == size.width() && target.height == size.height())
+            {
+                return Ok(pool.targets.remove(index));
+            }
+        }
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.compositor_target"),
+            size: wgpu::Extent3d {
+                width: size.width(),
+                height: size.height(),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Ok(TargetTexture {
+            width: size.width(),
+            height: size.height(),
+            texture,
+            view,
+        })
+    }
+
+    fn return_target(&self, target: TargetTexture) {
+        let mut pool = self
+            .compositor_pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pool.targets.len() < CompositorPool::MAX_TARGETS {
+            pool.targets.push(target);
+        }
+    }
+
+    /// Takes a matching texture, preferring one that already holds `cache_key`
+    /// so a static layer keeps its upload, and one that holds nothing so an
+    /// unkeyed layer does not evict it.
+    fn checkout_source(
+        &self,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        cache_key: Option<u64>,
+    ) -> SourceTexture {
+        {
+            let mut pool = self
+                .compositor_pool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let matching = |source: &SourceTexture| {
+                source.width == width && source.height == height && source.format == format
+            };
+            if let Some(key) = cache_key
+                && let Some(index) = pool
+                    .sources
+                    .iter()
+                    .position(|source| matching(source) && source.cache_key == Some(key))
+            {
+                return pool.sources.remove(index);
+            }
+            if let Some(index) = pool
+                .sources
+                .iter()
+                .position(|source| matching(source) && source.cache_key.is_none())
+            {
+                return pool.sources.remove(index);
+            }
+            if let Some(index) = pool.sources.iter().position(matching) {
+                return pool.sources.remove(index);
+            }
+        }
+        SourceTexture::new(&self.device, width, height, format)
+    }
+
+    fn return_source(&self, source: SourceTexture) {
+        let mut pool = self
+            .compositor_pool
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pool.sources.len() < CompositorPool::MAX_SOURCES {
+            pool.sources.push(source);
+        }
     }
 }
 
@@ -1229,155 +1820,196 @@ impl RenderGraph {
         size: RenderSize,
         layers: &[RgbaVideoLayer<'_>],
     ) -> Result<RenderedFrame, RenderError> {
-        if size.width() > renderer.limits.max_texture_dimension_2d
-            || size.height() > renderer.limits.max_texture_dimension_2d
-        {
-            return Err(RenderError::SizeExceedsDeviceLimit {
-                size,
-                limit: renderer.limits.max_texture_dimension_2d,
-            });
+        let layers: Vec<CompositorLayer<'_>> =
+            layers.iter().copied().map(CompositorLayer::Rgba).collect();
+        renderer.compose_layers_into_frame(snapshot, size, &layers)
+    }
+}
+
+/// One covering video layer decoded straight to NV12 planes.
+///
+/// A clip that fills the canvas at the output size loses nothing by being
+/// decoded as NV12: the planes are already what the encoder wants, and the
+/// layer shader converts to RGB while it composites. Partial-canvas clips stay
+/// on [`RgbaVideoLayer`] so their source resolution is not thrown away.
+#[derive(Clone, Copy, Debug)]
+pub struct Nv12VideoLayer<'a> {
+    width: u32,
+    height: u32,
+    luma: &'a [u8],
+    chroma: &'a [u8],
+    transform: Transform,
+    crop: Crop,
+    opacity: Opacity,
+}
+
+impl<'a> Nv12VideoLayer<'a> {
+    pub fn new(
+        width: u32,
+        height: u32,
+        luma: &'a [u8],
+        chroma: &'a [u8],
+    ) -> Result<Self, RenderError> {
+        let layer = Self {
+            width,
+            height,
+            luma,
+            chroma,
+            transform: Transform::IDENTITY,
+            crop: Crop::NONE,
+            opacity: Opacity::OPAQUE,
+        };
+        layer.validate()?;
+        Ok(layer)
+    }
+
+    /// Splits one contiguous NV12 buffer: luma first, then interleaved chroma.
+    pub fn from_contiguous(width: u32, height: u32, bytes: &'a [u8]) -> Result<Self, RenderError> {
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return Err(RenderError::InvalidSourceFrame);
         }
-        for layer in layers {
-            layer.validate()?;
-            if layer.width > renderer.limits.max_texture_dimension_2d
-                || layer.height > renderer.limits.max_texture_dimension_2d
-            {
-                return Err(RenderError::SourceSizeExceedsDeviceLimit {
-                    width: layer.width,
-                    height: layer.height,
-                    limit: renderer.limits.max_texture_dimension_2d,
-                });
+        let luma_length = usize::try_from(
+            width
+                .checked_mul(height)
+                .ok_or(RenderError::InvalidSourceFrame)?,
+        )
+        .map_err(|_| RenderError::InvalidSourceFrame)?;
+        if bytes.len() < luma_length {
+            return Err(RenderError::InvalidSourceFrame);
+        }
+        let (luma, chroma) = bytes.split_at(luma_length);
+        Self::new(width, height, luma, chroma)
+    }
+
+    pub const fn width(self) -> u32 {
+        self.width
+    }
+
+    pub const fn height(self) -> u32 {
+        self.height
+    }
+
+    pub fn with_visual_settings(
+        mut self,
+        transform: Transform,
+        crop: Crop,
+        opacity: Opacity,
+    ) -> Result<Self, RenderError> {
+        if !transform.is_valid() || !crop.is_valid() || !opacity.is_valid() {
+            return Err(RenderError::InvalidVideoSettings);
+        }
+        self.transform = transform;
+        self.crop = crop;
+        self.opacity = opacity;
+        Ok(self)
+    }
+
+    fn validate(&self) -> Result<(), RenderError> {
+        if !self.width.is_multiple_of(2) || !self.height.is_multiple_of(2) {
+            return Err(RenderError::InvalidSourceFrame);
+        }
+        let luma_length = (self.width as usize) * (self.height as usize);
+        if self.luma.len() != luma_length || self.chroma.len() != luma_length / 2 {
+            return Err(RenderError::InvalidSourceFrame);
+        }
+        Ok(())
+    }
+}
+
+/// One layer of a composition, whatever the source pixel layout is.
+#[derive(Clone, Copy, Debug)]
+pub enum CompositorLayer<'a> {
+    Rgba(RgbaVideoLayer<'a>),
+    Nv12(Nv12VideoLayer<'a>),
+}
+
+impl CompositorLayer<'_> {
+    fn validate(self) -> Result<(), RenderError> {
+        match self {
+            Self::Rgba(layer) => layer.validate(),
+            Self::Nv12(layer) => layer.validate(),
+        }
+    }
+
+    fn settings_uniform(self, size: RenderSize) -> [u8; 64] {
+        match self {
+            Self::Rgba(layer) => {
+                layer_settings_uniform(layer.transform, layer.crop, layer.opacity, size)
+            }
+            Self::Nv12(layer) => {
+                layer_settings_uniform(layer.transform, layer.crop, layer.opacity, size)
             }
         }
+    }
 
-        let target = renderer.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("or_render.viewer_target"),
+    fn source_size(self) -> (u32, u32) {
+        match self {
+            Self::Rgba(layer) => (layer.width, layer.height),
+            Self::Nv12(layer) => (layer.width, layer.height),
+        }
+    }
+}
+
+/// A compositor target texture kept alive between frames of the same size.
+struct TargetTexture {
+    width: u32,
+    height: u32,
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+}
+
+/// One uploaded layer texture, reused while its size, format and key agree.
+struct SourceTexture {
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    cache_key: Option<u64>,
+}
+
+impl SourceTexture {
+    fn new(device: &wgpu::Device, width: u32, height: u32, format: wgpu::TextureFormat) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("or_render.compositor_source"),
             size: wgpu::Extent3d {
-                width: size.width(),
-                height: size.height(),
+                width,
+                height,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            // TEXTURE_BINDING so an NV12 export can sample the composited target
-            // for its colour conversion instead of reading it back to the CPU.
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::TEXTURE_BINDING,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let target_view = target.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut sources = Vec::with_capacity(layers.len());
-        for layer in layers {
-            let source = renderer.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("or_render.viewer_source"),
-                size: wgpu::Extent3d {
-                    width: layer.width,
-                    height: layer.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            });
-            renderer.queue.write_texture(
-                source.as_image_copy(),
-                layer.pixels,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(layer.width * 4),
-                    rows_per_image: Some(layer.height),
-                },
-                wgpu::Extent3d {
-                    width: layer.width,
-                    height: layer.height,
-                    depth_or_array_layers: 1,
-                },
-            );
-            let view = source.create_view(&wgpu::TextureViewDescriptor::default());
-            let uniform = renderer
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("or_render.viewer_layer_settings"),
-                    contents: &layer.settings_uniform(size),
-                    usage: wgpu::BufferUsages::UNIFORM,
-                });
-            let bind_group = renderer
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("or_render.viewer_layer"),
-                    layout: &renderer.video_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&renderer.video_sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: uniform.as_entire_binding(),
-                        },
-                    ],
-                });
-            sources.push((source, view, uniform, bind_group));
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        Self {
+            width,
+            height,
+            format,
+            texture,
+            view,
+            cache_key: None,
         }
-
-        let attachments = [Some(wgpu::RenderPassColorAttachment {
-            view: &target_view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(SyntheticColor::BLACK.wgpu()),
-                store: wgpu::StoreOp::Store,
-            },
-        })];
-        let mut encoder = renderer
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("or_render.viewer_encoder"),
-            });
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("or_render.viewer_pass"),
-                color_attachments: &attachments,
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            pass.set_pipeline(&renderer.video_pipeline);
-            for (_, _, _, bind_group) in &sources {
-                pass.set_bind_group(0, bind_group, &[]);
-                pass.draw(0..3, 0..1);
-            }
-        }
-        renderer.queue.submit(Some(encoder.finish()));
-
-        let descriptor = FrameDescriptor::new(
-            FrameMemoryDomain::HardwareSurface,
-            size.width(),
-            size.height(),
-            FramePixelFormat::Rgba8,
-            FrameColorInfo::default(),
-            FrameTiming::at(snapshot.requested_range().start()),
-            FrameAccess::ReadOnly,
-        )
-        .map_err(|error| RenderError::FrameDescriptor {
-            message: error.to_string(),
-        })?;
-        Ok(RenderedFrame {
-            snapshot,
-            surface: PreviewSurface::offscreen(size, RenderFormat::Rgba8Unorm),
-            descriptor,
-            target: RenderTarget { texture: target },
-        })
     }
+}
+
+/// Compositor resources reused across frames.
+///
+/// Entries are checked out, never lent: two concurrent renders get different
+/// textures, and the pool only ever holds what those renders returned.
+#[derive(Default)]
+struct CompositorPool {
+    targets: Vec<TargetTexture>,
+    sources: Vec<SourceTexture>,
+}
+
+impl CompositorPool {
+    /// Bounds the memory a stalled or many-layer export can pin.
+    const MAX_TARGETS: usize = 2;
+    const MAX_SOURCES: usize = 8;
 }
 
 /// One software-decoded RGBA source layer passed to the render graph.
@@ -1389,6 +2021,11 @@ pub struct RgbaVideoLayer<'a> {
     transform: Transform,
     crop: Crop,
     opacity: Opacity,
+    /// Identifies pixels the caller already knows are unchanged since the last
+    /// frame, so the compositor can skip re-uploading them (a static title, for
+    /// example, is 8 MB of RGBA at 1080p that would otherwise cross the bus
+    /// every frame).
+    cache_key: Option<u64>,
 }
 
 /// A typed transition stage applied to one RGBA layer.
@@ -1604,9 +2241,17 @@ impl<'a> RgbaVideoLayer<'a> {
             transform: Transform::IDENTITY,
             crop: Crop::NONE,
             opacity: Opacity::OPAQUE,
+            cache_key: None,
         };
         layer.validate()?;
         Ok(layer)
+    }
+
+    /// Marks these pixels as reusable while `key` stays unchanged.
+    #[must_use]
+    pub const fn with_cache_key(mut self, key: u64) -> Self {
+        self.cache_key = Some(key);
+        self
     }
 
     pub const fn width(self) -> u32 {
@@ -1632,43 +2277,46 @@ impl<'a> RgbaVideoLayer<'a> {
         Ok(self)
     }
 
-    fn settings_uniform(&self, size: RenderSize) -> [u8; 64] {
-        let transform = self.transform;
-        let crop = self.crop;
-        let opacity = self.opacity;
-        let angle = (transform.rotation_milli_degrees as f32 / 1_000.0).to_radians();
-        let values = [
-            transform.x_milli_canvas as f32 / 500.0,
-            -(transform.y_milli_canvas as f32) / 500.0,
-            transform.scale_x_milli as f32 / 1_000.0,
-            transform.scale_y_milli as f32 / 1_000.0,
-            angle,
-            transform.anchor_x_basis_points as f32 / 10_000.0,
-            transform.anchor_y_basis_points as f32 / 10_000.0,
-            size.width() as f32 / size.height() as f32,
-            crop.left_basis_points as f32 / 10_000.0,
-            crop.top_basis_points as f32 / 10_000.0,
-            crop.right_basis_points as f32 / 10_000.0,
-            crop.bottom_basis_points as f32 / 10_000.0,
-            opacity.basis_points as f32 / 10_000.0,
-            0.0,
-            0.0,
-            0.0,
-        ];
-        let mut bytes = [0; 64];
-        for (index, value) in values.into_iter().enumerate() {
-            let offset = index * 4;
-            bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
-        }
-        bytes
-    }
-
     fn validate(&self) -> Result<(), RenderError> {
         if self.pixels.len() != rgba_length(self.width, self.height)? {
             return Err(RenderError::InvalidSourceFrame);
         }
         Ok(())
     }
+}
+
+/// Packs the per-layer uniforms shared by the RGBA and NV12 pipelines.
+fn layer_settings_uniform(
+    transform: Transform,
+    crop: Crop,
+    opacity: Opacity,
+    size: RenderSize,
+) -> [u8; 64] {
+    let angle = (transform.rotation_milli_degrees as f32 / 1_000.0).to_radians();
+    let values = [
+        transform.x_milli_canvas as f32 / 500.0,
+        -(transform.y_milli_canvas as f32) / 500.0,
+        transform.scale_x_milli as f32 / 1_000.0,
+        transform.scale_y_milli as f32 / 1_000.0,
+        angle,
+        transform.anchor_x_basis_points as f32 / 10_000.0,
+        transform.anchor_y_basis_points as f32 / 10_000.0,
+        size.width() as f32 / size.height() as f32,
+        crop.left_basis_points as f32 / 10_000.0,
+        crop.top_basis_points as f32 / 10_000.0,
+        crop.right_basis_points as f32 / 10_000.0,
+        crop.bottom_basis_points as f32 / 10_000.0,
+        opacity.basis_points as f32 / 10_000.0,
+        0.0,
+        0.0,
+        0.0,
+    ];
+    let mut bytes = [0; 64];
+    for (index, value) in values.into_iter().enumerate() {
+        let offset = index * 4;
+        bytes[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    }
+    bytes
 }
 
 /// An owned GPU render target and its immutable runtime metadata.
@@ -2212,6 +2860,117 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn nv12_layers_composite_through_the_shared_pipeline_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu nv12 layer test: {error}");
+                return;
+            }
+        };
+        let size = render_size(4, 4);
+        // The inverse matrix matches the BT.601 limited-range conversion the
+        // software decoder applies by default, so white stays the fixed point
+        // (luma 235, chroma 128) and red is (81, 90, 240) in that space.
+        for (luma, u, v, expected) in [
+            (235_u8, 128_u8, 128_u8, [255_u8, 255, 255, 255]),
+            (81, 90, 240, [255, 0, 0, 255]),
+        ] {
+            let luma_plane = [luma; 16];
+            let chroma_plane = [u, v].repeat(4);
+            let layer = Nv12VideoLayer::new(4, 4, &luma_plane, &chroma_plane).unwrap();
+            let readback = renderer
+                .composite_layers(size, &[CompositorLayer::Nv12(layer)])
+                .unwrap();
+            for pixel in readback.pixels().as_chunks::<4>().0 {
+                for (channel, wanted) in pixel.iter().zip(expected) {
+                    assert!(
+                        (*channel as i32 - wanted as i32).abs() <= 3,
+                        "pixel {pixel:?} for luma {luma}/u {u}/v {v}, expected {expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_cached_layer_keeps_its_upload_until_the_key_changes_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu layer cache test: {error}");
+                return;
+            }
+        };
+        let size = render_size(4, 4);
+        let white = [235_u8; 16];
+        let white_chroma = [128_u8; 8];
+        let red = [81_u8; 16];
+        let mut red_chroma = [0_u8; 8];
+        for pair in red_chroma.as_chunks_mut::<2>().0 {
+            pair[0] = 90;
+            pair[1] = 240;
+        }
+        let first = |layer: RgbaVideoLayer<'_>| {
+            renderer
+                .composite_layers(size, &[CompositorLayer::Rgba(layer)])
+                .unwrap()
+        };
+        let white_rgba = [255_u8, 255, 255, 255].repeat(16);
+        let red_rgba = [255_u8, 0, 0, 255].repeat(16);
+        let read = |readback: &OffscreenReadback| -> [i32; 4] {
+            let pixel = &readback.pixels()[..4];
+            [
+                i32::from(pixel[0]),
+                i32::from(pixel[1]),
+                i32::from(pixel[2]),
+                i32::from(pixel[3]),
+            ]
+        };
+        let assert_near = |actual: [i32; 4], expected: [i32; 4]| {
+            for (channel, wanted) in actual.iter().zip(expected) {
+                assert!(
+                    (channel - wanted).abs() <= 3,
+                    "pixel {actual:?}, expected {expected:?}"
+                );
+            }
+        };
+
+        // A key promises the pixels behind it are unchanged, so the second
+        // composite with the same key must not re-upload the new buffer.
+        let cached = first(
+            RgbaVideoLayer::new(4, 4, &white_rgba)
+                .unwrap()
+                .with_cache_key(7),
+        );
+        assert_near(read(&cached), [255, 255, 255, 255]);
+        let still_white = first(
+            RgbaVideoLayer::new(4, 4, &red_rgba)
+                .unwrap()
+                .with_cache_key(7),
+        );
+        assert_near(read(&still_white), [255, 255, 255, 255]);
+        // A new key invalidates the upload.
+        let redrawn = first(
+            RgbaVideoLayer::new(4, 4, &red_rgba)
+                .unwrap()
+                .with_cache_key(8),
+        );
+        assert_near(read(&redrawn), [255, 0, 0, 255]);
+        // NV12 layers never cache: their planes are rebuilt by the decoder.
+        let nv12 = Nv12VideoLayer::new(4, 4, &white, &white_chroma).unwrap();
+        let readback = renderer
+            .composite_layers(size, &[CompositorLayer::Nv12(nv12)])
+            .unwrap();
+        assert_near(read(&readback), [255, 255, 255, 255]);
+        let nv12_red = Nv12VideoLayer::new(4, 4, &red, &red_chroma).unwrap();
+        let readback = renderer
+            .composite_layers(size, &[CompositorLayer::Nv12(nv12_red)])
+            .unwrap();
+        assert_near(read(&readback), [255, 0, 0, 255]);
     }
 
     #[test]

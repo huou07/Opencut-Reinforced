@@ -74,8 +74,8 @@ mod desktop {
     };
     use or_media::{DecodeOutput, SnapshotQueue, SoftwareMediaDecoder, VideoDecodeSession};
     use or_render::{
-        RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer, VisualTransition,
-        process_visual_rgba,
+        CompositorLayer, Nv12VideoLayer, RenderDevice, RenderSize, RgbaVideoLayer, TextRasterizer,
+        VisualTransition, process_visual_rgba,
     };
     use or_runtime::{
         BudgetLimits, CancellationToken, FramePixelFormat, PreviewFrameRequest, PreviewFrameStep,
@@ -1460,13 +1460,31 @@ mod desktop {
                 })?;
                 let source_time = clip_source_time(clip, offset)?;
                 let runtime_generation = expected_generation.map(|(generation, _)| generation);
-                match self.decode_video_frame(
-                    program.key,
-                    runtime_generation,
-                    &clip.source,
-                    source_time,
-                    cancellation,
-                ) {
+                // A clip that fills the frame needs no RGBA round trip: decoding
+                // it straight to NV12 at the output size lets the layer shader
+                // convert to RGB on the GPU, and the export wants NV12 anyway.
+                let nv12_size = fixed_size.filter(|_| clip_covers_output(clip));
+                let decoded = if let Some(size) = nv12_size {
+                    self.decode_video_frame_nv12(
+                        program.key,
+                        runtime_generation,
+                        &clip.source,
+                        source_time,
+                        size,
+                        cancellation,
+                    )
+                    .map(|frame| frame.map(DecodedVideoFrame::Nv12))
+                } else {
+                    self.decode_video_frame(
+                        program.key,
+                        runtime_generation,
+                        &clip.source,
+                        source_time,
+                        cancellation,
+                    )
+                    .map(|frame| frame.map(DecodedVideoFrame::Rgba))
+                };
+                match decoded {
                     Ok(Some(frame)) => {
                         frames.push((frame, clip));
                     }
@@ -1516,49 +1534,64 @@ mod desktop {
                     clip.transition_in,
                     clip.transition_out,
                 )?;
-                let processed = if clip.effects.is_empty() && transitions.is_empty() {
-                    None
-                } else {
-                    let pixels = process_visual_rgba(
-                        frame.descriptor().width(),
-                        frame.descriptor().height(),
-                        frame.pixels(),
-                        &clip.effects,
-                        &transitions,
-                    )
-                    .map_err(|error| {
-                        PreviewError::new("VISUAL_PROCESS_FAILED", error.to_string())
-                    })?;
-                    processed_bytes = processed_bytes
-                        .checked_add(pixels.len())
-                        .filter(|bytes| *bytes <= MAX_VISUAL_PROCESS_BYTES)
-                        .ok_or_else(|| {
-                            PreviewError::new(
-                                "VISUAL_PROCESS_LIMIT",
-                                "active video effects exceed the preview memory limit",
+                let processed = match frame {
+                    DecodedVideoFrame::Rgba(rgba) => {
+                        if clip.effects.is_empty() && transitions.is_empty() {
+                            None
+                        } else {
+                            let pixels = process_visual_rgba(
+                                rgba.descriptor().width(),
+                                rgba.descriptor().height(),
+                                rgba.pixels(),
+                                &clip.effects,
+                                &transitions,
                             )
-                        })?;
-                    Some(pixels)
+                            .map_err(|error| {
+                                PreviewError::new("VISUAL_PROCESS_FAILED", error.to_string())
+                            })?;
+                            processed_bytes = processed_bytes
+                                .checked_add(pixels.len())
+                                .filter(|bytes| *bytes <= MAX_VISUAL_PROCESS_BYTES)
+                                .ok_or_else(|| {
+                                    PreviewError::new(
+                                        "VISUAL_PROCESS_LIMIT",
+                                        "active video effects exceed the preview memory limit",
+                                    )
+                                })?;
+                            Some(pixels)
+                        }
+                    }
+                    // Only plain covering clips are decoded this way, so there is
+                    // never an effect or transition to apply here.
+                    DecodedVideoFrame::Nv12(_) => None,
                 };
                 processed_video_pixels.push(processed);
             }
-            let mut layers = frames
+            let mut layers: Vec<CompositorLayer<'_>> = frames
                 .iter()
                 .zip(&processed_video_pixels)
-                .map(|((frame, clip), processed)| {
-                    let pixels = processed.as_deref().unwrap_or_else(|| frame.pixels());
-                    RgbaVideoLayer::new(
-                        frame.descriptor().width(),
-                        frame.descriptor().height(),
-                        pixels,
-                    )?
-                    .with_visual_settings(
-                        clip.transform,
-                        clip.crop,
-                        clip.opacity,
-                    )
+                .map(|((frame, clip), processed)| match frame {
+                    DecodedVideoFrame::Rgba(rgba) => {
+                        let pixels = processed.as_deref().unwrap_or_else(|| rgba.pixels());
+                        Ok(CompositorLayer::Rgba(
+                            RgbaVideoLayer::new(
+                                rgba.descriptor().width(),
+                                rgba.descriptor().height(),
+                                pixels,
+                            )?
+                            .with_visual_settings(
+                                clip.transform,
+                                clip.crop,
+                                clip.opacity,
+                            )?,
+                        ))
+                    }
+                    DecodedVideoFrame::Nv12(nv12) => Ok(CompositorLayer::Nv12(
+                        Nv12VideoLayer::from_contiguous(width, height, nv12.bytes())?
+                            .with_visual_settings(clip.transform, clip.crop, clip.opacity)?,
+                    )),
                 })
-                .collect::<Result<Vec<_>, _>>()
+                .collect::<Result<Vec<_>, or_render::RenderError>>()
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
             let mut active_text_clips = Vec::new();
             for clip in &program.text_clips {
@@ -1588,12 +1621,13 @@ mod desktop {
                         "active text layers exceed the preview memory limit",
                     )
                 })?;
-            let mut text_pixels: Vec<std::sync::Arc<[u8]>> =
+            let mut text_pixels: Vec<(std::sync::Arc<[u8]>, Option<u64>)> =
                 Vec::with_capacity(active_text_clips.len());
             for clip in &active_text_clips {
-                let pixels = lock(&self.text_rasterizer)
+                let rasterized = lock(&self.text_rasterizer)
                     .rasterize_cached(&clip.text, clip.formatting, width, height)
                     .map_err(|error| PreviewError::new("TEXT_RENDER_FAILED", error.to_string()))?;
+                let pixels = rasterized.pixels;
                 let transitions = clip_transitions(
                     time,
                     clip.timeline_start,
@@ -1602,7 +1636,7 @@ mod desktop {
                     clip.transition_out,
                 )?;
                 let processed = if clip.effects.is_empty() && transitions.is_empty() {
-                    pixels
+                    (pixels, Some(rasterized.id))
                 } else {
                     let processed =
                         process_visual_rgba(width, height, &pixels, &clip.effects, &transitions)
@@ -1618,32 +1652,38 @@ mod desktop {
                                 "active video and text effects exceed the preview memory limit",
                             )
                         })?;
-                    Arc::from(processed)
+                    (Arc::from(processed), None)
                 };
                 text_pixels.push(processed);
             }
             debug_assert!(
-                text_pixels.iter().map(|pixels| pixels.len()).sum::<usize>() <= text_bytes
+                text_pixels
+                    .iter()
+                    .map(|(pixels, _)| pixels.len())
+                    .sum::<usize>()
+                    <= text_bytes
             );
-            for (clip, pixels) in active_text_clips.iter().zip(&text_pixels) {
-                layers.push(
-                    RgbaVideoLayer::new(width, height, pixels)
-                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?
-                        .with_visual_settings(clip.transform, clip.crop, clip.opacity)
-                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?,
-                );
+            for (clip, (pixels, cache_key)) in active_text_clips.iter().zip(&text_pixels) {
+                let mut layer = RgbaVideoLayer::new(width, height, pixels)
+                    .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?
+                    .with_visual_settings(clip.transform, clip.crop, clip.opacity)
+                    .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+                if let Some(key) = cache_key {
+                    layer = layer.with_cache_key(*key);
+                }
+                layers.push(CompositorLayer::Rgba(layer));
             }
             let renderer = renderer()?;
             let (pixels, planes) = match output {
                 RenderOutput::Packed => {
                     let rendered = renderer
-                        .render_rgba_layers(snapshot, size, &layers)
+                        .composite_layers(size, &layers)
                         .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
                     (rendered.pixels().to_vec(), None)
                 }
                 RenderOutput::Nv12 => {
                     let planes = renderer
-                        .render_rgba_layers_nv12(snapshot, size, &layers)
+                        .composite_layers_nv12(size, &layers)
                         .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
                     (Vec::new(), Some(planes))
                 }
@@ -1938,6 +1978,34 @@ mod desktop {
         Some(clip)
     }
 
+    /// One decoded video frame, tagged with the layout it was decoded to.
+    enum DecodedVideoFrame {
+        Rgba(or_media::VideoFrame),
+        Nv12(or_media::VideoFrame),
+    }
+
+    impl DecodedVideoFrame {
+        const fn descriptor(&self) -> &or_runtime::FrameDescriptor {
+            match self {
+                Self::Rgba(frame) | Self::Nv12(frame) => frame.descriptor(),
+            }
+        }
+    }
+
+    /// True when the clip fills the output frame with no visual remapping.
+    ///
+    /// Such a clip loses nothing by being decoded straight to NV12 at the output
+    /// size: the planes are what the shader wants and what the encoder ends with,
+    /// so the software RGBA conversion and the 8 MB upload disappear.
+    fn clip_covers_output(clip: &VideoClip) -> bool {
+        clip.transform == Transform::IDENTITY
+            && clip.crop == Crop::NONE
+            && clip.opacity == Opacity::OPAQUE
+            && clip.effects.is_empty()
+            && clip.transition_in.is_none()
+            && clip.transition_out.is_none()
+    }
+
     /// The clip that fills the whole canvas with no compositing work, ignoring
     /// whether its source pixels already match the output size. The NV12 direct
     /// path scales while decoding, so it can serve any source size.
@@ -1959,14 +2027,7 @@ mod desktop {
             .iter()
             .filter(|clip| active(clip.timeline_start, clip.duration));
         let clip = video_clips.next()?;
-        if video_clips.next().is_some()
-            || clip.transform != Transform::IDENTITY
-            || clip.crop != Crop::NONE
-            || clip.opacity != Opacity::OPAQUE
-            || !clip.effects.is_empty()
-            || clip.transition_in.is_some()
-            || clip.transition_out.is_some()
-        {
+        if video_clips.next().is_some() || !clip_covers_output(clip) {
             return None;
         }
         Some(clip)

@@ -43,6 +43,17 @@ struct TextCacheKey {
 struct CachedTextLayer {
     key: TextCacheKey,
     pixels: Arc<[u8]>,
+    /// Stable for as long as this entry stays in the cache.
+    id: u64,
+}
+
+/// A rasterised text layer and the identity of its cached pixels.
+///
+/// The id lets the compositor skip re-uploading a canvas whose pixels it has
+/// already seen: a title held for a hundred frames is one upload, not a hundred.
+pub struct RasterizedText {
+    pub pixels: Arc<[u8]>,
+    pub id: u64,
 }
 
 /// CPU text shaping and rasterization using only the bundled Inter faces.
@@ -50,6 +61,7 @@ pub struct TextRasterizer {
     font_system: FontSystem,
     swash_cache: SwashCache,
     cache: Vec<CachedTextLayer>,
+    next_id: u64,
 }
 
 impl TextRasterizer {
@@ -74,6 +86,7 @@ impl TextRasterizer {
             font_system: FontSystem::new_with_locale_and_db("en-US".to_owned(), font_db),
             swash_cache: SwashCache::new(),
             cache: Vec::new(),
+            next_id: 1,
         }
     }
 
@@ -97,7 +110,7 @@ impl TextRasterizer {
         formatting: TextFormatting,
         width: u32,
         height: u32,
-    ) -> Result<Arc<[u8]>, TextRasterError> {
+    ) -> Result<RasterizedText, TextRasterError> {
         self.rasterize_spans_cached(text, &[], formatting, width, height)
     }
 
@@ -109,7 +122,7 @@ impl TextRasterizer {
         formatting: TextFormatting,
         width: u32,
         height: u32,
-    ) -> Result<Arc<[u8]>, TextRasterError> {
+    ) -> Result<RasterizedText, TextRasterError> {
         let key = TextCacheKey {
             text: text.to_owned(),
             spans: spans.to_vec(),
@@ -120,20 +133,24 @@ impl TextRasterizer {
         if let Some(index) = self.cache.iter().position(|entry| entry.key == key) {
             let entry = self.cache.remove(index);
             let pixels = Arc::clone(&entry.pixels);
+            let id = entry.id;
             self.cache.push(entry);
-            return Ok(pixels);
+            return Ok(RasterizedText { pixels, id });
         }
         let pixels: Arc<[u8]> = self
             .rasterize_spans_uncached(text, spans, formatting, width, height)?
             .into();
+        let id = self.next_id;
+        self.next_id = self.next_id.wrapping_add(1);
         self.cache.push(CachedTextLayer {
             key,
             pixels: Arc::clone(&pixels),
+            id,
         });
         while self.cache.len() > TEXT_CACHE_CAPACITY {
             self.cache.remove(0);
         }
-        Ok(pixels)
+        Ok(RasterizedText { pixels, id })
     }
 
     /// Measures shaped text without rasterising it.
