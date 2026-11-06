@@ -333,8 +333,21 @@ One near-term delivery mission for the local macOS app, in this order:
     harness and stays UNVERIFIED. Rows in
     [export-performance.md](export-performance.md).
 
+43. **Animation reaches the timeline and the preset row (2026-11-07).** An
+    animated clip shows a diamond badge and its semantics label says "animated";
+    Fade in / Slide up / Zoom in / Pop write ordinary keyframes; Copy/Paste
+    moves one clip's animation to another. Verified on macOS, Debian (Weston on
+    the Intel UHD 770) and Windows in an interactive session with the
+    `keyframes` journey.
 
-
+44. **Composited exports convert NV12 in one compute pass (2026-11-07).** The
+    two-pass conversion plus padded copies cost 13–14 ms per 1080p frame on the
+    Debian Intel host. One compute shader writing a tight buffer doubled the
+    composited ceiling (render + text 52.6 → 109–112 fps, full MP4 + text
+    59.8–83.2 → 106–112 fps) and left video-only rows unchanged. The Windows
+    Intel driver runs the compute version about 8 % slower on the same
+    workload; the follow-up is a one-time per-device measurement between the two
+    conversions rather than a backend-name guess (both report Vulkan).
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
