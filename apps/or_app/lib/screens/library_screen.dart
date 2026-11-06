@@ -640,6 +640,15 @@ class _GuideList extends StatelessWidget {
               ),
             ),
           ),
+        Padding(
+          key: const ValueKey('library-shortcut-hint'),
+          padding: const EdgeInsets.only(top: OrSpacing.x3),
+          child: Text(
+            'Press ? anywhere for every keyboard shortcut, or Ctrl/⌘ K for the '
+            'command palette.',
+            style: OrType.metadata.copyWith(color: OrColors.textSecondary),
+          ),
+        ),
         const ContentCreditsPanel(),
       ],
     );

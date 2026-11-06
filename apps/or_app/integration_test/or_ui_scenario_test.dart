@@ -731,6 +731,7 @@ class _Runner {
       'minus': LogicalKeyboardKey.minus,
       'f5': LogicalKeyboardKey.f5,
       'plus': LogicalKeyboardKey.numpadAdd,
+      'slash': LogicalKeyboardKey.slash,
     };
     final direct = named[name];
     if (direct != null) return direct;

@@ -109,6 +109,12 @@ change that area.
 
 Packaged-build driving cannot type into native AppKit panels on this host; those
 journeys click rows instead. Hardware decode and Android audio remain absent.
+- **A bound key is a listed key.** The shell's `Shortcuts` map and the sheet in
+  `apps/or_app/lib/shell/shortcut_sheet.dart` are checked against each other by
+  `test/shortcut_sheet_test.dart`; adding a binding without a row, or listing a
+  key that is not bound, fails the suite. Evidence: `?` opens the sheet in the
+  real app (`scripts/ui_scenarios/shortcut-sheet.json`, `OR_UI=PASS`).
+
 
 ## Related
 

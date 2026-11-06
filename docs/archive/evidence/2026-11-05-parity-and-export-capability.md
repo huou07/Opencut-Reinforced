@@ -440,3 +440,43 @@ Bisection rather than Newton's method is deliberate: a fixed 60 iterations
 cannot make the result depend on the data, so two hosts stepping the same frame
 agree — the same determinism rule the preview/export parity lane relies on.
 `crates/or_motion --lib` went from 99 to 103 tests.
+
+## Release `v0.1.20` published, and an in-place upgrade proven from it
+
+`Desktop release` run 42168843611 built all three hosts and published. Assets
+downloaded again from the release and checked with `shasum -a 256 -c
+SHA256SUMS.txt` → `OK` four times.
+
+| Asset | Bytes | Opened from the published bytes |
+|---|---|---|
+| `Opencut-Reinforced-0.1.20-arm64.dmg` | 37,340,205 | mounted `-readonly -nobrowse`; `Contents/MacOS/or version` → `Opencut Reinforced 0.1.20`; `codesign -dv` → `Identifier=io.github.huou07.orApp`, `flags=0x2(adhoc)`, Mach-O arm64 |
+| `Opencut-Reinforced-0.1.20-linux-x64.deb` | 26,100,464 | `sudo dpkg -i` over the installed 0.1.19 → `Setting up opencut-reinforced (0.1.20+e5e49c8b7b02)`; `/opt/opencut-reinforced/or version` → 0.1.20 |
+| `Opencut-Reinforced-0.1.20-windows-x64-setup.exe` | 28,647,456 | `certutil -hashfile` = `114603a7…` = the release's `SHA256SUMS.txt` row; silent install **over the installed 0.1.19 with the app running** → exit 0, log `or: stopping a running copy before touching files` and `or: image still held after attempt 1`, then `%LOCALAPPDATA%\Programs\Opencut Reinforced\or.exe version` → `Opencut Reinforced 0.1.20` (was 0.1.19 before) |
+| `Opencut-Reinforced-0.1.20-windows-x64.zip` | 41,902,754 | checksum-verified; the setup above installs the same runtime |
+| `SHA256SUMS.txt` | 438 | four `OK` |
+
+The Windows row is the interesting one: it is the first time the published
+installer was used to *update* an installed copy that was running, so the
+`PrepareToInstall` stop-and-wait path is proven from a released artifact rather
+than from a locally built one. The Mac row also showed why the harness mounts
+one volume at a time: a second attach leaves `… 1` behind, and a stale mount
+made one run report `Killed: 9` from a binary that the next run executed fine.
+
+## The shortcut sheet, 2026-11-06
+
+The app bound roughly forty keys and told nobody. A beginner cannot discover that
+`B` splits, that `[` and `]` jump five seconds, or that `1`–`4` switch tools by
+reading a manual, so the keys were effectively private to whoever wrote them.
+
+| Claim | Evidence |
+|---|---|
+| Every bound key is listed | `apps/or_app/test/shortcut_sheet_test.dart` reads both maps out of `lib/shell/app_shell.dart`, normalises each `LogicalKeyboardKey` through a printed-label table, and fails when a key is bound without a row — or listed without a binding |
+| `?` opens the sheet in the running app | `scripts/ui_scenarios/shortcut-sheet.json` → `RESULT: OR_UI=PASS` on macOS (Shift+slash, the row check, the semantics tree, Escape) |
+| A text field keeps the character | `apps/or_app/test/widget_test.dart` `the shortcut sheet opens with ? and stays out of a text field`: with the project name field focused the sheet stays shut and the field still reads `abc` |
+| The sheet is reachable without the key | command palette entry **Keyboard Shortcuts**, and the Guide tab hint (`library-shortcut-hint`, covered by `apps/or_app/test/library_screen_test.dart`) |
+
+The interesting defect: `SingleActivator(LogicalKeyboardKey.question, shift:
+true)` reads like the right binding and is wrong on every desktop layout. The
+logical key for that physical key stays `slash`; only the character becomes `?`.
+The widget test caught it because it presses Shift and slash the way a keyboard
+does, and the failure surfaced immediately as "the sheet never opened".

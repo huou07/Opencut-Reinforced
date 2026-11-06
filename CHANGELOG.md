@@ -13,6 +13,21 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.21 — 2026-11-06
+
+### Added
+- **A keyboard shortcut sheet.** Press `?` (or `Ctrl/⌘ /`), or pick **Keyboard
+  Shortcuts** in the command palette, and the app lists every binding it
+  installs, grouped by what a person is trying to do. The library's Guide tab
+  points at it. A test compares the sheet with the shell's shortcut map, so a
+  binding cannot ship unlisted.
+- A `shortcut-sheet` real-app journey (`scripts/ui_scenarios/shortcut-sheet.json`).
+
+### Fixed
+- `?` is bound as Shift plus the slash key. Binding the `question` logical key —
+  which is what it looks like it should be — would never fire, because the
+  logical key stays slash and only the character becomes `?`.
+
 ## 0.1.20 — 2026-11-06
 
 ### Added

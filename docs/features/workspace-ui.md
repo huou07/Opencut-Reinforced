@@ -180,6 +180,13 @@ file holds. A version-1 settings file opens in guided mode.
   opens the assistant rail, and the palette exposes both rail tabs.
 - Shortcuts resolve through the single shell `Shortcuts`/`Actions` map and do not
   fire while a text field has focus.
+- Every binding is readable on screen: `?` (Shift+slash) or `Ctrl/Cmd+/` opens
+  the shortcut sheet, the palette carries **Keyboard Shortcuts**, and the
+  library's Guide tab ends with a pointer to both. The sheet is a mirror of the
+  shell map, and `test/shortcut_sheet_test.dart` fails when a key is bound
+  without a printed row, so a new binding cannot ship undocumented. `?` is bound
+  as slash plus shift because the logical key stays slash on a real keyboard —
+  binding `question` looks right and never fires.
 - One gesture dispatches one command; no optimistic edit geometry in Flutter.
 - Simple and Advanced modes are visibility preferences over the same state and
   commands. Hiding a control never forks or removes project data.
