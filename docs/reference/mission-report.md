@@ -86,7 +86,7 @@ turned into a mass refactor.
 
 ## Remaining work
 
-The broader mission (perf audit of decode/composite/encode, 20-repo ideas,
-Rust-quality review, animated-export measurement, final benchmark table) is not
-finished; this report covers the four increments above and the evidence they
-produced. See [roadmap.md](roadmap.md) for the queue.
+The broader mission (full audit of decode/composite/encode, 20-repo ideas beyond
+the motion presets, cross-host benchmark rows at this revision, and a wider UX
+pass) is not finished; this report covers the six increments above and the
+evidence they produced. See [roadmap.md](roadmap.md) for the queue.
