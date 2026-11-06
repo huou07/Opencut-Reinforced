@@ -185,6 +185,31 @@ Output bytes are identical before and after on both hosts (11 267 668 on macOS,
 small win: the removed copy is cheaper than a pixel-format conversion, and the
 gain shows up mainly because one allocation per frame disappears.
 
+## Ink-rectangle scissor (2026-11-06)
+
+A text rasterisation is a full-canvas RGBA buffer that is transparent almost
+everywhere, so the compositor used to shade every canvas pixel for it on every
+frame. `TextRasterizer` now reports the bounding box of pixels with alpha, the
+layer carries it as an optional scissor and the compositor clips the draw to that
+rectangle; a rasterisation with no ink is skipped entirely. The scissor is only
+used for an untransformed, uncropped text layer, because a moved or scaled layer
+paints outside its canvas rectangle.
+
+| Host | Workload | Frames | Before | After | Delta |
+| --- | --- | --- | --- | --- | --- |
+| macOS M5 | render-only, one text layer | 300 | 219.5 / 246.2 / 247.9 | 385.2 / 388.8 / 374.9 | ≈ +56 % |
+| macOS M5 | MP4 quality export, one text layer | 150 | 188.4 / 204.7 | 215.5 / 221.2 | ≈ +9 % |
+| Debian (UHD 770) | render-only, one text layer | 300 | 50.4 / 49.7 / 50.0 | 52.8 / 52.3 / 52.2 | ≈ +4.6 % |
+| Debian (UHD 770) | MP4 quality export, one text layer | 150 | 60.6 / 75.9 | 89.6 / 76.7 | inconclusive (VM variance) |
+
+The Debian row is the honest limit of this change: on macOS the blend was fill
+bound, so clipping it to the ink was worth half the frame time again, while on
+Debian only a few percent moved. That means the Debian compositor spends most of
+its frame somewhere other than text fragments — the same host runs the no-text
+direct path at ~700 fps and any composited frame at ~50 fps, so the cost is in
+the composited path itself (plane upload, pass, readback), not in the text layer.
+The cause is recorded as unresolved rather than guessed at.
+
 ## Stage concurrency (2026-11-06)
 
 Per-core and per-GPU-engine counters, taken while the harness ran the same

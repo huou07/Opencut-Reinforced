@@ -183,6 +183,22 @@ Evidence, all local:
   ref (`<sha>..branch`), and the range must start at a commit the receiving
   clone already has.
 
+## Blending only the ink (later in the session)
+
+The text layer is a full-canvas RGBA buffer that is empty almost everywhere, yet
+the compositor shaded all 2.07 M pixels for it. `TextInkBounds` now reports the
+pixels with alpha, `RgbaVideoLayer::with_scissor` carries it, and `compose_into`
+clips the draw to that rectangle (and drops a layer with no ink). It applies only
+to an untransformed, uncropped layer.
+
+Interleaved against `f5465b40`, 300 frames: macOS render-only with one text layer
+219.5 / 246.2 / 247.9 → 385.2 / 388.8 / 374.9 fps; macOS MP4 quality 150 frames
+188.4 / 204.7 → 215.5 / 221.2; Debian render-only 50.4 / 49.7 / 50.0 → 52.8 /
+52.3 / 52.2, and its export rows (60.6 / 75.9 → 89.6 / 76.7) are too noisy on
+that VM to claim. The macOS gain is the fill-rate win the 720p/1080p diagnostic
+predicted; the Debian near-miss says its composited path costs its ~19 ms
+somewhere other than text fragments, which is recorded as unresolved.
+
 ## Not done, and why
 
 - The 20-repo technology evaluation was re-read and a dated re-check was added
