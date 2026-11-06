@@ -826,7 +826,10 @@ impl TempDirectory {
     fn new(prefix: &str) -> io::Result<Self> {
         for _ in 0..8 {
             let path = env::temp_dir().join(format!("{prefix}{}", Uuid::new_v4()));
+            #[cfg(unix)]
             let mut builder = DirBuilder::new();
+            #[cfg(not(unix))]
+            let builder = DirBuilder::new();
             #[cfg(unix)]
             {
                 use std::os::unix::fs::DirBuilderExt;

@@ -1265,7 +1265,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     /// the lazily built scratch buffers and bind groups, the second is the
     /// steady state the export will see.
     fn choose_nv12_mode(&self, source_view: &wgpu::TextureView, size: RenderSize) -> u8 {
-        let measure = |mut run: &mut dyn FnMut() -> Result<Nv12Planes, RenderError>| {
+        let measure = |run: &mut dyn FnMut() -> Result<Nv12Planes, RenderError>| {
             if run().is_err() {
                 return None;
             }
