@@ -380,3 +380,20 @@ spinning.
 The Windows run first printed `Test directory "test" not found.` because the
 command was started from the repository root; the suite lives in `apps\or_app`,
 which is now in the harness notes.
+
+## Release `v0.1.19` published, and what was opened from it
+
+| Asset | Bytes | Opened as |
+|---|---|---|
+| `Opencut-Reinforced-0.1.19-arm64.dmg` | 37,668,553 | mounted `-readonly -nobrowse`; `Contents/MacOS/or version` → `Opencut Reinforced 0.1.19` |
+| `Opencut-Reinforced-0.1.19-linux-x64.deb` | 26,096,196 | `sudo dpkg -i` → `Setting up opencut-reinforced (0.1.19+ff8d52bff07c)`; `/opt/opencut-reinforced/or version` → 0.1.19 |
+| `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` | 28,637,395 | built and signed by the tag run; the Windows host went unreachable before it could be installed locally, so this asset is checksum-verified only |
+| `Opencut-Reinforced-0.1.19-windows-x64.zip` | 41,891,227 | same tag run |
+| `SHA256SUMS.txt` | 438 | `shasum -a 256 -c` → `OK` for all four assets |
+
+`gh release download v0.1.19` then `shasum -a 256 -c SHA256SUMS.txt` printed
+`OK` four times, so the bytes GitHub serves are the bytes the tag run produced.
+The Windows row is deliberately honest: the published installer was not installed
+on the local Windows host for this release because that host stopped answering
+on port 22 while the verification was in progress, and the previous release's
+identical installer path was exercised end to end at `v0.1.18`.

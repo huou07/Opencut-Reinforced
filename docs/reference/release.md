@@ -6,26 +6,26 @@ Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
-The published line is **0.1.18** (2026-11-06), cut from one pull request whose
-`release-gate` went green and built by one tag run of `desktop-release.yml`. It is
-the line whose three-host bench measures OR's own pool, whose Windows installer
-updates and uninstalls over a running copy, and whose scenarios no longer depend
-on the machine that wrote them; the product features it carries arrived in 0.1.16
-(guided first project, scene typography in schema version 2, the shape style with
-a corner radius and a two-stop gradient in schema version 3, measured export
+The published line is **0.1.19** (2026-11-06), cut from one pull request whose
+`release-gate` went green and built by one tag run of `desktop-release.yml`. It
+is the line where the Windows app is driven by the same semantics harness as
+macOS and Linux (`scripts/or_ui.py --target windows`), where the "This machine"
+panel stops spinning when a probe is slow, and where no checked-in scenario
+names a fixture on its author's Mac. It also carries everything in 0.1.16–0.1.18:
+the guided first project, scene typography in schema version 2, the shape style
+with a corner radius and a two-stop gradient in schema version 3, measured export
 capability, machine facts, removable optional components, library licence
-credits, the preview/export parity lane, the Windows rooted-path fix and the
-packaged Linux lane fix). Its five assets —
-`Opencut-Reinforced-0.1.18-arm64.dmg` (37,341,513 B),
-`Opencut-Reinforced-0.1.18-linux-x64.deb` (26,097,756 B),
-`Opencut-Reinforced-0.1.18-windows-x64-setup.exe` (28,631,647 B),
-`Opencut-Reinforced-0.1.18-windows-x64.zip` (41,891,248 B) and
-`SHA256SUMS.txt` — were downloaded again after publication, matched their
-recorded SHA-256 values, and each package was opened on its own platform: the
-DMG mounted read-only ran `or version` and `whisper-cli --help`, the `.deb`
-installed with `dpkg -i` and ran `or version` from `/opt/opencut-reinforced`, and
-the Windows setup installed, started the app, and uninstalled over that running
-copy — exit 0, files removed, the log showing the close-app step.
+credits, the preview/export parity lane, the Windows rooted-path fix, the
+packaged Linux lane fix, and the Windows installer that updates and uninstalls
+over a running copy. Its five assets —
+`Opencut-Reinforced-0.1.19-arm64.dmg` (37,668,553 B),
+`Opencut-Reinforced-0.1.19-linux-x64.deb` (26,096,196 B),
+`Opencut-Reinforced-0.1.19-windows-x64-setup.exe` (28,637,395 B),
+`Opencut-Reinforced-0.1.19-windows-x64.zip` (41,891,227 B) and
+`SHA256SUMS.txt` — were downloaded again after publication and matched their
+recorded SHA-256 values; the DMG mounted read-only ran `or version` (0.1.19) and
+the `.deb` installed with `dpkg -i` and ran `or version` from
+`/opt/opencut-reinforced` (0.1.19).
 
 
 Stable releases ship three desktop packages from one source tree:
