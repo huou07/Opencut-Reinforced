@@ -62,6 +62,8 @@ LINUX_BUDGET_SECONDS = 900
 # A macOS desktop test builds the app bundle through Xcode on first use, so the
 # budget covers a cold build plus the journey itself.
 MACOS_BUDGET_SECONDS = 1800
+# A Windows desktop test builds the runner through MSBuild on first use.
+WINDOWS_BUDGET_SECONDS = 1800
 ANDROID_BUDGET_SECONDS = 1800
 
 
@@ -373,6 +375,93 @@ def run_macos(payload: dict, report_dir: Path) -> int:
     return finish(report_dir, artifacts, payload, "macos")
 
 
+
+def windows_flutter() -> str | None:
+    """Find the Flutter entry point; it is a `.bat` file on a Windows host.
+
+    `subprocess` hands the name to CreateProcess, which does not consult
+    `PATHEXT`, so a bare "flutter" never resolves here even when the SDK is on
+    PATH.
+    """
+    for name in ("flutter.bat", "flutter.exe", "flutter"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def run_windows(payload: dict, report_dir: Path) -> int:
+    """Drive the real Windows app: one integration_test run builds and launches it."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    stage_fixtures(payload, report_dir)
+    scenario_path = report_dir / "scenario.json"
+    scenario_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    artifacts = report_dir / "artifacts"
+    if artifacts.exists():
+        shutil.rmtree(artifacts)
+    artifacts.mkdir(parents=True)
+
+    environment = dict(
+        os.environ,
+        OR_UI_SCENARIO_FILE=str(scenario_path),
+        OR_UI_ARTIFACT_DIR=str(artifacts),
+        GITHUB_WORKSPACE=str(ROOT),
+    )
+    # The bridge links FFmpeg as shared libraries, so the freshly tested app
+    # needs them beside it or on PATH. A packaged build ships them; a debug run
+    # borrows the prefix the lane built or the one named here.
+    prefix = os.environ.get("FFMPEG_INSTALL_PREFIX") or os.environ.get("OR_FFMPEG_PREFIX")
+    if prefix:
+        for candidate in (Path(prefix) / "bin", Path(prefix)):
+            if (candidate / "avcodec-62.dll").is_file() or list(candidate.glob("avcodec-*.dll")):
+                environment["PATH"] = str(candidate) + os.pathsep + environment.get("PATH", "")
+                break
+    # The debug app has no packaged CLI beside it, so an assistant scenario needs
+    # the built one named.
+    built = ROOT / "target" / "debug" / "or.exe"
+    if built.is_file():
+        environment.setdefault("OR_CLI_PATH", str(built))
+    flutter = windows_flutter()
+    if flutter is None:
+        raise Blocked("the Flutter tool is not on PATH",
+                      "run this harness on the Windows host with Flutter installed")
+    command = [flutter, "--no-version-check", "test", "--no-pub", "-d", "windows",
+               SCENARIO_RUNNER]
+    completed = subprocess.run(command, cwd=str(APP), env=environment,
+                               capture_output=True, text=True,
+                               timeout=WINDOWS_BUDGET_SECONDS)
+    (report_dir / "run.log").write_text(
+        f"$ {' '.join(command)}\nexit {completed.returncode}\n"
+        f"{completed.stdout}\n{completed.stderr}\n", encoding="utf-8")
+    if completed.returncode != 0:
+        steps = read_transcript(artifacts, payload["name"]).get("steps", [])
+        failing = [(index, step) for index, step in enumerate(steps)
+                   if step.get("status") != "ok"]
+        if failing:
+            index, step = failing[0]
+            detail = step.get("detail") or step.get("error") or step.get("reason") or ""
+            reason_text = (
+                f"step {index} ({step.get('op')}) {step.get('status')}: "
+                f"{step.get('selector')} - {detail}".strip()
+            )
+        else:
+            reason = [line for line in (completed.stdout + completed.stderr).splitlines()
+                      if line.strip()][-8:]
+            reason_text = ("the scenario runner exited "
+                           f"{completed.returncode}: " + " | ".join(reason))
+        payload_out = {
+            "harness": "or_ui", "target": "windows", "result": "FAIL",
+            "reason": reason_text,
+            "log": str(report_dir / "run.log"),
+            "steps": steps,
+        }
+        (report_dir / "report.json").write_text(json.dumps(payload_out, indent=2) + "\n")
+        print(f"RESULT: OR_UI=FAIL ({payload['name']})")
+        print(payload_out["reason"])
+        return 1
+    return finish(report_dir, artifacts, payload, "windows")
+
+
 def read_transcript(artifacts: Path, name: str) -> dict:
     path = artifacts / f"{name}.json"
     if not path.is_file():
@@ -543,7 +632,7 @@ def load_json(path: Path) -> dict | None:
 def command_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--target", choices=("macos", "linux", "android"),
+    parser.add_argument("--target", choices=("macos", "linux", "windows", "android"),
                         default=None,
                         help="which target to drive (default: the host's own "
                              "desktop target — macos on a Mac, else linux)")
@@ -611,7 +700,9 @@ def build_command_scenario(args: argparse.Namespace) -> dict:
 
 def default_target() -> str:
     """Drive the host's own desktop app unless the caller names another target."""
-    return "macos" if sys.platform == "darwin" else "linux"
+    if sys.platform == "darwin":
+        return "macos"
+    return "windows" if sys.platform == "win32" else "linux"
 
 
 def parse_viewport(value: str) -> tuple[int, int]:
@@ -649,6 +740,8 @@ def main(argv: list[str] | None = None) -> int:
             return run_macos(payload, report_dir)
         if args.target == "linux":
             return run_linux(payload, report_dir)
+        if args.target == "windows":
+            return run_windows(payload, report_dir)
         return run_android(payload, report_dir)
     except Blocked as blocked:
         report_dir.mkdir(parents=True, exist_ok=True)

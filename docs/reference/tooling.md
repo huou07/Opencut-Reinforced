@@ -13,7 +13,7 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/acceptance.sh` | source gate plus documented Rust/Flutter lanes and the local performance budget |
 | `scripts/check-locks.sh` | resolve every committed `Cargo.lock` with `cargo metadata --locked --offline`, so a workspace version bump that was not carried into `tools/ffmpeg-link-probe/Cargo.lock` fails here instead of in the hosted Rust lane |
 | `scripts/verify_pinned_assets.py` | check every pinned runtime download against the release it names: it reads the URL, byte count and SHA-256 out of `apps/or_app/lib/updates/resource_center.dart` and streams each archive from GitHub, so a stale constant fails here instead of when a user clicks Install; `--only` narrows to one archive and `--check` prints the recorded values without touching the network |
-| `scripts/or_ui.py` | drive the real app by semantics and record a transcript |
+| `scripts/or_ui.py` | drive the real app by semantics and record a transcript; `--target macos|linux|windows`, where the Windows run needs `flutter.bat` and the FFmpeg prefix on `PATH` and records `shot-*.png.unavailable.txt` in place of an image (no raster surface in that test binding) |
 | `scripts/or_tree_outline.py` | one line per semantics node with rect and actions |
 | `scripts/packaged_drive.py` | CoreGraphics mouse/keyboard driving of the packaged app |
 | `scripts/bench_quality.py` | local performance budget rows on macOS, Linux and Windows; on Windows the FFmpeg prefix `bin` must be reachable (the tool prepends it) or the export lane dies with `STATUS_DLL_NOT_FOUND`, and `command.*` stays unverified unless a helper with lavfi is on `PATH` — rows that cannot be measured say so instead of reporting a number |

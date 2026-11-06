@@ -1,7 +1,7 @@
 {
  "name": "save-reopen",
  "viewport": {"width": 1280, "height": 800},
- "fixtures": ["copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"],
+ "fixtures": ["copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"],
  "steps": [
   {"op": "shot", "name": "home"},
   {"op": "tap", "selector": {"key": "nav-projects"}},

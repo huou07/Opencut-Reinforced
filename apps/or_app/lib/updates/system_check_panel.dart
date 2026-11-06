@@ -47,6 +47,17 @@ class _SystemCheckPanelState extends State<SystemCheckPanel> {
       child: FutureBuilder<HostFacts>(
         future: _facts,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'This machine could not be read: ${snapshot.error}. The editor '
+              'still works; the rows below that need it stay hidden.',
+              key: const ValueKey('system-check-error'),
+              style: const TextStyle(
+                color: OrColors.textSecondary,
+                fontSize: OrType.metadataSize,
+              ),
+            );
+          }
           final facts = snapshot.data;
           if (facts == null) {
             return const SizedBox(

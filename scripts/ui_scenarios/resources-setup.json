@@ -1,90 +1,91 @@
 {
-  "name": "resources-setup",
-  "viewport": {
-    "width": 1280,
-    "height": 800
+ "name": "resources-setup",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "description": "Setup is a GUI surface: Settings owns a Resources section that reports each bundled component of this installation, names the export formats the linked encoder can actually write, keeps optional speech models and the assistant harness behind explicit actions, and exposes the external-tools controls. The journey proves the section is reachable and that no component is installed or downloaded by opening it.",
+ "steps": [
+  {
+   "op": "shot",
+   "name": "resources-home"
   },
-  "description": "Setup is a GUI surface: Settings owns a Resources section that reports each bundled component of this installation, names the export formats the linked encoder can actually write, keeps optional speech models and the assistant harness behind explicit actions, and exposes the external-tools controls. The journey proves the section is reachable and that no component is installed or downloaded by opening it.",
-  "steps": [
-    {
-      "op": "shot",
-      "name": "resources-home"
-    },
-    {
-      "op": "tap",
-      "key": "nav-settings"
-    },
-    {
-      "op": "wait",
-      "text": "Settings"
-    },
-    {
-      "op": "tap",
-      "key": "settings-section-resources"
-    },
-    {
-      "op": "wait",
-      "text": "Resources & updates"
-    },
-    {
-      "op": "expect",
-      "key": "settings-external-tools"
-    },
-    {
-      "op": "expect",
-      "key": "settings-system-check"
-    },
-    {
-      "op": "expect",
-      "key": "system-check-summary"
-    },
-    {
-      "op": "expect",
-      "key": "settings-export-formats"
-    },
-    {
-      "op": "expect",
-      "key": "export-capability-summary"
-    },
-    {
-      "op": "shot",
-      "name": "resources-section"
-    },
-    {
-      "op": "tree",
-      "name": "resources-section"
-    },
-    {
-      "op": "expect",
-      "key": "tools-harness-detect"
-    },
-    {
-      "op": "expect",
-      "key": "resources-install-assistant"
-    },
-    {
-      "op": "tap",
-      "key": "settings-section-general"
-    },
-    {
-      "op": "expect",
-      "key": "settings-editor"
-    },
-    {
-      "op": "expect",
-      "key": "settings-guided-mode"
-    },
-    {
-      "op": "expect",
-      "key": "settings-next-step-tips"
-    },
-    {
-      "op": "expect",
-      "key": "settings-composition-guides"
-    },
-    {
-      "op": "expect",
-      "key": "settings-show-inspector"
-    }
-  ]
+  {
+   "op": "tap",
+   "key": "nav-settings"
+  },
+  {
+   "op": "wait",
+   "text": "Settings"
+  },
+  {
+   "op": "tap",
+   "key": "settings-section-resources"
+  },
+  {
+   "op": "wait",
+   "text": "Resources & updates"
+  },
+  {
+   "op": "expect",
+   "key": "settings-external-tools"
+  },
+  {
+   "op": "expect",
+   "key": "settings-system-check"
+  },
+  {
+   "op": "wait_key",
+   "key": "system-check-summary",
+   "budget_ms": 20000
+  },
+  {
+   "op": "expect",
+   "key": "settings-export-formats"
+  },
+  {
+   "op": "expect",
+   "key": "export-capability-summary"
+  },
+  {
+   "op": "shot",
+   "name": "resources-section"
+  },
+  {
+   "op": "tree",
+   "name": "resources-section"
+  },
+  {
+   "op": "expect",
+   "key": "tools-harness-detect"
+  },
+  {
+   "op": "expect",
+   "key": "resources-install-assistant"
+  },
+  {
+   "op": "tap",
+   "key": "settings-section-general"
+  },
+  {
+   "op": "expect",
+   "key": "settings-editor"
+  },
+  {
+   "op": "expect",
+   "key": "settings-guided-mode"
+  },
+  {
+   "op": "expect",
+   "key": "settings-next-step-tips"
+  },
+  {
+   "op": "expect",
+   "key": "settings-composition-guides"
+  },
+  {
+   "op": "expect",
+   "key": "settings-show-inspector"
+  }
+ ]
 }
