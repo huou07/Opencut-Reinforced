@@ -1329,11 +1329,9 @@ mod desktop {
                             if frame.descriptor().pixel_format() == FramePixelFormat::Nv12
                                 && frame.descriptor().width() == width
                                 && frame.descriptor().height() == height
-                                && let Some(planes) = frame
-                                    .shared_bytes()
-                                    .and_then(|bytes| {
-                                        or_render::Nv12Planes::from_shared(width, height, bytes)
-                                    }) =>
+                                && let Some(planes) = frame.shared_bytes().and_then(|bytes| {
+                                    or_render::Nv12Planes::from_shared(width, height, bytes)
+                                }) =>
                         {
                             if cancellation.is_cancelled()
                                 || expected_generation.is_some_and(|(generation, current)| {
@@ -4923,6 +4921,13 @@ mod desktop {
             let bytes = std::fs::metadata(&destination)
                 .expect("output exists")
                 .len();
+            let adapter = renderer()
+                .map(|renderer| {
+                    let info = renderer.adapter_info();
+                    format!("{} ({}, {:?})", info.name(), info.driver(), info.backend())
+                })
+                .unwrap_or_else(|_| "unavailable".to_owned());
+            println!("OR_EXPORT_BENCH_ADAPTER {adapter}");
             println!(
                 "OR_EXPORT_BENCH profile={profile} source={source} out={width}x{height} frames={frames} text={with_text} bytes={bytes} seconds={elapsed:.3} fps={:.1}",
                 frames as f64 / elapsed.max(f64::EPSILON)
