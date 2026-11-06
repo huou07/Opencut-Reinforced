@@ -611,6 +611,11 @@ impl NoiseGate {
         if !self.started {
             self.gain = 1.0;
         }
+        // The engine runs at 48 kHz; derive the per-sample decay from the rate the
+        // reference is documented at so a change of rate cannot silently make the
+        // gate forget a loud passage ten times too fast.
+        let peak_decay =
+            10.0_f32.powf(-PEAK_DECAY_DECIBELS_PER_SECOND / (20.0 * NOISE_GATE_SAMPLE_RATE));
         let (stereo_frames, _) = samples.as_chunks_mut::<2>();
         for stereo in stereo_frames {
             // A per-sample amplitude dips to zero on every zero crossing, so the
@@ -623,7 +628,7 @@ impl NoiseGate {
                 self.peak = level;
                 self.started = true;
             }
-            self.peak = level.max(self.peak * PEAK_DECAY).max(MIN_LEVEL);
+            self.peak = level.max(self.peak * peak_decay).max(MIN_LEVEL);
             let ratio = level / self.peak;
             let openness = ((ratio - 0.05) / 0.25).clamp(0.0, 1.0);
             let target = closed_gain + (1.0 - closed_gain) * openness;
@@ -642,10 +647,13 @@ impl NoiseGate {
 /// How fast the amplitude envelope follows the signal. One percent per frame is
 /// about two milliseconds at 48 kHz.
 const ENVELOPE_COEFFICIENT: f32 = 0.01;
-/// The peak reference decays by about 0.9 dB a second, so a loud line stops
-/// pinning the gate open after a few seconds while a quiet passage still
-/// re-learns its own level.
-const PEAK_DECAY: f32 = 0.99998;
+/// The peak reference falls by one decibel a second, so a loud line keeps a quiet
+/// passage gated for roughly twenty seconds before the reference has decayed to
+/// that passage's own level.
+const PEAK_DECAY_DECIBELS_PER_SECOND: f32 = 1.0;
+/// The rate the engine delivers PCM at; the gate's decay and envelope are tuned
+/// against it.
+const NOISE_GATE_SAMPLE_RATE: f32 = 48_000.0;
 const GATE_CLOSE: f32 = 0.02;
 const GATE_OPEN: f32 = 0.004;
 /// Below this the reference would divide by a denormal.
@@ -991,6 +999,35 @@ mod tests {
         assert!(
             burst_after > burst_before * 0.5,
             "the burst must stay audible"
+        );
+    }
+
+    #[test]
+    fn a_gate_holds_a_hiss_tail_down_for_seconds_after_a_burst() {
+        // Regression: the peak reference used to decay ~8 dB a second, so a
+        // seven-second hiss tail re-opened the gate within a second.
+        let mut gate = NoiseGate::default();
+        let rate = 48_000usize;
+        let mut burst = vec![0.0_f32; rate]; // half a second, stereo
+        for frame in 0..rate / 2 {
+            let value = 0.5 * (frame as f32 * 0.2).sin();
+            burst[frame * 2] = value;
+            burst[frame * 2 + 1] = value;
+        }
+        gate.process(&mut burst, 18);
+        let mut tail = vec![0.0_f32; rate * 2 * 6];
+        for (index, sample) in tail.iter_mut().enumerate() {
+            *sample = if index % 5 == 0 { 0.004 } else { -0.004 };
+        }
+        gate.process(&mut tail, 18);
+        let last_second = &tail[rate * 2 * 5..];
+        let energy = last_second
+            .iter()
+            .fold(0.0_f32, |sum, value| sum + value * value);
+        let source = 0.004_f32 * 0.004 * last_second.len() as f32;
+        assert!(
+            energy < source * 0.1,
+            "the gate re-opened on the tail: {energy} vs source {source}"
         );
     }
 
