@@ -8,10 +8,12 @@ void main() {
       pan: '25',
       fadeIn: '0.5',
       fadeOut: '1',
+      reduction: '12',
     );
     expect(settings, isNotNull);
     expect(settings!.gainMilliDecibels, -6500);
     expect(settings.panBasisPoints, 2500);
+    expect(settings.noiseReductionDecibels, 12);
     // ProjectRationalTime has no value equality; compare the ratvalue.
     expect(
       settings.fadeIn.numerator.toInt() / settings.fadeIn.denominator,
@@ -29,6 +31,7 @@ void main() {
       pan: '0',
       fadeIn: '0',
       fadeOut: '0',
+      reduction: '0',
     );
     expect(settings, isNull);
     expect(
@@ -39,14 +42,39 @@ void main() {
 
   test('a pan outside -100..100 is refused', () {
     expect(
-      audioSettingsFromTexts(gain: '0', pan: '200', fadeIn: '0', fadeOut: '0'),
+      audioSettingsFromTexts(
+        gain: '0',
+        pan: '200',
+        fadeIn: '0',
+        fadeOut: '0',
+        reduction: '0',
+      ),
       isNull,
     );
   });
 
   test('a fade that is not a time is refused', () {
     expect(
-      audioSettingsFromTexts(gain: '0', pan: '0', fadeIn: 'soon', fadeOut: '0'),
+      audioSettingsFromTexts(
+        gain: '0',
+        pan: '0',
+        fadeIn: 'soon',
+        fadeOut: '0',
+        reduction: '0',
+      ),
+      isNull,
+    );
+  });
+
+  test('a noise reduction above 24 dB is refused', () {
+    expect(
+      audioSettingsFromTexts(
+        gain: '0',
+        pan: '0',
+        fadeIn: '0',
+        fadeOut: '0',
+        reduction: '40',
+      ),
       isNull,
     );
   });
@@ -57,6 +85,7 @@ void main() {
       pan: '0',
       fadeIn: '1/4',
       fadeOut: '1/2',
+      reduction: '0',
     );
     expect(settings, isNotNull);
     expect(settings!.fadeIn.numerator, BigInt.from(1));

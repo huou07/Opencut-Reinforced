@@ -376,6 +376,8 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
         .toStringAsFixed(2);
     _audioFields['fade_in']!.text = _secondsLabel(settings.fadeIn);
     _audioFields['fade_out']!.text = _secondsLabel(settings.fadeOut);
+    _audioFields['noise_reduction_db']!.text =
+        settings.noiseReductionDecibels.toString();
   }
 
   ProjectTimelineVisualSettings? _readSettings() {
@@ -487,6 +489,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     pan: _audioFields['pan_percent']!.text,
     fadeIn: _audioFields['fade_in']!.text,
     fadeOut: _audioFields['fade_out']!.text,
+    reduction: _audioFields['noise_reduction_db']!.text,
   );
 
   Future<void> _apply(ProjectTimelineVisualSettings settings) async {
@@ -926,6 +929,36 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     style: const TextStyle(fontSize: OrType.tinySize),
   );
 
+  /// The four strengths an editor actually reaches for, so reducing noise is
+  /// one tap instead of a decibel guess. Picking a preset writes the ordinary
+  /// audio-settings command, which means the whole change is one undo step.
+  Widget _noiseReductionPresets() => Wrap(
+    spacing: OrSpacing.x2,
+    runSpacing: OrSpacing.x1,
+    children: [
+      for (final level in const [0, 6, 12, 18])
+        ChoiceChip(
+          key: ValueKey('inspector-noise-preset-$level'),
+          label: Text(level == 0 ? 'No reduction' : '$level dB'),
+          selected:
+              int.tryParse(_audioFields['noise_reduction_db']!.text) == level,
+          onSelected: widget.busy || _saving || _loading || widget.trackLocked
+              ? null
+              : (_) => _applyNoiseReduction(level),
+        ),
+    ],
+  );
+
+  Future<void> _applyNoiseReduction(int decibels) async {
+    _audioFields['noise_reduction_db']!.text = decibels.toString();
+    final settings = _readAudioSettings();
+    if (settings == null) {
+      setState(() => _error = inspectorAudioValidationMessage);
+      return;
+    }
+    await _applyAudio(settings);
+  }
+
   /// What the inspector shows when no clip is selected: the sequence the
   /// edits belong to, plus the facts that explain an empty viewer.
   Widget _projectInspector() {
@@ -1098,6 +1131,16 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       _audioTimeField('fade_in', 'Fade in (s)'),
       const SizedBox(height: OrSpacing.x1),
       _audioTimeField('fade_out', 'Fade out (s)'),
+      const SizedBox(height: OrSpacing.x1),
+      _audioNumberField(
+        'noise_reduction_db',
+        'Reduce noise (dB)',
+        decimal: false,
+        minimum: 0,
+        maximum: 24,
+      ),
+      const SizedBox(height: OrSpacing.x2),
+      _noiseReductionPresets(),
       if (_error != null) ...[
         const SizedBox(height: OrSpacing.x2),
         Semantics(
@@ -1435,7 +1478,13 @@ const _visualTimeFieldKeys = [
   'transition_out_duration',
 ];
 
-const _audioFieldKeys = ['gain_db', 'pan_percent', 'fade_in', 'fade_out'];
+const _audioFieldKeys = [
+  'gain_db',
+  'pan_percent',
+  'fade_in',
+  'fade_out',
+  'noise_reduction_db',
+];
 
 /// A horizontal toolbar that makes its overflow visible.
 ///

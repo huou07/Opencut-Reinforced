@@ -525,6 +525,7 @@ pub struct ProjectTimelineAudioSettingsView {
     pub pan_basis_points: i16,
     pub fade_in: RationalTimeView,
     pub fade_out: RationalTimeView,
+    pub noise_reduction_decibels: u32,
 }
 
 #[derive(Clone, Debug)]

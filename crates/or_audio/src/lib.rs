@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use or_core::{
-    AudioSettings, MAX_AUDIO_GAIN_MILLIDECIBELS, MIN_AUDIO_GAIN_MILLIDECIBELS, RationalRate,
-    RationalTime, TimeError,
+    AudioSettings, MAX_AUDIO_GAIN_MILLIDECIBELS, MAX_NOISE_REDUCTION_DECIBELS,
+    MIN_AUDIO_GAIN_MILLIDECIBELS, RationalRate, RationalTime, TimeError,
 };
 use or_runtime::{CancellationToken, RenderSnapshot};
 
@@ -579,6 +579,78 @@ pub fn process_audio_clip(
     Ok(())
 }
 
+/// Attenuates steady background noise in interleaved stereo PCM.
+///
+/// An expander keyed to a slowly decaying peak: material that sits more than
+/// about 10 dB under the loudest thing heard recently is pulled down toward
+/// `-reduction_decibels`, while anything close to that peak passes untouched.
+/// A sustained tone or a music bed therefore keeps its level, and hiss under
+/// speech falls away.
+///
+/// One instance belongs to one clip and keeps its state across render blocks,
+/// which is what stops the gain from pumping at block boundaries. Preview and
+/// export drive the same gate, so both agree.
+#[derive(Debug, Default)]
+pub struct NoiseGate {
+    peak: f32,
+    envelope: f32,
+    gain: f32,
+    started: bool,
+}
+
+impl NoiseGate {
+    /// Processes one block for a clip at `reduction_decibels` of attenuation.
+    pub fn process(&mut self, samples: &mut [f32], reduction_decibels: u32) {
+        if reduction_decibels == 0 {
+            // A disabled gate must not learn a reference from material the
+            // editor may switch on later at a different level.
+            return;
+        }
+        let reduction_decibels = reduction_decibels.min(MAX_NOISE_REDUCTION_DECIBELS);
+        let closed_gain = 10.0_f32.powf(-(reduction_decibels as f32) / 20.0);
+        if !self.started {
+            self.gain = 1.0;
+        }
+        let (stereo_frames, _) = samples.as_chunks_mut::<2>();
+        for stereo in stereo_frames {
+            // A per-sample amplitude dips to zero on every zero crossing, so the
+            // gate follows a ~2 ms envelope: fast enough to open on a consonant,
+            // slow enough never to chop a steady tone.
+            let amplitude = (stereo[0].abs() + stereo[1].abs()) * 0.5;
+            self.envelope += (amplitude - self.envelope) * ENVELOPE_COEFFICIENT;
+            let level = self.envelope;
+            if !self.started {
+                self.peak = level;
+                self.started = true;
+            }
+            self.peak = level.max(self.peak * PEAK_DECAY).max(MIN_LEVEL);
+            let ratio = level / self.peak;
+            let openness = ((ratio - 0.05) / 0.25).clamp(0.0, 1.0);
+            let target = closed_gain + (1.0 - closed_gain) * openness;
+            self.gain += (target - self.gain)
+                * if target < self.gain {
+                    GATE_CLOSE
+                } else {
+                    GATE_OPEN
+                };
+            stereo[0] *= self.gain;
+            stereo[1] *= self.gain;
+        }
+    }
+}
+
+/// How fast the amplitude envelope follows the signal. One percent per frame is
+/// about two milliseconds at 48 kHz.
+const ENVELOPE_COEFFICIENT: f32 = 0.01;
+/// The peak reference decays by about 0.9 dB a second, so a loud line stops
+/// pinning the gate open after a few seconds while a quiet passage still
+/// re-learns its own level.
+const PEAK_DECAY: f32 = 0.99998;
+const GATE_CLOSE: f32 = 0.02;
+const GATE_OPEN: f32 = 0.004;
+/// Below this the reference would divide by a denormal.
+const MIN_LEVEL: f32 = 1.0e-6;
+
 fn seconds(time: RationalTime) -> f64 {
     time.numerator() as f64 / f64::from(time.denominator())
 }
@@ -622,8 +694,8 @@ pub use device::{AudioDeviceOutput, AudioDeviceOutputError};
 mod tests {
     use super::{
         AudioBuffer, AudioClockError, AudioClockMessage, AudioProcessError, AudioPushError,
-        AudioRenderError, AvSynchronizer, AvSynchronizerError, LinearResampler, VideoSyncAction,
-        process_audio_clip,
+        AudioRenderError, AvSynchronizer, AvSynchronizerError, LinearResampler, NoiseGate,
+        VideoSyncAction, process_audio_clip,
     };
     use or_core::{AudioSettings, ProjectDocument, RationalTime};
     use or_runtime::{CancellationToken, RenderSnapshot};
@@ -876,13 +948,79 @@ mod tests {
     }
 
     #[test]
+    fn a_gate_keeps_a_sustained_tone_and_quiets_hiss_under_a_burst() {
+        let mut gate = NoiseGate::default();
+        // A loud burst, then a quiet hiss: the reference comes from the burst.
+        let mut samples = vec![0.0_f32; 48_000 * 2 * 2];
+        for (index, stereo) in samples.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let time = index as f32 / 48_000.0;
+            let value = if time < 0.5 {
+                0.3 * (2.0 * std::f32::consts::PI * 220.0 * time).sin()
+            } else {
+                // A different frequency at 30 dB below the burst.
+                0.0095 * (2.0 * std::f32::consts::PI * 3_000.0 * time).sin()
+            };
+            stereo[0] = value;
+            stereo[1] = value;
+        }
+        let mut processed = samples.clone();
+        gate.process(&mut processed, 18);
+        let before: f32 = samples[48_000..]
+            .chunks(2)
+            .map(|stereo| stereo[0] * stereo[0])
+            .sum::<f32>();
+        let after: f32 = processed[48_000..]
+            .chunks(2)
+            .map(|stereo| stereo[0] * stereo[0])
+            .sum::<f32>();
+        let attenuation_db = 10.0 * (after / before).log10();
+        assert!(
+            attenuation_db < -6.0,
+            "hiss should fall away, measured {attenuation_db} dB"
+        );
+        // The burst itself must survive: its second quarter is compared against
+        // the same window of the input, allowing for the envelope closing late.
+        let burst_before: f32 = samples[24_000..48_000.min(samples.len())]
+            .chunks(2)
+            .map(|stereo| stereo[0] * stereo[0])
+            .sum::<f32>();
+        let burst_after: f32 = processed[24_000..48_000.min(samples.len())]
+            .chunks(2)
+            .map(|stereo| stereo[0] * stereo[0])
+            .sum::<f32>();
+        assert!(
+            burst_after > burst_before * 0.5,
+            "the burst must stay audible"
+        );
+    }
+
+    #[test]
+    fn a_gate_leaves_a_steady_tone_alone() {
+        let mut gate = NoiseGate::default();
+        let mut samples = vec![0.0_f32; 48_000 * 2];
+        for (index, stereo) in samples.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+            let value = 0.3 * (2.0 * std::f32::consts::PI * 180.0 * index as f32 / 48_000.0).sin();
+            stereo[0] = value;
+            stereo[1] = value;
+        }
+        let mut processed = samples.clone();
+        gate.process(&mut processed, 18);
+        let before: f32 = samples.iter().map(|sample| sample * sample).sum();
+        let after: f32 = processed.iter().map(|sample| sample * sample).sum();
+        assert!(
+            after > before * 0.9,
+            "a steady tone must not be treated as noise: {after} vs {before}"
+        );
+    }
+
+    #[test]
     fn clip_processor_rejects_invalid_blocks_and_ranges() {
         assert_eq!(
             process_audio_clip(
                 &mut [0.0; 3],
                 RationalTime::ZERO,
                 time(1, 1),
-                AudioSettings::DEFAULT
+                AudioSettings::DEFAULT,
             ),
             Err(AudioProcessError::IncompleteStereoFrame)
         );

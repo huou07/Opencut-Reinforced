@@ -24,6 +24,10 @@ pub const MAX_TRANSFORM_POSITION_MILLI_CANVAS: i32 = 100_000;
 pub const MAX_TRANSFORM_SCALE_MILLI: u32 = 100_000;
 pub const MAX_AUDIO_GAIN_MILLIDECIBELS: i32 = 24_000;
 pub const MIN_AUDIO_GAIN_MILLIDECIBELS: i32 = -96_000;
+/// The loudest noise reduction a clip can ask the mixer for. Beyond about
+/// 24 dB a gate starts cutting breath and room tone between words, so the
+/// ceiling is a product decision, not a DSP limit.
+pub const MAX_NOISE_REDUCTION_DECIBELS: u32 = 24;
 
 macro_rules! timeline_id {
     ($name:ident) => {
@@ -657,6 +661,11 @@ pub struct AudioSettings {
     pub pan_basis_points: i16,
     pub fade_in: RationalTime,
     pub fade_out: RationalTime,
+    /// How much the mixer should attenuate steady background noise, in
+    /// decibels. Zero is off, which is what every project written before this
+    /// field existed means.
+    #[serde(default)]
+    pub noise_reduction_decibels: u32,
 }
 
 impl AudioSettings {
@@ -665,6 +674,7 @@ impl AudioSettings {
         pan_basis_points: 0,
         fade_in: RationalTime::ZERO,
         fade_out: RationalTime::ZERO,
+        noise_reduction_decibels: 0,
     };
 
     fn is_valid_for_duration(self, duration: RationalTime) -> bool {
@@ -675,6 +685,7 @@ impl AudioSettings {
             && !self.fade_out.is_negative()
             && self.fade_in <= duration
             && self.fade_out <= duration
+            && self.noise_reduction_decibels <= MAX_NOISE_REDUCTION_DECIBELS
     }
 }
 
@@ -1534,6 +1545,29 @@ impl Error for TimelineValidationError {}
 
 #[cfg(test)]
 mod tests {
+    use super::{AudioSettings, MAX_NOISE_REDUCTION_DECIBELS};
+
+    #[test]
+    fn noise_reduction_is_optional_in_old_settings_and_bounded_when_present() {
+        // Projects written before the field existed must still open: the absent
+        // value means "no reduction", never a silent default of some other level.
+        let legacy = r#"{"gain_millidecibels":0,"pan_basis_points":0,"fade_in":{"numerator":0,"denominator":1},"fade_out":{"numerator":0,"denominator":1}}"#;
+        let settings: AudioSettings = serde_json::from_str(legacy).unwrap();
+        assert_eq!(settings.noise_reduction_decibels, 0);
+
+        let duration = RationalTime::new(4, 1).unwrap();
+        let reduced = AudioSettings {
+            noise_reduction_decibels: MAX_NOISE_REDUCTION_DECIBELS,
+            ..AudioSettings::DEFAULT
+        };
+        assert!(reduced.is_valid_for_duration(duration));
+        let beyond = AudioSettings {
+            noise_reduction_decibels: MAX_NOISE_REDUCTION_DECIBELS + 1,
+            ..AudioSettings::DEFAULT
+        };
+        assert!(!beyond.is_valid_for_duration(duration));
+    }
+
     #[test]
     fn a_reversed_media_clip_round_trips_and_stays_forward_by_default() {
         // The flag is skipped when false, so an untouched project keeps the bytes it

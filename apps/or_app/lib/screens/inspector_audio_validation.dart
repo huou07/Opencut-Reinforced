@@ -8,8 +8,8 @@ import 'editor_rational_time.dart';
 /// names every field it validates, and tests assert both the null result and
 /// this text.
 const String inspectorAudioValidationMessage =
-    'Enter a gain between -96 and 24 dB, a pan between -100 and 100%, and '
-    'fade times in seconds.';
+    'Enter a gain between -96 and 24 dB, a pan between -100 and 100%, fade '
+    'times in seconds, and noise reduction between 0 and 24 dB.';
 
 /// Parses seconds or an exact rational like `1/4`; negative times are refused.
 ProjectRationalTime? parseSecondsOrRational(String text) {
@@ -29,11 +29,13 @@ ProjectTimelineAudioSettings? audioSettingsFromTexts({
   required String pan,
   required String fadeIn,
   required String fadeOut,
+  required String reduction,
 }) {
   final gainValue = double.tryParse(gain.trim());
   final panValue = double.tryParse(pan.trim());
   final fadeInValue = parseSecondsOrRational(fadeIn);
   final fadeOutValue = parseSecondsOrRational(fadeOut);
+  final reductionValue = int.tryParse(reduction.trim());
   if (gainValue == null ||
       !gainValue.isFinite ||
       gainValue < -96 ||
@@ -45,7 +47,10 @@ ProjectTimelineAudioSettings? audioSettingsFromTexts({
       fadeInValue == null ||
       fadeInValue.numerator < BigInt.zero ||
       fadeOutValue == null ||
-      fadeOutValue.numerator < BigInt.zero) {
+      fadeOutValue.numerator < BigInt.zero ||
+      reductionValue == null ||
+      reductionValue < 0 ||
+      reductionValue > 24) {
     return null;
   }
   return ProjectTimelineAudioSettings(
@@ -53,5 +58,6 @@ ProjectTimelineAudioSettings? audioSettingsFromTexts({
     panBasisPoints: (panValue * 100).round(),
     fadeIn: fadeInValue,
     fadeOut: fadeOutValue,
+    noiseReductionDecibels: reductionValue,
   );
 }

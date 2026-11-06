@@ -7092,11 +7092,13 @@ impl SseDecode for crate::api::views::ProjectTimelineAudioSettingsView {
         let mut var_panBasisPoints = <i16>::sse_decode(deserializer);
         let mut var_fadeIn = <crate::api::views::RationalTimeView>::sse_decode(deserializer);
         let mut var_fadeOut = <crate::api::views::RationalTimeView>::sse_decode(deserializer);
+        let mut var_noiseReductionDecibels = <u32>::sse_decode(deserializer);
         return crate::api::views::ProjectTimelineAudioSettingsView {
             gain_millidecibels: var_gainMillidecibels,
             pan_basis_points: var_panBasisPoints,
             fade_in: var_fadeIn,
             fade_out: var_fadeOut,
+            noise_reduction_decibels: var_noiseReductionDecibels,
         };
     }
 }
@@ -9347,6 +9349,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectTimelineAudioSe
             self.pan_basis_points.into_into_dart().into_dart(),
             self.fade_in.into_into_dart().into_dart(),
             self.fade_out.into_into_dart().into_dart(),
+            self.noise_reduction_decibels.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -11040,6 +11043,7 @@ impl SseEncode for crate::api::views::ProjectTimelineAudioSettingsView {
         <i16>::sse_encode(self.pan_basis_points, serializer);
         <crate::api::views::RationalTimeView>::sse_encode(self.fade_in, serializer);
         <crate::api::views::RationalTimeView>::sse_encode(self.fade_out, serializer);
+        <u32>::sse_encode(self.noise_reduction_decibels, serializer);
     }
 }
 

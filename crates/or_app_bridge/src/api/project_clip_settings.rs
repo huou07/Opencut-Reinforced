@@ -158,6 +158,7 @@ impl ProjectHostHandle {
                 pan_basis_points: settings.pan_basis_points,
                 fade_in,
                 fade_out,
+                noise_reduction_decibels: settings.noise_reduction_decibels,
             }),
         ))
     }

@@ -3869,6 +3869,7 @@ class _AppShellState extends State<AppShell> {
               panBasisPoints: current.panBasisPoints,
               fadeIn: current.fadeIn,
               fadeOut: current.fadeOut,
+              noiseReductionDecibels: current.noiseReductionDecibels,
             ),
           ),
     );

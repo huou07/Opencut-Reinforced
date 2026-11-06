@@ -2173,6 +2173,7 @@ pub(crate) fn audio_settings_view(settings: AudioSettings) -> ProjectTimelineAud
         pan_basis_points: settings.pan_basis_points,
         fade_in: rational_time_view(settings.fade_in),
         fade_out: rational_time_view(settings.fade_out),
+        noise_reduction_decibels: settings.noise_reduction_decibels,
     }
 }
 

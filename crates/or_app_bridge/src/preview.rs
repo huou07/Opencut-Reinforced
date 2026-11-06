@@ -56,7 +56,8 @@ mod desktop {
     use super::{PreviewError, PreviewPreparation, PreviewPreparationAction, PreviewSnapshot};
     use crate::viewer_texture;
     use or_audio::{
-        AudioClockMessage, AudioProducer, AvSynchronizer, VideoSyncAction, process_audio_clip,
+        AudioClockMessage, AudioProducer, AvSynchronizer, NoiseGate, VideoSyncAction,
+        process_audio_clip,
     };
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
@@ -2279,6 +2280,9 @@ mod desktop {
 
     #[derive(Clone)]
     struct AudioClip {
+        /// Stable identity so a clip's noise gate can keep its state from one
+        /// render block to the next.
+        id: String,
         #[allow(dead_code)]
         #[allow(dead_code)]
         playback_rate: RationalRate,
@@ -2555,6 +2559,7 @@ mod desktop {
                     PreviewError::new("PREVIEW_QUERY_FAILED", "timeline media source was missing")
                 })?;
                 audio_clips.push(AudioClip {
+                    id: clip.clip_id.to_string(),
                     source,
                     timeline_start: clip.timeline_start,
                     source_start: source_range.start(),
@@ -3167,6 +3172,14 @@ mod desktop {
                 Err(_) => Err("audio decoder worker panicked".to_owned()),
             }
         })?;
+        // The cached path holds the whole clip, so its gate runs once, start to
+        // end, and reaches the same steady state the streaming path would.
+        if clip.settings.noise_reduction_decibels > 0 {
+            let mut gate = NoiseGate::default();
+            for chunk in &mut cached.chunks {
+                gate.process(&mut chunk.samples, clip.settings.noise_reduction_decibels);
+            }
+        }
         Ok(cached)
     }
 
@@ -3217,6 +3230,7 @@ mod desktop {
         job: &JobContext,
         cancellation: &CancellationToken,
     ) -> Result<(), String> {
+        let mut noise_gates: HashMap<String, NoiseGate> = HashMap::new();
         while *audio_cursor < audio_until {
             if job.is_cancelled() || cancellation.is_cancelled() {
                 return Err("export was cancelled".to_owned());
@@ -3238,6 +3252,7 @@ mod desktop {
                     mix_audio_window(
                         &mut mixed,
                         &program.audio_clips,
+                        &mut noise_gates,
                         program.key,
                         block_start,
                         budgets.clone(),
@@ -3425,6 +3440,7 @@ mod desktop {
         }
 
         let mut cursor = 0_u64;
+        let mut noise_gates: HashMap<String, NoiseGate> = HashMap::new();
         let mut samples = Vec::new();
         let mut ready = Some(ready);
         while cursor < end_frame as u64 && !cancellation.is_cancelled() {
@@ -3445,6 +3461,7 @@ mod desktop {
             if let Err(message) = mix_audio_window(
                 &mut samples,
                 clips,
+                &mut noise_gates,
                 key,
                 block_start,
                 budgets.clone(),
@@ -3496,6 +3513,7 @@ mod desktop {
     fn mix_audio_window(
         output: &mut [f32],
         clips: &[AudioClip],
+        gates: &mut HashMap<String, NoiseGate>,
         key: ProgramKey,
         block_start: RationalTime,
         budgets: RuntimeBudgets,
@@ -3563,7 +3581,7 @@ mod desktop {
                     {
                         if !cancellation.is_cancelled()
                             && let Err(message) =
-                                mix_audio_chunk(output, clip, block_start, item.into_value())
+                                mix_audio_chunk(output, clip, gates, block_start, item.into_value())
                         {
                             mix_error.get_or_insert(message);
                         }
@@ -3602,9 +3620,12 @@ mod desktop {
     fn mix_audio_chunk(
         output: &mut [f32],
         clip: &AudioClip,
+        gates: &mut HashMap<String, NoiseGate>,
         block_start: RationalTime,
-        chunk: or_media::AudioChunk,
+        mut chunk: or_media::AudioChunk,
     ) -> Result<(), String> {
+        let gate = gates.entry(clip.id.clone()).or_default();
+        gate.process(chunk.samples_mut(), clip.settings.noise_reduction_decibels);
         mix_audio_samples(
             output,
             clip,

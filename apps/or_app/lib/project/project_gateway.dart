@@ -733,6 +733,7 @@ class ProjectTimelineAudioSettings {
     required this.panBasisPoints,
     required this.fadeIn,
     required this.fadeOut,
+    required this.noiseReductionDecibels,
   });
 
   static final identity = ProjectTimelineAudioSettings(
@@ -740,12 +741,17 @@ class ProjectTimelineAudioSettings {
     panBasisPoints: 0,
     fadeIn: ProjectRationalTime(BigInt.zero, 1),
     fadeOut: ProjectRationalTime(BigInt.zero, 1),
+    noiseReductionDecibels: 0,
   );
 
   final int gainMilliDecibels;
   final int panBasisPoints;
   final ProjectRationalTime fadeIn;
   final ProjectRationalTime fadeOut;
+
+  /// How hard the mixer gates steady background noise, in decibels. Zero is
+  /// off; the timeline menu offers 12 dB as the everyday choice.
+  final int noiseReductionDecibels;
 }
 
 class ProjectTimelineClipPage {

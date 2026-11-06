@@ -7319,13 +7319,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   dco_decode_project_timeline_audio_settings_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ProjectTimelineAudioSettingsView(
       gainMillidecibels: dco_decode_i_32(arr[0]),
       panBasisPoints: dco_decode_i_16(arr[1]),
       fadeIn: dco_decode_rational_time_view(arr[2]),
       fadeOut: dco_decode_rational_time_view(arr[3]),
+      noiseReductionDecibels: dco_decode_u_32(arr[4]),
     );
   }
 
@@ -9193,11 +9194,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_panBasisPoints = sse_decode_i_16(deserializer);
     var var_fadeIn = sse_decode_rational_time_view(deserializer);
     var var_fadeOut = sse_decode_rational_time_view(deserializer);
+    var var_noiseReductionDecibels = sse_decode_u_32(deserializer);
     return ProjectTimelineAudioSettingsView(
       gainMillidecibels: var_gainMillidecibels,
       panBasisPoints: var_panBasisPoints,
       fadeIn: var_fadeIn,
       fadeOut: var_fadeOut,
+      noiseReductionDecibels: var_noiseReductionDecibels,
     );
   }
 
@@ -10960,6 +10963,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_16(self.panBasisPoints, serializer);
     sse_encode_rational_time_view(self.fadeIn, serializer);
     sse_encode_rational_time_view(self.fadeOut, serializer);
+    sse_encode_u_32(self.noiseReductionDecibels, serializer);
   }
 
   @protected

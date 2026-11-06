@@ -250,6 +250,12 @@ impl AudioChunk {
         &self.samples
     }
 
+    /// Borrows the decoded samples so a clip-owned stage such as its noise gate
+    /// can adjust them in place instead of copying the block.
+    pub fn samples_mut(&mut self) -> &mut [f32] {
+        &mut self.samples
+    }
+
     pub fn sample_frames(&self) -> usize {
         self.samples.len() / OUTPUT_AUDIO_CHANNELS
     }

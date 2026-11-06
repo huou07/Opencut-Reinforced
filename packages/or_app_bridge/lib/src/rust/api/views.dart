@@ -769,12 +769,14 @@ class ProjectTimelineAudioSettingsView {
   final int panBasisPoints;
   final RationalTimeView fadeIn;
   final RationalTimeView fadeOut;
+  final int noiseReductionDecibels;
 
   const ProjectTimelineAudioSettingsView({
     required this.gainMillidecibels,
     required this.panBasisPoints,
     required this.fadeIn,
     required this.fadeOut,
+    required this.noiseReductionDecibels,
   });
 
   @override
@@ -782,7 +784,8 @@ class ProjectTimelineAudioSettingsView {
       gainMillidecibels.hashCode ^
       panBasisPoints.hashCode ^
       fadeIn.hashCode ^
-      fadeOut.hashCode;
+      fadeOut.hashCode ^
+      noiseReductionDecibels.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -792,7 +795,8 @@ class ProjectTimelineAudioSettingsView {
           gainMillidecibels == other.gainMillidecibels &&
           panBasisPoints == other.panBasisPoints &&
           fadeIn == other.fadeIn &&
-          fadeOut == other.fadeOut;
+          fadeOut == other.fadeOut &&
+          noiseReductionDecibels == other.noiseReductionDecibels;
 }
 
 class ProjectTimelineClipPageView {
