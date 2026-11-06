@@ -14,7 +14,8 @@ use or_core::{
 pub struct ProjectKeyframeView {
     pub at: RationalTimeView,
     pub value: i32,
-    /// `linear`, `ease_in`, `ease_out` or `ease_in_out`.
+    /// `linear`, `ease_in`, `ease_out`, `ease_in_out`, `ease_out_back` or
+    /// `ease_out_bounce`.
     pub easing: String,
 }
 
@@ -134,8 +135,8 @@ fn keyframes_from_view(
             let easing =
                 KeyframeEasing::parse(&keyframe.easing).ok_or_else(|| ProjectBridgeError {
                     code: "INVALID_KEYFRAME_EASING".to_owned(),
-                    message: "keyframe easing must be linear, ease_in, ease_out or \
-                              ease_in_out"
+                    message: "keyframe easing must be linear, ease_in, ease_out, \
+                              ease_in_out, ease_out_back or ease_out_bounce"
                         .to_owned(),
                 })?;
             Ok(Keyframe {

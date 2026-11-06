@@ -359,6 +359,11 @@ One near-term delivery mission for the local macOS app, in this order:
     automatic and the report shows both. Animated export rows exist for Debian
     (96.7–119.2 fps with a title) and Windows (126.9 video-only, 80.0 with a
     title), inside each host's static spread.
+46. **Six keyframe easings (2026-11-07).** Overshoot (`ease_out_back`) and
+    Bounce (`ease_out_bounce`) join linear and the three cubic curves in the
+    core model, the CLI/MCP spelling, the inspector (six chips in the keyframe
+    dialog) and export sampling. The `keyframes` journey edits a keyframe to
+    Overshoot and reads `0.00s · 50.0% · Overshoot` back on macOS.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

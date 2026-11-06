@@ -2655,7 +2655,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(name) => KeyframeEasing::parse(name).ok_or_else(|| {
                     CliError::usage(
                         json,
-                        "--easing must be linear, ease_in, ease_out or ease_in_out",
+                        "--easing must be linear, ease_in, ease_out, ease_in_out, ease_out_back or ease_out_bounce",
                     )
                 })?,
             };

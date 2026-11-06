@@ -53,6 +53,11 @@ host, and what remains unverified. Revision `bacf5cff`; branch
   with one text layer). macOS is unchanged within spread; the Windows Intel
   driver runs the compute version about 8 % slower on that workload, recorded as
   a measured tradeoff with a per-device follow-up.
+- **Six easings.** Overshoot (back) and Bounce join the four cubic curves, in
+  the core model, the bridge/CLI spelling, the inspector dialog (six chips, no
+  menu) and the export path. The dialog shows every curve at once, and the
+  keyframes journey edits a keyframe to Overshoot and reads
+  `0.00s · 50.0% · Overshoot` back on the real inspector.
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.

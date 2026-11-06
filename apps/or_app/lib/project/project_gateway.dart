@@ -745,13 +745,17 @@ enum ProjectKeyframeEasing {
   linear,
   easeIn,
   easeOut,
-  easeInOut;
+  easeInOut,
+  easeOutBack,
+  easeOutBounce;
 
   String get wireName => switch (this) {
     ProjectKeyframeEasing.linear => 'linear',
     ProjectKeyframeEasing.easeIn => 'ease_in',
     ProjectKeyframeEasing.easeOut => 'ease_out',
     ProjectKeyframeEasing.easeInOut => 'ease_in_out',
+    ProjectKeyframeEasing.easeOutBack => 'ease_out_back',
+    ProjectKeyframeEasing.easeOutBounce => 'ease_out_bounce',
   };
 
   static ProjectKeyframeEasing fromWire(String value) =>

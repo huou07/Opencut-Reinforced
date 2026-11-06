@@ -145,35 +145,35 @@ mod desktop {
     const MAX_EXPORT_AUDIO_WORKERS: usize = 16;
 
     /// The graphics backend chosen in Settings, read once when the device opens.
-static GRAPHICS_PREFERENCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+    static GRAPHICS_PREFERENCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
-/// Records the backend preference before the renderer opens.
-///
-/// Accepts `auto` or a compiler backend name; an unknown name is a caller
-/// error rather than a silent fallback, so the UI can say the truth.
-pub(crate) fn set_graphics_preference(backend: &str) -> Result<(), String> {
-    let name = backend.trim().to_ascii_lowercase();
-    if name != "auto" && or_render::RenderDevice::backend_flag(&name).is_none() {
-        return Err(format!(
-            "graphics backend must be auto, metal, vulkan, dx12 or gles; got {backend:?}"
-        ));
+    /// Records the backend preference before the renderer opens.
+    ///
+    /// Accepts `auto` or a compiler backend name; an unknown name is a caller
+    /// error rather than a silent fallback, so the UI can say the truth.
+    pub(crate) fn set_graphics_preference(backend: &str) -> Result<(), String> {
+        let name = backend.trim().to_ascii_lowercase();
+        if name != "auto" && or_render::RenderDevice::backend_flag(&name).is_none() {
+            return Err(format!(
+                "graphics backend must be auto, metal, vulkan, dx12 or gles; got {backend:?}"
+            ));
+        }
+        let mut guard = GRAPHICS_PREFERENCE
+            .lock()
+            .map_err(|_| "graphics preference lock is poisoned".to_owned())?;
+        *guard = Some(name);
+        Ok(())
     }
-    let mut guard = GRAPHICS_PREFERENCE
-        .lock()
-        .map_err(|_| "graphics preference lock is poisoned".to_owned())?;
-    *guard = Some(name);
-    Ok(())
-}
 
-pub(crate) fn graphics_preference() -> String {
-    GRAPHICS_PREFERENCE
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone())
-        .unwrap_or_else(|| "auto".to_owned())
-}
+    pub(crate) fn graphics_preference() -> String {
+        GRAPHICS_PREFERENCE
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .unwrap_or_else(|| "auto".to_owned())
+    }
 
-static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
+    static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
     static FFMPEG_LICENSE_PROBLEM: OnceLock<String> = OnceLock::new();
 
@@ -2771,7 +2771,8 @@ static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
                 let preferred = preferred_backend();
                 let device = match preferred
                     .as_deref()
-                    .and_then(or_render::RenderDevice::backend_flag) {
+                    .and_then(or_render::RenderDevice::backend_flag)
+                {
                     Some(backends) => block_on(RenderDevice::new_with_backends(backends))
                         .or_else(|_| block_on(RenderDevice::new())),
                     None => block_on(RenderDevice::new()),

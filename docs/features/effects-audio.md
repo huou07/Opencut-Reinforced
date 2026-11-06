@@ -16,8 +16,11 @@ units (%, °, px, dB, s) while retaining exact project values.
 
 Transform channels (position, scale, rotation) and opacity can be keyframed per
 clip. A keyframe stores an offset from the clip start, an exact integer value in
-the same fixed-point unit as the static field, and one of four cubic easings
-(linear, ease in, ease out, ease in and out). Before the first and after the last
+the same fixed-point unit as the static field, and one of six easings: linear,
+cubic ease in, ease out and ease in-out, Overshoot (a spring-like pass beyond
+the target) and Bounce (four decaying hops that still land exactly on it).
+Interpolated values may pass the target on Overshoot; opacity and scale are
+clamped at render time. Before the first and after the last
 keyframe the track holds the nearest value, and a channel with no keyframes keeps
 the static field, so a project written before animation opens unchanged.
 

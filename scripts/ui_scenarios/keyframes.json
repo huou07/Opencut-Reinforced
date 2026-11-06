@@ -146,12 +146,43 @@
   {
    "op": "tap",
    "selector": {
-    "text": "Save"
+    "key": "animation-dialog-easing-ease_out_back"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "animation-dialog-save"
    }
   },
   {
    "op": "pump",
    "ms": 600
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-keyframe-opacity-0"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Overshoot",
+   "budget_ms": 5000
+  },
+  {
+   "op": "tree",
+   "name": "after-easing"
   },
   {
    "op": "expect_absent",

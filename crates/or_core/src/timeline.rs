@@ -694,10 +694,21 @@ pub enum KeyframeEasing {
     EaseIn,
     EaseOut,
     EaseInOut,
+    /// Overshoots the target and settles back, like a spring without ringing.
+    EaseOutBack,
+    /// Bounces a few times before resting on the target.
+    EaseOutBounce,
 }
 
 impl KeyframeEasing {
-    pub const ALL: [Self; 4] = [Self::Linear, Self::EaseIn, Self::EaseOut, Self::EaseInOut];
+    pub const ALL: [Self; 6] = [
+        Self::Linear,
+        Self::EaseIn,
+        Self::EaseOut,
+        Self::EaseInOut,
+        Self::EaseOutBack,
+        Self::EaseOutBounce,
+    ];
 
     pub const fn wire_name(self) -> &'static str {
         match self {
@@ -705,6 +716,8 @@ impl KeyframeEasing {
             Self::EaseIn => "ease_in",
             Self::EaseOut => "ease_out",
             Self::EaseInOut => "ease_in_out",
+            Self::EaseOutBack => "ease_out_back",
+            Self::EaseOutBounce => "ease_out_bounce",
         }
     }
 
@@ -726,6 +739,27 @@ impl KeyframeEasing {
                     4.0 * t * t * t
                 } else {
                     1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+                }
+            }
+            Self::EaseOutBack => {
+                const C1: f64 = 1.701_58;
+                const C3: f64 = C1 + 1.0;
+                1.0 + C3 * (t - 1.0).powi(3) + C1 * (t - 1.0).powi(2)
+            }
+            Self::EaseOutBounce => {
+                const N1: f64 = 7.562_5;
+                const D1: f64 = 2.75;
+                if t < 1.0 / D1 {
+                    N1 * t * t
+                } else if t < 2.0 / D1 {
+                    let t = t - 1.5 / D1;
+                    N1 * t * t + 0.75
+                } else if t < 2.5 / D1 {
+                    let t = t - 2.25 / D1;
+                    N1 * t * t + 0.937_5
+                } else {
+                    let t = t - 2.625 / D1;
+                    N1 * t * t + 0.984_375
                 }
             }
         }
@@ -2740,6 +2774,35 @@ mod tests {
             two_keyframes(KeyframeEasing::EaseInOut).sample_at(time(1, 2), 0),
             500
         );
+    }
+
+    #[test]
+    fn every_easing_round_trips_its_wire_name() {
+        for easing in KeyframeEasing::ALL {
+            assert_eq!(KeyframeEasing::parse(easing.wire_name()), Some(easing));
+        }
+    }
+
+    #[test]
+    fn back_overshoots_the_target_and_bounce_stays_inside_it() {
+        let back = two_keyframes(KeyframeEasing::EaseOutBack);
+        let overshoot = back.sample_at(time(3, 4), 0);
+        assert!(
+            overshoot > 1_000,
+            "back should pass the target, got {overshoot}"
+        );
+        assert_eq!(back.sample_at(time(1, 1), 0), 1_000);
+
+        let bounce = two_keyframes(KeyframeEasing::EaseOutBounce);
+        for step in 0..=10 {
+            let value = bounce.sample_at(time(step, 10), 0);
+            assert!(
+                (0..=1_000).contains(&value),
+                "bounce stays inside the range, got {value}"
+            );
+        }
+        assert!(bounce.sample_at(time(1, 2), 0) > 500);
+        assert_eq!(bounce.sample_at(time(1, 1), 0), 1_000);
     }
 
     #[test]

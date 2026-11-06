@@ -7626,6 +7626,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an edited keyframe keeps the chosen easing', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final view = ProjectReadModel(
+      projectId: 'project-id',
+      projectInstanceId: 'instance-id',
+      revision: BigInt.zero,
+      name: 'Animation',
+      dirty: false,
+      descriptorPath: '/tmp/or-animation.json',
+    );
+    final session = _FakeSession('/tmp/or-animation.orproj', view);
+    Widget panel(ProjectReadModel project) => MaterialApp(
+      home: Scaffold(
+        body: ClipAnimationPanel(
+          gateway: gateway,
+          session: session,
+          project: project,
+          trackId: 'track-1',
+          clipId: 'clip-1',
+          clipStart: ProjectRationalTime(BigInt.zero, 1),
+          clipDuration: ProjectRationalTime(BigInt.from(4), 1),
+          playhead: ProjectRationalTime(BigInt.one, 1),
+        ),
+      ),
+    );
+    await tester.pumpWidget(panel(view));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('animation-add-opacity')));
+    await tester.pumpAndSettle();
+    // The host bumps its revision on every edit; the shell passes the new
+    // revision down, so rebuild the panel the way the editor does.
+    await tester.pumpWidget(panel(session.view));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('animation-keyframe-opacity-0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('animation-dialog-easing-ease_out_back')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('animation-dialog-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      gateway.lastAnimation.opacityBasisPoints.single.easing,
+      ProjectKeyframeEasing.easeOutBack,
+    );
+    final chip = tester.widget<InputChip>(
+      find.byKey(const ValueKey('animation-keyframe-opacity-0')),
+    );
+    expect((chip.label as Text).data, contains('Overshoot'));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('clearing the animation removes every keyframe', (tester) async {
     final gateway = _FakeProjectGateway()
       ..lastAnimation = ProjectClipAnimation(

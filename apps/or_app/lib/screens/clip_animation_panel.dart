@@ -496,17 +496,20 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
           ),
         ),
         const SizedBox(height: OrSpacing.x1),
-        DropdownButtonFormField<ProjectKeyframeEasing>(
-          key: const ValueKey('animation-dialog-easing'),
-          initialValue: _easing,
-          items: [
+        // Six curves stay visible as chips: no menu route to dismiss and the
+        // shape of each choice is one tap away.
+        Wrap(
+          spacing: OrSpacing.x1,
+          runSpacing: OrSpacing.x1,
+          children: [
             for (final easing in ProjectKeyframeEasing.values)
-              DropdownMenuItem(
-                value: easing,
-                child: Text(_easingLabel(easing)),
+              ChoiceChip(
+                key: ValueKey('animation-dialog-easing-${easing.wireName}'),
+                label: Text(_easingLabel(easing)),
+                selected: _easing == easing,
+                onSelected: (_) => setState(() => _easing = easing),
               ),
           ],
-          onChanged: (value) => setState(() => _easing = value ?? _easing),
         ),
         if (_error != null) ...[
           const SizedBox(height: OrSpacing.x1),
@@ -519,6 +522,7 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
     ),
     actions: [
       TextButton(
+        key: const ValueKey('animation-dialog-remove'),
         onPressed: () => Navigator.of(context).pop(
           _KeyframeEdit(
             at: widget.keyframe.at,
@@ -530,10 +534,12 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
         child: const Text('Remove'),
       ),
       TextButton(
+        key: const ValueKey('animation-dialog-cancel'),
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('Cancel'),
       ),
       FilledButton(
+        key: const ValueKey('animation-dialog-save'),
         onPressed: _submit,
         child: const Text('Save'),
       ),
@@ -677,6 +683,8 @@ String _easingLabel(ProjectKeyframeEasing easing) => switch (easing) {
   ProjectKeyframeEasing.easeIn => 'Ease in',
   ProjectKeyframeEasing.easeOut => 'Ease out',
   ProjectKeyframeEasing.easeInOut => 'Ease in and out',
+  ProjectKeyframeEasing.easeOutBack => 'Overshoot',
+  ProjectKeyframeEasing.easeOutBounce => 'Bounce',
 };
 
 String _secondsLabel(double seconds) => '${seconds.toStringAsFixed(2)}s';
