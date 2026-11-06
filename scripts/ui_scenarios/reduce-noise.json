@@ -1,0 +1,184 @@
+{
+  "name": "reduce-noise",
+  "harness": "or_ui",
+  "description": "Reduce Noise on a timeline audio clip through the real inspector. A one second fixture is imported, inserted on an audio track and selected; the inspector scrolls to the audio section, shows the field at 0 dB, the 18 dB preset writes it through the ordinary audio-settings command, the field reads 18, and one undo returns it to 0. A passing run means the control is reachable, writes canonical state and costs one undo step.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "wav"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Reduce noise"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "fixture.wav",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-audio"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-gain_db"
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -420
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "0"
+    },
+    {
+      "op": "expect",
+      "key": "inspector-noise-preset-18"
+    },
+    {
+      "op": "shot",
+      "name": "no-reduction"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "inspector-noise-preset-18"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 1500
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -420
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "18"
+    },
+    {
+      "op": "shot",
+      "name": "eighteen-db"
+    },
+    {
+      "op": "tree",
+      "name": "eighteen-db"
+    },
+    {
+      "op": "key",
+      "chord": "cmd+z"
+    },
+    {
+      "op": "pump",
+      "ms": 800
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -420
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "0"
+    },
+    {
+      "op": "shot",
+      "name": "one-undo"
+    }
+  ]
+}
