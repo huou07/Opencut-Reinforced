@@ -23,9 +23,12 @@ over a running copy. Its five assets —
 `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` (28,637,395 B),
 `Opencut-Reinforced-0.1.19-windows-x64.zip` (41,891,227 B) and
 `SHA256SUMS.txt` — were downloaded again after publication and matched their
-recorded SHA-256 values; the DMG mounted read-only ran `or version` (0.1.19) and
-the `.deb` installed with `dpkg -i` and ran `or version` from
-`/opt/opencut-reinforced` (0.1.19).
+recorded SHA-256 values; the DMG mounted read-only ran `or version` (0.1.19), the
+`.deb` installed with `dpkg -i` and ran `or version` from
+`/opt/opencut-reinforced` (0.1.19), and the `.setup.exe` installed silently on
+the local Windows host and reported 0.1.19 from `%LOCALAPPDATA%\Programs\Opencut
+Reinforced\or.exe`, with `certutil -hashfile` matching the release's own
+`SHA256SUMS.txt` row.
 
 
 Stable releases ship three desktop packages from one source tree:

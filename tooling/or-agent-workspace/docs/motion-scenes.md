@@ -121,7 +121,7 @@ gradient angle changes between the light and dark halves of a scene.
 ```json
 {
   "format": "opencut-reinforced-motion-scene",
-  "schema_version": 3,
+  "schema_version": 4,
   "scene_id": "<UUIDv4>",
   "name": "...",
   "duration": {"numerator": 4, "denominator": 1},
@@ -140,7 +140,14 @@ gradient angle changes between the light and dark halves of a scene.
 ```
 
 `camera` is optional; without it the identity camera is used, so existing scenes
-render unchanged. Keys carry `pan_x`/`pan_y`, `zoom` (0.25–4) and
+render unchanged. Both the camera and any animation may also carry
+`"easing_curve": [p1x, p1y, p2x, p2y]` (schema version 4) — a CSS-style cubic
+Bézier that replaces `easing`. The x components must stay in `0..=1`; the y
+components are free, which is what allows an overshoot. Two curves worth
+memorising: `[0.16, 1, 0.3, 1]` pulls away fast and settles slowly (a good
+entrance), and `[0.34, 1.56, 0.64, 1]` overshoots and comes back (a good
+emphasis pop, use it on `scale` only). One curve per scene: mixing four of them
+reads as noise. Keys carry `pan_x`/`pan_y`, `zoom` (0.25–4) and
 `rotation_degrees`; they are interpolated like node animations and applied to
 every resolved instruction, so preview, layout and materialisation agree.
 

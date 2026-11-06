@@ -13,6 +13,28 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.20 — 2026-11-06
+
+### Added
+- **A batch import can be stopped.** Importing a folder of two hundred files
+  used to be all-or-nothing: the top bar counted `Importing 2 of 200 · name…`
+  and every other action answered "Another project action is still running."
+  The bar now carries a stop button next to that line. The file already in
+  flight finishes and keeps its place, nothing after it is attempted, and the
+  closing line says what happened, for example "Imported 12 selected files, then
+  stopped; 188 were not added." Failures seen before the stop are still named.
+
+- **Scenes can carry a real easing curve.** Motion and camera keys accept a
+  cubic Bézier `easing_curve` next to the four named easings (scene schema
+  version 4), so an entrance can lead fast and settle slowly, and an emphasis can
+  overshoot and return. The curve is authored in the file or by the agent; older
+  scenes keep rendering exactly as before.
+
+### Fixed
+- **The top bar no longer overflows while an import runs.** Holding a long
+  transient line and a stop button in one row pushed the bar 168 pixels past a
+  1280-wide window; the line now shrinks and ellipsises instead.
+
 ## 0.1.19 — 2026-11-06
 
 ### Added

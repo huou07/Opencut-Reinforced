@@ -280,6 +280,20 @@ One near-term delivery mission for the local macOS app, in this order:
     read: …" instead of an endless spinner. A timer-based budget was written
     first and removed: a `Future.timeout` leaves a pending timer that fails every
     widget test that disposes its tree while the probe is in flight.
+35. **A batch import had no way to stop (2026-11-06).** A large folder import
+    was all-or-nothing: the shell locked every other action and the top bar only
+    counted files, so the only exit was to wait or kill the app. The bar now
+    offers `cancel-import`; the file in flight finishes, the rest are skipped,
+    and the closing line says how many landed and how many did not. Adding the
+    button also exposed a 168-pixel bar overflow at 1280 wide, fixed by letting
+    the transient line ellipsise.
+36. **Scene motion only knew four easings (2026-11-06).** Every animation and
+    camera move interpolated with a quadratic, so entrances could not lead fast
+    and settles could not overshoot. Schema version 4 adds an optional cubic
+    Bézier `easing_curve` on animations and on the camera (ADR 0014); the
+    inspector has no graph editor yet, so the curve is authored in the file or by
+    the agent.
+
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

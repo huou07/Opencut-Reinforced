@@ -18,6 +18,8 @@ class AppTopBar extends StatelessWidget {
     this.onExport,
     this.onCancelExport,
     this.exportIsActive = false,
+    this.onCancelImport,
+    this.importIsActive = false,
     this.statusLabel,
     this.statusIsError = false,
     this.statusIcon,
@@ -37,6 +39,11 @@ class AppTopBar extends StatelessWidget {
   final VoidCallback? onExport;
   final VoidCallback? onCancelExport;
   final bool exportIsActive;
+
+  /// The import stop button. A folder of recordings could only be waited out
+  /// before this existed.
+  final VoidCallback? onCancelImport;
+  final bool importIsActive;
   final String? statusLabel;
   final bool statusIsError;
 
@@ -309,13 +316,21 @@ class AppTopBar extends StatelessWidget {
                 ),
                 if (!compact && showSaveStateText) ...[
                   const SizedBox(width: OrSpacing.x1),
-                  Text(
-                    statusLabel!,
-                    style: TextStyle(
-                      color: statusIsError
-                          ? OrColors.warning
-                          : OrColors.textMuted,
-                      fontSize: OrType.tinySize,
+                  // A batch import writes a long transient line ("Importing 2
+                  // of 5 · recording-2026-11-06.wav") and the row also has to
+                  // hold the stop button, so the text yields space instead of
+                  // overflowing the bar.
+                  Flexible(
+                    child: Text(
+                      statusLabel!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: statusIsError
+                            ? OrColors.warning
+                            : OrColors.textMuted,
+                        fontSize: OrType.tinySize,
+                      ),
                     ),
                   ),
                   const SizedBox(width: OrSpacing.x3),
@@ -349,6 +364,18 @@ class AppTopBar extends StatelessWidget {
                       ),
                     ),
                   ),
+                const SizedBox(width: OrSpacing.x1),
+              ],
+              if (importIsActive && onCancelImport != null) ...[
+                Tooltip(
+                  message: 'Stop importing',
+                  child: IconButton(
+                    key: const ValueKey('cancel-import'),
+                    onPressed: onCancelImport,
+                    icon: const Icon(Icons.stop_circle_outlined, size: 17),
+                    color: OrColors.textSecondary,
+                  ),
+                ),
                 const SizedBox(width: OrSpacing.x1),
               ],
               if (exportIsActive && onCancelExport != null) ...[

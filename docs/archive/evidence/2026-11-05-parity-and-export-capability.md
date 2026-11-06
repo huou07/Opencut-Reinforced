@@ -387,13 +387,56 @@ which is now in the harness notes.
 |---|---|---|
 | `Opencut-Reinforced-0.1.19-arm64.dmg` | 37,668,553 | mounted `-readonly -nobrowse`; `Contents/MacOS/or version` → `Opencut Reinforced 0.1.19` |
 | `Opencut-Reinforced-0.1.19-linux-x64.deb` | 26,096,196 | `sudo dpkg -i` → `Setting up opencut-reinforced (0.1.19+ff8d52bff07c)`; `/opt/opencut-reinforced/or version` → 0.1.19 |
-| `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` | 28,637,395 | built and signed by the tag run; the Windows host went unreachable before it could be installed locally, so this asset is checksum-verified only |
+| `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` | 28,637,395 | installed later from the published file once the host came back: `start /wait … /VERYSILENT` → exit 0, `%LOCALAPPDATA%\Programs\Opencut Reinforced\or.exe version` → `Opencut Reinforced 0.1.19`, `certutil -hashfile` = `db77e3d5…` = the `SHA256SUMS.txt` row |
 | `Opencut-Reinforced-0.1.19-windows-x64.zip` | 41,891,227 | same tag run |
 | `SHA256SUMS.txt` | 438 | `shasum -a 256 -c` → `OK` for all four assets |
 
 `gh release download v0.1.19` then `shasum -a 256 -c SHA256SUMS.txt` printed
 `OK` four times, so the bytes GitHub serves are the bytes the tag run produced.
-The Windows row is deliberately honest: the published installer was not installed
-on the local Windows host for this release because that host stopped answering
-on port 22 while the verification was in progress, and the previous release's
-identical installer path was exercised end to end at `v0.1.18`.
+The Windows row is honest about timing: the published installer could not be
+installed at publication because that host stopped answering on port 22. It was
+installed from the same published bytes on 2026-11-06 once the host returned
+(the machine had moved to a new address), and its hash equals the release's own
+`SHA256SUMS.txt` row, so the asset is proven rather than assumed.
+
+## A batch import can be stopped, 2026-11-06
+
+The shell used to hold every other action behind "Another project action is
+still running." until a folder import finished, and the only progress was the
+bar's `Importing 2 of 200 · name…` line. The bar now carries `cancel-import`.
+
+| Claim | Evidence |
+|---|---|
+| The loop stops after the file in flight | `apps/or_app/test/media_import_flow_test.dart` — stop pressed during file 2 leaves `attempted == [a, b]`, `cancelled` true, and the rest untouched |
+| Nothing imported reads honestly | same file, `stopping before the first file says nothing was added` → "Stopped before anything was imported. 2 … were not added." |
+| Failures before the stop are still named | same file, `a cancelled batch still names the files that failed` |
+| The button is wired to that flag | `apps/or_app/test/widget_test.dart`, `the top bar stops a batch import after the file in flight`: two selected sources, the first import held open, tap `cancel-import`, release it → `importMediaCalls == 1` and the closing line "Imported 1 selected files, then stopped; 1 were not added." |
+| The bar survives the extra control | the same widget test failed with `A RenderFlex overflowed by 168 pixels on the right` before the fix; the transient line now ellipsises, and the test runs at 1280×800 |
+
+Two lessons are worth keeping. A widget test that taps
+`timeline-empty-import-media` must give its picker a `savePath`; without one the
+create-project flow never opens and the finder reports the editor key missing
+while the tree is still on Home. And the overflow was a real defect the test
+found, not noise: adding a control to a bar that already holds a variable-length
+transient line needs the line to yield space.
+
+## Scene easing curves, schema version 4, 2026-11-06
+
+The named easings (`linear`, `ease_in`, `ease_out`, `ease_in_out`) are
+quadratics. They stop a move looking mechanical but cannot express a slow lead-in
+that snaps, or a settle that overshoots and returns, so every scene moved the
+same way. Schema version 4 adds an optional `easing_curve` to animations and to
+the camera; see ADR 0014.
+
+| Claim | Evidence |
+|---|---|
+| A curve replaces the named easing and reaches the resolved instruction | `crates/or_motion/src/lib.rs`, `an_easing_curve_replaces_the_named_easing`: the sampled opacity is past what `ease_out` would give and equals `ease_curve([0.0, 0.9, 0.2, 1.0], 0.5)` within 1e-4 |
+| The camera carries its own curve | same file, `a_camera_carries_its_own_easing_curve`: pan/zoom at t=0.5 comes from the curve, not from the linear camera |
+| A curve that is not a function of time is refused, with a location | `a_curve_with_an_x_component_outside_the_unit_range_is_refused` → `MOTION_INVALID_EASING_CURVE` at `/animations/0/easing_curve`; `validate_camera` applies the same rule at `/camera/easing_curve` |
+| The solver is exact at the ends, monotonic and deterministic | `a_curve_solves_its_ends_exactly_and_never_runs_backwards`: `0 → 0`, `1 → 1`, 101 successive samples never decrease, and an overshooting curve exceeds 1 mid-way |
+| Old documents are untouched | `shape_document` (version 3) and every version 1–2 fixture still parse and render; the envelope accepts `MIN..=4` and `a_future_schema_version_is_refused_rather_than_guessed_at` now uses `MOTION_SCENE_SCHEMA_VERSION + 1` |
+
+Bisection rather than Newton's method is deliberate: a fixed 60 iterations
+cannot make the result depend on the data, so two hosts stepping the same frame
+agree — the same determinism rule the preview/export parity lane relies on.
+`crates/or_motion --lib` went from 99 to 103 tests.

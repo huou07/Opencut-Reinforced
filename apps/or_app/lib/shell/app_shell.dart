@@ -274,6 +274,10 @@ class _AppShellState extends State<AppShell> {
   /// transient slot so a slow import reports its own progress instead of an
   /// unrelated autosave line or nothing at all.
   String? _importStatus;
+
+  /// Set by the top bar's stop button and read by the import loop before each
+  /// file, so a long folder batch can end without closing the project.
+  bool _importCancelled = false;
   ProjectMediaPage? _mediaPage;
   final Map<String, ProjectMediaPreview> _mediaPreviews = {};
 
@@ -687,6 +691,9 @@ class _AppShellState extends State<AppShell> {
                           statusIcon: _importStatus != null
                               ? Icons.download_outlined
                               : null,
+                          importIsActive: _importStatus != null,
+                          onCancelImport: () =>
+                              setState(() => _importCancelled = true),
                           // The bar is the workspace's only title row: it also
                           // owns save state, history and the project menu.
                           projectDirty: editor && _activeSession != null
@@ -4338,6 +4345,7 @@ class _AppShellState extends State<AppShell> {
       'first=${sources.isEmpty ? '<none>' : sources.first} '
       'mounted=$mounted busy=$_busy',
     );
+    _importCancelled = false;
     sources = sources.toSet().toList(growable: false);
     if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
       _journeyTrace('return-early-empty-or-closed');
@@ -4358,6 +4366,7 @@ class _AppShellState extends State<AppShell> {
 
     final outcome = await MediaImportFlow(
       onStatus: _setImportStatus,
+      cancelled: () => _importCancelled,
       importOne: (source) async {
         if (!mounted || !identical(session, _activeSession)) {
           return (imported: false, failure: null, aborted: true);
@@ -4543,6 +4552,7 @@ class _AppShellState extends State<AppShell> {
       _showUnavailable('A replacement media file could not be selected.');
       return;
     }
+    _importCancelled = false;
     sources = sources.toSet().toList(growable: false);
     if (sources.isEmpty || !mounted || !identical(session, _activeSession)) {
       return;
