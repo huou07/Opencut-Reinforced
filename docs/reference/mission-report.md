@@ -81,11 +81,11 @@ one text layer 240.4/234.7 fps, animated scale 238.9/243.8 fps — within the
 2026-11-06 spread. Windows (Vulkan Intel Graphics, Media Foundation): full MP4
 129.1/127.2 fps, MP4 + text 78.8/82.6, render-only 214.4/210.2 (text 104.4/104.6),
 encoder-only 278.1, decoder-only 63.8. Debian (Vulkan UHD 770, `h264_vaapi`): full MP4 video-only
-256.0/260.6 fps (was 225), full MP4 + text 59.8–83.2 fps, render-only video
-745.9/779.2, render-only + text 52.6/53.2, encoder-only 454.3/447.8,
-decode-only 273.8/276.8. The Debian text path is readback-bound: the composited
-frame waits 13–14 ms in the synchronous NV12 readback while the CPU submit is
-25–74 µs. Rows in [export-performance.md](export-performance.md).
+256.0/260.6 fps (was 225), full MP4 + text 101.9–118.3 fps after the one-pass
+compute conversion (was 59.8–83.2), render-only video 745.9/779.2,
+encoder-only 454.3/447.8, decode-only 273.8/276.8. The composited path still
+waits 6–14 ms in the synchronous NV12 readback, so it stays the ceiling on this
+iGPU. Rows in [export-performance.md](export-performance.md).
 
 ## Claims, stated as evidence allows
 
@@ -104,11 +104,12 @@ frame waits 13–14 ms in the synchronous NV12 readback while the CPU submit is
   real dialog on all three hosts (`scripts/ui_scenarios/export-text.json`, 30
   steps, receipt screenshot): macOS, Debian under Weston on the Intel UHD 770 and
   Windows in an interactive session.
-- **PASS** — all three checkouts build and run at `4cf49782` and the core editing
-  and export workflows still pass their tests.
-- **PASS (macOS)** — an export with animated scale keyframes (`OR_BENCH_ANIM=1`)
-  ran at 238.9/243.8 fps against the static 239.6/245.6 spread; Debian and
-  Windows animated rows remain **UNVERIFIED**.
+- **PASS** — all three checkouts build and run at `6072a678` and the core
+  editing and export workflows still pass their tests.
+- **PASS (macOS, Debian)** — an export with animated scale keyframes
+  (`OR_BENCH_ANIM=1`) matches the static row (macOS 238.9/243.8 vs 239.6/245.6;
+  Debian 260.6 video and 96.7–119.2 with text). The Windows animated row remains
+  **UNVERIFIED**.
 - **PASS (Debian)** — the video-only full pipeline improved from 225 to
   256–261 fps at this revision; the text row is readback-bound and documented.
 - **PASS (Windows)** — full MP4 improved from 121 to 127–129 fps, render-only
@@ -142,3 +143,21 @@ The broader mission (full audit of decode/composite/encode, 20-repo ideas beyond
 the motion presets, cross-host benchmark rows at this revision, and a wider UX
 pass) is not finished; this report covers the six increments above and the
 evidence they produced. See [roadmap.md](roadmap.md) for the queue.
+
+## Remaining, with the reason
+
+- **Async or GPU-resident readback** — the composited export still waits for one
+  NV12 readback per frame (6–14 ms at 1080p on the Intel iGPU). A double-buffered
+  readback or feeding the encoder from GPU memory is the next real step; it
+  touches the export loop and the encoder boundary, so it was not started for a
+  partial gain.
+- **GPU backend, decoder and CPU-worker choice** — Settings exposes the profile
+  and the H.264 encoder; the adapter is reported and used automatically. A
+  backend picker needs restart semantics (the device is process-global) and a
+  decoder picker needs a hardware-decode path the product declined until it is
+  measured, so both are recorded as open rather than faked.
+- **Discrete NVIDIA/AMD (NVENC, AMF)** — probed and probed-off paths exist, but no
+  such device is attached to the three hosts, so no benchmark is claimed.
+- **Windows animated-export row** — the knob exists; only the row is missing.
+- **Template gallery on MotionScene** — the 20-repo table lists it as deferred;
+  the library still starts empty and presets cover the beginner path.
