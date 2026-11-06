@@ -2953,7 +2953,9 @@ mod desktop {
                     .unwrap_or(1)
             });
         // A knob exists for measurement; production takes every usable core.
-        let worker_count = requested.clamp(1, MAX_EXPORT_AUDIO_WORKERS).min(clips.len());
+        let worker_count = requested
+            .clamp(1, MAX_EXPORT_AUDIO_WORKERS)
+            .min(clips.len());
         // The cache runs while the viewer and its audio clock may still hold
         // leases on the shared playback budget. Give the export cache its own
         // budget so a playing preview cannot starve export preparation, and size
@@ -4530,6 +4532,10 @@ mod desktop {
             let frames = u64::from(env_number("OR_BENCH_FRAMES", 300));
             let with_text = std::env::var("OR_BENCH_TEXT").is_ok_and(|value| value == "1");
             let profile = std::env::var("OR_BENCH_PROFILE").unwrap_or_else(|_| "mp4".to_owned());
+            let quality = match std::env::var("OR_BENCH_QUALITY").as_deref() {
+                Ok("speed") => ExportQuality::Speed,
+                _ => ExportQuality::Quality,
+            };
             let rate = RationalRate::new(30, 1).expect("rate");
             let duration =
                 RationalTime::new(i64::try_from(frames).expect("frames"), 30).expect("duration");
@@ -4683,7 +4689,7 @@ mod desktop {
                 let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
                     &destination,
                     media_profile,
-                    ExportQuality::Quality,
+                    quality,
                     width,
                     height,
                     rate.numerator(),
@@ -4718,7 +4724,7 @@ mod desktop {
                     program,
                     target,
                     export_profile,
-                    ExportQuality::Quality,
+                    quality,
                     (width, height),
                     frames,
                     rate,
@@ -4777,9 +4783,8 @@ mod desktop {
             // saved, so a benchmark cannot touch the project it measures.
             let file_session =
                 or_core::ProjectFileSession::open(&project_path).expect("project opens");
-            let program = Arc::new(
-                load_program_from_session(file_session.session()).expect("program loads"),
-            );
+            let program =
+                Arc::new(load_program_from_session(file_session.session()).expect("program loads"));
             let rate = program.frame_rate.expect("sequence frame rate");
             let content_end = program.content_end.expect("content end");
             let frames = rate.frame_index_ceil(content_end).expect("frame count");

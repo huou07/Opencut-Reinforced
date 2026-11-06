@@ -657,6 +657,11 @@ impl FfmpegExportWriter {
                     // Quality one, which is the opposite of what the preference
                     // asks for.
                     options.set("preset", nvenc_preset(quality));
+                } else if video_codec.name() == "h264_vaapi" {
+                    // VAAPI answers "No quality level set; using default (20)"
+                    // without this, and the driver's default is the same for a
+                    // Speed export and a Quality one.
+                    options.set("quality", vaapi_quality(quality).to_string());
                 }
             }
             // A VAAPI encoder reads surfaces from its own pool, so the pool is
@@ -1160,6 +1165,18 @@ const fn nvenc_preset(quality: ExportQuality) -> &'static str {
     }
 }
 
+/// VAAPI's speed ladder: higher is faster and softer.
+///
+/// The driver takes 1..=7 as target usage; 7 is its fastest mode and 2 its
+/// slower, cleaner one, which is the same direction as the other ladders in
+/// this file.
+const fn vaapi_quality(quality: ExportQuality) -> u8 {
+    match quality {
+        ExportQuality::Quality => 2,
+        ExportQuality::Speed => 7,
+    }
+}
+
 /// Video bitrate for the hardware H.264 profile, scaled by the quality preference.
 ///
 /// The base rate stays inside the bounds the profile always had; `Quality` spends
@@ -1334,7 +1351,7 @@ fn is_again(error: ffmpeg::Error) -> bool {
 mod quality_tests {
     use super::{
         ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES, codec,
-        describe_export_capability, nvenc_preset, video_bitrate, vp9_settings,
+        describe_export_capability, nvenc_preset, vaapi_quality, video_bitrate, vp9_settings,
     };
 
     #[test]
@@ -1346,6 +1363,14 @@ mod quality_tests {
         // Lower `cpu-used` is slower and better; lower `crf` is better and larger.
         assert!(cpu_used.parse::<u8>().unwrap() < "8".parse::<u8>().unwrap());
         assert!(crf.parse::<u32>().unwrap() < "36".parse::<u32>().unwrap());
+    }
+
+    #[test]
+    fn vaapi_spends_more_time_on_a_quality_export_than_on_a_speed_export() {
+        // VAAPI's `quality` is target usage: higher is faster and softer.
+        assert_eq!(vaapi_quality(ExportQuality::Speed), 7);
+        assert_eq!(vaapi_quality(ExportQuality::Quality), 2);
+        assert!(vaapi_quality(ExportQuality::Speed) > vaapi_quality(ExportQuality::Quality));
     }
 
     #[test]
