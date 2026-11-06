@@ -57,7 +57,8 @@ host, and what remains unverified. Revision `bacf5cff`; branch
   the core model, the bridge/CLI spelling, the inspector dialog (six chips, no
   menu) and the export path. The dialog shows every curve at once, and the
   keyframes journey edits a keyframe to Overshoot and reads
-  `0.00s · 50.0% · Overshoot` back on the real inspector.
+  `0.00s · 50.0% · Overshoot` back on the real inspector on macOS, Debian
+  (Weston/Intel GPU) and Windows (interactive session).
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.
