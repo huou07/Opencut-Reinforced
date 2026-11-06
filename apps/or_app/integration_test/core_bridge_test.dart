@@ -470,6 +470,7 @@ void main() {
       panBasisPoints: -3750,
       fadeIn: ProjectRationalTime(BigInt.one, 8),
       fadeOut: ProjectRationalTime(BigInt.one, 16),
+      noiseReductionDecibels: 0,
     );
     final updated = await gateway.updateTimelineClipAudioSettings(
       session,
