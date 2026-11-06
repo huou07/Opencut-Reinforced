@@ -400,12 +400,18 @@ impl ExportCapability {
     }
 }
 
-/// Measures which export profiles this build carries.
+/// Measures which export profiles this build can actually open.
+///
+/// A name in the package is not a capability: NVENC can be linked on a machine
+/// with no NVIDIA driver. The picker therefore reports the first candidate that
+/// both exists and opened here, and `mp4_available` says no when none did, so
+/// the dialog hides a format whose export could only fail.
 pub fn describe_export_capability() -> ExportCapability {
-    let h264 = H264_ENCODER_CANDIDATES
+    let probes = probe_h264_encoders();
+    let h264 = probes
         .iter()
-        .copied()
-        .find(|name| codec::encoder::find_by_name(name).is_some());
+        .find(|candidate| candidate.present && candidate.opens)
+        .map(|candidate| candidate.name.as_str());
     let aac = codec::encoder::find(codec::Id::AAC).is_some();
     let vp9 = codec::encoder::find_by_name("libvpx-vp9").is_some()
         && codec::encoder::find_by_name("libopus").is_some();
@@ -415,7 +421,7 @@ pub fn describe_export_capability() -> ExportCapability {
         h264_encoder: h264.map(str::to_owned),
         h264_hardware: matches!(
             h264,
-            Some("h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi" | "h264_open")
+            Some("h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi")
         ),
         mp4_available: h264.is_some() && aac,
         webm_available: vp9,
@@ -439,7 +445,7 @@ pub fn probe_h264_encoders() -> Vec<or_core::EncoderCandidate> {
             let present = encoder.is_some();
             let hardware = matches!(
                 *name,
-                "h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi" | "h264_open"
+                "h264_videotoolbox" | "h264_nvenc" | "h264_mf" | "h264_vaapi"
             );
             let (opens, note) = if let Some(encoder) = encoder {
                 if *name == "h264_vaapi" {
@@ -1507,13 +1513,15 @@ mod quality_tests {
             capability.lossless_available,
             "the linked FFmpeg has no FFV1/PCM_S16LE pair"
         );
-        let h264_present = H264_ENCODER_CANDIDATES
-            .iter()
-            .any(|name| codec::encoder::find_by_name(name).is_some());
-        assert_eq!(capability.h264_encoder.is_some(), h264_present);
-        // A named encoder is one of the candidates, never an invention.
+        // A named encoder is one the machine actually opened, not merely one
+        // the package carries: NVENC can be linked with no NVIDIA driver.
         if let Some(name) = capability.h264_encoder.as_deref() {
             assert!(H264_ENCODER_CANDIDATES.contains(&name), "{name}");
+            let probe = super::probe_h264_encoders()
+                .into_iter()
+                .find(|candidate| candidate.name == name)
+                .expect("a described encoder is a candidate");
+            assert!(probe.present && probe.opens, "{name} did not open");
         }
         // The preferred profile is one the description says is available.
         let preferred = capability.preferred_profile();

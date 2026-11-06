@@ -1,0 +1,61 @@
+{
+ "name": "performance-profiles",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-settings"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Resources & updates",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "settings-section-performance"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "This machine will encode with",
+   "budget_ms": 30000
+  },
+  {
+   "op": "shot",
+   "name": "performance-recommended"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "performance-profile-compatibility"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No software H.264 encoder opened",
+   "budget_ms": 20000
+  },
+  {
+   "op": "shot",
+   "name": "performance-compatibility"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "performance-reset"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "h264_videotoolbox",
+   "budget_ms": 20000
+  }
+ ]
+}
