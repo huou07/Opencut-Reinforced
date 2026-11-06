@@ -199,6 +199,17 @@ that VM to claim. The macOS gain is the fill-rate win the 720p/1080p diagnostic
 predicted; the Debian near-miss says its composited path costs its ~19 ms
 somewhere other than text fragments, which is recorded as unresolved.
 
+## Admission gate on Debian at the scissor revision
+
+`bash scripts/acceptance.sh --timeout 900` in `~/or-wt-perf` at `f0b44a24` wrote
+`.hub/gate-report.json` with `covered_gates: ["source-integrity"]`, `skipped: []`
+and eight `not_run` lanes: the performance budget ("a benchmark row could not be
+measured on this host"), `or_render`, `or_audio`, `or_ai`, `or_whisper_provider`
+(each "hosted-CI authority" / "no audio device on this host"), and the hosted
+`platform-verification`, `release-gate` and `packaging` gates. So the gate agrees
+with this receipt's own boundary: the local lanes pass, and the GPU, audio-device,
+packaging and cross-platform lanes stay UNVERIFIED here.
+
 ## Not done, and why
 
 - The 20-repo technology evaluation was re-read and a dated re-check was added
