@@ -192,8 +192,9 @@ everywhere, so the compositor used to shade every canvas pixel for it on every
 frame. `TextRasterizer` now reports the bounding box of pixels with alpha, the
 layer carries it as an optional scissor and the compositor clips the draw to that
 rectangle; a rasterisation with no ink is skipped entirely. The scissor is only
-used for an untransformed, uncropped text layer, because a moved or scaled layer
-paints outside its canvas rectangle.
+used for an untransformed, uncropped text layer with no effects, because a moved
+or scaled layer paints outside its canvas rectangle and an effect can spread
+pixels past the glyphs; both fall back to blending the whole layer.
 
 | Host | Workload | Frames | Before | After | Delta |
 | --- | --- | --- | --- | --- | --- |
