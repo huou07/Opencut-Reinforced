@@ -145,6 +145,9 @@ any other rule to this file.
 - **Hardware profiles** — what each host detects (GPU backend, opened encoders, decoders) and which profile plan an export takes.
   When: explaining an encoder choice, a fallback, or a hardware claim on a host.
   Path: `docs/reference/hardware-profiles.md`
+- **Mission report** — what the 2026-11-07 mission shipped and what is PASS, UNVERIFIED or blocked per host.
+  When: checking the evidence behind a 2026-11-07 performance or keyframe claim.
+  Path: `docs/reference/mission-report.md`
 - **Release** — Developer Preview pipeline and stable-release requirements.
   When: packaging or distribution work is explicitly in scope.
   Path: `docs/reference/release.md`

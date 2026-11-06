@@ -301,6 +301,37 @@ One near-term delivery mission for the local macOS app, in this order:
     the shell's shortcut map. The `?` sheet lists them all and is checked against
     that map by a test, so a binding cannot ship unlisted; `?` had to bind slash
     plus shift, because the logical key never becomes `question`.
+39. **Hardware profiles and an execution plan (2026-11-07).** Export used to walk
+    a hardware-first encoder list with no user control and no record of why a
+    candidate was skipped. The Rust core now carries a measured report (which
+    H.264 encoders actually open, which decoders exist, the GPU adapter the
+    preview device uses), four profiles (recommended, maximum performance,
+    balanced, compatibility) with a recorded fallback, and resolves the plan once
+    per export job. Settings gains a Performance section, the export dialog names
+    the encoder the file will use, the CLI carries `--performance`/`--encoder`,
+    and the finished job reports the encoder it opened. Verified with semantic
+    journeys on macOS, Debian (Weston headless on the UHD 770) and Windows 11
+    (interactive session); the Windows lane found a duplicate-key crash in the
+    panel that macOS and Debian never built. Details in
+    [hardware-profiles.md](hardware-profiles.md).
+40. **Clips can animate (2026-11-07).** Transform channels and opacity are
+    keyframable per clip with linear and three cubic easings, stored in canonical
+    milli-units on the visual settings and sampled in the shared frame loop, so
+    preview and export agree. The inspector adds, edits, removes and clears
+    keyframes at the playhead. Verified on all three hosts by the `keyframes`
+    scenario. See [effects-audio.md](../features/effects-audio.md).
+41. **The UI harness could not reach a section below the fold (2026-11-07).** Long
+    inspectors build rows lazily, so one large `scroll` parked the list at the
+    bottom and `ensureVisible` could not find a row that was never built. The
+    harness gained `scroll_until`, and scenarios run from `apps/or_app` now
+    resolve `copy:` fixtures from the repository root instead of silently falling
+    back to the generated WAV.
+42. **2026-11-07 export rows show no regression (2026-11-07).** At `4cf49782` the
+    M5 recorded MP4 239.6/245.6 fps and MP4 with one text layer 240.4/234.7 fps,
+    matching the 2026-11-06 rows within spread; a clip with no keyframes skips
+    sampling entirely. An export with animated keyframes is not covered by the
+    harness and stays UNVERIFIED. Rows in
+    [export-performance.md](export-performance.md).
 
 
 

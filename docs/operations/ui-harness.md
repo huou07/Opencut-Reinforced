@@ -1,6 +1,6 @@
 # Agent-Facing UI Harness
 
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-07
 
 Scope: how to drive the real application by semantics instead of coordinates, and
 how to read the result. Prefer this over screenshots, MCP or vision.
@@ -55,8 +55,12 @@ its global rect and actions — the fast way to read a screen.
 
 A step is one JSON object. Notable ops: `tap`, `secondary_tap` (opens clip
 context menus), `drag` (selector + `dx`/`dy` + optional `steps`), `resize`
-(`width`, `height`), and `fixtures` (including `copy:<path>`, which imports a real
-file through the real picker). A `copy:` fixture ending in `.orproj` becomes the
+(`width`, `height`), `scroll_until` (selector + optional `scroll` key, `dy` and
+`steps`), and `fixtures` (including `copy:<path>`, which imports a real file
+through the real picker and resolves it from the repository root). Use
+`scroll_until` rather than one large `scroll` for a section below the fold: long
+inspectors build rows lazily, so a single drag parks the list at the bottom and
+`ensureVisible` cannot find a row that was never built. A `copy:` fixture ending in `.orproj` becomes the
 project the scenario opens (copied to `scenario.orproj` in the scenario
 directory, so a save never writes into the repository fixture); other `copy:`
 fixtures are media.

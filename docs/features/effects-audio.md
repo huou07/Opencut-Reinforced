@@ -30,6 +30,13 @@ keyframes, offsets past the clip end, more than 64 keyframes per channel, and
 values outside the clip limits. Graph editing, effect parameter keyframes and
 clip-level motion presets remain deferred.
 
+Verified 2026-11-07 at `4cf49782` on all three hosts with the `keyframes` UI
+scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a
+Weston headless session on the Intel UHD 770 (Mesa GL), and Windows 11 in an
+interactive desktop session. The run selects a clip, reaches Animation, adds a
+keyframe at the playhead, edits it to 50% and reads the chip back as
+`0.00s · 50.0% · Linear`.
+
 ## Effects and transitions
 
 A closed, typed set with typed parameters and presets that fill the fields before

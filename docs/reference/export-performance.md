@@ -1,6 +1,6 @@
 # Export and render performance
 
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-07
 
 Scope: how export and render throughput is measured on a real host, the rows
 each machine has recorded, and what those rows already prove about the
@@ -330,6 +330,24 @@ workers could exist".
   host and asserts the encoders in `config_components.h` before `make`.
 - VAAPI carries a quality ladder (`[h264_vaapi] No quality level set; using
   default (20)` is gone) and the audio pre-decode scales with the machine.
+
+## 2026-11-07 rows — keyframe baseline
+
+Measured at `4cf49782` with the harness fix `13dca62d` on the MacBook Air M5,
+300 frames, `/tmp/or-bench/bench1080.mp4`, `--release`, idle machine, two runs
+per row (full pipeline, `OR_BENCH_MODE` unset):
+
+| Row | fps |
+|---|---|
+| MP4 H.264 + AAC | 239.6, 245.6 |
+| MP4 H.264 + AAC + one text layer | 240.4, 234.7 |
+
+These match the 2026-11-06 rows within run-to-run spread (242 and 208–233), so
+the keyframe plumbing did not move the static path: a clip with no keyframes
+skips the per-frame sampling (`ClipAnimation::is_empty`) and reads its static
+transform exactly as before. An export with animated keyframes was not measured
+by this harness (`export_media_benchmark` builds a static clip only); that row is
+UNVERIFIED.
 
 ## Known limits
 
