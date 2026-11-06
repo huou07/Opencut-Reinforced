@@ -210,6 +210,24 @@ measured on this host"), `or_render`, `or_audio`, `or_ai`, `or_whisper_provider`
 with this receipt's own boundary: the local lanes pass, and the GPU, audio-device,
 packaging and cross-platform lanes stay UNVERIFIED here.
 
+## Verification sweep at the scissor revision
+
+Run on the macOS host at `ceb03031`, after every change in this receipt:
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Rust libraries | `cargo test -p or_core -p or_audio -p or_media -p or_render -p or_runtime -p or_app_bridge -p or_cli --lib` | 549 passed, 0 failed, 9 ignored (`or_core` 379, `or_render` 51, `or_app_bridge` 56 + 8 ignored, `or_media` 23, `or_runtime` 22 + 1 ignored, `or_audio` 18) |
+| Dart widget tests | `flutter test` in `apps/or_app` | 513 passed, 0 failed |
+| UI journey, captures and noise presets | `python3 scripts/or_ui.py --target macos run scripts/ui_scenarios/reduce-noise.json` | PASS, 34 steps |
+| UI journey, a video clip's own sound | `… video-clip-audio.json` | PASS, 54 steps |
+| UI journey, clip speed | `… clip-speed.json` | PASS, 45 steps |
+| Repository gate | `bash scripts/check-repo.sh` | PASS, 894 tracked files |
+
+The Debian equivalent is the admission gate recorded above (`source-integrity`
+covered, the other eight lanes named as not run). The Windows equivalent is the
+bench harness plus the `or_core` ducking tests, its GUI journeys remaining
+BLOCKED by the session-0 window station.
+
 ## Not done, and why
 
 - The 20-repo technology evaluation was re-read and a dated re-check was added
