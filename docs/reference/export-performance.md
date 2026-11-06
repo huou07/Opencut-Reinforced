@@ -150,7 +150,15 @@ stereo), WebM 54.5 fps (3,600,271 B, `vp9` Profile 0 + `opus`), Matroska 54.6 fp
 (47,874,201 B, `ffv1` `bgra` + `pcm_s16le`). Debian: MP4 114.3 fps (6,222,521 B,
 `h264` High + `aac` LC), WebM 24.3 fps (3,606,822 B, `vp9` + `opus`), Matroska
 32.2 fps (47,874,935 B, `ffv1` + `pcm_s16le`). The Debian MP4 row with text has
-climbed from 62.5 fps at `b3650587` to 114.3 fps. Nothing on the codec path changed
+climbed from 62.5 fps at `b3650587` to 114.3 fps. Windows at the same revision:
+MP4 81.7 fps (5,895,002 B, `h264` Constrained Baseline + `aac` LC), WebM 9.0 fps
+(3,615,894 B), Matroska 6.4 fps (47,874,924 B).
+
+One caveat the text rows made visible: with a text layer the byte counts are no
+longer identical across hosts (47 874 201 / 47 874 935 / 47 874 924 for lossless),
+because the composited frame reaches the encoder through the GPU YUV conversion
+and drivers round it differently. The no-text rows above stay byte-identical
+because that path copies the decoder's planes untouched. Nothing on the codec path changed
 after the rows above, so those host rows still describe these containers, and the
 text column now shows the scissor helping the VP9 path as well (32.7 → 54.5 fps).
 
