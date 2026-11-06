@@ -80,6 +80,12 @@ Foundation (Constrained Baseline stream). MP4 is H.264 + AAC on all three.
   tone region unchanged at −24.09 dBFS, hiss region −51.4 → −66.3 dBFS
   (astats via Homebrew ffmpeg on the AAC track). This is the check that caught
   the decay bug: the first build reduced the hiss by only 0.9 dB.
+- **Real-app interaction proof** (`scripts/ui_scenarios/reduce-noise.json`,
+  `python3 scripts/or_ui.py --target macos run …` → PASS): the inspector is a
+  lazy list, so the scenario scrolls `inspector-scroll` into view, reads the
+  field at `0`, taps the 18 dB chip, reads `18` back and undoes once to read
+  `0` again — three `expect_value` rows in the harness report, at the same
+  revision as the widget and CLI tests.
 - Video-embedded audio is **absent from the product**: a clip on a video track
   contributes no sound, so reducing the audio of a video clip cannot be
   implemented until that pipeline exists. The media-library "clean audio" path

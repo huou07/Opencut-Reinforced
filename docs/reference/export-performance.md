@@ -127,6 +127,25 @@ on the produced file, never from the profile name:
 | Debian | `[CUDA @ …] Could not dynamically load CUDA` then `[h264_vaapi @ …] No quality level set; using default (20).` | h264 High 1920×1080 yuv420p + aac LC |
 | Windows | Media Foundation path (no CUDA, no QSV driver); `ffprobe` shows Constrained Baseline | h264 Constrained Baseline 1920×1080 + aac LC |
 
+### Container and codec rows at the final revision
+
+Same fixture, same 150-frame window, no text, measured on each host at the
+final revision of the branch. Byte counts are identical across hosts because
+VP9 CRF and FFV1 are rate-independent: the three encodes are the same file.
+
+| Host | WebM VP9/Opus | WebM bytes | Matroska FFV1/PCM | Lossless bytes |
+|---|---|---|---|---|
+| macOS M5 | 37.1 fps | 4,109,503 | 42.3 fps | 39,278,557 |
+| Debian (no GPU) | 25.1 fps | 4,109,503 | 33.4 fps | 39,278,557 |
+| Windows (Core 5 120U) | 9.4 fps | 4,109,503 | 6.6 fps | 39,278,557 |
+
+`ffprobe` on all three outputs: `vp9` Profile 0 + `opus` in `matroska,webm`, and
+`ffv1` + `pcm_s16le` in `matroska,webm` — the encoders the profile names, not
+the profile label. WebM and lossless are software-only paths on every host, so
+their rows track CPU throughput rather than the GPU compositor; Windows WebM is
+the slowest row in the whole table and remains a known limit, not a regression
+(the parent build measured 8.4 fps there).
+
 Re-measured at the final revision of the branch (`ba0034ff`) as a smoke check:
 macOS render 1311 fps / 226 fps (text) and MP4 216.8–234.1 fps / 167.0–181.9 fps
 (text); Debian render 698.9 / 49.2 fps and MP4 150 frames 239.6 / 62.5 fps;
