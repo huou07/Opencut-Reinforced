@@ -192,3 +192,9 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   such device is attached to the three hosts, so no benchmark is claimed.
 - **Template gallery on MotionScene** — the 20-repo table lists it as deferred;
   the library still starts empty and presets cover the beginner path.
+- **Masks, graph editor, 3D and vector import** — each is a numbered product
+  decision, not a silent omission: masks and the graph editor are PLANNED in
+  `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the
+  20-repo table because each would add a second renderer or asset pipeline with
+  no offline-deterministic path today. Crop, the closed effect set, keyframes
+  and text presets cover the same intents on the current renderer.
