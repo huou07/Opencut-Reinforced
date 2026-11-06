@@ -2661,12 +2661,14 @@ mod tests {
             pan_basis_points: -3_750,
             fade_in: RationalTime::new(1, 2).unwrap(),
             fade_out: RationalTime::new(3, 4).unwrap(),
+            noise_reduction_decibels: 12,
         };
         let audio_view = audio_settings_view(audio);
         assert_eq!(audio_view.gain_millidecibels, -6_250);
         assert_eq!(audio_view.pan_basis_points, -3_750);
         assert_eq!(audio_view.fade_in, rational_time_view(audio.fade_in));
         assert_eq!(audio_view.fade_out, rational_time_view(audio.fade_out));
+        assert_eq!(audio_view.noise_reduction_decibels, 12);
     }
 
     #[test]

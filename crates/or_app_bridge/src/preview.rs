@@ -3868,6 +3868,7 @@ mod desktop {
             let source =
                 MediaSourceRef::local_file("file:///tmp/or-preview-audio-speed.wav").unwrap();
             let fast_clip = AudioClip {
+                id: "fast".to_owned(),
                 source: source.clone(),
                 timeline_start: RationalTime::ZERO,
                 source_start: RationalTime::ZERO,
@@ -3890,6 +3891,7 @@ mod desktop {
             assert_eq!(fast_output, [0.0, 0.0, 2.0, 2.0, 4.0, 4.0, 6.0, 6.0]);
 
             let slow_clip = AudioClip {
+                id: "slow".to_owned(),
                 source,
                 timeline_start: RationalTime::ZERO,
                 source_start: RationalTime::ZERO,
@@ -3922,6 +3924,7 @@ mod desktop {
             let source =
                 MediaSourceRef::local_file("file:///tmp/or-preview-audio-cache.wav").unwrap();
             let clip = AudioClip {
+                id: "cached".to_owned(),
                 source,
                 timeline_start: RationalTime::ZERO,
                 source_start: RationalTime::ZERO,
