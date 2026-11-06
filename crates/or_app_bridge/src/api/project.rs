@@ -2067,6 +2067,7 @@ pub(crate) fn visual_settings_view(settings: &VisualSettings) -> ProjectTimeline
             .unwrap_or_else(|| rational_time_view(RationalTime::ZERO)),
         update_transition_in: false,
         update_transition_out: false,
+        audio: Some(audio_settings_view(settings.audio)),
     }
 }
 
@@ -2213,8 +2214,9 @@ pub(crate) fn unsupported_visual_settings() -> ProjectBridgeError {
 pub(crate) fn unsupported_audio_settings() -> ProjectBridgeError {
     ProjectBridgeError {
         code: "UNSUPPORTED_CLIP_SETTINGS".to_owned(),
-        message: "Audio gain, pan, and fade settings are only available for audio clips."
-            .to_owned(),
+        message:
+            "Audio gain, pan, fade and noise reduction are available for audio and video clips."
+                .to_owned(),
     }
 }
 
@@ -2663,6 +2665,11 @@ mod tests {
             fade_out: RationalTime::new(3, 4).unwrap(),
             noise_reduction_decibels: 12,
         };
+        assert_eq!(
+            view.audio,
+            Some(audio_settings_view(AudioSettings::DEFAULT)),
+            "a visual view carries the clip's own sound",
+        );
         let audio_view = audio_settings_view(audio);
         assert_eq!(audio_view.gain_millidecibels, -6_250);
         assert_eq!(audio_view.pan_basis_points, -3_750);

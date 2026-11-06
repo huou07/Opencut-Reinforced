@@ -12,7 +12,7 @@ use serde_json::value::RawValue;
 use std::{collections::HashSet, error::Error, fmt, num::NonZeroU32};
 
 const PROJECT_FORMAT_MARKER: &str = "opencut-reinforced-project";
-pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 10;
+pub const CURRENT_PROJECT_SCHEMA_VERSION: u32 = 11;
 
 /// Canonical persistent state for a project.
 ///
@@ -420,6 +420,21 @@ impl ProjectDocument {
         })
     }
 
+    fn from_v11(project: ProjectStateV8) -> Result<Self, ProjectCodecError> {
+        let media = decode_media_library_v7(project.media, ProjectCodecError::InvalidV11Data)?;
+        let timeline = project
+            .timeline
+            .into_domain(&media)
+            .map_err(|_| ProjectCodecError::InvalidV11Data)?;
+        Ok(Self {
+            id: project.id,
+            revision: project.revision,
+            name: project.name,
+            media,
+            timeline,
+        })
+    }
+
     fn from_v7_state(
         project: ProjectStateV7,
         invalid_data: ProjectCodecError,
@@ -668,12 +683,21 @@ struct ProjectFileV9 {
     project: ProjectStateV8,
 }
 
-/// Version 10 adds optional per-clip noise reduction to `AudioSettings`. The
-/// state shape is otherwise the one version 9 wrote, so a version 9 file is
-/// read through the same conversion and simply defaults the new field.
+/// Version 10 adds optional per-clip noise reduction to `AudioSettings`, and
+/// version 11 adds audio settings to a visual clip so a video's own audio can be
+/// mixed. Both keep the state shape version 9 wrote, so an older file is read
+/// through the same conversion and simply defaults the newer fields.
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ProjectFileV10 {
+    format: String,
+    schema_version: u32,
+    project: ProjectStateV8,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ProjectFileV11 {
     format: String,
     schema_version: u32,
     project: ProjectStateV8,
@@ -1575,7 +1599,7 @@ impl From<&ProjectDocument> for ProjectFileV8 {
     }
 }
 
-impl From<&ProjectDocument> for ProjectFileV10 {
+impl From<&ProjectDocument> for ProjectFileV11 {
     fn from(document: &ProjectDocument) -> Self {
         Self {
             format: PROJECT_FORMAT_MARKER.to_owned(),
@@ -1671,6 +1695,7 @@ pub enum ProjectCodecError {
     InvalidV8Data,
     InvalidV9Data,
     InvalidV10Data,
+    InvalidV11Data,
     SerializationFailure,
 }
 
@@ -1705,6 +1730,9 @@ impl fmt::Display for ProjectCodecError {
             Self::InvalidV10Data => {
                 formatter.write_str("project schema version 10 data is invalid")
             }
+            Self::InvalidV11Data => {
+                formatter.write_str("project schema version 11 data is invalid")
+            }
             Self::SerializationFailure => {
                 formatter.write_str("project document could not be serialized")
             }
@@ -1716,12 +1744,12 @@ impl Error for ProjectCodecError {}
 
 /// Encodes canonical project state as readable UTF-8 JSON with a trailing newline.
 pub fn encode_project(document: &ProjectDocument) -> Result<String, ProjectCodecError> {
-    validate_media_library(&document.media, ProjectCodecError::InvalidV10Data)?;
+    validate_media_library(&document.media, ProjectCodecError::InvalidV11Data)?;
     document
         .timeline
         .validate(&document.media)
-        .map_err(|_| ProjectCodecError::InvalidV10Data)?;
-    let mut encoded = serde_json::to_string_pretty(&ProjectFileV10::from(document))
+        .map_err(|_| ProjectCodecError::InvalidV11Data)?;
+    let mut encoded = serde_json::to_string_pretty(&ProjectFileV11::from(document))
         .map_err(|_| ProjectCodecError::SerializationFailure)?;
     encoded.push('\n');
     Ok(encoded)
@@ -1831,6 +1859,14 @@ pub fn decode_project(encoded: &str) -> Result<ProjectDocument, ProjectCodecErro
                 return Err(ProjectCodecError::InvalidV10Data);
             }
             ProjectDocument::from_v10(file.project)
+        }
+        11 => {
+            let file: ProjectFileV11 =
+                serde_json::from_str(encoded).map_err(|_| ProjectCodecError::InvalidV11Data)?;
+            if file.format != PROJECT_FORMAT_MARKER || file.schema_version != 11 {
+                return Err(ProjectCodecError::InvalidV11Data);
+            }
+            ProjectDocument::from_v11(file.project)
         }
         _ => Err(ProjectCodecError::UnsupportedSchemaVersion(schema_version)),
     }
@@ -2007,7 +2043,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 10);
+        assert_eq!(value["schema_version"], 11);
         assert_eq!(
             value["project"]["timeline"]["tracks"][0]["clips"][0]["content"]["playback_rate"],
             json!({"numerator": 3, "denominator": 2})
@@ -2049,7 +2085,7 @@ mod tests {
         assert_eq!(clip.timeline_duration(), source_range.duration());
         assert_eq!(
             serde_json::from_str::<Value>(&encode_project(&migrated).unwrap()).unwrap()["schema_version"],
-            10
+            11
         );
     }
 
@@ -2067,7 +2103,7 @@ mod tests {
         assert_eq!(decoded, project);
         assert_eq!(
             serde_json::from_str::<Value>(&encode_project(&decoded).unwrap()).unwrap()["schema_version"],
-            10
+            11
         );
     }
 
@@ -2089,7 +2125,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 10);
+        assert_eq!(value["schema_version"], 11);
         assert_eq!(
             value["project"]["media"][0]["source"]["kind"],
             "android_saf_document_uri"
@@ -2122,7 +2158,7 @@ mod tests {
             value,
             json!({
                 "format": "opencut-reinforced-project",
-                "schema_version": 10,
+                "schema_version": 11,
                 "project": {
                     "id": project.id().to_string(),
                     "revision": 0,
@@ -2138,8 +2174,8 @@ mod tests {
             })
         );
         assert!(encoded.ends_with('\n'));
-        assert_eq!(value["schema_version"], 10);
-        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 10);
+        assert_eq!(value["schema_version"], 11);
+        assert_eq!(CURRENT_PROJECT_SCHEMA_VERSION, 11);
     }
 
     #[test]
@@ -2173,7 +2209,7 @@ mod tests {
     }
 
     #[test]
-    fn a_version_9_envelope_is_read_and_rewritten_as_version_10() {
+    fn a_version_9_envelope_is_read_and_rewritten_as_the_current_version() {
         // A version 9 file is what the previous build wrote, and its audio
         // settings carry no reduction field. The envelope must still open, and
         // the next save must name version 10 so an older build refuses the file
@@ -2185,7 +2221,7 @@ mod tests {
         let decoded = decode_project(&legacy.to_string()).unwrap();
         assert_eq!(decoded, project);
         let rewritten: Value = serde_json::from_str(&encode_project(&decoded).unwrap()).unwrap();
-        assert_eq!(rewritten["schema_version"], 10);
+        assert_eq!(rewritten["schema_version"], 11);
     }
 
     #[test]
@@ -2211,7 +2247,7 @@ mod tests {
 
         let encoded = encode_project(&migrated).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 10);
+        assert_eq!(value["schema_version"], 11);
         assert_eq!(
             value["project"]["timeline"]["sequence_frame_rate"],
             Value::Null
@@ -2240,7 +2276,7 @@ mod tests {
         assert!(migrated.timeline().tracks().is_empty());
         assert!(migrated.timeline().markers().is_empty());
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 10);
+        assert_eq!(encoded["schema_version"], 11);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
             Value::Null
@@ -2266,7 +2302,7 @@ mod tests {
         assert_eq!(migrated.timeline().sequence_frame_rate(), None);
 
         let encoded: Value = serde_json::from_str(&encode_project(&migrated).unwrap()).unwrap();
-        assert_eq!(encoded["schema_version"], 10);
+        assert_eq!(encoded["schema_version"], 11);
         assert_eq!(encoded["project"]["revision"], 19);
         assert_eq!(
             encoded["project"]["timeline"]["sequence_frame_rate"],
@@ -2420,7 +2456,7 @@ mod tests {
 
         let encoded = encode_project(&project).unwrap();
         let value: Value = serde_json::from_str(&encoded).unwrap();
-        assert_eq!(value["schema_version"], 10);
+        assert_eq!(value["schema_version"], 11);
         assert_eq!(
             value["project"]["timeline"]["tracks"][0]["state"]["locked"],
             true
@@ -2435,14 +2471,14 @@ mod tests {
         invalid["project"]["timeline"]["tracks"][0]["kind"] = json!("motion");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
 
         let mut invalid = value.clone();
         invalid["project"]["timeline"]["tracks"][0]["clips"][0]["content"]["type"] = json!("html");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
 
         let mut invalid = value.clone();
@@ -2450,7 +2486,7 @@ mod tests {
             json!("host_path");
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
 
         let mut invalid = value.clone();
@@ -2458,7 +2494,7 @@ mod tests {
             json!(true);
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
 
         let mut invalid = value;
@@ -2466,7 +2502,7 @@ mod tests {
             json!("x".repeat(MAX_TIMELINE_TEXT_BYTES + 1));
         assert_eq!(
             decode_project(&invalid.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
     }
 
@@ -2540,7 +2576,7 @@ mod tests {
         let value: Value = serde_json::from_str(&encoded).unwrap();
         let decoded = decode_project(&encoded).unwrap();
 
-        assert_eq!(value["schema_version"], 10);
+        assert_eq!(value["schema_version"], 11);
         assert_eq!(value["project"]["timeline"]["markers"], json!([]));
         assert_eq!(value["project"]["timeline"]["tracks"][0]["kind"], "video");
         assert_eq!(value["project"]["timeline"]["tracks"][1]["kind"], "audio");
@@ -2822,7 +2858,7 @@ mod tests {
         for case in cases {
             assert_eq!(
                 decode_project(&case.to_string()),
-                Err(ProjectCodecError::InvalidV10Data)
+                Err(ProjectCodecError::InvalidV11Data)
             );
         }
 
@@ -2833,7 +2869,7 @@ mod tests {
         ]);
         assert_eq!(
             decode_project(&out_of_order.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
 
         let too_many = (0..=crate::MAX_TIMELINE_MARKERS)
@@ -2849,7 +2885,7 @@ mod tests {
         too_many_value["project"]["timeline"]["markers"] = json!(too_many);
         assert_eq!(
             decode_project(&too_many_value.to_string()),
-            Err(ProjectCodecError::InvalidV10Data)
+            Err(ProjectCodecError::InvalidV11Data)
         );
     }
 

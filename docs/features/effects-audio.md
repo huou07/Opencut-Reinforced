@@ -66,16 +66,24 @@ level (−24.09 dBFS before and after) and the hiss 15 dB lower (−51.4 → −
 dBFS), with the reducer set to 18 dB. The gate runs at decode, before
 gain/pan/fades, so the level it sees is the source level.
 
-Video-embedded audio is not part of the product yet: only `TrackKind::Audio`
-clips build an audio clip, so a video clip's own track cannot carry a reduction
-until that pipeline exists. The media-library "clean audio" action still writes a
-new cleaned WAV; the timeline action no longer needs it.
+A video clip carries the sound of its own media: `VisualSettings.audio` holds the
+same `AudioSettings`, the program builds an audio clip for a video clip whose media
+has an audio stream, and the inspector shows the audio fields beside the picture
+fields. A visual update carries the audio half in the same command
+(`ProjectTimelineVisualSettingsView.audio`), so moving picture and changing sound in
+one Apply is one revision and one undo step; a view without audio leaves the clip's
+sound untouched, which is what the transform overlay and the text inspector send.
+Measured on a 640×360 H.264+AAC clip exported to MP4: the tone stays at −24.1 dB
+and the hiss falls from −51.4 dB to −66.8 dB with 18 dB reduction. Text, caption
+and audio-track behaviour is unchanged, and the media-library "clean audio" action
+still writes a new cleaned WAV; the timeline action no longer needs it.
 
 ## Deferred
 
 Keyframed parameters, effect stacks beyond the closed set, masks, adjustment
 layers, HDR, hardware-accelerated effects, spectral denoising (the current
-reduction is a gate, not a noise-print removal), and video-embedded audio.
+reduction is a gate, not a noise-print removal), and per-stream selection when a
+video file carries more than one audio stream.
 
 ## Related
 

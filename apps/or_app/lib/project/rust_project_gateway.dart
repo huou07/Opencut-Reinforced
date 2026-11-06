@@ -463,6 +463,16 @@ class RustProjectGateway implements ProjectGateway {
         transitionOutDuration: _projectRationalTime(
           settings.transitionOutDuration,
         ),
+        audio: settings.audio == null
+            ? null
+            : ProjectTimelineAudioSettings(
+                gainMilliDecibels: settings.audio!.gainMillidecibels,
+                panBasisPoints: settings.audio!.panBasisPoints,
+                fadeIn: _projectRationalTime(settings.audio!.fadeIn),
+                fadeOut: _projectRationalTime(settings.audio!.fadeOut),
+                noiseReductionDecibels:
+                    settings.audio!.noiseReductionDecibels,
+              ),
       );
     } on rust.ProjectBridgeError catch (error) {
       throw ProjectGatewayException(error.code, error.message);
@@ -522,6 +532,16 @@ class RustProjectGateway implements ProjectGateway {
           settings.transitionOutDuration ?? ProjectRationalTime(BigInt.zero, 1),
         ),
         updateTransitionOut: settings.updateTransitionOut,
+        audio: settings.audio == null
+            ? null
+            : rust.ProjectTimelineAudioSettingsView(
+                gainMillidecibels: settings.audio!.gainMilliDecibels,
+                panBasisPoints: settings.audio!.panBasisPoints,
+                fadeIn: _rustTime(settings.audio!.fadeIn),
+                fadeOut: _rustTime(settings.audio!.fadeOut),
+                noiseReductionDecibels:
+                    settings.audio!.noiseReductionDecibels,
+              ),
       ),
     ),
   );

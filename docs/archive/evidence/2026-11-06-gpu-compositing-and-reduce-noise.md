@@ -91,6 +91,31 @@ Foundation (Constrained Baseline stream). MP4 is H.264 + AAC on all three.
   implemented until that pipeline exists. The media-library "clean audio" path
   still writes a new WAV and is not the timeline feature.
 
+## Video clips carry their own audio (later in the session)
+
+A video clip's soundtrack used to be ignored by the program builder, so Reduce
+Noise could only reach an audio track. `VisualSettings.audio` now holds the same
+`AudioSettings`, the program pushes an audio clip for a video clip whose media has
+an audio stream, the inspector shows the audio fields beside the picture fields,
+and a visual update carries the audio half in the same command, so one Apply is
+one revision and one undo step.
+
+Evidence, all local:
+
+- Fixture: 10 s 640×360 H.264 + mono AAC (3 s tone, 7 s hiss at 0.02).
+- CLI: `or timeline set-clip-audio --noise-reduction-db 18` on the video clip
+  printed "Updated timeline clip_id … at revision 4"; the saved project is
+  `schema_version 11` with `audio.noise_reduction_decibels: 18`.
+- Export (bench harness, MP4 quality 300 frames): before `audio=1 bytes=264158`,
+  after `audio=1 bytes=264353`; `volumedetect` on the two MP4s: tone −24.1 dB
+  before and after, hiss −51.4 dB → **−66.8 dB**.
+- Schema: version 11 with an optional `audio` block; version 9 and 10 files open
+  unchanged (a real 12-audio-clip version 9 file was opened, edited and rewritten
+  as version 11).
+- UI: `scripts/ui_scenarios/video-clip-audio.json` imports the repository's
+  `tiny_h264_aac.mp4` as a video clip, scrolls the inspector to the audio fields,
+  picks 12 dB, and one `cmd+z` returns the field to 0 — `OR_UI=PASS` on macOS.
+
 ## Bugs found and fixed during the session
 
 - A BT.709 inverse in the NV12 layer shader against BT.601 planes decoded by
@@ -112,8 +137,8 @@ Foundation (Constrained Baseline stream). MP4 is H.264 + AAC on all three.
   dependency was adopted. A per-library table was not rewritten because the
   existing review already carries verdicts and nothing measured this week
   changed them.
-- Windows UI journeys, Debian UI journeys, and WebM/lossless rows on the final
-  revision were not re-run as UI flows. Benchmarks cover MP4/WebM/lossless on
+- Windows UI journeys and Debian UI journeys were not run as UI flows; the new
+  video-clip audio journey was driven on macOS only. Benchmarks cover MP4/WebM/lossless on
   the harness path; MP4 rows were re-measured at the final revision on macOS and
   Debian.
 - `qsv`, `nvenc`, `amf` and VideoToolbox acceleration paths were not exercised

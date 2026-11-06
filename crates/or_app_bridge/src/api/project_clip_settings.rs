@@ -4,6 +4,7 @@ use super::project::*;
 use or_core::{
     AudioSettings, ClipContent, ClipSettings, CommandEnvelope, Crop, Opacity, ProjectId,
     ProjectInstanceId, ProjectRevision, RationalRate, TimelineClipState, TrackKind, Transform,
+    VisualSettings,
 };
 
 impl ProjectHostHandle {
@@ -87,6 +88,26 @@ impl ProjectHostHandle {
                 Err(error) => return action_error(error),
             };
         }
+        // One command carries both halves of a video clip's settings, so a
+        // change that touches picture and sound is still one undo step. A view
+        // without audio leaves the clip's sound untouched.
+        if let Some(audio) = settings.audio {
+            let fade_in = match time_from_view(audio.fade_in) {
+                Ok(time) => time,
+                Err(error) => return action_error(error),
+            };
+            let fade_out = match time_from_view(audio.fade_out) {
+                Ok(time) => time,
+                Err(error) => return action_error(error),
+            };
+            visual.audio = AudioSettings {
+                gain_millidecibels: audio.gain_millidecibels,
+                pan_basis_points: audio.pan_basis_points,
+                fade_in,
+                fade_out,
+                noise_reduction_decibels: audio.noise_reduction_decibels,
+            };
+        }
         self.dispatch_command(CommandEnvelope::update_timeline_clip(
             project_id,
             project_instance_id,
@@ -106,15 +127,16 @@ impl ProjectHostHandle {
         track_id: String,
         clip_id: String,
     ) -> Result<ProjectTimelineAudioSettingsView, ProjectBridgeError> {
-        let (_, _, _, clip) = self.find_audio_clip(
+        let (_, _, _, clip) = self.find_clip_with_audio(
             &project_id,
             &project_instance_id,
             expected_revision,
             &track_id,
             &clip_id,
         )?;
-        let ClipSettings::Audio(settings) = clip.settings else {
-            return Err(unsupported_audio_settings());
+        let settings = match clip.settings {
+            ClipSettings::Audio(settings) => settings,
+            ClipSettings::Visual(settings) => settings.audio,
         };
         Ok(audio_settings_view(settings))
     }
@@ -128,7 +150,7 @@ impl ProjectHostHandle {
         clip_id: String,
         settings: ProjectTimelineAudioSettingsView,
     ) -> ProjectActionResult {
-        let (project_id, project_instance_id, revision, clip) = match self.find_audio_clip(
+        let (project_id, project_instance_id, revision, clip) = match self.find_clip_with_audio(
             &project_id,
             &project_instance_id,
             expected_revision,
@@ -146,6 +168,22 @@ impl ProjectHostHandle {
             Ok(time) => time,
             Err(error) => return action_error(error),
         };
+        let audio = AudioSettings {
+            gain_millidecibels: settings.gain_millidecibels,
+            pan_basis_points: settings.pan_basis_points,
+            fade_in,
+            fade_out,
+            noise_reduction_decibels: settings.noise_reduction_decibels,
+        };
+        // A video clip keeps its audio settings beside its visual ones, so the
+        // clip stays a single settings value and one command still means one
+        // undo step.
+        let updated = match clip.settings {
+            ClipSettings::Audio(_) => ClipSettings::Audio(audio),
+            ClipSettings::Visual(visual) => {
+                ClipSettings::Visual(VisualSettings { audio, ..visual })
+            }
+        };
         self.dispatch_command(CommandEnvelope::update_timeline_clip(
             project_id,
             project_instance_id,
@@ -153,13 +191,7 @@ impl ProjectHostHandle {
             clip.clip_id,
             clip.timeline_duration,
             clip.content,
-            ClipSettings::Audio(AudioSettings {
-                gain_millidecibels: settings.gain_millidecibels,
-                pan_basis_points: settings.pan_basis_points,
-                fade_in,
-                fade_out,
-                noise_reduction_decibels: settings.noise_reduction_decibels,
-            }),
+            updated,
         ))
     }
 
@@ -371,7 +403,7 @@ impl ProjectHostHandle {
         Ok((project_id, project_instance_id, revision, clip))
     }
 
-    fn find_audio_clip(
+    fn find_clip_with_audio(
         &self,
         project_id: &str,
         project_instance_id: &str,
@@ -395,7 +427,7 @@ impl ProjectHostHandle {
                 track_id,
                 clip_id,
             )?;
-        if track_kind != TrackKind::Audio {
+        if track_kind != TrackKind::Audio && track_kind != TrackKind::Video {
             return Err(unsupported_audio_settings());
         }
         Ok((project_id, project_instance_id, revision, clip))

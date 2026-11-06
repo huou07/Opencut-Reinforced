@@ -662,6 +662,7 @@ class ProjectTimelineVisualSettings {
     this.modifiedEffects = const {},
     this.updateTransitionIn = false,
     this.updateTransitionOut = false,
+    this.audio,
   });
 
   static const identity = ProjectTimelineVisualSettings(
@@ -709,6 +710,9 @@ class ProjectTimelineVisualSettings {
   final int contrastAmountMilli;
   final int saturationAmountMilli;
   final int gaussianBlurRadiusMilli;
+  /// The clip's own sound, present on a video clip that carries audio. A
+  /// visual update that leaves this null does not rewrite the clip's sound.
+  final ProjectTimelineAudioSettings? audio;
   final ProjectTimelineTransition transitionIn;
   final ProjectRationalTime? transitionInDuration;
   final ProjectTimelineTransition transitionOut;

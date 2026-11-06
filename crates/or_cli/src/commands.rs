@@ -2632,11 +2632,9 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             let (path, attached) = media_project_path(&options, json)?;
             let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
             let (_, _, clip) = find_clip_state(&path, attached, clip_id, json)?;
-            let ClipSettings::Audio(mut audio) = clip.settings.clone() else {
-                return Err(CliError::usage(
-                    json,
-                    "this clip has visual settings, not audio settings; use set-clip-visual",
-                ));
+            let mut audio = match clip.settings.clone() {
+                ClipSettings::Audio(audio) => audio,
+                ClipSettings::Visual(visual) => visual.audio,
             };
             if let Some(value) = optional_i32(&options, "--gain-millidecibels", json)? {
                 audio.gain_millidecibels = value;
@@ -2673,7 +2671,12 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     )
                 })?;
             }
-            let settings = ClipSettings::Audio(audio);
+            let settings = match clip.settings.clone() {
+                ClipSettings::Audio(_) => ClipSettings::Audio(audio),
+                ClipSettings::Visual(visual) => {
+                    ClipSettings::Visual(VisualSettings { audio, ..visual })
+                }
+            };
             let result =
                 send_clip_update(&path, attached, &clip, clip.content.clone(), settings, json)?;
             Ok(render_timeline_command(

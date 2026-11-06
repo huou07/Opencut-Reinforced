@@ -145,7 +145,9 @@ list:
   above — no JavaScript runtime, or a second renderer beside wgpu, or a licence
   that an MIT editor cannot carry.
 
-The one capability from the list that OR still lacks is video-embedded audio:
-a clip on a video track contributes no sound, so "reduce noise on the audio of a
-video clip" cannot be honoured until that pipeline exists. That is a product
-gap, not a dependency decision.
+Video-embedded audio is no longer a gap: a video clip whose media has an audio
+stream now contributes that stream to the mixer and carries the same audio
+settings (gain, pan, fades, noise reduction) as an audio clip, so "reduce noise
+on the audio of a video clip" is answered by an in-house path rather than a
+dependency. Per-stream selection for a file with several audio streams stays
+deferred.

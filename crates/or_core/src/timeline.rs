@@ -623,6 +623,10 @@ pub struct VisualSettings {
     pub effects: Vec<EffectReference>,
     pub transition_in: Option<TransitionReference>,
     pub transition_out: Option<TransitionReference>,
+    /// Settings for the audio a visual clip carries in its own media. Text and
+    /// caption clips never contribute audio, so theirs stays at the default.
+    #[serde(default)]
+    pub audio: AudioSettings,
 }
 
 impl VisualSettings {
@@ -638,6 +642,7 @@ impl VisualSettings {
                 .all(|transition| {
                     transition.duration.is_positive() && transition.duration <= duration
                 })
+            && self.audio.is_valid_for_duration(duration)
     }
 }
 
@@ -650,6 +655,7 @@ impl Default for VisualSettings {
             effects: Vec::new(),
             transition_in: None,
             transition_out: None,
+            audio: AudioSettings::DEFAULT,
         }
     }
 }

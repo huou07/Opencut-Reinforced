@@ -7019,6 +7019,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTimelineAudioSettingsView?
+  dco_decode_opt_box_autoadd_project_timeline_audio_settings_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_project_timeline_audio_settings_view(raw);
+  }
+
+  @protected
   ProjectTranscriptProposalView?
   dco_decode_opt_box_autoadd_project_transcript_proposal_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -7498,8 +7507,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   dco_decode_project_timeline_visual_settings_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 26)
-      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
+    if (arr.length != 27)
+      throw Exception('unexpected arr length: expect 27 but see ${arr.length}');
     return ProjectTimelineVisualSettingsView(
       xMilliCanvas: dco_decode_i_32(arr[0]),
       yMilliCanvas: dco_decode_i_32(arr[1]),
@@ -7527,6 +7536,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       transitionOutDuration: dco_decode_rational_time_view(arr[23]),
       updateTransitionIn: dco_decode_bool(arr[24]),
       updateTransitionOut: dco_decode_bool(arr[25]),
+      audio: dco_decode_opt_box_autoadd_project_timeline_audio_settings_view(
+        arr[26],
+      ),
     );
   }
 
@@ -8774,6 +8786,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ProjectTimelineAudioSettingsView?
+  sse_decode_opt_box_autoadd_project_timeline_audio_settings_view(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_project_timeline_audio_settings_view(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ProjectTranscriptProposalView?
   sse_decode_opt_box_autoadd_project_transcript_proposal_view(
     SseDeserializer deserializer,
@@ -9451,6 +9479,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_transitionOutDuration = sse_decode_rational_time_view(deserializer);
     var var_updateTransitionIn = sse_decode_bool(deserializer);
     var var_updateTransitionOut = sse_decode_bool(deserializer);
+    var var_audio =
+        sse_decode_opt_box_autoadd_project_timeline_audio_settings_view(
+          deserializer,
+        );
     return ProjectTimelineVisualSettingsView(
       xMilliCanvas: var_xMilliCanvas,
       yMilliCanvas: var_yMilliCanvas,
@@ -9478,6 +9510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       transitionOutDuration: var_transitionOutDuration,
       updateTransitionIn: var_updateTransitionIn,
       updateTransitionOut: var_updateTransitionOut,
+      audio: var_audio,
     );
   }
 
@@ -10637,6 +10670,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_project_timeline_audio_settings_view(
+    ProjectTimelineAudioSettingsView? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_project_timeline_audio_settings_view(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_project_transcript_proposal_view(
     ProjectTranscriptProposalView? self,
     SseSerializer serializer,
@@ -11139,6 +11188,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_rational_time_view(self.transitionOutDuration, serializer);
     sse_encode_bool(self.updateTransitionIn, serializer);
     sse_encode_bool(self.updateTransitionOut, serializer);
+    sse_encode_opt_box_autoadd_project_timeline_audio_settings_view(
+      self.audio,
+      serializer,
+    );
   }
 
   @protected

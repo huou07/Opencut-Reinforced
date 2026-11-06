@@ -274,6 +274,12 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     setState(() {});
   }
 
+  /// Whether this clip's own media can carry audio worth editing: only a media
+  /// clip on a visual track, never text or captions.
+  bool get _showsClipAudio =>
+      !widget.isAudioTrack &&
+      widget.clip?.contentKind == ProjectTimelineClipContentKind.media;
+
   Future<void> _loadSettings() async {
     final generation = ++_loadGeneration;
     final project = widget.project;
@@ -317,6 +323,18 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
         );
         if (!mounted || generation != _loadGeneration) return;
         _writeSettings(settings);
+        // A video clip carries audio settings beside its visual ones, so the
+        // same panel edits both without a second surface.
+        if (_showsClipAudio) {
+          final audio = await gateway.getTimelineClipAudioSettings(
+            session,
+            project,
+            trackId: trackId,
+            clipId: clipId,
+          );
+          if (!mounted || generation != _loadGeneration) return;
+          _writeAudioSettings(audio);
+        }
       }
     } on ProjectGatewayException catch (error) {
       if (!mounted || generation != _loadGeneration) return;
@@ -457,6 +475,8 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
         (transitionOutKind != 0 && !transitionOutDuration.isPositive)) {
       return null;
     }
+    final audio = _showsClipAudio ? _readAudioSettings() : null;
+    if (_showsClipAudio && audio == null) return null;
     return ProjectTimelineVisualSettings(
       xMilliCanvas: x,
       yMilliCanvas: y,
@@ -481,6 +501,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       modifiedEffects: Set.unmodifiable(_modifiedEffects),
       updateTransitionIn: _updateTransitionIn,
       updateTransitionOut: _updateTransitionOut,
+      audio: audio,
     );
   }
 
@@ -956,7 +977,47 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       setState(() => _error = inspectorAudioValidationMessage);
       return;
     }
-    await _applyAudio(settings);
+    if (!_showsClipAudio) {
+      await _applyAudio(settings);
+      return;
+    }
+    // A video clip's picture and sound travel in one command, so reducing its
+    // noise stays one undo step even though this panel holds both halves.
+    final visual = _readSettings();
+    if (visual == null) {
+      setState(
+        () => _error =
+            'Enter values within the supported ranges. '
+            'Percentages may use decimals.',
+      );
+      return;
+    }
+    await _apply(visual);
+  }
+
+  /// Reset clears the clip, including the sound of a video clip. The audio
+  /// half rides along in the visual command, so it is one undo step too.
+  ProjectTimelineVisualSettings _resetTarget() {
+    final base = ProjectTimelineVisualSettings.identity;
+    if (!_showsClipAudio) return base;
+    return ProjectTimelineVisualSettings(
+      xMilliCanvas: base.xMilliCanvas,
+      yMilliCanvas: base.yMilliCanvas,
+      scaleXMilli: base.scaleXMilli,
+      scaleYMilli: base.scaleYMilli,
+      rotationMilliDegrees: base.rotationMilliDegrees,
+      anchorXBasisPoints: base.anchorXBasisPoints,
+      anchorYBasisPoints: base.anchorYBasisPoints,
+      cropLeftBasisPoints: base.cropLeftBasisPoints,
+      cropTopBasisPoints: base.cropTopBasisPoints,
+      cropRightBasisPoints: base.cropRightBasisPoints,
+      cropBottomBasisPoints: base.cropBottomBasisPoints,
+      opacityBasisPoints: base.opacityBasisPoints,
+      modifiedEffects: base.modifiedEffects,
+      updateTransitionIn: base.updateTransitionIn,
+      updateTransitionOut: base.updateTransitionOut,
+      audio: ProjectTimelineAudioSettings.identity,
+    );
   }
 
   /// What the inspector shows when no clip is selected: the sequence the
@@ -1103,44 +1164,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
     padding: const EdgeInsets.all(OrSpacing.x2),
     children: [
       _playbackRateEditor(),
-      Text(
-        'AUDIO',
-        style: TextStyle(
-          color: OrColors.textMuted,
-          fontSize: OrType.tinySize,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      const SizedBox(height: OrSpacing.x1),
-      _audioNumberField(
-        'gain_db',
-        'Gain (dB)',
-        decimal: true,
-        minimum: -96,
-        maximum: 24,
-      ),
-      const SizedBox(height: OrSpacing.x1),
-      _audioNumberField(
-        'pan_percent',
-        'Pan (%)',
-        decimal: true,
-        minimum: -100,
-        maximum: 100,
-      ),
-      const SizedBox(height: OrSpacing.x1),
-      _audioTimeField('fade_in', 'Fade in (s)'),
-      const SizedBox(height: OrSpacing.x1),
-      _audioTimeField('fade_out', 'Fade out (s)'),
-      const SizedBox(height: OrSpacing.x1),
-      _audioNumberField(
-        'noise_reduction_db',
-        'Reduce noise (dB)',
-        decimal: false,
-        minimum: 0,
-        maximum: 24,
-      ),
-      const SizedBox(height: OrSpacing.x2),
-      _noiseReductionPresets(),
+      ..._audioFieldWidgets(),
       if (_error != null) ...[
         const SizedBox(height: OrSpacing.x2),
         Semantics(
@@ -1157,6 +1181,49 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
       ],
     ],
   );
+
+  /// The audio controls, shared by an audio clip and by a video clip that
+  /// carries audio in its own media.
+  List<Widget> _audioFieldWidgets() => [
+    Text(
+      'AUDIO',
+      style: TextStyle(
+        color: OrColors.textMuted,
+        fontSize: OrType.tinySize,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+    const SizedBox(height: OrSpacing.x1),
+    _audioNumberField(
+      'gain_db',
+      'Gain (dB)',
+      decimal: true,
+      minimum: -96,
+      maximum: 24,
+    ),
+    const SizedBox(height: OrSpacing.x1),
+    _audioNumberField(
+      'pan_percent',
+      'Pan (%)',
+      decimal: true,
+      minimum: -100,
+      maximum: 100,
+    ),
+    const SizedBox(height: OrSpacing.x1),
+    _audioTimeField('fade_in', 'Fade in (s)'),
+    const SizedBox(height: OrSpacing.x1),
+    _audioTimeField('fade_out', 'Fade out (s)'),
+    const SizedBox(height: OrSpacing.x1),
+    _audioNumberField(
+      'noise_reduction_db',
+      'Reduce noise (dB)',
+      decimal: false,
+      minimum: 0,
+      maximum: 24,
+    ),
+    const SizedBox(height: OrSpacing.x2),
+    _noiseReductionPresets(),
+  ];
 
   Widget _pair(
     String leftKey,
@@ -1201,7 +1268,7 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
                   ? null
                   : () => audio
                         ? _applyAudio(ProjectTimelineAudioSettings.identity)
-                        : _apply(ProjectTimelineVisualSettings.identity),
+                        : _apply(_resetTarget()),
               child: const Text('Reset'),
             ),
           ),
@@ -1428,6 +1495,10 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
                     'transition_out_duration',
                     'Duration out (s)',
                   ),
+                  if (_showsClipAudio) ...[
+                    const SizedBox(height: OrSpacing.x3),
+                    ..._audioFieldWidgets(),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: OrSpacing.x2),
                     Semantics(

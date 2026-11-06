@@ -1,0 +1,277 @@
+{
+  "name": "video-clip-audio",
+  "harness": "or_ui",
+  "description": "A video clip's own soundtrack through the real inspector. The repo's H.264+AAC fixture is imported as a video clip, the inspector shows the audio controls beside the picture controls, picking the 12 dB noise presets writes one command that carries picture and sound, and one undo returns it to 0.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "fixtures": [
+    "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+  ],
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Video sound"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-add-video"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "V1"
+    },
+    {
+      "op": "picker",
+      "next": "media"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "tiny_h264_aac.mp4",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Insert"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "expect",
+      "key": "inspector-visual-apply"
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 400
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-gain_db"
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -600
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "0"
+    },
+    {
+      "op": "expect",
+      "key": "inspector-noise-preset-12"
+    },
+    {
+      "op": "shot",
+      "name": "video-no-reduction"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "inspector-noise-preset-12"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 2500
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -600
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "12"
+    },
+    {
+      "op": "shot",
+      "name": "video-twelve-db"
+    },
+    {
+      "op": "key",
+      "chord": "cmd+z"
+    },
+    {
+      "op": "pump",
+      "ms": 2500
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -600
+    },
+    {
+      "op": "pump",
+      "ms": 300
+    },
+    {
+      "op": "expect",
+      "key": "inspector-audio-noise_reduction_db"
+    },
+    {
+      "op": "expect_value",
+      "key": "inspector-audio-noise_reduction_db",
+      "value": "0"
+    },
+    {
+      "op": "tree",
+      "name": "after-undo"
+    },
+    {
+      "op": "shot",
+      "name": "video-after-undo"
+    }
+  ]
+}

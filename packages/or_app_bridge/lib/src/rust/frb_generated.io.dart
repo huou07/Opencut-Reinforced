@@ -300,6 +300,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_opt_box_autoadd_project_text_formatting_view(dynamic raw);
 
   @protected
+  ProjectTimelineAudioSettingsView?
+  dco_decode_opt_box_autoadd_project_timeline_audio_settings_view(dynamic raw);
+
+  @protected
   ProjectTranscriptProposalView?
   dco_decode_opt_box_autoadd_project_transcript_proposal_view(dynamic raw);
 
@@ -842,6 +846,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ProjectTextFormattingView?
   sse_decode_opt_box_autoadd_project_text_formatting_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectTimelineAudioSettingsView?
+  sse_decode_opt_box_autoadd_project_timeline_audio_settings_view(
     SseDeserializer deserializer,
   );
 
@@ -1508,6 +1518,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_project_text_formatting_view(
     ProjectTextFormattingView? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_project_timeline_audio_settings_view(
+    ProjectTimelineAudioSettingsView? self,
     SseSerializer serializer,
   );
 

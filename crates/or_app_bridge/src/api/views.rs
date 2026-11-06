@@ -517,6 +517,10 @@ pub struct ProjectTimelineVisualSettingsView {
     pub transition_out_duration: RationalTimeView,
     pub update_transition_in: bool,
     pub update_transition_out: bool,
+    /// Audio settings of the clip's own media. `None` on an update means "leave
+    /// them as they are", so a caller that only moves picture does not rewrite
+    /// sound.
+    pub audio: Option<ProjectTimelineAudioSettingsView>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

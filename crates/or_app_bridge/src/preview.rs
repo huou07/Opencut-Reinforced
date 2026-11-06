@@ -83,7 +83,7 @@ mod desktop {
         PreviewTransport, RenderSnapshot, RuntimeBudgets,
     };
     use std::{
-        collections::{HashMap, VecDeque},
+        collections::{HashMap, HashSet, VecDeque},
         future::Future,
         num::NonZeroUsize,
         pin::Pin,
@@ -2339,6 +2339,7 @@ mod desktop {
     ) -> Result<PreviewProgram, PreviewError> {
         let mut media_sources = HashMap::new();
         let mut media_dimensions = HashMap::new();
+        let mut media_with_audio = HashSet::new();
         let mut offset = 0usize;
         loop {
             let result = query_request(QueryEnvelope::media_list(
@@ -2362,6 +2363,14 @@ mod desktop {
                     });
                 if let Some(dimensions) = dimensions {
                     media_dimensions.insert(item.id(), dimensions);
+                }
+                if item
+                    .metadata()
+                    .streams()
+                    .iter()
+                    .any(|stream| matches!(stream, MediaStreamMetadata::Audio(_)))
+                {
+                    media_with_audio.insert(item.id());
                 }
                 media_sources.insert(item.id(), item.source().clone());
             }
@@ -2414,6 +2423,7 @@ mod desktop {
                     clip,
                     &media_sources,
                     &media_dimensions,
+                    &media_with_audio,
                 )?;
             }
         }
@@ -2480,6 +2490,7 @@ mod desktop {
         clip: TimelineClipState,
         sources: &HashMap<MediaId, MediaSourceRef>,
         media_dimensions: &HashMap<MediaId, (u32, u32)>,
+        media_with_audio: &HashSet<MediaId>,
     ) -> Result<(), PreviewError> {
         let end = clip
             .timeline_start
@@ -2505,7 +2516,7 @@ mod desktop {
                     PreviewError::new("PREVIEW_QUERY_FAILED", "timeline media source was missing")
                 })?;
                 video_clips.push(VideoClip {
-                    source,
+                    source: source.clone(),
                     source_dimensions: media_dimensions.get(&media_id).copied(),
                     timeline_start: clip.timeline_start,
                     source_start: source_range.start(),
@@ -2520,6 +2531,19 @@ mod desktop {
                     transition_in: settings.transition_in,
                     transition_out: settings.transition_out,
                 });
+                // A video clip's own audio is mixed like an audio clip's, using
+                // the settings stored on the visual clip.
+                if media_with_audio.contains(&media_id) {
+                    audio_clips.push(AudioClip {
+                        id: clip.clip_id.to_string(),
+                        source,
+                        timeline_start: clip.timeline_start,
+                        source_start: source_range.start(),
+                        duration: clip.timeline_duration,
+                        playback_rate,
+                        settings: settings.audio,
+                    });
+                }
             }
             (
                 TrackKind::Text,

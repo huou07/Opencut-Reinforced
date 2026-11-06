@@ -1224,6 +1224,13 @@ pub enum TimelineTrimEdge {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[serde(deny_unknown_fields)]
+// A clip state now carries its own audio settings, which makes the split
+// variant the largest. Boxing the payload would allocate on every history
+// clone and on every program build, so the inline size stays.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a clip state carries its audio settings; boxing allocates on every history clone"
+)]
 pub enum ProjectChange {
     ProjectName {
         before: String,

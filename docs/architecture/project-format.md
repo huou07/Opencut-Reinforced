@@ -29,7 +29,7 @@ UTF-8 JSON:
 ```json
 {
   "format": "opencut-reinforced-project",
-  "schema_version": 10,
+  "schema_version": 11,
   "project": {
     "id": "01234567-89ab-4def-8123-456789abcdef",
     "revision": 0,
@@ -41,7 +41,7 @@ UTF-8 JSON:
 | Field | Type | Meaning |
 |---|---|---|
 | `format` | string | Always `opencut-reinforced-project` |
-| `schema_version` | integer | Document layout version; current **10** |
+| `schema_version` | integer | Document layout version; current **11** |
 | `project` | object | Project identity and revision |
 
 The authoritative constant is `CURRENT_PROJECT_SCHEMA_VERSION` in
@@ -62,6 +62,7 @@ commit that changes it.
 | 8 | Exact rational `playback_rate` on media clips; absent legacy values mean 1× |
 | 9 | Optional sequence canvas (`width`/`height`) beside the sequence frame rate, so preview and export share one composition shape |
 | 10 | Optional `noise_reduction_decibels` on a clip's audio settings; absent means 0, so every version 9 file opens unchanged |
+| 11 | Optional `audio` block on a clip's visual settings, so a video clip's own soundtrack carries gain, pan, fades and noise reduction; absent means defaults, so every version 9 and 10 file opens unchanged |
 
 The codec and migration tests are the authority; if this table and those tests
 disagree, the tests are right.

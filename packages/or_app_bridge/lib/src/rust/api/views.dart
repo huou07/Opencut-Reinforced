@@ -1196,6 +1196,11 @@ class ProjectTimelineVisualSettingsView {
   final bool updateTransitionIn;
   final bool updateTransitionOut;
 
+  /// Audio settings of the clip's own media. `None` on an update means "leave
+  /// them as they are", so a caller that only moves picture does not rewrite
+  /// sound.
+  final ProjectTimelineAudioSettingsView? audio;
+
   const ProjectTimelineVisualSettingsView({
     required this.xMilliCanvas,
     required this.yMilliCanvas,
@@ -1223,6 +1228,7 @@ class ProjectTimelineVisualSettingsView {
     required this.transitionOutDuration,
     required this.updateTransitionIn,
     required this.updateTransitionOut,
+    this.audio,
   });
 
   @override
@@ -1252,7 +1258,8 @@ class ProjectTimelineVisualSettingsView {
       transitionOutKind.hashCode ^
       transitionOutDuration.hashCode ^
       updateTransitionIn.hashCode ^
-      updateTransitionOut.hashCode;
+      updateTransitionOut.hashCode ^
+      audio.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1284,7 +1291,8 @@ class ProjectTimelineVisualSettingsView {
           transitionOutKind == other.transitionOutKind &&
           transitionOutDuration == other.transitionOutDuration &&
           updateTransitionIn == other.updateTransitionIn &&
-          updateTransitionOut == other.updateTransitionOut;
+          updateTransitionOut == other.updateTransitionOut &&
+          audio == other.audio;
 }
 
 class ProjectTranscriptProposalView {

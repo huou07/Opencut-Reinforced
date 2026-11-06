@@ -6681,6 +6681,19 @@ impl SseDecode for Option<crate::api::views::ProjectTextFormattingView> {
     }
 }
 
+impl SseDecode for Option<crate::api::views::ProjectTimelineAudioSettingsView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::api::views::ProjectTimelineAudioSettingsView>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::views::ProjectTranscriptProposalView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7339,6 +7352,8 @@ impl SseDecode for crate::api::views::ProjectTimelineVisualSettingsView {
             <crate::api::views::RationalTimeView>::sse_decode(deserializer);
         let mut var_updateTransitionIn = <bool>::sse_decode(deserializer);
         let mut var_updateTransitionOut = <bool>::sse_decode(deserializer);
+        let mut var_audio =
+            <Option<crate::api::views::ProjectTimelineAudioSettingsView>>::sse_decode(deserializer);
         return crate::api::views::ProjectTimelineVisualSettingsView {
             x_milli_canvas: var_xMilliCanvas,
             y_milli_canvas: var_yMilliCanvas,
@@ -7366,6 +7381,7 @@ impl SseDecode for crate::api::views::ProjectTimelineVisualSettingsView {
             transition_out_duration: var_transitionOutDuration,
             update_transition_in: var_updateTransitionIn,
             update_transition_out: var_updateTransitionOut,
+            audio: var_audio,
         };
     }
 }
@@ -9626,6 +9642,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectTimelineVisualS
             self.transition_out_duration.into_into_dart().into_dart(),
             self.update_transition_in.into_into_dart().into_dart(),
             self.update_transition_out.into_into_dart().into_dart(),
+            self.audio.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -10748,6 +10765,16 @@ impl SseEncode for Option<crate::api::views::ProjectTextFormattingView> {
     }
 }
 
+impl SseEncode for Option<crate::api::views::ProjectTimelineAudioSettingsView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::views::ProjectTimelineAudioSettingsView>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::views::ProjectTranscriptProposalView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11202,6 +11229,9 @@ impl SseEncode for crate::api::views::ProjectTimelineVisualSettingsView {
         <crate::api::views::RationalTimeView>::sse_encode(self.transition_out_duration, serializer);
         <bool>::sse_encode(self.update_transition_in, serializer);
         <bool>::sse_encode(self.update_transition_out, serializer);
+        <Option<crate::api::views::ProjectTimelineAudioSettingsView>>::sse_encode(
+            self.audio, serializer,
+        );
     }
 }
 
