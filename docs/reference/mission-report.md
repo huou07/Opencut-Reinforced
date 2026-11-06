@@ -4,7 +4,7 @@ Last reviewed: 2026-11-07
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
 parity, clip keyframes and motion presets) shipped, what was verified on each
-host, and what remains unverified. Revision `37f39a67`; branch
+host, and what remains unverified. Revision `7fc8df3d`; branch
 `mission/hardware-profiles-and-polish`.
 
 ## Shipped
@@ -40,9 +40,14 @@ host, and what remains unverified. Revision `37f39a67`; branch
 | Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
 | Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
 
-Benchmarks at this revision (macOS only, 300 frames, idle): MP4 239.6/245.6 fps,
-MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
-[export-performance.md](export-performance.md).
+Benchmarks at this revision (300 frames, idle): macOS MP4 239.6/245.6 fps, MP4 +
+one text layer 240.4/234.7 fps, animated scale 238.9/243.8 fps — within the
+2026-11-06 spread. Debian (Vulkan UHD 770, `h264_vaapi`): full MP4 video-only
+256.0/260.6 fps (was 225), full MP4 + text 59.8–83.2 fps, render-only video
+745.9/779.2, render-only + text 52.6/53.2, encoder-only 454.3/447.8,
+decode-only 273.8/276.8. The Debian text path is readback-bound: the composited
+frame waits 13–14 ms in the synchronous NV12 readback while the CPU submit is
+25–74 µs. Rows in [export-performance.md](export-performance.md).
 
 ## Claims, stated as evidence allows
 
@@ -60,8 +65,10 @@ MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
 - **PASS (macOS)** — an export with animated scale keyframes (`OR_BENCH_ANIM=1`)
   ran at 238.9/243.8 fps against the static 239.6/245.6 spread; Debian and
   Windows animated rows remain **UNVERIFIED**.
-- **UNVERIFIED** — Debian and Windows benchmark rows were not re-taken at this
-  revision; the last rows are from 2026-11-06.
+- **PASS (Debian)** — the video-only full pipeline improved from 225 to
+  256–261 fps at this revision; the text row is readback-bound and documented.
+- **UNVERIFIED** — Windows benchmark rows were not re-taken at this revision;
+  the last rows are from 2026-11-06.
 - **BLOCKED by hardware** — oneVPL/Quick Sync is absent from every packaged
   FFmpeg build (no `h264_qsv`), and no discrete NVIDIA/AMD device is available
   locally, so those paths are implemented and probed but not benchmarked.

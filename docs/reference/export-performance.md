@@ -351,9 +351,34 @@ re-taken.
 These match the 2026-11-06 rows within run-to-run spread (242 and 208–233), so
 the keyframe plumbing did not move the static path: a clip with no keyframes
 skips the per-frame sampling (`ClipAnimation::is_empty`) and reads its static
-transform exactly as before. An export with animated keyframes was not measured
-by this harness (`export_media_benchmark` builds a static clip only); that row is
-UNVERIFIED.
+transform exactly as before.
+
+### Debian rows at `37f39a67`
+
+Measured on the Debian host (Intel UHD 770 through Vulkan, `h264_vaapi`
+encoder, GPL FFmpeg prefix `~/or-build/ffmpeg-8.1.3-install`), 300 frames,
+1920x1080, one run per stage unless noted:
+
+| Stage | fps |
+|---|---|
+| Decode only (`OR_BENCH_MODE=decode`) | 273.8, 276.8 |
+| Encode only (`OR_BENCH_MODE=encode`) | 454.3, 447.8 |
+| Render only, video (`OR_BENCH_MODE=render`) | 745.9, 779.2 |
+| Render only, one text layer | 52.6, 53.2 |
+| Full MP4, video only | 256.0, 260.6 |
+| Full MP4, one text layer | 65.6, 83.2, 68.1, 59.8 |
+
+The video-only full pipeline improved from 225 fps (2026-11-06) to 256–261; that
+path decodes NV12 and hands the planes to the encoder without compositing. Any
+text or effect layer forces the composited path: an RGBA target, two full-screen
+NV12 conversion passes and two texture-to-buffer copies, then a blocking
+`device.poll(PollType::Wait)`. Temporary `OR_TRACE_COMPOSE` instrumentation
+(not committed) put the CPU submit at 25–74 µs and the poll at 13.0–14.2 ms per
+1080p frame, while the text raster cache hit in 2–4 µs and layer setup took
+0.5–0.8 ms. The text row is therefore readback-bound, not shaping-bound; it is
+also why the same workload beats 300 fps on the M5 (≈3 ms for the same path).
+Asynchronous or GPU-resident readback is the next step, and it is not part of
+this revision.
 
 ## Known limits
 
@@ -363,10 +388,9 @@ UNVERIFIED.
   never warns about that.
 - The Debian host composites on an Intel UHD 770 through Vulkan and encodes
   through `h264_vaapi`, so its rows describe that integrated device; they say
-  nothing about an NVIDIA or AMD machine. Why its text row is roughly half the
-  Windows row on the same workload is unresolved: the two hosts differ in CPU
-  (i5-13500T against Core 5 120U), driver and display server, and no single
-  measurement separates those causes.
+  nothing about an NVIDIA or AMD machine. Its text row is now explained: the
+  composited path waits 13–14 ms per 1080p frame in the NV12 readback, while the
+  Windows host pays a smaller readback cost on a different driver.
 - Each host reports the adapter that served the benchmark
   (`OR_EXPORT_BENCH_ADAPTER`), so a row can be attributed to a device instead of
   assumed: macOS prints `Apple M5 (, Metal)`, Debian prints the Intel UHD 770 /
