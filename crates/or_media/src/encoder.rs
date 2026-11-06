@@ -516,6 +516,8 @@ pub struct FfmpegExportWriter {
     /// The encoder this writer settled on, so a caller or a test can tell which
     /// host path an export took.
     video_encoder_name: String,
+    /// Why that encoder was picked, when the profile asked for a decision.
+    encoding_plan: Option<or_core::ExportEncodingPlan>,
     /// Set when the video encoder reads GPU surfaces; the writer uploads every
     /// rendered frame into this pool before sending it.
     hardware_frames: Option<HardwareFrames>,
@@ -868,6 +870,7 @@ impl FfmpegExportWriter {
             profile,
             pixel_format,
             video_encoder_name: video_codec.name().to_owned(),
+            encoding_plan,
             hardware_frames,
             video_scaler,
             video_stream,
@@ -885,6 +888,12 @@ impl FfmpegExportWriter {
     /// The H.264/VP9/FFV1 encoder this writer opened.
     pub fn video_encoder_name(&self) -> &str {
         &self.video_encoder_name
+    }
+
+    /// The measured decision behind [`Self::video_encoder_name`], when this
+    /// profile took one.
+    pub fn encoding_plan(&self) -> Option<&or_core::ExportEncodingPlan> {
+        self.encoding_plan.as_ref()
     }
 
     /// Encodes one packed RGBA frame at its exact sequence frame index.
@@ -1458,7 +1467,7 @@ fn is_again(error: ffmpeg::Error) -> bool {
 #[cfg(test)]
 mod quality_tests {
     use super::{
-        ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES, codec,
+        ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES,
         describe_export_capability, nvenc_preset, vaapi_quality, video_bitrate, vp9_settings,
     };
 

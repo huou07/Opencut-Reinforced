@@ -62,6 +62,8 @@ pub struct ProjectExportJobView {
     pub state: String,
     pub progress_completed: Option<u64>,
     pub progress_total: Option<u64>,
+    /// The encoder this job opened, when it reached that decision.
+    pub detail: Option<String>,
     pub failure_message: Option<String>,
 }
 

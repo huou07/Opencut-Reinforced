@@ -342,13 +342,13 @@ class _AppShellState extends State<AppShell> {
       onProjectSummary: (current) {
         if (mounted) setState(() => _activeProject = current);
       },
-      onExported: (path) {
+      onExported: (path, detail) {
         if (mounted) {
           setState(
             () => _exportedProjectInstance = _activeProject?.projectInstanceId,
           );
         }
-        unawaited(_showExportReceipt(path));
+        unawaited(_showExportReceipt(path, detail));
       },
     )..addListener(_handleExportChanged);
     FocusManager.instance.addListener(_handleFocusChange);
@@ -2462,7 +2462,7 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _showExportReceipt(String destination) async {
+  Future<void> _showExportReceipt(String destination, String? detail) async {
     final name = destination.split(Platform.pathSeparator).last;
     var size = '';
     try {
@@ -2477,9 +2477,14 @@ class _AppShellState extends State<AppShell> {
     }
     if (!mounted) return;
     final host = HostPlatform.current();
+    // The engine names the encoder it actually opened; showing it proves the
+    // performance profile reached the file rather than only the dialog.
+    final message = detail == null
+        ? 'Exported $name$size'
+        : 'Exported $name$size\n$detail';
     OrSnackBar.show(
       context,
-      'Exported $name$size',
+      message,
       duration: const Duration(seconds: 8),
       actionLabel: host.revealLabel,
       onAction: () => unawaited(_revealExport(destination)),

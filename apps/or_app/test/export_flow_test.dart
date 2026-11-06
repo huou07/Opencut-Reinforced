@@ -16,7 +16,7 @@ final _project = ProjectReadModel(
   descriptorPath: '/tmp/project-a.orproj',
 );
 
-ProjectExportJob _job(String state) => ProjectExportJob(
+ProjectExportJob _job(String state, {String? detail}) => ProjectExportJob(
   succeeded: state != 'failed',
   errorCode: '',
   message: '',
@@ -24,6 +24,7 @@ ProjectExportJob _job(String state) => ProjectExportJob(
   state: state,
   progressCompleted: state == 'running' ? BigInt.from(3) : null,
   progressTotal: state == 'running' ? BigInt.from(9) : null,
+  detail: detail,
 );
 
 class _FakeGateway implements ProjectGateway {
@@ -84,7 +85,6 @@ class _FakeGateway implements ProjectGateway {
     String jobId,
   ) async => _job('cancelled');
 
-  @override
   @override
   Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
     ProjectSessionHandle session,
@@ -163,7 +163,7 @@ ExportFlow _flow({
   required _FakePicker picker,
   ExportOptions? choice,
   void Function(ProjectReadModel)? onProjectSummary,
-  void Function(String)? onExported,
+  void Function(String, String?)? onExported,
 }) => ExportFlow(
   gateway: gateway,
   picker: picker,
@@ -177,7 +177,7 @@ ExportFlow _flow({
         preferredH264Encoder: null,
       ),
   onProjectSummary: onProjectSummary ?? (_) {},
-  onExported: onExported ?? (_) {},
+  onExported: onExported ?? (_, _) {},
 );
 
 void main() {
@@ -190,7 +190,7 @@ void main() {
       final flow = _flow(
         gateway: gateway,
         picker: picker,
-        onExported: exported.add,
+        onExported: (path, _) => exported.add(path),
       );
 
       final session = _Session();
@@ -220,7 +220,7 @@ void main() {
       gateway: gateway,
       picker: picker,
       onProjectSummary: summaries.add,
-      onExported: exported.add,
+      onExported: (path, _) => exported.add(path),
     );
 
     await flow.start(_Session());
@@ -264,7 +264,7 @@ void main() {
     final flow = _flow(
       gateway: gateway,
       picker: picker,
-      onExported: exported.add,
+      onExported: (path, _) => exported.add(path),
     );
 
     await flow.start(_Session());
@@ -307,5 +307,25 @@ void main() {
     flow.detach();
     expect(picker.discardCalls, 0);
     flow.dispose();
+  });
+
+  test('the receipt carries the encoder the job actually opened', () async {
+    final gateway = _FakeGateway()
+      ..status = _job(
+        'succeeded',
+        detail: 'Encoding with h264_videotoolbox (hardware).',
+      );
+    final picker = _FakePicker();
+    final details = <String?>[];
+    final flow = _flow(
+      gateway: gateway,
+      picker: picker,
+      onExported: (_, detail) => details.add(detail),
+    );
+
+    await flow.start(_Session());
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+
+    expect(details, ['Encoding with h264_videotoolbox (hardware).']);
   });
 }

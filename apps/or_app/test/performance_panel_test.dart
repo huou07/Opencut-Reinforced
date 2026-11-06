@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/core_gateway.dart';
+import 'package:or_app_bridge/or_app_bridge.dart';
 import 'package:or_app/production/editor_settings.dart';
 import 'package:or_app/updates/performance_panel.dart';
 

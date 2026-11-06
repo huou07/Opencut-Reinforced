@@ -99,6 +99,7 @@ fn export_job_requests_share_the_live_application_and_ipc_route_without_mutation
                         completed: 3,
                         total: 9,
                     }),
+                    detail: None,
                     failure_message: None,
                 },
             )

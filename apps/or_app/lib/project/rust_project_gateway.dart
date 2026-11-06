@@ -1647,6 +1647,7 @@ class RustProjectGateway implements ProjectGateway {
         state: value.state,
         progressCompleted: value.progressCompleted,
         progressTotal: value.progressTotal,
+        detail: value.detail,
         failureMessage: value.failureMessage,
       );
 

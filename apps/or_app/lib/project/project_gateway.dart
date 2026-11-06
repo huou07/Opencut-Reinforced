@@ -211,6 +211,7 @@ class ProjectExportJob {
     required this.state,
     this.progressCompleted,
     this.progressTotal,
+    this.detail,
     this.failureMessage,
   });
 
@@ -221,6 +222,10 @@ class ProjectExportJob {
   final String state;
   final BigInt? progressCompleted;
   final BigInt? progressTotal;
+
+  /// One job-specific fact from the engine, such as the encoder this export
+  /// opened and why it fell back. Null until the job reaches that point.
+  final String? detail;
   final String? failureMessage;
 
   bool get isActive => state == 'queued' || state == 'running';

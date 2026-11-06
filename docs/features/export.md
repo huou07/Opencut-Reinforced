@@ -66,6 +66,13 @@ on the name. `or_core::hardware::plan_h264_encoding` owns the policy,
 starts and nothing re-probes inside the frame loop. A profile is a preference,
 not a promise: every profile still requires an encoder that opened here.
 
+The export job reports the encoder it actually opened in its snapshot `detail`
+line (`ProjectExportJobView.detail`), including the fallback reason when the
+planned encoder could not be used. The receipt shown after a finished export
+prints that line, so a person can see which path wrote the file without reading
+the console, and a profile regression becomes visible in the app rather than
+only in a benchmark.
+
 The quality preference reaches the hardware encoder too: a `Quality` export sets
 the NVENC preset to `p5` and a `Speed` export to `p2`, so the choice trades time
 for picture on the GPU instead of only changing the bitrate. Software encoding

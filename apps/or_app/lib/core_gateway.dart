@@ -2,8 +2,6 @@ import 'package:or_app_bridge/or_app_bridge.dart'
     show
         AppInfo,
         Capability,
-        DecoderProbeView,
-        EncoderProbeView,
         EncodingPlanView,
         HealthStatus,
         PerformanceReportView;
@@ -12,8 +10,6 @@ export 'package:or_app_bridge/or_app_bridge.dart'
     show
         AppInfo,
         Capability,
-        DecoderProbeView,
-        EncoderProbeView,
         EncodingPlanView,
         HealthStatus,
         PerformanceReportView;

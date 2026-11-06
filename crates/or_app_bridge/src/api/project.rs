@@ -1821,6 +1821,7 @@ fn export_job_view(response: ExportResponse) -> ProjectExportJobView {
         progress_total: job
             .as_ref()
             .and_then(|job: &JobSnapshot| job.progress.map(|progress| progress.total)),
+        detail: job.as_ref().and_then(|job| job.detail.clone()),
         failure_message: job.and_then(|job| job.failure_message),
     }
 }

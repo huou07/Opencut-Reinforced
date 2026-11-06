@@ -350,6 +350,9 @@ class ProjectExportJobView {
   final String state;
   final BigInt? progressCompleted;
   final BigInt? progressTotal;
+
+  /// The encoder this job opened, when it reached that decision.
+  final String? detail;
   final String? failureMessage;
 
   const ProjectExportJobView({
@@ -360,6 +363,7 @@ class ProjectExportJobView {
     required this.state,
     this.progressCompleted,
     this.progressTotal,
+    this.detail,
     this.failureMessage,
   });
 
@@ -372,6 +376,7 @@ class ProjectExportJobView {
       state.hashCode ^
       progressCompleted.hashCode ^
       progressTotal.hashCode ^
+      detail.hashCode ^
       failureMessage.hashCode;
 
   @override
@@ -386,6 +391,7 @@ class ProjectExportJobView {
           state == other.state &&
           progressCompleted == other.progressCompleted &&
           progressTotal == other.progressTotal &&
+          detail == other.detail &&
           failureMessage == other.failureMessage;
 }
 

@@ -2890,6 +2890,17 @@ mod desktop {
                 },
             )
             .map_err(|error| error.to_string())?;
+        if let Some(plan) = writer.encoding_plan() {
+            // The receipt names the encoder this job actually opened, not the
+            // one the dialog previewed, so a fallback is visible after the fact.
+            let mut detail = format!("Encoding with {}", plan.summary());
+            if let Some(reason) = &plan.fallback {
+                detail.push_str(&format!(" — {reason}"));
+            } else if let Some(note) = plan.notes.first() {
+                detail.push_str(&format!(" — {note}"));
+            }
+            job.report_detail(format!("{detail}."));
+        }
         let mut audio_cursor = 0_u64;
         job.report_progress(0, frame_count);
 

@@ -85,12 +85,26 @@ impl JobFailure {
 pub struct JobContext {
     cancelled: Arc<std::sync::atomic::AtomicBool>,
     progress: Arc<Mutex<Option<JobProgress>>>,
+    detail: Arc<Mutex<Option<String>>>,
 }
 
 impl JobContext {
     /// Returns whether cancellation has been requested for this job.
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Records one human-readable fact about the running job, such as the
+    /// encoder it opened. The first value wins, so the reason is not replaced by
+    /// later progress notes, and a snapshot can read it while the job runs.
+    pub fn report_detail(&self, detail: impl Into<String>) {
+        let mut current = self
+            .detail
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if current.is_none() {
+            *current = Some(detail.into());
+        }
     }
 
     /// Shares this job's cancellation state with bounded runtime work.
@@ -134,6 +148,9 @@ pub struct JobSnapshot {
     pub state: JobState,
     pub sequence: u64,
     pub progress: Option<JobProgress>,
+    /// One job-specific fact, when the job reported one (the export encoder).
+    #[serde(default)]
+    pub detail: Option<String>,
     pub failure_message: Option<String>,
 }
 
@@ -174,6 +191,7 @@ struct JobRecord {
     sequence: u64,
     cancel: Arc<std::sync::atomic::AtomicBool>,
     progress: Arc<Mutex<Option<JobProgress>>>,
+    detail: Arc<Mutex<Option<String>>>,
     failure_message: Option<String>,
 }
 
@@ -254,6 +272,7 @@ impl JobManager {
         let id = JobId::generate();
         let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let progress = Arc::new(Mutex::new(None));
+        let detail = Arc::new(Mutex::new(None));
         let config = self.shared.config;
 
         let mut state = lock(&self.shared);
@@ -281,6 +300,7 @@ impl JobManager {
                 sequence,
                 cancel,
                 progress,
+                detail,
                 failure_message: None,
             },
         );
@@ -306,6 +326,11 @@ impl JobManager {
                 .progress
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            detail: record
+                .detail
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone(),
             failure_message: record.failure_message.clone(),
         })
     }
@@ -424,7 +449,7 @@ fn worker_loop(shared: Arc<Shared>) {
             let Some(id) = state.pending.pop_front() else {
                 continue;
             };
-            let (cancel, progress) = {
+            let (cancel, progress, detail) = {
                 let Some(record) = state.records.get_mut(&id) else {
                     continue;
                 };
@@ -432,18 +457,23 @@ fn worker_loop(shared: Arc<Shared>) {
                     continue;
                 }
                 record.state = JobState::Running;
-                (Arc::clone(&record.cancel), Arc::clone(&record.progress))
+                (
+                    Arc::clone(&record.cancel),
+                    Arc::clone(&record.progress),
+                    Arc::clone(&record.detail),
+                )
             };
             let body = state.tasks.remove(&id);
-            body.map(|body| (id, cancel, progress, body))
+            body.map(|body| (id, cancel, progress, detail, body))
         };
 
-        let Some((id, cancel, progress, body)) = work else {
+        let Some((id, cancel, progress, detail, body)) = work else {
             continue;
         };
         let context = JobContext {
             cancelled: Arc::clone(&cancel),
             progress,
+            detail,
         };
         let outcome = catch_unwind(AssertUnwindSafe(|| body(&context)));
         let was_cancelled = cancel.load(std::sync::atomic::Ordering::SeqCst);

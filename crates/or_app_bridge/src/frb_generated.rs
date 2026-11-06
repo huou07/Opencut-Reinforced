@@ -7087,6 +7087,7 @@ impl SseDecode for crate::api::views::ProjectExportJobView {
         let mut var_state = <String>::sse_decode(deserializer);
         let mut var_progressCompleted = <Option<u64>>::sse_decode(deserializer);
         let mut var_progressTotal = <Option<u64>>::sse_decode(deserializer);
+        let mut var_detail = <Option<String>>::sse_decode(deserializer);
         let mut var_failureMessage = <Option<String>>::sse_decode(deserializer);
         return crate::api::views::ProjectExportJobView {
             succeeded: var_succeeded,
@@ -7096,6 +7097,7 @@ impl SseDecode for crate::api::views::ProjectExportJobView {
             state: var_state,
             progress_completed: var_progressCompleted,
             progress_total: var_progressTotal,
+            detail: var_detail,
             failure_message: var_failureMessage,
         };
     }
@@ -9422,6 +9424,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectExportJobView {
             self.state.into_into_dart().into_dart(),
             self.progress_completed.into_into_dart().into_dart(),
             self.progress_total.into_into_dart().into_dart(),
+            self.detail.into_into_dart().into_dart(),
             self.failure_message.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -11328,6 +11331,7 @@ impl SseEncode for crate::api::views::ProjectExportJobView {
         <String>::sse_encode(self.state, serializer);
         <Option<u64>>::sse_encode(self.progress_completed, serializer);
         <Option<u64>>::sse_encode(self.progress_total, serializer);
+        <Option<String>>::sse_encode(self.detail, serializer);
         <Option<String>>::sse_encode(self.failure_message, serializer);
     }
 }

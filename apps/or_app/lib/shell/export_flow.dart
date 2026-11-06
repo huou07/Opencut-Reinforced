@@ -35,7 +35,9 @@ class ExportFlow extends ChangeNotifier {
   final ProjectFilePicker picker;
   final Future<ExportOptions?> Function() chooseOptions;
   final void Function(ProjectReadModel current) onProjectSummary;
-  final void Function(String destination) onExported;
+  /// Called with the published file and the engine detail of the job, such as
+  /// the encoder it opened, when the job reported one.
+  final void Function(String destination, String? detail) onExported;
 
   Timer? _pollTimer;
   bool _pollInFlight = false;
@@ -225,7 +227,7 @@ class ExportFlow extends ChangeNotifier {
             notifyListeners();
             // The status line is two words; the file itself is what the owner
             // needs, so the receipt carries its name, size and a copy action.
-            onExported(destination);
+            onExported(destination, status.detail);
           } on ProjectSafStorageException catch (error) {
             if (!_isCurrent(session)) return;
             _status = error.message;
