@@ -287,6 +287,13 @@ One near-term delivery mission for the local macOS app, in this order:
     and the closing line says how many landed and how many did not. Adding the
     button also exposed a 168-pixel bar overflow at 1280 wide, fixed by letting
     the transient line ellipsise.
+36. **Scene motion only knew four easings (2026-11-06).** Every animation and
+    camera move interpolated with a quadratic, so entrances could not lead fast
+    and settles could not overshoot. Schema version 4 adds an optional cubic
+    Bézier `easing_curve` on animations and on the camera (ADR 0014); the
+    inspector has no graph editor yet, so the curve is authored in the file or by
+    the agent.
+
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

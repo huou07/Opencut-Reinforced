@@ -418,3 +418,24 @@ create-project flow never opens and the finder reports the editor key missing
 while the tree is still on Home. And the overflow was a real defect the test
 found, not noise: adding a control to a bar that already holds a variable-length
 transient line needs the line to yield space.
+
+## Scene easing curves, schema version 4, 2026-11-06
+
+The named easings (`linear`, `ease_in`, `ease_out`, `ease_in_out`) are
+quadratics. They stop a move looking mechanical but cannot express a slow lead-in
+that snaps, or a settle that overshoots and returns, so every scene moved the
+same way. Schema version 4 adds an optional `easing_curve` to animations and to
+the camera; see ADR 0014.
+
+| Claim | Evidence |
+|---|---|
+| A curve replaces the named easing and reaches the resolved instruction | `crates/or_motion/src/lib.rs`, `an_easing_curve_replaces_the_named_easing`: the sampled opacity is past what `ease_out` would give and equals `ease_curve([0.0, 0.9, 0.2, 1.0], 0.5)` within 1e-4 |
+| The camera carries its own curve | same file, `a_camera_carries_its_own_easing_curve`: pan/zoom at t=0.5 comes from the curve, not from the linear camera |
+| A curve that is not a function of time is refused, with a location | `a_curve_with_an_x_component_outside_the_unit_range_is_refused` → `MOTION_INVALID_EASING_CURVE` at `/animations/0/easing_curve`; `validate_camera` applies the same rule at `/camera/easing_curve` |
+| The solver is exact at the ends, monotonic and deterministic | `a_curve_solves_its_ends_exactly_and_never_runs_backwards`: `0 → 0`, `1 → 1`, 101 successive samples never decrease, and an overshooting curve exceeds 1 mid-way |
+| Old documents are untouched | `shape_document` (version 3) and every version 1–2 fixture still parse and render; the envelope accepts `MIN..=4` and `a_future_schema_version_is_refused_rather_than_guessed_at` now uses `MOTION_SCENE_SCHEMA_VERSION + 1` |
+
+Bisection rather than Newton's method is deliberate: a fixed 60 iterations
+cannot make the result depend on the data, so two hosts stepping the same frame
+agree — the same determinism rule the preview/export parity lane relies on.
+`crates/or_motion --lib` went from 99 to 103 tests.
