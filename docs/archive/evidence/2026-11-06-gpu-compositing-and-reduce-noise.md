@@ -115,6 +115,14 @@ Evidence, all local:
 - UI: `scripts/ui_scenarios/video-clip-audio.json` imports the repository's
   `tiny_h264_aac.mp4` as a video clip, scrolls the inspector to the audio fields,
   picks 12 dB, and one `cmd+z` returns the field to 0 — `OR_UI=PASS` on macOS.
+- Cross-host confirmation at `0eb453c8` (the commit after the feature):
+  `cargo test -p or_core -p or_audio -p or_app_bridge --lib` gives 378 / 18 / 54
+  passed on macOS and Debian and 376 / 18 / 50 on Windows (the bridge count
+  differs because four tests are host-gated), `cargo test -p or_cli` gives
+  44 + 4 + 4 on macOS and Debian, and `flutter build {macos,linux,windows}
+  --debug` succeeds on all three hosts at that revision. The macOS bundle was
+  relaunched and the new scenario re-ran to PASS; the Windows GUI stays BLOCKED
+  (no interactive desktop over SSH) and Debian editing stays UNVERIFIED.
 
 ## Bugs found and fixed during the session
 
