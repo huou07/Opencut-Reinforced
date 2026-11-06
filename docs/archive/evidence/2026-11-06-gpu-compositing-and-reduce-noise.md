@@ -61,7 +61,7 @@ Foundation (Constrained Baseline stream). MP4 is H.264 + AAC on all three.
 |---|---|---|
 | macOS | `flutter build macos --debug` PASS | launched, stays running, window present PASS |
 | Debian | `flutter build linux --debug` PASS | launches under Xvfb, window `1280x720` titled "Opencut Reinforced", shell renders (`0x141414` background) — PASS for start, interactive editing UNVERIFIED |
-| Windows | `flutter build windows --debug` PASS (`or_app.exe`, bridge DLL, Flutter DLL) | **BLOCKED**: no interactive desktop reachable over SSH — the process starts in the SSH session without a window, `CopyFromScreen` raises `Win32Exception`, and a scheduled-task launch could not be registered |
+| Windows | `flutter build windows --debug` PASS (`or_app.exe`, bridge DLL, Flutter DLL) | launches in the SSH session and drives a journey that decodes no images: `text-journey.json` PASS 23 steps (`ANGLE_DEFAULT_PLATFORM=warp`). Image-backed journeys stay **BLOCKED**: the first decoded image throws `Exception: No Impeller context is available` (session 0 has no GPU-backed window station) |
 
 ## Results — Reduce Noise
 
@@ -235,14 +235,21 @@ BLOCKED by the session-0 window station.
   dependency was adopted. A per-library table was not rewritten because the
   existing review already carries verdicts and nothing measured this week
   changed them.
-- Windows UI journeys stay blocked, and the reason is now measured rather than
-  inferred: the SSH session is Windows **session 0** while `explorer.exe` and
-  `dwm.exe` live in session 1, so the harness can launch `or_app.exe` and the
-  first ten scenario steps run, but the first decoded image throws
-  `Exception: No Impeller context is available` from the image resource service
-  and the journey fails. `ANGLE_DEFAULT_PLATFORM=swiftshader` stops the app from
-  starting at all; `warp` reaches the same image failure. There is no GPU-backed
-  window station in session 0 to give the engine.
+- Windows journeys that decode an image stay blocked, and the reason is measured
+  rather than inferred: the SSH session is Windows **session 0** while
+  `explorer.exe` and `dwm.exe` live in session 1, so the harness can launch
+  `or_app.exe` and the first ten scenario steps run, but the first decoded image
+  throws `Exception: No Impeller context is available` from the image resource
+  service. `ANGLE_DEFAULT_PLATFORM=swiftshader` stops the app from starting at
+  all; `warp` reaches the same image failure. There is no GPU-backed window
+  station in session 0 to give the engine.
+- Windows is not blocked as a *host*: a journey that decodes no images now
+  passes there. `scripts/ui_scenarios/text-journey.json` creates a project, adds
+  a text track and a title through the text dialog, selects the clip and undoes
+  it — PASS 23 steps on macOS, Debian (Xvfb, software GL) and Windows (session 0,
+  `ANGLE_DEFAULT_PLATFORM=warp`). So project creation, track creation, the text
+  dialog, clip selection and undo are exercised on all three hosts; only the
+  media thumbnail path needs a window station with a GPU context.
 
 ## Ducking under a video track (later in the session)
 
