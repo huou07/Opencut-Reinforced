@@ -16,6 +16,15 @@ user precisely what is wrong when it cannot be used.
 - While a batch runs, the top bar reports `Importing 2 of 5 · name…` with an
   import glyph, so a slow file is visibly in flight instead of leaving the
   surface silent. A completed multi-file batch reports the count.
+- A running batch can be stopped: the bar offers `cancel-import` (tooltip
+  "Stop importing", key `cancel-import`) next to the line. The file already in
+  flight finishes and keeps its place, nothing after it is attempted, and the
+  closing line says what happened — "Imported 1 selected files, then stopped;
+  1 were not added.", or "Stopped before anything was imported. N … were not
+  added." with any failures still named. The flag lives in the shell and is
+  reset at the start of every batch, so a stop never leaks into the next one.
+  `apps/or_app/test/media_import_flow_test.dart` covers the loop and
+  `apps/or_app/test/widget_test.dart` covers the button.
 - Opening an existing project and importing into it is proven end to end by
   `scripts/ui_scenarios/existing-project-import.json`: the project is saved
   without a sequence frame rate (the shape a new project can be saved in), the

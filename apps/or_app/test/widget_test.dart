@@ -6804,6 +6804,41 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('the top bar stops a batch import after the file in flight', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1280, 800));
+    final gateway = _FakeProjectGateway();
+    final firstImport = Completer<void>();
+    final picker = _FakeProjectPicker()
+      ..savePath = '/tmp/stop-import.orproj'
+      ..mediaPaths = ['/media/first.wav', '/media/second.wav'];
+    gateway.importGates.add(firstImport);
+    await _mount(tester, gateway: gateway, picker: picker);
+    await _createProject(tester, 'Stop an import');
+
+    await tester.tap(find.byKey(const ValueKey('timeline-empty-import-media')));
+    await tester.pump();
+    await tester.pump();
+
+    // The first file is still being probed, so the bar offers a way out.
+    expect(gateway.importMediaCalls, 1);
+    expect(find.byKey(const ValueKey('cancel-import')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('cancel-import')));
+    await tester.pump();
+
+    firstImport.complete();
+    await tester.pumpAndSettle();
+
+    // The second file is never attempted and the closing line says why.
+    expect(gateway.importMediaCalls, 1);
+    expect(find.byKey(const ValueKey('cancel-import')), findsNothing);
+    expect(
+      find.text('Imported 1 selected files, then stopped; 1 were not added.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('importing media announces the source it added', (tester) async {
     // The representative journey, end to end and without sight: create a
     // project, import a file, and confirm the imported media becomes

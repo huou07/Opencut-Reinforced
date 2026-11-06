@@ -397,3 +397,24 @@ The Windows row is deliberately honest: the published installer was not installe
 on the local Windows host for this release because that host stopped answering
 on port 22 while the verification was in progress, and the previous release's
 identical installer path was exercised end to end at `v0.1.18`.
+
+## A batch import can be stopped, 2026-11-06
+
+The shell used to hold every other action behind "Another project action is
+still running." until a folder import finished, and the only progress was the
+bar's `Importing 2 of 200 · name…` line. The bar now carries `cancel-import`.
+
+| Claim | Evidence |
+|---|---|
+| The loop stops after the file in flight | `apps/or_app/test/media_import_flow_test.dart` — stop pressed during file 2 leaves `attempted == [a, b]`, `cancelled` true, and the rest untouched |
+| Nothing imported reads honestly | same file, `stopping before the first file says nothing was added` → "Stopped before anything was imported. 2 … were not added." |
+| Failures before the stop are still named | same file, `a cancelled batch still names the files that failed` |
+| The button is wired to that flag | `apps/or_app/test/widget_test.dart`, `the top bar stops a batch import after the file in flight`: two selected sources, the first import held open, tap `cancel-import`, release it → `importMediaCalls == 1` and the closing line "Imported 1 selected files, then stopped; 1 were not added." |
+| The bar survives the extra control | the same widget test failed with `A RenderFlex overflowed by 168 pixels on the right` before the fix; the transient line now ellipsises, and the test runs at 1280×800 |
+
+Two lessons are worth keeping. A widget test that taps
+`timeline-empty-import-media` must give its picker a `savePath`; without one the
+create-project flow never opens and the finder reports the editor key missing
+while the tree is still on Home. And the overflow was a real defect the test
+found, not noise: adding a control to a bar that already holds a variable-length
+transient line needs the line to yield space.
