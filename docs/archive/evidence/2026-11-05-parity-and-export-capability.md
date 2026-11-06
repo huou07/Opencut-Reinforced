@@ -345,7 +345,7 @@ target that runs the same scenarios through `flutter test -d windows`.
 | Scenario | Result | What it observed |
 |---|---|---|
 | `workspace-chrome` | `RESULT: OR_UI=PASS` | opened Projects, created a project through the dialog, reached the empty timeline |
-| `library-tour` | `RESULT: OR_UI=PASS` | visited every Library tab and the licence panel |
+| `library-tour` | `RESULT: OR_UI=PASS` (fresh profile) | visited every Library tab and the licence panel; a second run starts inside the app because the welcome panel stays dismissed |
 | `speech-runtime-install` | `RESULT: OR_UI=PASS` | installed the pinned engine from GitHub, confirmed the manifest, removed it after confirmation, saw Install return |
 | `resources-setup` | `RESULT: OR_UI=PASS` | Resources & updates reported the machine and the measured export formats |
 | `editor-journey`, `save-reopen`, `export-encode` | stopped at the clip insert | the engine raised `No Impeller context is available` when a clip reached the timeline |

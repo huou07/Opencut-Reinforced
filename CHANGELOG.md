@@ -13,6 +13,26 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.19 — 2026-11-06
+
+### Added
+- **The real app is driven on Windows too.** `scripts/or_ui.py --target windows`
+  runs the same semantics scenarios as macOS and Linux through
+  `flutter test -d windows`. The Windows workspace chrome, the library tour, the
+  Resources and updates section and the speech-runtime install/remove journey
+  all pass on the real Windows build.
+
+### Fixed
+- **The machine panel no longer spins.** The "This machine" panel ran its memory
+  probe and its disk probe one after the other, and on Windows each one is a
+  PowerShell launch, so the panel showed a spinner for the length of two process
+  startups. Both probes now run together, and a probe that fails prints "This
+  machine could not be read: …" instead of leaving the row empty forever.
+- **Eighteen scenarios named a fixture on their author's Mac.** A
+  `copy:/Users/meomeo/...` fixture staged nothing on any other host, so those
+  scenarios could only ever pass on one machine. They now name a
+  repository-relative path.
+
 ## 0.1.18 — 2026-11-06
 
 ### Fixed
