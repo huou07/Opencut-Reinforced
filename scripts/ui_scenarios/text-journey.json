@@ -1,0 +1,127 @@
+{
+  "name": "text-journey",
+  "harness": "or_ui",
+  "description": "Create a project, add a text track, add a title through the text dialog, and undo it. No media is imported, so no image decode is needed and the journey can run where the rasteriser has no GPU context.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-new-project",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Text journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 600
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add text track"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 1200
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-create-menu"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 600
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "text": "Add title"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 900
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "timeline-text-content"
+      },
+      "value": "Text journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-save-text"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 1500
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 800
+    },
+    {
+      "op": "shot",
+      "name": "title-added"
+    },
+    {
+      "op": "key",
+      "chord": "ctrl+z"
+    },
+    {
+      "op": "pump",
+      "ms": 1200
+    },
+    {
+      "op": "expect_absent",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    }
+  ]
+}
