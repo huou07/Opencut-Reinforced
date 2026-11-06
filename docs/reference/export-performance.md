@@ -202,6 +202,10 @@ paints outside its canvas rectangle.
 | Debian (UHD 770) | render-only, one text layer | 300 | 50.4 / 49.7 / 50.0 | 52.8 / 52.3 / 52.2 | ≈ +4.6 % |
 | Debian (UHD 770) | MP4 quality export, one text layer | 150 | 60.6 / 75.9 | 89.6 / 76.7 | inconclusive (VM variance) |
 
+The scissor only skips fragments the layer never wrote, so it must not change the
+picture: a 30-frame text export at 1080p compares at `PSNR y:inf` (bit-identical
+pixels, 1 209 179 bytes on both sides).
+
 The Debian row is the honest limit of this change: on macOS the blend was fill
 bound, so clipping it to the ink was worth half the frame time again, while on
 Debian only a few percent moved. That means the Debian compositor spends most of
