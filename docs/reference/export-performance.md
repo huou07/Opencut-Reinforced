@@ -127,6 +127,13 @@ on the produced file, never from the profile name:
 | Debian | `[CUDA @ …] Could not dynamically load CUDA` then `[h264_vaapi @ …] No quality level set; using default (20).` | h264 High 1920×1080 yuv420p + aac LC |
 | Windows | Media Foundation path (no CUDA, no QSV driver); `ffprobe` shows Constrained Baseline | h264 Constrained Baseline 1920×1080 + aac LC |
 
+Re-measured at the final revision of the branch (`ba0034ff`) as a smoke check:
+macOS render 1311 fps / 226 fps (text) and MP4 216.8–234.1 fps / 167.0–181.9 fps
+(text); Debian render 698.9 / 49.2 fps and MP4 150 frames 239.6 / 62.5 fps;
+Windows render 142.0 / 89.7 fps and MP4 114.0 / 76.0 fps. The spread between
+batches is host load, not a code change: the three-host tables above were taken
+in one quiet window.
+
 ## What the rows prove
 
 - Compositing text over an NV12 frame on the GPU removes the text penalty. The
