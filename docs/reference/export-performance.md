@@ -242,6 +242,33 @@ upload into the compositor (about 225 MB/s effective on this host) as the likely
 term, which is exactly what importing hardware decoder frames instead of
 software planes would remove.
 
+## Hardware decode, measured and not adopted (2026-11-06)
+
+The macOS runtime is built with `--enable-videotoolbox` but only for the H.264
+*encoder*; decode runs through libavcodec on the CPU. That looked like a gap
+worth closing, so it was measured before anything was built into the app.
+
+A build with the VideoToolbox hwaccel enabled (`--enable-hwaccel=h264_videotoolbox,hevc_videotoolbox`,
+verified as `CONFIG_H264_VIDEOTOOLBOX_HWACCEL 1` in `config_components.h`) was
+produced and compared on a 4K H.264 fixture (3840×2160, 200 frames,
+`/tmp/or-bench/bench4k.mp4`, `libx264 -preset ultrafast -crf 26`):
+
+| Path | Wall time, three runs | Rate |
+| --- | --- | --- |
+| software libavcodec (`ffmpeg -i … -f null -`) | 0.16 / 0.19 / 0.17 s | ≈1176 fps |
+| VideoToolbox (`ffmpeg -hwaccel videotoolbox … -f null -`) | 1.32 / 1.34 / 1.33 s | ≈150 fps |
+
+Software decode of 4K H.264 on this host is already far faster than the
+hardware path, whose frame transfer to system memory dominates. Since OR's
+pipeline consumes system-memory frames (the compositor uploads them itself),
+hardware decode would be a regression here, not a win: nothing was integrated,
+and the recipe keeps the minimal `--disable-everything` posture rather than
+carrying a hwaccel it does not use.
+
+The same reasoning applies to the Windows and Linux rows: their decode is
+CPU-side, and the measured encode ceilings above (Media Foundation on Windows,
+`h264_vaapi` on Debian) show the pipeline is not decode-starved at 1080p.
+
 ## Stage concurrency (2026-11-06)
 
 Per-core and per-GPU-engine counters, taken while the harness ran the same
