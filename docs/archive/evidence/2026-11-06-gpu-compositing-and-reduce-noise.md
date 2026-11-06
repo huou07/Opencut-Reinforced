@@ -115,6 +115,10 @@ Evidence, all local:
 - UI: `scripts/ui_scenarios/video-clip-audio.json` imports the repository's
   `tiny_h264_aac.mp4` as a video clip, scrolls the inspector to the audio fields,
   picks 12 dB, and one `cmd+z` returns the field to 0 — `OR_UI=PASS` on macOS.
+- Final-revision export rows (`0eb453c8`, same fixture and profile): macOS
+  234.1 fps / 223.6 with text, Debian 232.0 fps (6,237,429 bytes, h264 High +
+  aac LC), Windows 111.5 fps (6,055,754 bytes, h264 Constrained Baseline + aac
+  LC) with the writer logging `[h264_mf @ …] MFT name: 'H264 Encoder MFT'`.
 - Cross-host confirmation at `0eb453c8` (the commit after the feature):
   `cargo test -p or_core -p or_audio -p or_app_bridge --lib` gives 378 / 18 / 54
   passed on macOS and Debian and 376 / 18 / 50 on Windows (the bridge count

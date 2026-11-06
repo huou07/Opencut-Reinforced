@@ -153,6 +153,15 @@ Windows render 142.0 / 89.7 fps and MP4 114.0 / 76.0 fps. The spread between
 batches is host load, not a code change: the three-host tables above were taken
 in one quiet window.
 
+Re-measured once more after the video-clip-audio work (`0eb453c8`), same
+fixture and profile, MP4 quality: macOS 234.1 fps (300 frames, 11,267,668
+bytes) and 223.6 fps with text (11,732,698 bytes); Debian 232.0 fps over 150
+frames (6,237,429 bytes, `ffprobe` h264 High + aac LC); Windows 111.5 fps over
+150 frames (6,055,754 bytes, `ffprobe` h264 Constrained Baseline + aac LC, and
+the writer now logs `[h264_mf @ …] MFT name: 'H264 Encoder MFT'`, which is the
+encoder itself rather than an inference from the profile). The audio work adds
+nothing to these rows because the fixture has no audio stream.
+
 ## What the rows prove
 
 - Compositing text over an NV12 frame on the GPU removes the text penalty. The
