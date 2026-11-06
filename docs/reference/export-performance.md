@@ -191,6 +191,10 @@ in one quiet window.
 - Windows rows were taken on the Media Foundation encoder, not QSV or NVENC:
   the host has no QSV-capable display driver and no NVIDIA device. The candidate
   list still prefers `h264_nvenc` then `h264_qsv` when they exist.
+- WebM and lossless are CPU-bound on every host: the encoders are software
+  (libvpx VP9, FFV1) and neither takes a GPU frame. Windows WebM at 9.4 fps is
+  roughly what its twelve threads buy next to Debian's twenty, not a missing
+  encoder; its MP4 row still uses Media Foundation.
 - `OR_BENCH_MODE=encode` measures the writer alone with blank NV12 frames. It is
   an encoder ceiling, not an export row; full-pipeline rows leave `OR_BENCH_MODE`
   unset.
