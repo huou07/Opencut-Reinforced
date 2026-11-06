@@ -59,6 +59,22 @@ void main() {
   });
 }
 
+/// Resolves a `copy:` fixture that the scenario names relative to the
+/// repository root, even when the test runs from the app directory.
+File _fixtureSource(String path) {
+  final direct = File(path);
+  if (direct.existsSync()) return direct;
+  var directory = Directory.current;
+  for (var depth = 0; depth < 6; depth++) {
+    final candidate = File('${directory.path}/$path');
+    if (candidate.existsSync()) return candidate;
+    final parent = directory.parent;
+    if (parent.path == directory.path) break;
+    directory = parent;
+  }
+  return direct;
+}
+
 /// Where the scenario, its fixtures and its evidence live on this target.
 class _Locations {
   static bool get onAndroid => Platform.isAndroid;
@@ -1400,7 +1416,7 @@ class _FixturePicker extends FileSelectorProjectPicker {
     String? projectFixture;
     for (final fixture in fixtures) {
       if (!fixture.startsWith('copy:')) continue;
-      final source = File(fixture.substring('copy:'.length));
+      final source = _fixtureSource(fixture.substring('copy:'.length));
       if (!source.existsSync()) continue;
       // A copied `.orproj` fixture is the project the scenario opens; it lives
       // in the scenario directory so a save writes there, not into the
