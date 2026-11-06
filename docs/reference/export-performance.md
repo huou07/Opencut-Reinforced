@@ -100,10 +100,15 @@ Debian 13 (VAAPI H.264, 150 frames for the export rows):
 | Render only, one text layer | 34.4 | 49.5 / 49.9 / 50.4 |
 | Encoder only (blank NV12, 150 frames) | — | 442.7 / 445.2 / 446.1 / 447.6 |
 
-The Debian host has no display GPU: compositing runs on llvmpipe, which is why
-its text row improves 1.45× rather than 2.4× and why its per-frame cost stays
-minute-scale. Output bytes are unchanged by the compositor: 6 237 429 without
-text and 6 222 521 with text, LSB-identical at the same settings.
+The Debian host composites on its integrated Intel UHD 770 through Vulkan
+(`OR_EXPORT_BENCH_ADAPTER Intel(R) UHD Graphics 770 (ADL-S GT1) (Intel
+open-source Mesa driver, Vulkan)`), not on a software rasteriser. Its text row
+still improves only 1.45× where macOS reaches 2.4×, so a full-canvas text blend
+plus readback costs roughly 20 ms/frame there against 3.5 ms on the Apple GPU;
+the gap between this host's integrated device and the Windows one (91–102 fps on
+the same workload) is measured but not explained — see "Known limits". Output
+bytes are unchanged by the compositor: 6 237 429 without text and 6 222 521 with
+text, LSB-identical at the same settings.
 
 Windows 11 (Media Foundation H.264, 300 frames):
 
@@ -162,6 +167,24 @@ the writer now logs `[h264_mf @ …] MFT name: 'H264 Encoder MFT'`, which is the
 encoder itself rather than an inference from the profile). The audio work adds
 nothing to these rows because the fixture has no audio stream.
 
+## Copy-free plane handoff (2026-11-06)
+
+The direct export path (one covering clip, no effects, no text) used to copy the
+decoder's 3.1 MiB NV12 frame into `Nv12Planes` on every frame even though the
+frame lease already owns the bytes behind an `Arc`. `Nv12Planes` now holds either
+owned planes or a window into that shared buffer, and `VideoFrame::shared_bytes`
+offers it directly.
+
+| Host | Frames | Before | After | Delta |
+| --- | --- | --- | --- | --- |
+| macOS M5 | 300 | 241.9 / 242.9 / 246.6 / 248.0 | 243.0 / 247.7 / 247.8 / 248.5 | ≈ +1.2 % (median 244.8 → 247.8) |
+| Debian (UHD 770) | 300 | 247.7 / 256.1 / 256.5 | 260.5 / 260.5 / 262.2 | ≈ +1.7 % (median 256.1 → 260.5) |
+
+Output bytes are identical before and after on both hosts (11 267 668 on macOS,
+12 122 320 on Debian at 300 frames), so the copy was pure overhead. It is a
+small win: the removed copy is cheaper than a pixel-format conversion, and the
+gain shows up mainly because one allocation per frame disappears.
+
 ## Stage concurrency (2026-11-06)
 
 Per-core and per-GPU-engine counters, taken while the harness ran the same
@@ -216,8 +239,16 @@ workers could exist".
   a real project with its video clip opacity repaired to 100 %. With the stored
   opacity of 0.01 % the same project exports black at 178.9 fps, and the editor
   never warns about that.
-- The Debian host has no display GPU, so its rows measure llvmpipe; they say
-  nothing about a machine with a real Intel UHD or NVIDIA device.
+- The Debian host composites on an Intel UHD 770 through Vulkan and encodes
+  through `h264_vaapi`, so its rows describe that integrated device; they say
+  nothing about an NVIDIA or AMD machine. Why its text row is roughly half the
+  Windows row on the same workload is unresolved: the two hosts differ in CPU
+  (i5-13500T against Core 5 120U), driver and display server, and no single
+  measurement separates those causes.
+- Each host reports the adapter that served the benchmark
+  (`OR_EXPORT_BENCH_ADAPTER`), so a row can be attributed to a device instead of
+  assumed: macOS prints `Apple M5 (, Metal)`, Debian prints the Intel UHD 770 /
+  Vulkan line above.
 - Windows rows were taken on the Media Foundation encoder, not QSV or NVENC:
   the host has no QSV-capable display driver and no NVIDIA device. The candidate
   list still prefers `h264_nvenc` then `h264_qsv` when they exist.

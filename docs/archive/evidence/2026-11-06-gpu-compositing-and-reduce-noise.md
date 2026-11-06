@@ -91,6 +91,28 @@ Foundation (Constrained Baseline stream). MP4 is H.264 + AAC on all three.
   implemented until that pipeline exists. The media-library "clean audio" path
   still writes a new WAV and is not the timeline feature.
 
+## Copies, adapters, and what the rows attribute to a device (later still)
+
+- The direct export path handed the encoder a **copy** of the decoder's NV12
+  frame every frame. `Nv12Planes` now holds either owned planes or a window into
+  the lease's shared `Arc<[u8]>`, so a frame reaches the writer without the copy.
+  Interleaved A/B, 300 frames, identical output bytes: macOS 244.8 → 247.8 fps
+  (median, ≈ +1.2 %), Debian 256.1 → 260.5 fps (≈ +1.7 %). Recorded as a small
+  win, not a headline.
+- The benchmark now prints the adapter that served it
+  (`OR_EXPORT_BENCH_ADAPTER`). macOS prints `Apple M5 (, Metal)`; Debian prints
+  `Intel(R) UHD Graphics 770 (ADL-S GT1) (Intel open-source Mesa driver,
+  Vulkan)`. This **corrects an earlier note in this receipt**: the Debian host is
+  not a software rasteriser, so its 49.8 fps text row is an integrated-GPU
+  number, and the earlier "llvmpipe-class" explanation was wrong. Why that row
+  is about half the Windows row on the same workload stays unresolved and is
+  recorded as an open question rather than a cause.
+- A compositor identity bug was found while reviewing this work: the text-upload
+  cache keyed on a rasterizer-local id, but the pool is process-wide, so a second
+  project's first title could draw the first project's pixels. Fixed with a
+  process-wide counter; the regression test fails when the counter is forced to
+  collide.
+
 ## Video clips carry their own audio (later in the session)
 
 A video clip's soundtrack used to be ignored by the program builder, so Reduce
