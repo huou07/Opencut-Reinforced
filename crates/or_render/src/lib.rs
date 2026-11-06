@@ -1132,8 +1132,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         Ok(Nv12Planes {
             width,
             height,
-            luma,
-            chroma,
+            luma: PlaneBytes::Owned(luma),
+            chroma: PlaneBytes::Owned(chroma),
         })
     }
 
@@ -1668,8 +1668,30 @@ fn repack_plane(
 pub struct Nv12Planes {
     width: u32,
     height: u32,
-    luma: Vec<u8>,
-    chroma: Vec<u8>,
+    luma: PlaneBytes,
+    chroma: PlaneBytes,
+}
+
+/// One plane's storage: either bytes this crate owns, or a window into a buffer
+/// the decoder still holds. The shared form lets a decoded frame reach the
+/// encoder without a 3 MiB copy per frame at 1080p.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PlaneBytes {
+    Owned(Vec<u8>),
+    Shared {
+        bytes: std::sync::Arc<[u8]>,
+        start: usize,
+        end: usize,
+    },
+}
+
+impl PlaneBytes {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Owned(bytes) => bytes,
+            Self::Shared { bytes, start, end } => &bytes[*start..*end],
+        }
+    }
 }
 
 impl Nv12Planes {
@@ -1683,12 +1705,12 @@ impl Nv12Planes {
 
     /// Full-resolution luma, `width * height` bytes.
     pub fn luma(&self) -> &[u8] {
-        &self.luma
+        self.luma.as_slice()
     }
 
     /// Half-resolution interleaved chroma, `(width / 2) * (height / 2) * 2` bytes.
     pub fn chroma(&self) -> &[u8] {
-        &self.chroma
+        self.chroma.as_slice()
     }
 
     /// Builds planes from one contiguous NV12 buffer: `width * height` luma
@@ -1697,21 +1719,50 @@ impl Nv12Planes {
     /// This is the layout the decoder produces so a CPU decode can reach the
     /// hardware encoder without an intermediate RGBA copy.
     pub fn from_contiguous(width: u32, height: u32, bytes: &[u8]) -> Option<Self> {
-        if width == 0 || height == 0 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
-            return None;
-        }
-        let luma_len = (width as usize).checked_mul(height as usize)?;
-        let expected = luma_len.checked_add(luma_len / 2)?;
-        if bytes.len() != expected {
+        let luma_len = nv12_luma_length(width, height)?;
+        if bytes.len() != luma_len + luma_len / 2 {
             return None;
         }
         Some(Self {
             width,
             height,
-            luma: bytes[..luma_len].to_vec(),
-            chroma: bytes[luma_len..].to_vec(),
+            luma: PlaneBytes::Owned(bytes[..luma_len].to_vec()),
+            chroma: PlaneBytes::Owned(bytes[luma_len..].to_vec()),
         })
     }
+
+    /// Builds planes over a buffer the caller already owns, without copying it.
+    ///
+    /// The layout is the same as [`Self::from_contiguous`]; the buffer stays
+    /// alive for as long as any plane of this picture is held.
+    pub fn from_shared(width: u32, height: u32, bytes: std::sync::Arc<[u8]>) -> Option<Self> {
+        let luma_len = nv12_luma_length(width, height)?;
+        if bytes.len() != luma_len + luma_len / 2 {
+            return None;
+        }
+        Some(Self {
+            width,
+            height,
+            luma: PlaneBytes::Shared {
+                bytes: std::sync::Arc::clone(&bytes),
+                start: 0,
+                end: luma_len,
+            },
+            chroma: PlaneBytes::Shared {
+                bytes,
+                start: luma_len,
+                end: luma_len + luma_len / 2,
+            },
+        })
+    }
+}
+
+/// Validates NV12 geometry and returns the luma plane length in bytes.
+fn nv12_luma_length(width: u32, height: u32) -> Option<usize> {
+    if width == 0 || height == 0 || !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+        return None;
+    }
+    (width as usize).checked_mul(height as usize)
 }
 
 impl fmt::Debug for RenderDevice {
@@ -2860,6 +2911,32 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn shared_nv12_planes_read_the_same_picture_without_copying_it() {
+        let width = 4_u32;
+        let height = 4_u32;
+        let mut contiguous = vec![0_u8; (width * height) as usize * 3 / 2];
+        for (index, sample) in contiguous.iter_mut().enumerate() {
+            *sample = u8::try_from(index % 251).unwrap();
+        }
+        let copied = Nv12Planes::from_contiguous(width, height, &contiguous).unwrap();
+        let shared = Nv12Planes::from_shared(width, height, std::sync::Arc::from(&contiguous[..]))
+            .expect("a contiguous buffer of the right length is NV12");
+        assert_eq!(copied.luma(), shared.luma());
+        assert_eq!(copied.chroma(), shared.chroma());
+        assert_eq!(shared.luma().len(), 16);
+        assert_eq!(shared.chroma().len(), 8);
+        assert!(
+            Nv12Planes::from_shared(width, height, std::sync::Arc::from(&contiguous[..1]))
+                .is_none(),
+            "a short buffer is not a picture"
+        );
+        assert!(
+            Nv12Planes::from_shared(3, height, std::sync::Arc::from(&contiguous[..])).is_none(),
+            "an odd width has no chroma pairing"
+        );
     }
 
     #[test]

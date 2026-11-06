@@ -613,6 +613,18 @@ impl FrameLease {
         }
     }
 
+    /// Shares the lease's software buffer without copying it.
+    ///
+    /// A software lease already owns its bytes behind an `Arc`, so a consumer
+    /// that keeps the pixels after the frame is released can hold this clone
+    /// instead of re-copying the picture into its own buffer.
+    pub fn software_bytes_shared(&self) -> Option<Arc<[u8]>> {
+        match self.storage.as_ref() {
+            Some(FrameLeaseStorage::Software(bytes)) => Some(Arc::clone(bytes)),
+            Some(FrameLeaseStorage::Release(_)) | None => None,
+        }
+    }
+
     fn shared_software_copy(&self) -> Option<Self> {
         match self.storage.as_ref()? {
             FrameLeaseStorage::Software(bytes) => Some(Self {

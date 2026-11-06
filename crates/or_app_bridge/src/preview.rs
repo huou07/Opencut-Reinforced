@@ -1329,11 +1329,11 @@ mod desktop {
                             if frame.descriptor().pixel_format() == FramePixelFormat::Nv12
                                 && frame.descriptor().width() == width
                                 && frame.descriptor().height() == height
-                                && let Some(planes) = or_render::Nv12Planes::from_contiguous(
-                                    width,
-                                    height,
-                                    frame.bytes(),
-                                ) =>
+                                && let Some(planes) = frame
+                                    .shared_bytes()
+                                    .and_then(|bytes| {
+                                        or_render::Nv12Planes::from_shared(width, height, bytes)
+                                    }) =>
                         {
                             if cancellation.is_cancelled()
                                 || expected_generation.is_some_and(|(generation, current)| {

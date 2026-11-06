@@ -163,6 +163,12 @@ impl VideoFrame {
             .expect("software decoder frames own software bytes")
     }
 
+    /// Shares the frame's software buffer, so a consumer that outlives the frame
+    /// can hand the pixels on without copying them.
+    pub fn shared_bytes(&self) -> Option<std::sync::Arc<[u8]>> {
+        self.lease.software_bytes_shared()
+    }
+
     fn duplicate(&self, budgets: &RuntimeBudgets) -> Result<Self, DecodeError> {
         let descriptor = *self.descriptor();
         let pixels = self.pixels();
