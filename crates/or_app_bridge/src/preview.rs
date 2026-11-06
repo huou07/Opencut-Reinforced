@@ -47,6 +47,13 @@ pub(crate) enum PreviewPreparationAction {
     target_os = "android"
 ))]
 pub(crate) use desktop::render_adapter_info;
+#[cfg(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows",
+    target_os = "android"
+))]
+pub(crate) use desktop::{graphics_preference, set_graphics_preference};
 
 pub(crate) struct PreviewPreparation {
     pub request_id: Option<u64>,
@@ -137,7 +144,36 @@ mod desktop {
     /// the memory reservation below, not the worker count, is what keeps it bounded.
     const MAX_EXPORT_AUDIO_WORKERS: usize = 16;
 
-    static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
+    /// The graphics backend chosen in Settings, read once when the device opens.
+static GRAPHICS_PREFERENCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Records the backend preference before the renderer opens.
+///
+/// Accepts `auto` or a compiler backend name; an unknown name is a caller
+/// error rather than a silent fallback, so the UI can say the truth.
+pub(crate) fn set_graphics_preference(backend: &str) -> Result<(), String> {
+    let name = backend.trim().to_ascii_lowercase();
+    if name != "auto" && or_render::RenderDevice::backend_flag(&name).is_none() {
+        return Err(format!(
+            "graphics backend must be auto, metal, vulkan, dx12 or gles; got {backend:?}"
+        ));
+    }
+    let mut guard = GRAPHICS_PREFERENCE
+        .lock()
+        .map_err(|_| "graphics preference lock is poisoned".to_owned())?;
+    *guard = Some(name);
+    Ok(())
+}
+
+pub(crate) fn graphics_preference() -> String {
+    GRAPHICS_PREFERENCE
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .unwrap_or_else(|| "auto".to_owned())
+}
+
+static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
     static FFMPEG_LICENSE_PROBLEM: OnceLock<String> = OnceLock::new();
 
@@ -2731,9 +2767,32 @@ mod desktop {
 
     fn renderer() -> Result<&'static RenderDevice, PreviewError> {
         RENDER_DEVICE
-            .get_or_init(|| block_on(RenderDevice::new()).map_err(|error| error.to_string()))
+            .get_or_init(|| {
+                let preferred = preferred_backend();
+                let device = match preferred
+                    .as_deref()
+                    .and_then(or_render::RenderDevice::backend_flag) {
+                    Some(backends) => block_on(RenderDevice::new_with_backends(backends))
+                        .or_else(|_| block_on(RenderDevice::new())),
+                    None => block_on(RenderDevice::new()),
+                };
+                device.map_err(|error| error.to_string())
+            })
             .as_ref()
             .map_err(|message| PreviewError::new("RENDER_UNAVAILABLE", message.clone()))
+    }
+
+    /// The backend the person chose, or `None` for automatic selection.
+    ///
+    /// The device is process-global and opened once. Reading the preference
+    /// here keeps the choice out of every frame: a change made in Settings is
+    /// stored for the next start instead of rebuilding a live device.
+    fn preferred_backend() -> Option<String> {
+        let value = GRAPHICS_PREFERENCE
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())?;
+        (value != "auto").then_some(value)
     }
 
     /// Preview renders a portrait or landscape canvas at its own aspect, capped

@@ -8007,11 +8007,15 @@ class _FakeCoreGateway implements CoreGateway {
         gpuDeviceType: 'integrated',
         gpuDriver: 'fixture',
         gpuDriverInfo: '',
+        preferredBackend: 'auto',
         gpuCompiledBackends: ['metal'],
         h264Encoders: [],
         decoders: [],
         plans: [],
       );
+
+  @override
+  Future<void> setGraphicsPreference(String backend) async {}
 
   @override
   Future<EncodingPlanView> encodingPlan({

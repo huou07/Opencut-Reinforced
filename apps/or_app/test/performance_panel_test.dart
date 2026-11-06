@@ -106,6 +106,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('choosing a graphics backend stores it for the next start', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+
+    final dropdown = find.byKey(const ValueKey('performance-backend'));
+    await tester.ensureVisible(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vulkan').last);
+    await tester.pumpAndSettle();
+
+    expect(saves, 1);
+    expect(settings.graphicsBackend, 'vulkan');
+    expect(gateway.graphicsCalls, 1);
+    expect(gateway.lastGraphicsBackend, 'vulkan');
+  });
+
   testWidgets('reset clears the encoder override and returns to recommended', (
     tester,
   ) async {
@@ -155,7 +174,8 @@ class _FakeGateway implements CoreGateway {
         gpuDeviceType: 'integrated',
         gpuDriver: 'fixture-driver',
         gpuDriverInfo: '',
-        gpuCompiledBackends: ['metal'],
+        preferredBackend: 'auto',
+        gpuCompiledBackends: ['metal', 'vulkan'],
         h264Encoders: [
           EncoderProbeView(
             name: 'h264_videotoolbox',
@@ -183,6 +203,15 @@ class _FakeGateway implements CoreGateway {
         ],
         plans: [],
       );
+
+  @override
+  Future<void> setGraphicsPreference(String backend) async {
+    graphicsCalls += 1;
+    lastGraphicsBackend = backend;
+  }
+
+  int graphicsCalls = 0;
+  String? lastGraphicsBackend;
 
   @override
   Future<EncodingPlanView> encodingPlan({

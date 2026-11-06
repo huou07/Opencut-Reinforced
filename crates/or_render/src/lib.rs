@@ -572,6 +572,20 @@ impl RenderDevice {
         .collect()
     }
 
+    /// Maps a backend wire name to the flag it selects.
+    ///
+    /// Settings stores the name the report prints, so both sides agree on
+    /// `metal`, `vulkan`, `dx12` and `gles`; unknown names select nothing.
+    pub fn backend_flag(name: &str) -> Option<wgpu::Backends> {
+        match name {
+            "metal" => Some(wgpu::Backends::METAL),
+            "vulkan" => Some(wgpu::Backends::VULKAN),
+            "dx12" => Some(wgpu::Backends::DX12),
+            "gles" => Some(wgpu::Backends::GL),
+            _ => None,
+        }
+    }
+
     /// Creates a device using the compiled native backends.
     pub async fn new() -> Result<Self, RenderError> {
         Self::new_with_backends(Self::compiled_backends()).await

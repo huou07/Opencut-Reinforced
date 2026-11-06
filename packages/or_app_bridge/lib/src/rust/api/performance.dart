@@ -32,6 +32,16 @@ Future<EncodingPlanView> encodingPlan({
   preferredH264Encoder: preferredH264Encoder,
 );
 
+/// Records the graphics backend the app should open on its next start.
+///
+/// The render device is process-global and created once, so this only affects
+/// a device that has not opened yet; Settings says so in the UI instead of
+/// pretending a running preview switched backends.
+Future<void> setGraphicsPreference({required String backend}) => RustLib
+    .instance
+    .api
+    .crateApiPerformanceSetGraphicsPreference(backend: backend);
+
 /// One decoder this build carries.
 class DecoderProbeView {
   final String name;
@@ -154,6 +164,9 @@ class PerformanceReportView {
   /// Native backends this build can open, e.g. `["metal"]`.
   final List<String> gpuCompiledBackends;
 
+  /// The backend chosen in Settings (`auto` or a backend name).
+  final String preferredBackend;
+
   /// Set when the render device could not be opened for the report.
   final String? gpuError;
   final List<EncoderProbeView> h264Encoders;
@@ -171,6 +184,7 @@ class PerformanceReportView {
     required this.gpuDriver,
     required this.gpuDriverInfo,
     required this.gpuCompiledBackends,
+    required this.preferredBackend,
     this.gpuError,
     required this.h264Encoders,
     required this.decoders,
@@ -187,6 +201,7 @@ class PerformanceReportView {
       gpuDriver.hashCode ^
       gpuDriverInfo.hashCode ^
       gpuCompiledBackends.hashCode ^
+      preferredBackend.hashCode ^
       gpuError.hashCode ^
       h264Encoders.hashCode ^
       decoders.hashCode ^
@@ -205,6 +220,7 @@ class PerformanceReportView {
           gpuDriver == other.gpuDriver &&
           gpuDriverInfo == other.gpuDriverInfo &&
           gpuCompiledBackends == other.gpuCompiledBackends &&
+          preferredBackend == other.preferredBackend &&
           gpuError == other.gpuError &&
           h264Encoders == other.h264Encoders &&
           decoders == other.decoders &&

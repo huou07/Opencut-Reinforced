@@ -30,6 +30,15 @@ Future<void> main() async {
     runApp(OrStartupFailure(message: '$error'));
     return;
   }
+  // The render device is opened once per process, so the stored backend
+  // preference must reach Rust before the first preview. Failure is not fatal:
+  // automatic selection still opens a device.
+  try {
+    final settings = await EditorSettingsStore().load();
+    await RustCoreGateway().setGraphicsPreference(settings.graphicsBackend);
+  } catch (error) {
+    stderr.writeln('Could not apply the graphics backend preference: $error');
+  }
   runApp(const OrApp(gateway: RustCoreGateway()));
   PacingRecorder.install();
 }

@@ -73,7 +73,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 901513233;
+  int get rustContentHash => 1285836657;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -937,6 +937,10 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ProjectClipAnimationView>
   crateApiProjectAnimationProjectClipAnimationViewDefault();
+
+  Future<void> crateApiPerformanceSetGraphicsPreference({
+    required String backend,
+  });
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_ProjectHostHandle;
@@ -6559,6 +6563,39 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         argNames: [],
       );
 
+  @override
+  Future<void> crateApiPerformanceSetGraphicsPreference({
+    required String backend,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(backend, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 114,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiPerformanceSetGraphicsPreferenceConstMeta,
+        argValues: [backend],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiPerformanceSetGraphicsPreferenceConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_graphics_preference",
+        argNames: ["backend"],
+      );
+
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_ProjectHostHandle => wire
       .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerProjectHostHandle;
@@ -7430,8 +7467,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PerformanceReportView dco_decode_performance_report_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return PerformanceReportView(
       cpuArch: dco_decode_String(arr[0]),
       logicalCores: dco_decode_u_32(arr[1]),
@@ -7441,10 +7478,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       gpuDriver: dco_decode_String(arr[5]),
       gpuDriverInfo: dco_decode_String(arr[6]),
       gpuCompiledBackends: dco_decode_list_String(arr[7]),
-      gpuError: dco_decode_opt_String(arr[8]),
-      h264Encoders: dco_decode_list_encoder_probe_view(arr[9]),
-      decoders: dco_decode_list_decoder_probe_view(arr[10]),
-      plans: dco_decode_list_encoding_plan_view(arr[11]),
+      preferredBackend: dco_decode_String(arr[8]),
+      gpuError: dco_decode_opt_String(arr[9]),
+      h264Encoders: dco_decode_list_encoder_probe_view(arr[10]),
+      decoders: dco_decode_list_decoder_probe_view(arr[11]),
+      plans: dco_decode_list_encoding_plan_view(arr[12]),
     );
   }
 
@@ -9419,6 +9457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_gpuDriver = sse_decode_String(deserializer);
     var var_gpuDriverInfo = sse_decode_String(deserializer);
     var var_gpuCompiledBackends = sse_decode_list_String(deserializer);
+    var var_preferredBackend = sse_decode_String(deserializer);
     var var_gpuError = sse_decode_opt_String(deserializer);
     var var_h264Encoders = sse_decode_list_encoder_probe_view(deserializer);
     var var_decoders = sse_decode_list_decoder_probe_view(deserializer);
@@ -9432,6 +9471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       gpuDriver: var_gpuDriver,
       gpuDriverInfo: var_gpuDriverInfo,
       gpuCompiledBackends: var_gpuCompiledBackends,
+      preferredBackend: var_preferredBackend,
       gpuError: var_gpuError,
       h264Encoders: var_h264Encoders,
       decoders: var_decoders,
@@ -11472,6 +11512,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.gpuDriver, serializer);
     sse_encode_String(self.gpuDriverInfo, serializer);
     sse_encode_list_String(self.gpuCompiledBackends, serializer);
+    sse_encode_String(self.preferredBackend, serializer);
     sse_encode_opt_String(self.gpuError, serializer);
     sse_encode_list_encoder_probe_view(self.h264Encoders, serializer);
     sse_encode_list_decoder_probe_view(self.decoders, serializer);

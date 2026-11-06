@@ -57,6 +57,8 @@ pub struct PerformanceReportView {
     pub gpu_driver_info: String,
     /// Native backends this build can open, e.g. `["metal"]`.
     pub gpu_compiled_backends: Vec<String>,
+    /// The backend chosen in Settings (`auto` or a backend name).
+    pub preferred_backend: String,
     /// Set when the render device could not be opened for the report.
     pub gpu_error: Option<String>,
     pub h264_encoders: Vec<EncoderProbeView>,
@@ -71,6 +73,7 @@ pub struct PerformanceReportView {
 /// report: the media facts still decide a usable export on a machine whose
 /// preview is broken.
 pub fn performance_report() -> PerformanceReportView {
+    let preferred_backend = crate::preview::graphics_preference();
     let candidates = or_media::probe_h264_encoders();
     let plans = PerformanceProfile::ALL
         .iter()
@@ -100,6 +103,7 @@ pub fn performance_report() -> PerformanceReportView {
         gpu_device_type,
         gpu_driver,
         gpu_driver_info,
+        preferred_backend,
         gpu_compiled_backends: or_render::RenderDevice::compiled_backend_names()
             .into_iter()
             .map(str::to_owned)
@@ -184,4 +188,25 @@ fn adapter_columns(
         adapter.driver_info().to_owned(),
         None,
     )
+}
+
+/// Records the graphics backend the app should open on its next start.
+///
+/// The render device is process-global and created once, so this only affects
+/// a device that has not opened yet; Settings says so in the UI instead of
+/// pretending a running preview switched backends.
+pub fn set_graphics_preference(backend: String) -> Result<(), String> {
+    crate::preview::set_graphics_preference(&backend)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::set_graphics_preference;
+
+    #[test]
+    fn unknown_graphics_backends_are_rejected() {
+        assert!(set_graphics_preference("bogus".to_owned()).is_err());
+        assert!(set_graphics_preference("auto".to_owned()).is_ok());
+        assert_eq!(crate::preview::graphics_preference(), "auto");
+    }
 }

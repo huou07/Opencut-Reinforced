@@ -32,6 +32,10 @@ host, and what remains unverified. Revision `bacf5cff`; branch
 - **Motion presets.** Fade in, Slide up, Zoom in and Pop write ordinary
   keyframes through the same animation command, so a preset is a starting point
   whose chips stay editable and the project file never stores a preset name.
+- **Graphics backend preference.** Settings → Performance stores a backend
+  (`auto` or a compiled name) and the app passes it to Rust before the first
+  preview, so a machine whose default adapter misbehaves can pick another one;
+  an unusable choice falls back to automatic and the report shows both values.
 - **Agent animation verbs.** `or timeline add-keyframe` (channel, exact offset,
   value, easing) and `or timeline clear-animation` write the same clip update as
   the inspector, and re-adding an offset replaces that keyframe instead of

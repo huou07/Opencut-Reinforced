@@ -43,6 +43,23 @@ plan records `fallback` and uses the next encoder that did, instead of failing
 the job. The resolved encoder is written into the job snapshot (`detail`, e.g.
 `Encoding with h264_videotoolbox (hardware).`) and shown in the export receipt.
 
+## Choosing a graphics backend
+
+Settings → Performance also offers **Graphics backend**: Automatic (every
+backend this build compiles) or one of the compiled names (`metal`, `vulkan`,
+`dx12`, `gles`). The value is stored as `graphics_backend` in
+`editor-settings.json`, read at startup before the first preview, and passed to
+`or_render::RenderDevice::new_with_backends`. The device is opened once per
+process, so a change is applied on the next app start and the panel says so.
+
+A name the build does not compile, or a backend whose adapter fails to open,
+falls back to automatic selection instead of leaving the app without a
+renderer; the report prints the stored preference (`preferred_backend`) next to
+the backend the preview actually opened, so a fallback is visible rather than
+silent. The decoder and CPU-worker pickers are intentionally absent: decoding
+has one automatic policy in this build, and the export render thread count is
+an internal pipeline constant rather than a user preference.
+
 ## Verified rows
 
 | Host | GPU / backend | Recommended plan | Compatibility plan | Evidence |

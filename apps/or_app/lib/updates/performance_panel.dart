@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:or_app_bridge/or_app_bridge.dart'
     show EncodingPlanView, EncoderProbeView, PerformanceReportView;
@@ -55,8 +57,13 @@ class _PerformancePanelState extends State<PerformancePanel> {
 
   /// Saves first and resolves the plan from the value that was saved, so the
   /// panel never shows a plan for a profile the other screen already replaced.
-  void _save(EditorSettings next) {
+  void _save(EditorSettings next, {String? backend}) {
     widget.onSettingsChanged(next);
+    if (backend != null) {
+      // Stored for the next start: the render device is opened once per
+      // process, so the panel does not claim a live switch.
+      unawaited(widget.gateway.setGraphicsPreference(backend));
+    }
     setState(() {
       _plan = _planFor(next);
     });
@@ -151,6 +158,8 @@ class _PerformancePanelState extends State<PerformancePanel> {
         const SizedBox(height: OrSpacing.x3),
         _encoderRow(report, settings),
         const SizedBox(height: OrSpacing.x2),
+        _backendRow(report, settings),
+        const SizedBox(height: OrSpacing.x2),
         Align(
           alignment: Alignment.centerLeft,
           child: Wrap(
@@ -162,7 +171,9 @@ class _PerformancePanelState extends State<PerformancePanel> {
                 onPressed: () => _save(
                   settings
                       .copyWith(performanceProfile: 'recommended')
-                      .withPreferredH264Encoder(null),
+                      .withPreferredH264Encoder(null)
+                  .copyWith(graphicsBackend: 'auto'),
+                  backend: 'auto',
                 ),
                 child: const Text('Reset to recommended'),
               ),
@@ -172,6 +183,52 @@ class _PerformancePanelState extends State<PerformancePanel> {
                 child: const Text('Measure again'),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _backendRow(PerformanceReportView report, EditorSettings settings) {
+    final options = ['auto', ...report.gpuCompiledBackends];
+    final current = options.contains(settings.graphicsBackend)
+        ? settings.graphicsBackend
+        : 'auto';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Row(
+          label: 'Graphics backend',
+          value: current == 'auto'
+              ? 'Automatic'
+              : _backendLabel(current),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        DropdownButton<String>(
+          key: const ValueKey('performance-backend'),
+          value: current,
+          isExpanded: true,
+          onChanged: (value) {
+            if (value == null || value == current) return;
+            _save(settings.copyWith(graphicsBackend: value), backend: value);
+          },
+          items: [
+            for (final backend in options)
+              DropdownMenuItem(
+                value: backend,
+                child: Text(
+                  backend == 'auto'
+                      ? 'Automatic (all compiled backends)'
+                      : _backendLabel(backend),
+                ),
+              ),
+          ],
+        ),
+        Text(
+          'Changes apply the next time the app starts.',
+          style: const TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.metadataSize,
           ),
         ),
       ],

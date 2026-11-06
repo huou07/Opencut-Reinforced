@@ -134,7 +134,8 @@ is missing.
   preview device actually opened (or why none did), the decoders this build
   carries, and every H.264 candidate with whether it opened; then offers
   Recommended, Maximum performance, Balanced and Compatibility, an encoder
-  override, and Reset to recommended. The plan line names the chosen encoder
+  override, a graphics-backend choice that applies at the next start, and
+  Reset to recommended. The plan line names the chosen encoder
   and any fallback, so a profile never claims acceleration that was not
   measured. The export dialog shows the same profile row and the encoder the
   file will use. It sits beside Resources rather than inside it: Resources asks

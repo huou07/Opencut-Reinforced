@@ -28,4 +28,10 @@ abstract interface class CoreGateway {
     required String profile,
     String? preferredH264Encoder,
   });
+
+  /// Records the graphics backend for the renderer's next start.
+  ///
+  /// The device is opened once per process, so this is a stored preference,
+  /// not a live switch; Settings says so next to the control.
+  Future<void> setGraphicsPreference(String backend);
 }

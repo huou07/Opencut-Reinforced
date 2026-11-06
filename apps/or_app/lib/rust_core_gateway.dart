@@ -26,4 +26,8 @@ class RustCoreGateway implements CoreGateway {
     profile: profile,
     preferredH264Encoder: preferredH264Encoder,
   );
+
+  @override
+  Future<void> setGraphicsPreference(String backend) =>
+      rust.setGraphicsPreference(backend: backend);
 }

@@ -29,7 +29,7 @@
 
 use crate::api::project::*;
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 901513233;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1285836657;
 
 // Section: executor
 
@@ -6068,6 +6068,39 @@ fn wire__crate__api__project_animation__project_clip_animation_view_default_impl
         },
     )
 }
+fn wire__crate__api__performance__set_graphics_preference_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_graphics_preference",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_backend = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, String>((move || {
+                    let output_ok = crate::api::performance::set_graphics_preference(api_backend)?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -7139,6 +7172,7 @@ impl SseDecode for crate::api::performance::PerformanceReportView {
         let mut var_gpuDriver = <String>::sse_decode(deserializer);
         let mut var_gpuDriverInfo = <String>::sse_decode(deserializer);
         let mut var_gpuCompiledBackends = <Vec<String>>::sse_decode(deserializer);
+        let mut var_preferredBackend = <String>::sse_decode(deserializer);
         let mut var_gpuError = <Option<String>>::sse_decode(deserializer);
         let mut var_h264Encoders =
             <Vec<crate::api::performance::EncoderProbeView>>::sse_decode(deserializer);
@@ -7155,6 +7189,7 @@ impl SseDecode for crate::api::performance::PerformanceReportView {
             gpu_driver: var_gpuDriver,
             gpu_driver_info: var_gpuDriverInfo,
             gpu_compiled_backends: var_gpuCompiledBackends,
+            preferred_backend: var_preferredBackend,
             gpu_error: var_gpuError,
             h264_encoders: var_h264Encoders,
             decoders: var_decoders,
@@ -8832,6 +8867,12 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
+        114 => wire__crate__api__performance__set_graphics_preference_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
         _ => unreachable!(),
     }
 }
@@ -9497,6 +9538,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::performance::PerformanceRepor
             self.gpu_driver.into_into_dart().into_dart(),
             self.gpu_driver_info.into_into_dart().into_dart(),
             self.gpu_compiled_backends.into_into_dart().into_dart(),
+            self.preferred_backend.into_into_dart().into_dart(),
             self.gpu_error.into_into_dart().into_dart(),
             self.h264_encoders.into_into_dart().into_dart(),
             self.decoders.into_into_dart().into_dart(),
@@ -11534,6 +11576,7 @@ impl SseEncode for crate::api::performance::PerformanceReportView {
         <String>::sse_encode(self.gpu_driver, serializer);
         <String>::sse_encode(self.gpu_driver_info, serializer);
         <Vec<String>>::sse_encode(self.gpu_compiled_backends, serializer);
+        <String>::sse_encode(self.preferred_backend, serializer);
         <Option<String>>::sse_encode(self.gpu_error, serializer);
         <Vec<crate::api::performance::EncoderProbeView>>::sse_encode(
             self.h264_encoders,
@@ -12317,7 +12360,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

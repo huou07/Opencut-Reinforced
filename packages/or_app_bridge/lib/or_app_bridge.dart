@@ -7,7 +7,8 @@ export 'src/rust/api/performance.dart'
         EncodingPlanView,
         PerformanceReportView,
         encodingPlan,
-        performanceReport;
+        performanceReport,
+        setGraphicsPreference;
 export 'src/rust/api/project_animation.dart';
 export 'src/rust/api/motion.dart'
     show

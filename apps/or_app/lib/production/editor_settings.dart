@@ -15,6 +15,7 @@ class EditorSettings {
     this.tipsDismissed = false,
     this.performanceProfile = 'recommended',
     this.preferredH264Encoder,
+    this.graphicsBackend = 'auto',
   });
 
   /// The inspector is an advanced surface. The toolbar and clip dialogs carry
@@ -45,12 +46,18 @@ class EditorSettings {
   /// decide. A name this build does not carry falls back and says why.
   final String? preferredH264Encoder;
 
+  /// The graphics backend the renderer opens on the next start: `auto` or one
+  /// of `metal`, `vulkan`, `dx12`, `gles`. The device is opened once per
+  /// process, so a change is stored and applied next launch.
+  final String graphicsBackend;
+
   EditorSettings copyWith({
     bool? showInspector,
     bool? simpleMode,
     bool? showGuides,
     bool? tipsDismissed,
     String? performanceProfile,
+    String? graphicsBackend,
   }) => EditorSettings(
     showInspector: showInspector ?? this.showInspector,
     simpleMode: simpleMode ?? this.simpleMode,
@@ -58,6 +65,7 @@ class EditorSettings {
     tipsDismissed: tipsDismissed ?? this.tipsDismissed,
     performanceProfile: performanceProfile ?? this.performanceProfile,
     preferredH264Encoder: preferredH264Encoder,
+    graphicsBackend: graphicsBackend ?? this.graphicsBackend,
   );
 
   /// Sets or clears the encoder override without touching the other fields.
@@ -68,16 +76,18 @@ class EditorSettings {
     tipsDismissed: tipsDismissed,
     performanceProfile: performanceProfile,
     preferredH264Encoder: encoder,
+    graphicsBackend: graphicsBackend,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 3,
+    'version': 4,
     'show_inspector': showInspector,
     'simple_mode': simpleMode,
     'show_guides': showGuides,
     'tips_dismissed': tipsDismissed,
     'performance_profile': performanceProfile,
     'preferred_h264_encoder': preferredH264Encoder,
+    'graphics_backend': graphicsBackend,
   };
 
   /// A version-1 file predates guided mode and guides. Guided mode is on by
@@ -100,6 +110,11 @@ class EditorSettings {
       preferredH264Encoder: value['preferred_h264_encoder'] is String
           ? value['preferred_h264_encoder'] as String
           : null,
+      graphicsBackend: switch (value['graphics_backend']) {
+        'metal' || 'vulkan' || 'dx12' || 'gles' =>
+          value['graphics_backend'] as String,
+        _ => 'auto',
+      },
     );
   }
 }
