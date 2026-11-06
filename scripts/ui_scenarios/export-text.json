@@ -1,0 +1,175 @@
+{
+ "name": "export-text",
+ "harness": "or_ui",
+ "description": "Imports a clip, adds a title over it and exports an MP4 through the real dialog. A passing run means the composited export path (video + text -> NV12 conversion -> encoder) works end to end in the app, not only in the benchmark.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Export text"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Import a video",
+   "budget_ms": 20000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-import-media"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-create-menu"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 200
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Add text track"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 200
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-create-menu"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 200
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Add title"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "timeline-text-content"
+   },
+   "value": "Benchmark title"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-save-text"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-save"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Saved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export video",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Continue"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export complete",
+   "budget_ms": 180000
+  },
+  {
+   "op": "shot",
+   "name": "receipt"
+  }
+ ]
+}
