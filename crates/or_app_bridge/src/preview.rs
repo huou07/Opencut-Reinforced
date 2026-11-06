@@ -3617,6 +3617,17 @@ mod desktop {
         Ok(())
     }
 
+    /// Applies one clip's noise gate to a decoded block, keeping gate state per
+    /// clip so a hiss tail is not re-opened at every block boundary.
+    fn gate_clip_audio(
+        clip: &AudioClip,
+        gates: &mut HashMap<String, NoiseGate>,
+        samples: &mut [f32],
+    ) {
+        let gate = gates.entry(clip.id.clone()).or_default();
+        gate.process(samples, clip.settings.noise_reduction_decibels);
+    }
+
     fn mix_audio_chunk(
         output: &mut [f32],
         clip: &AudioClip,
@@ -3624,8 +3635,7 @@ mod desktop {
         block_start: RationalTime,
         mut chunk: or_media::AudioChunk,
     ) -> Result<(), String> {
-        let gate = gates.entry(clip.id.clone()).or_default();
-        gate.process(chunk.samples_mut(), clip.settings.noise_reduction_decibels);
+        gate_clip_audio(clip, gates, chunk.samples_mut());
         mix_audio_samples(
             output,
             clip,
@@ -3916,6 +3926,60 @@ mod desktop {
                 [
                     0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5, 2.0, 2.0, 2.5, 2.5, 3.0, 3.0, 3.0, 3.0,
                 ]
+            );
+        }
+
+        #[test]
+        fn a_clip_gate_quiets_hiss_after_a_burst_and_keeps_state_across_blocks() {
+            // The gate must not be re-created per block: a hiss tail would then be
+            // measured against a cold peak and stay open.
+            let source =
+                MediaSourceRef::local_file("file:///tmp/or-preview-audio-noise.wav").unwrap();
+            let clip = AudioClip {
+                id: "noisy".to_owned(),
+                source,
+                timeline_start: RationalTime::ZERO,
+                source_start: RationalTime::ZERO,
+                duration: RationalTime::new(2, 1).unwrap(),
+                playback_rate: RationalRate::new(1, 1).unwrap(),
+                settings: AudioSettings {
+                    noise_reduction_decibels: 18,
+                    ..AudioSettings::DEFAULT
+                },
+            };
+            let frames = AUDIO_SAMPLE_RATE as usize;
+            let mut burst = vec![0.0_f32; frames * 2];
+            for frame in 0..frames / 4 {
+                let value = 0.5 * (frame as f32 * 0.2).sin();
+                burst[frame * 2] = value;
+                burst[frame * 2 + 1] = value;
+            }
+            let mut block = burst.clone();
+            let mut gates = HashMap::new();
+            gate_clip_audio(&clip, &mut gates, &mut block);
+            let mut hiss = vec![0.0_f32; frames * 2];
+            for (index, sample) in hiss.iter_mut().enumerate() {
+                *sample = if index % 7 == 0 { 0.004 } else { -0.004 };
+            }
+            gate_clip_audio(&clip, &mut gates, &mut hiss);
+            let quiet = hiss.iter().fold(0.0_f32, |sum, value| sum + value * value);
+            assert!(
+                quiet < burst.len() as f32 * 0.000_01,
+                "hiss stayed loud: energy {quiet}"
+            );
+            // A steady tone in the same clip keeps its level.
+            let mut tone = vec![0.0_f32; frames * 2];
+            for frame in 0..frames {
+                let value = 0.2 * (frame as f32 * 0.05).sin();
+                tone[frame * 2] = value;
+                tone[frame * 2 + 1] = value;
+            }
+            let before = tone.iter().fold(0.0_f32, |sum, value| sum + value * value);
+            gate_clip_audio(&clip, &mut gates, &mut tone);
+            let after = tone.iter().fold(0.0_f32, |sum, value| sum + value * value);
+            assert!(
+                after > before * 0.25,
+                "the tone was gated: {after} vs {before}"
             );
         }
 

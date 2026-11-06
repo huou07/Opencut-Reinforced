@@ -21,6 +21,8 @@ Host-specific commands are in [operations/local-macos.md](../operations/local-ma
 | `scripts/bench_export.py` | portable export/render benchmark: `decode.<profile>`, `render.<profile>` and `full.<profile>` rows for mp4/webm/mkv at one picture size, driven through the bridge test `export_media_benchmark`; resolves the FFmpeg prefix from `FFMPEG_DIR`, the cargo config, or the known prefixes, runs the test binary directly with the library path it needs, and exits 3 when a row cannot be measured |
 | `scripts/build_macos_release.sh` | build/package/codesign the macOS bundle with bridge hash check; a packaged local bundle also carries the `or` CLI the assistant edits through |
 | `scripts/stage_macos_ffmpeg.sh` | build the pinned LGPL FFmpeg 8.1.3 prefix (codec sources, packaged helpers, VideoToolbox) that macOS app packaging consumes |
+| `scripts/build_linux_ffmpeg.sh` | build the Linux FFmpeg 8.1.3 prefix from the repository recipe: pinned x264, VAAPI and NVENC, asserts the encoders compiled in `config_components.h`, verifies the helper binaries and records the build info; the linux CI lane calls it |
+| `scripts/build_windows_ffmpeg.sh` | build the Windows prefix with Media Foundation (`h264_mf`), NVENC, VP9 and AAC; requires the codec prefix to carry `ffnvcodec.pc` first |
 | `scripts/check_doc_links.py`, `scripts/check_doc_freshness.sh`, `scripts/check_claims.py` | documentation and claim gates |
 | `scripts/check_or_core_deps.py` | keeps `or_core` free of GPU/media/audio/text/AI dependencies |
 | `scripts/run_local_lane.sh`, `scripts/run_android_lane.sh` | platform lanes for future/other-platform work |

@@ -109,33 +109,39 @@ Measured 2026-11-05 on the `debian` host with `ffmpeg 7.1.5-0+deb13u1`.
 | GIF | — | — | refused | — | — |
 | TIFF | — | — | refused | — | — |
 
-The Debian build is a general-purpose distribution FFmpeg: it has `libx265`
-and therefore a GPL-enabled configuration. OR links the system build on Linux
-and never asks it for x265; the licence position for that seam is recorded in
-[ADR 0011](../adr/0011-linux-delivery-encoder.md). The row is here to say what
-that build can decode, not to propose an encoder.
+Linux now links a prefix built from `scripts/build_linux_ffmpeg.sh`, not a
+hand-made or distribution build: that recipe pins x264, VAAPI and NVENC and
+asserts `CONFIG_LIBX264_ENCODER`, `CONFIG_H264_VAAPI_ENCODER` and
+`CONFIG_H264_NVENC_ENCODER` in `config_components.h` before `make`, because a
+configure line is not evidence the encoder compiled. The x264 link makes that
+binary GPL-2.0-or-later; the licence position is
+[ADR 0011](../adr/0011-linux-delivery-encoder.md). The Debian host's previous
+prefix had been built with the minimal macOS-style arguments — `ffv1`,
+`libvpx-vp9`, `libopus` and nothing else — which is why MP4 was refused there
+even though the operating system was not the limitation.
 
-## Windows 11, dev prefix FFmpeg 8.1.3
+## Windows 11, dev prefix FFmpeg 8.1.3 (rebuilt 2026-11-06)
 
-Measured 2026-11-06 on the `win11` host against the prefix that host's
-`.cargo/config.toml` names (`C:/orb/tmp/ffmpeg-8.1.3-install`), by listing the
-encoders and running the export benchmark through it:
+Measured on the `win11` host against `C:/orb/tmp/ffmpeg-8.1.3-install`, rebuilt
+from `scripts/build_windows_ffmpeg.sh` after the codec prefix was regenerated
+with `ffnvcodec`:
 
 | Row | Result |
 |---|---|
-| `h264_videotoolbox`, `h264_nvenc`, `h264_mf`, `h264_vaapi`, `h264_open`, `libx264` | none present |
-| `ffv1`, `libvpx-vp9`, `libopus`, PCM family | present |
-| MP4 H.264 export | refused: "this FFmpeg build carries no H.264 encoder" |
-| WebM VP9/Opus export, 1080p | works, 8.4 fps (300 frames) |
+| `h264_mf` (H264 via MediaFoundation) | present |
+| `h264_nvenc` | present in the build; no NVIDIA device on this host |
+| `aac`, `libvpx-vp9`, `libopus`, `ffv1`, PCM family | present |
+| MP4 H.264 + AAC export, 1080p | works, 121.5 fps (300 frames), h264 Constrained Baseline + aac LC |
+| MP4 H.264 + AAC with one text layer | works, 74.7–79.4 fps |
+| WebM VP9/Opus export, 1080p | works |
 | Lossless FFV1 export | works |
 
-The prefix lists 18 encoders in total. The configure recipe enables a hardware
-H.264 encoder for macOS only (`--enable-videotoolbox
---enable-encoder=h264_videotoolbox`); the Windows job enables none, and Media
-Foundation (`h264_mf`) is the LGPL-compatible answer for that host. Until the
-Windows prefix carries one, the export claim for Windows is WebM and lossless
-only, and the MP4 row must not be claimed. Linux is a different case: its
-prefix here is a local build with `h264_vaapi`, `h264_nvenc` and `libx264`.
+The earlier "MP4 refused" row was a stale prefix, not a platform limit: that
+prefix predated the recipe's `--enable-mediafoundation --enable-encoder=h264_mf`
+and had no `ffnvcodec.pc`, so the script stopped at its NVENC header check. Both
+were fixed by rebuilding the codec prefix and then FFmpeg. The encoder the
+writer actually chooses is confirmed from stderr and from `ffprobe`, never from
+the profile name.
 
 ## What the app tells the user
 

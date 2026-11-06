@@ -1,6 +1,6 @@
 # Feature — Visual Settings, Effects, Colour and Audio Controls
 
-Last reviewed: 2026-11-02
+Last reviewed: 2026-11-06
 
 Scope: per-clip visual and audio parameters, the closed effect/transition set, and
 the colour assumptions behind preview and export.
@@ -46,11 +46,33 @@ Clip gain and mute are canonical clip state; gain, pan, fades and later DSP belo
 to the audio engine (`or_audio`), never to Flutter widgets. Desktop audio output
 is available; Android audio output is explicitly unavailable.
 
+### Reduce noise
+
+`AudioSettings.noise_reduction_decibels` (0..=24, absent meaning 0) is canonical
+clip state like gain, so a reduction survives save/reopen, exports, and one undo
+step for a whole change. The inspector exposes a `Reduce noise (dB)` field and
+No reduction / 6 / 12 / 18 dB chips; both write the same `timeline.clip.update`
+command the field below it uses.
+
+The DSP is a peak-keyed expander, not a spectral denoiser: `or_audio::NoiseGate`
+tracks a decaying peak (≈0.9 dB/s) and an ≈2 ms level envelope, then pulls
+material more than roughly 10 dB under that peak toward `-reduction_db` while
+leaving sustained tones and music at their level. One gate belongs to one clip.
+The streaming mixer keeps gates in a map across blocks so a hiss tail is not
+re-opened at every audio block, and the export cache runs the same gate over a
+whole decoded clip, so preview and export agree. The gate runs at decode, before
+gain/pan/fades, so the level it sees is the source level.
+
+Video-embedded audio is not part of the product yet: only `TrackKind::Audio`
+clips build an audio clip, so a video clip's own track cannot carry a reduction
+until that pipeline exists. The media-library "clean audio" action still writes a
+new cleaned WAV; the timeline action no longer needs it.
+
 ## Deferred
 
 Keyframed parameters, effect stacks beyond the closed set, masks, adjustment
-layers, HDR, hardware-accelerated effects, and audio DSP beyond the current
-gain/pan/fade contract.
+layers, HDR, hardware-accelerated effects, spectral denoising (the current
+reduction is a gate, not a noise-print removal), and video-embedded audio.
 
 ## Related
 

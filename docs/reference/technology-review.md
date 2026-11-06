@@ -1,6 +1,6 @@
 # Technology Review — November 2026
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-06
 
 Scope: the adoption review of twenty named repositories plus the alternatives
 that were checked against them. It records what each one is, its licence, its
@@ -83,7 +83,7 @@ before any code lands.
 |---|---|---|---|---|
 | `goldfire/howler.js` | 2.2.4 (2023-09-19) | MIT | Do not use | Maintenance-only Web Audio playback wrapper; OR already decodes and plays in Rust (`cpal` plus FFmpeg). |
 | `Vanilagy/mediabunny` | 1.65.2 (2026-11-04) | MPL-2.0 (file-level copyleft; bundle-safe in an MIT app) | Do not use | Browser-first WebCodecs muxer; outside a browser it needs `@mediabunny/server` and a Node host. No Rust or Dart path. |
-| `FFmpeg/FFmpeg` | 8.1.3 pinned (2026-09-21); 9.0.2 is current major | LGPL-2.1-or-later for the shipped build; GPL only with `--enable-gpl` | Shared dependency (already adopted) | The media runtime for every platform. Only the build profile is a decision. |
+| `FFmpeg/FFmpeg` | 8.1.3 pinned (2026-09-21); 9.0.2 is current major | LGPL-2.1-or-later on macOS and Windows; GPL-2.0-or-later on Linux, which links x264 (ADR 0011) | Shared dependency (already adopted) | The media runtime for every platform. Only the build profile is a decision, and it is now one script per platform. |
 
 ## Alternatives checked
 
@@ -120,3 +120,32 @@ before any code lands.
 5. FFmpeg stays pinned at 8.1.3 while 9.0.2 is current. 8.1 is still maintained,
    and moving majors needs its own compatibility run. The static-link LGPL §6
    obligation is the live licensing exposure, not the GPL question.
+
+## Re-check, 2026-11-06
+
+Re-read on the same day the render and audio work landed. No version in the
+twenty changed a verdict, so nothing was added as a runtime dependency. Three
+things did change in the product, and they are in-house rather than from this
+list:
+
+- Text-over-video compositing no longer leaves the GPU path. The NV12 layer
+  pipeline, the pooled compositor and the keyed text upload are OR code
+  (`crates/or_render`), because no library in this review offers compositing on
+  OR's wgpu stack.
+- Reduce Noise is a peak-keyed gate in `or_audio`, not a port of a JavaScript
+  audio library. Howler.js remains a browser playback wrapper; Web Audio in a
+  Flutter desktop app would add a second audio clock.
+- Linux MP4 export now has one build recipe (`scripts/build_linux_ffmpeg.sh`)
+  instead of an inline CI body. That is the licence-bearing change in this
+  review: the Linux binary is GPL because of x264, while macOS and Windows stay
+  LGPL with their OS encoders. Remotion, GSAP and Remotion's skills stay
+  excluded on licence grounds; Three.js stays an unbuilt sidecar candidate;
+  Mediabunny, Satori, SVGO, Anime.js, Motion, Rive, dotLottie, Motion Canvas,
+  R3F, Drei, Rapier and postprocessing stay out for the reasons in the tables
+  above — no JavaScript runtime, or a second renderer beside wgpu, or a licence
+  that an MIT editor cannot carry.
+
+The one capability from the list that OR still lacks is video-embedded audio:
+a clip on a video track contributes no sound, so "reduce noise on the audio of a
+video clip" cannot be honoured until that pipeline exists. That is a product
+gap, not a dependency decision.

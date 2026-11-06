@@ -2624,6 +2624,7 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "--pan-basis-points",
                     "--fade-in",
                     "--fade-out",
+                    "--noise-reduction-db",
                 ],
                 &[],
                 json,
@@ -2660,6 +2661,17 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                     "--fade-out",
                     json,
                 )?;
+            }
+            if let Some(value) = options.value("--noise-reduction-db") {
+                let text = value.to_str().ok_or_else(|| {
+                    CliError::usage(json, "--noise-reduction-db must be valid UTF-8")
+                })?;
+                audio.noise_reduction_decibels = text.parse::<u32>().map_err(|_| {
+                    CliError::usage(
+                        json,
+                        "--noise-reduction-db must be a whole number of decibels",
+                    )
+                })?;
             }
             let settings = ClipSettings::Audio(audio);
             let result =
