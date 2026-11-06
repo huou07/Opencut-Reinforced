@@ -4413,6 +4413,8 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             "--profile",
             "--quality",
             "--short-side",
+            "--performance",
+            "--encoder",
         ],
         &["--no-wait"],
         json,
@@ -4449,9 +4451,37 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             "--profile must match the destination extension (.mp4, .webm, .mkv)",
         ));
     }
+    // The profile decides the encoder path; an explicit encoder overrides its
+    // choice. Both are resolved once here, so the host never re-reads a setting
+    // per frame.
+    let performance = match options.value("--performance") {
+        None => or_core::ExportPerformance::default(),
+        Some(value) => or_core::ExportPerformance {
+            profile: value
+                .to_str()
+                .and_then(or_core::PerformanceProfile::parse)
+                .ok_or_else(|| {
+                    CliError::usage(
+                        json,
+                        "--performance must be recommended, maximum_performance, balanced, \
+                         or compatibility",
+                    )
+                })?,
+            preferred_h264_encoder: None,
+        },
+    };
+    let performance = or_core::ExportPerformance {
+        preferred_h264_encoder: options
+            .value("--encoder")
+            .and_then(|value| value.to_str())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned),
+        ..performance
+    };
     let quality = match options.value("--quality") {
         Some(value) => parse_export_quality(value, json)?,
-        None => ExportQuality::Quality,
+        None => performance.profile.default_quality(),
     };
     let short_side = optional_u32(&options, "--short-side", json)?;
     let client = attached_client(&path, json)?;
@@ -4468,7 +4498,7 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             profile,
             quality,
             short_side,
-            performance: or_core::ExportPerformance::default(),
+            performance,
         },
         json,
     )?;
@@ -4505,11 +4535,16 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             destination.display()
         ))
     } else {
-        Ok(format!(
+        let mut receipt = format!(
             "Exported to {} as job {}.",
             destination.display(),
             job.id
-        ))
+        );
+        if let Some(detail) = job.detail.as_deref() {
+            receipt.push('\n');
+            receipt.push_str(detail);
+        }
+        Ok(receipt)
     }
 }
 
