@@ -379,6 +379,25 @@ NV12 conversion passes and two texture-to-buffer copies, then a blocking
 also why the same workload beats 300 fps on the M5 (≈3 ms for the same path).
 Asynchronous or GPU-resident readback is the next step, and it is not part of
 this revision.
+### Windows rows at `37f39a67`
+
+Measured on the Windows 11 host (Intel Graphics through Vulkan, Media Foundation
+encoder), 300 frames, 1920x1080, `C:/Users/hp/bench1080.mp4`:
+
+| Stage | fps |
+|---|---|
+| Decode only | 63.8 |
+| Encode only (Media Foundation) | 278.1 |
+| Render only, video | 214.4, 210.2 |
+| Render only, one text layer | 104.4, 104.6 |
+| Full MP4, video only | 129.1, 127.2 |
+| Full MP4, one text layer | 78.8, 82.6 |
+
+The full MP4 row improved from 121 fps (2026-11-06) and the render row from 188;
+the text row is unchanged within spread. Unlike Debian, one text layer costs
+Windows about 2x rather than 14x: the composited readback is cheaper on this
+driver, which is consistent with the readback explanation above and with the
+earlier note that the Windows text row was roughly half the Debian one.
 
 ## Known limits
 

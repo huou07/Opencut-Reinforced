@@ -42,7 +42,9 @@ host, and what remains unverified. Revision `7fc8df3d`; branch
 
 Benchmarks at this revision (300 frames, idle): macOS MP4 239.6/245.6 fps, MP4 +
 one text layer 240.4/234.7 fps, animated scale 238.9/243.8 fps — within the
-2026-11-06 spread. Debian (Vulkan UHD 770, `h264_vaapi`): full MP4 video-only
+2026-11-06 spread. Windows (Vulkan Intel Graphics, Media Foundation): full MP4
+129.1/127.2 fps, MP4 + text 78.8/82.6, render-only 214.4/210.2 (text 104.4/104.6),
+encoder-only 278.1, decoder-only 63.8. Debian (Vulkan UHD 770, `h264_vaapi`): full MP4 video-only
 256.0/260.6 fps (was 225), full MP4 + text 59.8–83.2 fps, render-only video
 745.9/779.2, render-only + text 52.6/53.2, encoder-only 454.3/447.8,
 decode-only 273.8/276.8. The Debian text path is readback-bound: the composited
@@ -67,8 +69,9 @@ frame waits 13–14 ms in the synchronous NV12 readback while the CPU submit is
   Windows animated rows remain **UNVERIFIED**.
 - **PASS (Debian)** — the video-only full pipeline improved from 225 to
   256–261 fps at this revision; the text row is readback-bound and documented.
-- **UNVERIFIED** — Windows benchmark rows were not re-taken at this revision;
-  the last rows are from 2026-11-06.
+- **PASS (Windows)** — full MP4 improved from 121 to 127–129 fps, render-only
+  video from 188 to 210–214 fps, and one text layer costs about 2x rather than
+  the 14x seen on Debian.
 - **BLOCKED by hardware** — oneVPL/Quick Sync is absent from every packaged
   FFmpeg build (no `h264_qsv`), and no discrete NVIDIA/AMD device is available
   locally, so those paths are implemented and probed but not benchmarked.
