@@ -144,9 +144,10 @@ iGPU. Rows in [export-performance.md](export-performance.md).
   earlier revisions are gone.
 - `flutter analyze --no-pub`: “No issues found!”; `flutter test`: 526 passed.
 - `./scripts/check-repo.sh`: PASS (913 tracked files).
-- Debian and Windows checkouts fast-forwarded to `20543449` and compile; their
-  journeys at the same feature set pass (home-template, keyframes/easing,
-  composited export).
+- Debian and Windows checkouts fast-forwarded to the same code and compile;
+  their journeys at the same feature set pass (home-template, keyframes/easing,
+  composited export), and the final `home-template` run passed on both after the
+  last sync.
 - Nothing was pushed, tagged or released; the mission left 83 local commits on
   `mission/hardware-profiles-and-polish` over `main`.
 
