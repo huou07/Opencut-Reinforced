@@ -59,6 +59,64 @@ struct CachedTextLayer {
     pixels: Arc<[u8]>,
     /// Stable for as long as this entry stays in the cache.
     id: u64,
+    /// The rectangle that holds any ink, in canvas pixels.
+    bounds: TextInkBounds,
+}
+
+/// The smallest rectangle of a rasterised canvas that contains visible ink.
+///
+/// A held title usually covers a few hundred thousand pixels of an 8 MB canvas,
+/// so the compositor can blend only this rectangle instead of the whole frame.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TextInkBounds {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl TextInkBounds {
+    /// Nothing was drawn: the layer can be skipped entirely.
+    pub const EMPTY: Self = Self {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+    };
+
+    fn of_rgba(pixels: &[u8], width: u32, height: u32) -> Self {
+        let width_px = usize::try_from(width).unwrap_or(0);
+        let height_px = usize::try_from(height).unwrap_or(0);
+        let mut left = width_px;
+        let mut top = height_px;
+        let mut right = 0_usize;
+        let mut bottom = 0_usize;
+        for (row, line) in pixels.chunks_exact(width_px * 4).enumerate() {
+            let mut min_x = width_px;
+            let mut max_x = 0_usize;
+            for (column, pixel) in line.as_chunks::<4>().0.iter().enumerate() {
+                if pixel[3] != 0 {
+                    min_x = min_x.min(column);
+                    max_x = max_x.max(column + 1);
+                }
+            }
+            if min_x < max_x {
+                left = left.min(min_x);
+                right = right.max(max_x);
+                top = top.min(row);
+                bottom = row + 1;
+            }
+        }
+        if left >= right || top >= bottom {
+            return Self::EMPTY;
+        }
+        Self {
+            x: u32::try_from(left).unwrap_or(0),
+            y: u32::try_from(top).unwrap_or(0),
+            width: u32::try_from(right - left).unwrap_or(width),
+            height: u32::try_from(bottom - top).unwrap_or(height),
+        }
+    }
 }
 
 /// A rasterised text layer and the identity of its cached pixels.
@@ -68,6 +126,9 @@ struct CachedTextLayer {
 pub struct RasterizedText {
     pub pixels: Arc<[u8]>,
     pub id: u64,
+    /// Where the ink actually is, so a mostly transparent canvas does not cost a
+    /// full-frame blend.
+    pub bounds: TextInkBounds,
 }
 
 /// CPU text shaping and rasterization using only the bundled Inter faces.
@@ -146,22 +207,25 @@ impl TextRasterizer {
             let entry = self.cache.remove(index);
             let pixels = Arc::clone(&entry.pixels);
             let id = entry.id;
+            let bounds = entry.bounds;
             self.cache.push(entry);
-            return Ok(RasterizedText { pixels, id });
+            return Ok(RasterizedText { pixels, id, bounds });
         }
         let pixels: Arc<[u8]> = self
             .rasterize_spans_uncached(text, spans, formatting, width, height)?
             .into();
+        let bounds = TextInkBounds::of_rgba(&pixels, width, height);
         let id = next_layer_id();
         self.cache.push(CachedTextLayer {
             key,
             pixels: Arc::clone(&pixels),
             id,
+            bounds,
         });
         while self.cache.len() > TEXT_CACHE_CAPACITY {
             self.cache.remove(0);
         }
-        Ok(RasterizedText { pixels, id })
+        Ok(RasterizedText { pixels, id, bounds })
     }
 
     /// Measures shaped text without rasterising it.

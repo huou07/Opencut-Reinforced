@@ -1620,8 +1620,11 @@ mod desktop {
                         "active text layers exceed the preview memory limit",
                     )
                 })?;
-            let mut text_pixels: Vec<(std::sync::Arc<[u8]>, Option<u64>)> =
-                Vec::with_capacity(active_text_clips.len());
+            let mut text_pixels: Vec<(
+                std::sync::Arc<[u8]>,
+                Option<u64>,
+                or_render::TextInkBounds,
+            )> = Vec::with_capacity(active_text_clips.len());
             for clip in &active_text_clips {
                 let rasterized = lock(&self.text_rasterizer)
                     .rasterize_cached(&clip.text, clip.formatting, width, height)
@@ -1634,8 +1637,9 @@ mod desktop {
                     clip.transition_in,
                     clip.transition_out,
                 )?;
+                let ink = rasterized.bounds;
                 let processed = if clip.effects.is_empty() && transitions.is_empty() {
-                    (pixels, Some(rasterized.id))
+                    (pixels, Some(rasterized.id), ink)
                 } else {
                     let processed =
                         process_visual_rgba(width, height, &pixels, &clip.effects, &transitions)
@@ -1651,24 +1655,36 @@ mod desktop {
                                 "active video and text effects exceed the preview memory limit",
                             )
                         })?;
-                    (Arc::from(processed), None)
+                    (Arc::from(processed), None, ink)
                 };
                 text_pixels.push(processed);
             }
             debug_assert!(
                 text_pixels
                     .iter()
-                    .map(|(pixels, _)| pixels.len())
+                    .map(|(pixels, _, _)| pixels.len())
                     .sum::<usize>()
                     <= text_bytes
             );
-            for (clip, (pixels, cache_key)) in active_text_clips.iter().zip(&text_pixels) {
+            for (clip, (pixels, cache_key, ink)) in active_text_clips.iter().zip(&text_pixels) {
+                if ink.width == 0 || ink.height == 0 {
+                    // Nothing was drawn (an empty string, or text placed entirely
+                    // off the canvas), so there is no frame to blend.
+                    continue;
+                }
                 let mut layer = RgbaVideoLayer::new(width, height, pixels)
                     .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?
                     .with_visual_settings(clip.transform, clip.crop, clip.opacity)
                     .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
                 if let Some(key) = cache_key {
                     layer = layer.with_cache_key(*key);
+                }
+                if clip.transform == or_core::Transform::IDENTITY
+                    && clip.crop == or_core::Crop::NONE
+                {
+                    // The glyph rectangle is the only part of the canvas that can
+                    // paint, so blending the rest of the frame is wasted fill.
+                    layer = layer.with_scissor(ink.x, ink.y, ink.width, ink.height);
                 }
                 layers.push(CompositorLayer::Rgba(layer));
             }

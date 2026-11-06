@@ -1235,7 +1235,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         let mut sources: Vec<SourceTexture> = Vec::with_capacity(layers.len() * 2);
         let mut uniforms: Vec<wgpu::Buffer> = Vec::with_capacity(layers.len());
-        let mut draws: Vec<(bool, wgpu::BindGroup)> = Vec::with_capacity(layers.len());
+        let mut draws: Vec<(bool, wgpu::BindGroup, Option<LayerScissor>)> =
+            Vec::with_capacity(layers.len());
         let outcome = (|| -> Result<(), RenderError> {
             for layer in layers {
                 layer.validate()?;
@@ -1341,7 +1342,11 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     }
                 };
                 uniforms.push(uniform);
-                draws.push((nv12, bind_group));
+                let scissor = match *layer {
+                    CompositorLayer::Rgba(rgba) => rgba.scissor,
+                    CompositorLayer::Nv12(_) => None,
+                };
+                draws.push((nv12, bind_group, scissor));
             }
 
             let attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -1365,13 +1370,27 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
-                for (nv12, bind_group) in &draws {
+                for (nv12, bind_group, scissor) in &draws {
                     pass.set_pipeline(if *nv12 {
                         &self.nv12_layer_pipeline
                     } else {
                         &self.video_pipeline
                     });
                     pass.set_bind_group(0, bind_group, &[]);
+                    let (x, y, width, height) = scissor
+                        .map(|(x, y, width, height)| {
+                            (
+                                x.min(size.width()),
+                                y.min(size.height()),
+                                width.min(size.width().saturating_sub(x)),
+                                height.min(size.height().saturating_sub(y)),
+                            )
+                        })
+                        .unwrap_or((0, 0, size.width(), size.height()));
+                    if width == 0 || height == 0 {
+                        continue;
+                    }
+                    pass.set_scissor_rect(x, y, width, height);
                     pass.draw(0..3, 0..1);
                 }
             }
@@ -2063,6 +2082,9 @@ impl CompositorPool {
     const MAX_SOURCES: usize = 8;
 }
 
+/// A scissor rectangle in canvas pixels, `(x, y, width, height)`.
+type LayerScissor = (u32, u32, u32, u32);
+
 /// One software-decoded RGBA source layer passed to the render graph.
 #[derive(Clone, Copy, Debug)]
 pub struct RgbaVideoLayer<'a> {
@@ -2077,6 +2099,12 @@ pub struct RgbaVideoLayer<'a> {
     /// example, is 8 MB of RGBA at 1080p that would otherwise cross the bus
     /// every frame).
     cache_key: Option<u64>,
+    /// The part of the canvas this layer can paint, in target pixels.
+    ///
+    /// A text canvas is mostly transparent, so scissoring the blend to the ink
+    /// turns a full-frame blend into one over the glyph rectangle. `None` paints
+    /// the whole layer, which is what a video layer needs.
+    scissor: Option<LayerScissor>,
 }
 
 /// A typed transition stage applied to one RGBA layer.
@@ -2293,9 +2321,20 @@ impl<'a> RgbaVideoLayer<'a> {
             crop: Crop::NONE,
             opacity: Opacity::OPAQUE,
             cache_key: None,
+            scissor: None,
         };
         layer.validate()?;
         Ok(layer)
+    }
+
+    /// Restricts painting to `x, y, width, height` in target pixels.
+    ///
+    /// Only meaningful when the layer keeps the identity transform, because a
+    /// moved or scaled layer paints outside the rectangle its canvas covers.
+    #[must_use]
+    pub const fn with_scissor(mut self, x: u32, y: u32, width: u32, height: u32) -> Self {
+        self.scissor = Some((x, y, width, height));
+        self
     }
 
     /// Marks these pixels as reusable while `key` stays unchanged.
@@ -2999,6 +3038,39 @@ mod tests {
     }
 
     #[test]
+    #[test]
+    fn a_scissored_layer_paints_only_inside_its_ink_rectangle_when_adapter_is_available() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu scissor test: {error}");
+                return;
+            }
+        };
+        let size = render_size(4, 4);
+        let pixels = [255_u8, 0, 0, 255].repeat(16);
+        let layer = RgbaVideoLayer::new(4, 4, &pixels)
+            .expect("layer should validate")
+            .with_scissor(0, 0, 2, 2);
+        let readback = renderer
+            .composite_layers(size, &[CompositorLayer::Rgba(layer)])
+            .unwrap();
+        for (index, pixel) in readback.pixels().as_chunks::<4>().0.iter().enumerate() {
+            let inside = index == 0 || index == 1 || index == 4 || index == 5;
+            let wanted = if inside {
+                [255_u8, 0, 0, 255]
+            } else {
+                [0, 0, 0, 255]
+            };
+            for (channel, wanted) in pixel.iter().zip(wanted) {
+                assert!(
+                    (*channel as i32 - wanted as i32).abs() <= 3,
+                    "pixel {index} was {pixel:?}, expected {wanted:?}"
+                );
+            }
+        }
+    }
+
     fn nv12_layers_composite_through_the_shared_pipeline_when_adapter_is_available() {
         let renderer = match block_on(RenderDevice::new()) {
             Ok(renderer) => renderer,
@@ -3201,4 +3273,4 @@ pub use motion_image::{
     MAX_MOTION_IMAGE_BYTES, MAX_MOTION_IMAGE_PIXELS, MotionImage, MotionImageError,
     decode_motion_image, load_motion_scene_images,
 };
-pub use text::{TextRasterError, TextRasterizer};
+pub use text::{TextInkBounds, TextRasterError, TextRasterizer};
