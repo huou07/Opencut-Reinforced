@@ -70,14 +70,13 @@ mod desktop {
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
         ApplicationRequest, ApplicationResponse, AudioSettings, ClipAnimation, ClipContent,
-        ClipSettings, Crop,
-        EffectReference, ExportProfile, ExportQuality, ExportRequest, ExportResponse,
-        JobCancelOutcome, JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
-        MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
-        MotionMaterializeRequest, MotionMaterializeResponse, Opacity, ProjectId, ProjectInstanceId,
-        ProjectRevision, ProjectSession, QueryEnvelope, QueryResult, RationalRate, RationalTime,
-        SequenceCanvas, TextFormatting, TimeRange, TimelineClipState, TimelineTrackSummaryV2,
-        TrackKind, Transform, TransitionReference,
+        ClipSettings, Crop, EffectReference, ExportProfile, ExportQuality, ExportRequest,
+        ExportResponse, JobCancelOutcome, JobContext, JobFailure, JobKind, JobManager,
+        JobManagerConfig, JobState, MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef,
+        MediaStreamMetadata, MotionMaterializeRequest, MotionMaterializeResponse, Opacity,
+        ProjectId, ProjectInstanceId, ProjectRevision, ProjectSession, QueryEnvelope, QueryResult,
+        RationalRate, RationalTime, SequenceCanvas, TextFormatting, TimeRange, TimelineClipState,
+        TimelineTrackSummaryV2, TrackKind, Transform, TransitionReference,
     };
     use or_ipc::{
         ExportRequestHandler, LiveProjectHost, MotionMaterializeHandler, ProjectSessionIdentity,
@@ -1600,7 +1599,7 @@ mod desktop {
                         ))
                     }
                     DecodedVideoFrame::Nv12(nv12) => {
-                                let (transform, opacity) = animated_settings(
+                        let (transform, opacity) = animated_settings(
                             &clip.animation,
                             clip.transform,
                             clip.opacity,
@@ -2357,6 +2356,9 @@ mod desktop {
         timeline_start: RationalTime,
         time: RationalTime,
     ) -> (Transform, Opacity) {
+        if animation.is_empty() {
+            return (transform, opacity);
+        }
         let elapsed = time
             .checked_sub(timeline_start)
             .unwrap_or(RationalTime::zero());
@@ -2368,7 +2370,6 @@ mod desktop {
         /// Stable identity so a clip's noise gate can keep its state from one
         /// render block to the next.
         id: String,
-        #[allow(dead_code)]
         #[allow(dead_code)]
         playback_rate: RationalRate,
         source: MediaSourceRef,
@@ -2919,21 +2920,20 @@ mod desktop {
             ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
             ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
         };
-        let mut writer =
-            or_media::FfmpegExportWriter::create_with_options(
-                destination,
-                or_media::ExportWriterOptions {
-                    profile: media_profile,
-                    quality,
-                    performance: performance.profile,
-                    preferred_h264_encoder: performance.preferred_h264_encoder.as_deref(),
-                    width: output_size.0,
-                    height: output_size.1,
-                    frame_rate_numerator: frame_rate.numerator(),
-                    frame_rate_denominator: frame_rate.denominator(),
-                },
-            )
-            .map_err(|error| error.to_string())?;
+        let mut writer = or_media::FfmpegExportWriter::create_with_options(
+            destination,
+            or_media::ExportWriterOptions {
+                profile: media_profile,
+                quality,
+                performance: performance.profile,
+                preferred_h264_encoder: performance.preferred_h264_encoder.as_deref(),
+                width: output_size.0,
+                height: output_size.1,
+                frame_rate_numerator: frame_rate.numerator(),
+                frame_rate_denominator: frame_rate.denominator(),
+            },
+        )
+        .map_err(|error| error.to_string())?;
         if let Some(plan) = writer.encoding_plan() {
             // The receipt names the encoder this job actually opened, not the
             // one the dialog previewed, so a fallback is visible after the fact.

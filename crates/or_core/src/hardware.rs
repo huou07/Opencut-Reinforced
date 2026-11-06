@@ -219,10 +219,11 @@ pub fn plan_h264_encoding(
         );
     }
     for candidate in candidates {
-        if candidate.present && !candidate.opens {
-            if let Some(note) = &candidate.note {
-                notes.push(format!("{}: {note}", candidate.name));
-            }
+        if candidate.present
+            && !candidate.opens
+            && let Some(note) = &candidate.note
+        {
+            notes.push(format!("{}: {note}", candidate.name));
         }
     }
 
@@ -261,7 +262,10 @@ mod tests {
     #[test]
     fn profiles_round_trip_their_wire_names() {
         for profile in PerformanceProfile::ALL {
-            assert_eq!(PerformanceProfile::parse(profile.wire_name()), Some(profile));
+            assert_eq!(
+                PerformanceProfile::parse(profile.wire_name()),
+                Some(profile)
+            );
         }
         assert_eq!(PerformanceProfile::parse(" turbo "), None);
     }

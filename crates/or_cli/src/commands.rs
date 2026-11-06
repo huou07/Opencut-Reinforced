@@ -4535,11 +4535,7 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             destination.display()
         ))
     } else {
-        let mut receipt = format!(
-            "Exported to {} as job {}.",
-            destination.display(),
-            job.id
-        );
+        let mut receipt = format!("Exported to {} as job {}.", destination.display(), job.id);
         if let Some(detail) = job.detail.as_deref() {
             receipt.push('\n');
             receipt.push_str(detail);

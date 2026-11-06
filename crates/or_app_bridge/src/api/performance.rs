@@ -175,14 +175,7 @@ impl EncodingPlanView {
 
 fn adapter_columns(
     adapter: &RenderAdapterInfo,
-) -> (
-    String,
-    String,
-    String,
-    String,
-    String,
-    Option<String>,
-) {
+) -> (String, String, String, String, String, Option<String>) {
     (
         adapter.name().to_owned(),
         adapter.backend_name().to_owned(),

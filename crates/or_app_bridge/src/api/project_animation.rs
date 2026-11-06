@@ -131,14 +131,13 @@ fn keyframes_from_view(
     let mut keyframes = keyframes
         .into_iter()
         .map(|keyframe| {
-            let easing = KeyframeEasing::parse(&keyframe.easing).ok_or_else(|| {
-                ProjectBridgeError {
+            let easing =
+                KeyframeEasing::parse(&keyframe.easing).ok_or_else(|| ProjectBridgeError {
                     code: "INVALID_KEYFRAME_EASING".to_owned(),
                     message: "keyframe easing must be linear, ease_in, ease_out or \
                               ease_in_out"
                         .to_owned(),
-                }
-            })?;
+                })?;
             Ok(Keyframe {
                 at: time_from_view(keyframe.at)?,
                 value: keyframe.value,

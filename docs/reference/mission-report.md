@@ -60,6 +60,24 @@ MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
   FFmpeg build (no `h264_qsv`), and no discrete NVIDIA/AMD device is available
   locally, so those paths are implemented and probed but not benchmarked.
 
+## Rust quality review
+
+Reviewed the new policy, keyframe and bridge code against the Rust API
+Guidelines and the `rust-review` checks, and fixed what had a real cost:
+
+- the frame loop skipped animation sampling entirely when a clip has no
+  keyframes, instead of walking six empty tracks per layer per frame;
+- a duplicated `#[allow(dead_code)]` on `AudioClip::playback_rate`;
+- `probe_decoders` sat after the test module in `or_media/src/decoder.rs`;
+- a nested `if` in the plan-note loop of `or_core/src/hardware.rs`;
+- `ProjectHostHandle::start_export` now states why it carries nine optional
+  arguments instead of silently tripping the lint.
+
+`cargo fmt --check` is clean. Default clippy on `or_core`, `or_media` and
+`or_app_bridge` leaves one pre-existing warning (`ClipSettings` variant size);
+the workspace-wide pedantic run is still noisy from older code and was not
+turned into a mass refactor.
+
 ## Remaining work
 
 The broader mission (perf audit of decode/composite/encode, 20-repo ideas,

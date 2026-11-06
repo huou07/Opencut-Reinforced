@@ -822,8 +822,7 @@ fn permille_between(start: RationalTime, end: RationalTime, at: RationalTime) ->
         return None;
     }
     let elapsed = at.checked_sub(start).ok()?;
-    let numerator =
-        i128::from(elapsed.numerator()) * i128::from(span.denominator()) * 1_000;
+    let numerator = i128::from(elapsed.numerator()) * i128::from(span.denominator()) * 1_000;
     let denominator = i128::from(span.numerator()) * i128::from(elapsed.denominator());
     if denominator == 0 {
         return None;

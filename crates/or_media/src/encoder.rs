@@ -290,9 +290,7 @@ fn encoder_answers(encoder: codec::Codec) -> bool {
 }
 
 /// Opens the encoder a plan selected, or fails with the gap the plan found.
-fn pick_h264_encoder(
-    plan: &or_core::ExportEncodingPlan,
-) -> Result<H264Pick, ExportEncodeError> {
+fn pick_h264_encoder(plan: &or_core::ExportEncodingPlan) -> Result<H264Pick, ExportEncodeError> {
     let Some(name) = plan.h264_encoder.as_deref() else {
         let mut message = format!(
             "this machine has no usable H.264 encoder (looked for {}), so MP4 \
@@ -452,9 +450,8 @@ pub fn probe_h264_encoders() -> Vec<or_core::EncoderCandidate> {
                     let opens = vaapi_answers();
                     (
                         opens,
-                        (!opens).then(|| {
-                            "the VAAPI device or its frame pool did not open".to_owned()
-                        }),
+                        (!opens)
+                            .then(|| "the VAAPI device or its frame pool did not open".to_owned()),
                     )
                 } else if !hardware_device_available(name) {
                     (
@@ -1467,8 +1464,8 @@ fn is_again(error: ffmpeg::Error) -> bool {
 #[cfg(test)]
 mod quality_tests {
     use super::{
-        ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES,
-        describe_export_capability, nvenc_preset, vaapi_quality, video_bitrate, vp9_settings,
+        ExportQuality, FfmpegExportProfile, H264_ENCODER_CANDIDATES, describe_export_capability,
+        nvenc_preset, vaapi_quality, video_bitrate, vp9_settings,
     };
 
     #[test]
