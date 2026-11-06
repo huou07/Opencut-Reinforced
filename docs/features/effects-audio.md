@@ -45,7 +45,7 @@ reused on a clip that already fades; the clipboard lives in the process and is
 never written to the project file. Graph editing and effect-parameter keyframes
 remain deferred.
 
-Verified 2026-11-07 at `37f39a67` (presets) and `4cf49782` (manual keyframes) on all three hosts with the `keyframes` UI
+Verified 2026-11-07 at `07d91f64` (timeline badge), `37f39a67` (presets) and `4cf49782` (manual keyframes) on all three hosts with the `keyframes` UI
 scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a
 Weston headless session on the Intel UHD 770 (Mesa GL), and Windows 11 in an
 interactive desktop session. The run selects a clip, reaches Animation, adds a
