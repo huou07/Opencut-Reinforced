@@ -387,16 +387,17 @@ which is now in the harness notes.
 |---|---|---|
 | `Opencut-Reinforced-0.1.19-arm64.dmg` | 37,668,553 | mounted `-readonly -nobrowse`; `Contents/MacOS/or version` → `Opencut Reinforced 0.1.19` |
 | `Opencut-Reinforced-0.1.19-linux-x64.deb` | 26,096,196 | `sudo dpkg -i` → `Setting up opencut-reinforced (0.1.19+ff8d52bff07c)`; `/opt/opencut-reinforced/or version` → 0.1.19 |
-| `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` | 28,637,395 | built and signed by the tag run; the Windows host went unreachable before it could be installed locally, so this asset is checksum-verified only |
+| `Opencut-Reinforced-0.1.19-windows-x64-setup.exe` | 28,637,395 | installed later from the published file once the host came back: `start /wait … /VERYSILENT` → exit 0, `%LOCALAPPDATA%\Programs\Opencut Reinforced\or.exe version` → `Opencut Reinforced 0.1.19`, `certutil -hashfile` = `db77e3d5…` = the `SHA256SUMS.txt` row |
 | `Opencut-Reinforced-0.1.19-windows-x64.zip` | 41,891,227 | same tag run |
 | `SHA256SUMS.txt` | 438 | `shasum -a 256 -c` → `OK` for all four assets |
 
 `gh release download v0.1.19` then `shasum -a 256 -c SHA256SUMS.txt` printed
 `OK` four times, so the bytes GitHub serves are the bytes the tag run produced.
-The Windows row is deliberately honest: the published installer was not installed
-on the local Windows host for this release because that host stopped answering
-on port 22 while the verification was in progress, and the previous release's
-identical installer path was exercised end to end at `v0.1.18`.
+The Windows row is honest about timing: the published installer could not be
+installed at publication because that host stopped answering on port 22. It was
+installed from the same published bytes on 2026-11-06 once the host returned
+(the machine had moved to a new address), and its hash equals the release's own
+`SHA256SUMS.txt` row, so the asset is proven rather than assumed.
 
 ## A batch import can be stopped, 2026-11-06
 
