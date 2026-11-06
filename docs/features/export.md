@@ -100,6 +100,13 @@ MOV, H.265/AV1 delivery and other hardware encoders remain future work gated on
 licence, platform and build-configuration review. The package build enables only
 the selected profile's muxer and encoders.
 
+## Verification
+
+`scripts/ui_scenarios/export-text.json` imports a clip, adds a title over it and
+exports an MP4 through the real dialog, so the composited conversion, encoder
+and job receipt are exercised together. It passes on macOS, Debian under Weston
+with a real Intel GPU, and Windows in an interactive session.
+
 ## Behaviour
 
 - Export captures one project revision and queues bounded background work with
