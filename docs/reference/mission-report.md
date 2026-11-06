@@ -59,6 +59,11 @@ host, and what remains unverified. Revision `bacf5cff`; branch
   keyframes journey edits a keyframe to Overshoot and reads
   `0.00s · 50.0% · Overshoot` back on the real inspector on macOS, Debian
   (Weston/Intel GPU) and Windows (interactive session).
+- **Templates on Home.** The four most-used starter shapes sit under Home's
+  quick actions with an "All templates" link, so a first-time user can start
+  from a real project shape without discovering the Library tab first. Picking
+  one reuses the ordinary create-project path, and the supplied overlays are
+  ordinary text clips. Proven by the `home-template` journey on all three hosts.
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.
@@ -82,7 +87,7 @@ Dart inside the existing architecture.
 
 | Host | Build | Rust tests | Flutter | UI journey | Packaged app |
 |---|---|---|---|---|---|
-| macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1; `or_cli` 45 semantic + 4 MCP | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json` PASS | PASS (debug; release build not re-taken this mission) |
+| macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1; `or_cli` 45 semantic + 4 MCP | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json`, `home-template.json` PASS | PASS (debug; release build not re-taken this mission) |
 | Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
 | Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
 

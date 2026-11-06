@@ -364,6 +364,11 @@ One near-term delivery mission for the local macOS app, in this order:
     core model, the CLI/MCP spelling, the inspector (six chips in the keyframe
     dialog) and export sampling. The `keyframes` journey edits a keyframe to
     Overshoot and reads `0.00s · 50.0% · Overshoot` back on macOS.
+47. **Templates on Home (2026-11-07).** Home gained a "Start from a template"
+    row (landscape, vertical, square, tutorial) plus "All templates"; picking
+    one reuses the create-project dialog with the name prefilled and no frame
+    rate question. The `home-template` journey passes on macOS, Debian and
+    Windows.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
