@@ -1570,6 +1570,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                 busy: widget.busy,
                 sequenceFrameRate: _previewState.value?.sequenceFrameRate,
                 contentEnd: _previewState.value?.contentEnd,
+                playhead: _previewState.value?.position,
                 trackCount: widget.timelineTracks?.items.length ?? 0,
                 clipCount: widget.timelineClipPages.values.fold<int>(
                   0,

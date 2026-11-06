@@ -809,6 +809,36 @@ class ProjectClipAnimation {
       scaleYMilli.isEmpty &&
       rotationMilliDegrees.isEmpty;
 
+  /// The animation a Copy action put on the clip clipboard.
+  ///
+  /// Deliberately process-local: a copied animation is a starting point for
+  /// another clip in the same session, not a document, and a stale clipboard
+  /// from a different project could paste values the target clip cannot hold.
+  static ProjectClipAnimation? copied;
+
+  /// Replaces only the channels that have keyframes in `source`.
+  ProjectClipAnimation pasteChannelsFrom(ProjectClipAnimation source) =>
+      copyWith(
+        opacityBasisPoints: source.opacityBasisPoints.isEmpty
+            ? opacityBasisPoints
+            : source.opacityBasisPoints,
+        xMilliCanvas: source.xMilliCanvas.isEmpty
+            ? xMilliCanvas
+            : source.xMilliCanvas,
+        yMilliCanvas: source.yMilliCanvas.isEmpty
+            ? yMilliCanvas
+            : source.yMilliCanvas,
+        scaleXMilli: source.scaleXMilli.isEmpty
+            ? scaleXMilli
+            : source.scaleXMilli,
+        scaleYMilli: source.scaleYMilli.isEmpty
+            ? scaleYMilli
+            : source.scaleYMilli,
+        rotationMilliDegrees: source.rotationMilliDegrees.isEmpty
+            ? rotationMilliDegrees
+            : source.rotationMilliDegrees,
+      );
+
   ProjectClipAnimation copyWith({
     List<ProjectKeyframe>? opacityBasisPoints,
     List<ProjectKeyframe>? xMilliCanvas,

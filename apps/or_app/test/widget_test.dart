@@ -7629,6 +7629,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('copying an animation pastes it onto another clip', (
+    tester,
+  ) async {
+    ProjectClipAnimation.copied = null;
+    final gateway = _FakeProjectGateway()
+      ..lastAnimation = ProjectClipAnimation(
+        opacityBasisPoints: [
+          ProjectKeyframe(
+            at: ProjectRationalTime(BigInt.zero, 1),
+            value: 5000,
+          ),
+        ],
+      );
+    final view = ProjectReadModel(
+      projectId: 'project-id',
+      projectInstanceId: 'instance-id',
+      revision: BigInt.zero,
+      name: 'Animation',
+      dirty: false,
+      descriptorPath: '/tmp/or-animation.json',
+    );
+    final session = _FakeSession('/tmp/or-animation.orproj', view);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClipAnimationPanel(
+            gateway: gateway,
+            session: session,
+            project: view,
+            trackId: 'track-1',
+            clipId: 'clip-1',
+            clipStart: ProjectRationalTime(BigInt.zero, 1),
+            clipDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('animation-copy')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('animation-clear')));
+    await tester.pumpAndSettle();
+    expect(gateway.lastAnimation.isEmpty, isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('animation-paste')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAnimationCalls, 2);
+    expect(gateway.lastAnimation.opacityBasisPoints, hasLength(1));
+    expect(gateway.lastAnimation.opacityBasisPoints.single.value, 5000);
+    ProjectClipAnimation.copied = null;
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a motion preset writes editable keyframes', (tester) async {
     final gateway = _FakeProjectGateway();
     final view = ProjectReadModel(

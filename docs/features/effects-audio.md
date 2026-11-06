@@ -33,8 +33,13 @@ Four motion presets write ordinary keyframes through the same command: Fade in
 (opacity), Slide up (position), Zoom in (scale) and Pop (a short scale bump).
 A preset replaces the keyframes on the channels it animates and leaves the rest
 alone, so it is a starting point that the chips can then be edited or cleared;
-the project file stores keyframes, never a preset name. Graph editing and
-effect-parameter keyframes remain deferred.
+the project file stores keyframes, never a preset name.
+
+Copy animation and Paste animation carry a clip's keyframes to another clip.
+Paste replaces only the channels the copied animation has, so a slide can be
+reused on a clip that already fades; the clipboard lives in the process and is
+never written to the project file. Graph editing and effect-parameter keyframes
+remain deferred.
 
 Verified 2026-11-07 at `37f39a67` (presets) and `4cf49782` (manual keyframes) on all three hosts with the `keyframes` UI
 scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a

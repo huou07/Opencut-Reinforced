@@ -235,13 +235,45 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
           style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
         ),
         const SizedBox(height: OrSpacing.x1),
-        Text(
-          'MOTION PRESETS',
-          style: TextStyle(
-            color: OrColors.textMuted,
-            fontSize: OrType.tinySize,
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'MOTION PRESETS',
+                style: TextStyle(
+                  color: OrColors.textMuted,
+                  fontSize: OrType.tinySize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('animation-copy'),
+              onPressed: _animation.isEmpty
+                  ? null
+                  : () {
+                      ProjectClipAnimation.copied = _animation;
+                      setState(() {});
+                    },
+              child: const Text('Copy'),
+            ),
+            TextButton(
+              key: const ValueKey('animation-paste'),
+              onPressed:
+                  widget.enabled &&
+                      !_saving &&
+                      ProjectClipAnimation.copied != null
+                  ? () => unawaited(
+                      _save(
+                        _animation.pasteChannelsFrom(
+                          ProjectClipAnimation.copied!,
+                        ),
+                      ),
+                    )
+                  : null,
+              child: const Text('Paste'),
+            ),
+          ],
         ),
         const SizedBox(height: OrSpacing.x1),
         Wrap(
