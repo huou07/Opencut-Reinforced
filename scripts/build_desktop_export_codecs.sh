@@ -222,7 +222,7 @@ else
   "$vpx_source/configure" "${vpx_configure_args[@]}"
 fi
 if [[ "$platform" == macos && -f Makefile ]]; then make clean; fi
-make -j2
+make -j"${OR_BUILD_JOBS:-2}"
 make install
 
 if [[ "$platform" == windows ]]; then
@@ -275,7 +275,7 @@ if [[ "$platform" == linux ]]; then
     --enable-pic \
     --disable-cli \
     --disable-opencl
-  make -j2
+  make -j"${OR_BUILD_JOBS:-2}"
   make install
   test -f "$prefix/lib/libx264.a"
   test -f "$prefix/lib/pkgconfig/x264.pc"

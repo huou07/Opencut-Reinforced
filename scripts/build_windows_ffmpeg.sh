@@ -145,7 +145,7 @@ if ! grep -Eq '^#define CONFIG_LIBVPX_VP9_ENCODER 1$' config_components.h; then
   grep -n -B 8 -A 16 -i -E 'libvpx_vp9_encoder|vpx_codec_vp9_cx|VPX_IMG_FMT_HIGHBITDEPTH|vpxmd|LNK[0-9]{4}' ffbuild/config.log | tail -n 180 || true
   exit 1
 fi
-make -j2
+make -j"${OR_BUILD_JOBS:-2}"
 make install
 # The install bin directory holds helper DLLs. Exercise the actual
 # reviewed operations before testing the app-relative package.

@@ -156,7 +156,7 @@ export PKG_CONFIG_PATH="$work/ffmpeg-codecs/lib/pkgconfig"
 cd "$source"
 if [[ -f ffbuild/config.mak ]]; then make clean; fi
 ./configure "${configure_args[@]}"
-make -j2
+make -j"${OR_BUILD_JOBS:-2}"
 make install
 
 # The bundle must carry the license texts for everything statically linked into
