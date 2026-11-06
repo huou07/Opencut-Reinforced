@@ -3,7 +3,7 @@
 Last reviewed: 2026-11-07
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
-parity, clip keyframes and motion presets) shipped, what was verified on each
+parity, clip keyframes, motion presets and agent animation verbs) shipped, what was verified on each
 host, and what remains unverified. Revision `bacf5cff`; branch
 `mission/hardware-profiles-and-polish`.
 
@@ -32,6 +32,11 @@ host, and what remains unverified. Revision `bacf5cff`; branch
 - **Motion presets.** Fade in, Slide up, Zoom in and Pop write ordinary
   keyframes through the same animation command, so a preset is a starting point
   whose chips stay editable and the project file never stores a preset name.
+- **Agent animation verbs.** `or timeline add-keyframe` (channel, exact offset,
+  value, easing) and `or timeline clear-animation` write the same clip update as
+  the inspector, and re-adding an offset replaces that keyframe instead of
+  duplicating it. The MCP server exposes `add_keyframe` and `clear_animation`, so
+  an agent can build a title animation the same way a person does.
 - **Timeline discoverability.** A clip with keyframes shows a diamond badge in
   its timeline block and says "animated" in its accessibility label, so the
   feature is visible without opening the inspector. Verified at `07d91f64` on

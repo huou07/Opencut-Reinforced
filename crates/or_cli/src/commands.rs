@@ -1,17 +1,17 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipContent, ClipId, ClipSettings,
-    CommandEnvelope, CommandResult, EffectReference, ExportProfile, ExportQuality, ExportRequest,
-    ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
-    MAX_TIMELINE_CLIP_PAGE_SIZE, MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem,
-    MotionMaterializeRequest, Opacity, OperationError, ProjectFileMediaImportError,
-    ProjectFileMediaRelinkError, ProjectFileSession, ProjectFileSessionError, QueryEnvelope,
-    QueryResult, RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason,
-    RecoveryInspection, SequenceCanvas, TextAlignment, TextBackground, TextColor, TextFormatting,
-    TextVerticalAnchor, TextWeight, TimelineClipState, TrackId, TrackKind, TrackState,
-    TranscriptionRequest, TranscriptionResponse, TransitionKind, TransitionReference,
-    VisualSettings, apply_project_recovery, command_catalog, discard_project_recovery,
-    encode_caption_file, inspect_project_recovery, parse_caption_file, prepare_media_import,
-    query_catalog,
+    ApplicationRequest, ApplicationResponse, CaptionFileFormat, ClipAnimation, ClipContent, ClipId,
+    ClipSettings, CommandEnvelope, CommandResult, EffectReference, ExportProfile, ExportQuality,
+    ExportRequest, ExportResponse, FontIdentity, ImportedCaption, JobId, JobSnapshot, JobState,
+    Keyframe, KeyframeEasing, KeyframeTrack, MAX_TIMELINE_CLIP_PAGE_SIZE,
+    MAX_TIMELINE_MARKER_PAGE_SIZE, MarkerId, MediaId, MediaItem, MotionMaterializeRequest, Opacity,
+    OperationError, ProjectFileMediaImportError, ProjectFileMediaRelinkError, ProjectFileSession,
+    ProjectFileSessionError, QueryEnvelope, QueryResult, RationalRate, RationalTime,
+    RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, SequenceCanvas,
+    TextAlignment, TextBackground, TextColor, TextFormatting, TextVerticalAnchor, TextWeight,
+    TimelineClipState, TrackId, TrackKind, TrackState, TranscriptionRequest, TranscriptionResponse,
+    TransitionKind, TransitionReference, VisualSettings, apply_project_recovery, command_catalog,
+    discard_project_recovery, encode_caption_file, inspect_project_recovery, parse_caption_file,
+    prepare_media_import, query_catalog,
 };
 use or_ipc::{
     ApplicationSuccess, DescribeResponse, IpcErrorCode, IpcProtocolError, LocalIpcClient,
@@ -2613,6 +2613,114 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
                 Some(("clip_id", clip_id.to_string())),
             ))
         }
+        "add-keyframe" => {
+            let options = Options::parse(
+                action_args,
+                &[
+                    "--project",
+                    "--attach",
+                    "--clip",
+                    "--channel",
+                    "--at",
+                    "--value",
+                    "--easing",
+                ],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let (_, kind, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            if kind == TrackKind::Audio {
+                return Err(CliError::usage(
+                    json,
+                    "animation applies to video, text and caption clips",
+                ));
+            }
+            let ClipSettings::Visual(mut visual) = clip.settings.clone() else {
+                return Err(CliError::usage(json, "this clip has no visual settings"));
+            };
+            let channel = required_name(&options, "--channel", json)?;
+            let Some(track) = animation_track(&mut visual.animation, &channel) else {
+                return Err(CliError::usage(
+                    json,
+                    "--channel must be opacity, x, y, scale_x, scale_y or rotation",
+                ));
+            };
+            let at = parse_cli_rational(&required_name(&options, "--at", json)?, "--at", json)?;
+            let value = optional_i32(&options, "--value", json)?
+                .ok_or_else(|| CliError::usage(json, "--value is required for a keyframe"))?;
+            let easing = match options.value("--easing").and_then(|value| value.to_str()) {
+                None => KeyframeEasing::Linear,
+                Some(name) => KeyframeEasing::parse(name).ok_or_else(|| {
+                    CliError::usage(
+                        json,
+                        "--easing must be linear, ease_in, ease_out or ease_in_out",
+                    )
+                })?,
+            };
+            upsert_keyframe(&mut track.keyframes, Keyframe { at, value, easing });
+            let result = send_clip_update(
+                &path,
+                attached,
+                &clip,
+                clip.content.clone(),
+                ClipSettings::Visual(visual),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
+        "clear-animation" => {
+            let options = Options::parse(
+                action_args,
+                &["--project", "--attach", "--clip", "--channel"],
+                &[],
+                json,
+            )?;
+            let (path, attached) = media_project_path(&options, json)?;
+            let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
+            let (_, kind, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            if kind == TrackKind::Audio {
+                return Err(CliError::usage(
+                    json,
+                    "animation applies to video, text and caption clips",
+                ));
+            }
+            let ClipSettings::Visual(mut visual) = clip.settings.clone() else {
+                return Err(CliError::usage(json, "this clip has no visual settings"));
+            };
+            match options.value("--channel").and_then(|value| value.to_str()) {
+                None => visual.animation = ClipAnimation::default(),
+                Some(channel) => {
+                    let Some(track) = animation_track(&mut visual.animation, channel) else {
+                        return Err(CliError::usage(
+                            json,
+                            "--channel must be opacity, x, y, scale_x, scale_y or rotation",
+                        ));
+                    };
+                    track.keyframes.clear();
+                }
+            }
+            let result = send_clip_update(
+                &path,
+                attached,
+                &clip,
+                clip.content.clone(),
+                ClipSettings::Visual(visual),
+                json,
+            )?;
+            Ok(render_timeline_command(
+                &result,
+                attached,
+                json,
+                Some(("clip_id", clip_id.to_string())),
+            ))
+        }
         "set-clip-audio" => {
             let options = Options::parse(
                 action_args,
@@ -4872,6 +4980,33 @@ fn parse_cli_rate(value: &str, flag: &str, json: bool) -> Result<RationalRate, C
     let numerator = numerator.parse::<u32>().map_err(|_| invalid())?;
     let denominator = denominator.parse::<u32>().map_err(|_| invalid())?;
     RationalRate::new(numerator, denominator).map_err(|_| invalid())
+}
+
+/// The keyframe channel a CLI name selects, in the order the inspector shows.
+fn animation_track<'a>(
+    animation: &'a mut ClipAnimation,
+    channel: &str,
+) -> Option<&'a mut KeyframeTrack> {
+    match channel {
+        "opacity" => Some(&mut animation.opacity_basis_points),
+        "x" => Some(&mut animation.x_milli_canvas),
+        "y" => Some(&mut animation.y_milli_canvas),
+        "scale_x" => Some(&mut animation.scale_x_milli),
+        "scale_y" => Some(&mut animation.scale_y_milli),
+        "rotation" => Some(&mut animation.rotation_milli_degrees),
+        _ => None,
+    }
+}
+
+/// Inserts a keyframe in time order, replacing one already at the same time.
+///
+/// An agent that retries a command produces the same project, and a person
+/// editing a value at the same offset does not accumulate duplicates.
+fn upsert_keyframe(keyframes: &mut Vec<Keyframe>, keyframe: Keyframe) {
+    match keyframes.binary_search_by(|probe| probe.at.cmp(&keyframe.at)) {
+        Ok(index) => keyframes[index] = keyframe,
+        Err(index) => keyframes.insert(index, keyframe),
+    }
 }
 
 fn rational_value(value: RationalTime) -> Value {

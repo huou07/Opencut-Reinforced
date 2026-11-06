@@ -1232,10 +1232,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if !width.is_multiple_of(4) {
             return self.readback_texture_nv12_passes(&source_view, size);
         }
-        match self
-            .nv12_mode
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
+        match self.nv12_mode.load(std::sync::atomic::Ordering::Relaxed) {
             1 => self.readback_texture_nv12_compute(&source_view, size),
             2 => self.readback_texture_nv12_passes(&source_view, size),
             _ => {

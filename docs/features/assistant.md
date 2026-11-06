@@ -94,6 +94,7 @@ fallback:
 | `captions transcribe` | `captions_transcribe` | local multilingual transcript proposal; review before applying |
 | `timeline import-captions` | — | apply a reviewed SRT/WebVTT file as a new caption track |
 | `timeline set-clip-visual`, `set-clip-audio`, `set-clip-playback` | `set_clip_visual`, `set_clip_audio`, `set_clip_playback` | transform, crop, opacity, effects, transitions, gain, pan, fades, speed, reverse, freeze |
+| `timeline add-keyframe`, `timeline clear-animation` | `add_keyframe`, `clear_animation` | animate transform and opacity channels with exact offsets and easings; re-adding an offset replaces it |
 | `timeline set-canvas`, `timeline move-clips` | `set_canvas`, `move_clips` | sequence shape and one-command group moves |
 | `media get` | `media_get` | one media item by id with its probe metadata |
 | `captions export` | `captions_export` | write every caption clip as SRT or WebVTT |

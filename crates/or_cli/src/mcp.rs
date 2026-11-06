@@ -217,6 +217,8 @@ impl Server {
             "set_clip_visual" => self.set_clip_visual(arguments),
             "set_clip_audio" => self.set_clip_audio(arguments),
             "set_clip_playback" => self.set_clip_playback(arguments),
+            "add_keyframe" => self.add_keyframe(arguments),
+            "clear_animation" => self.clear_animation(arguments),
             "move_clips" => self.move_clips(arguments),
             "captions_export" => self.captions_export(arguments),
             "export_start" => self.export_start(arguments),
@@ -985,6 +987,39 @@ impl Server {
         self.run_or_owned(&args).and_then(pretty)
     }
 
+    fn add_keyframe(&self, arguments: &Value) -> Result<String, String> {
+        let clip_id = required_str(arguments, "clip_id")?;
+        let mut args = vec![
+            "timeline".to_owned(),
+            "add-keyframe".to_owned(),
+            "--clip".to_owned(),
+            clip_id,
+        ];
+        append_options(
+            &mut args,
+            arguments,
+            &[
+                ("channel", "--channel"),
+                ("at", "--at"),
+                ("value", "--value"),
+                ("easing", "--easing"),
+            ],
+        )?;
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
+    fn clear_animation(&self, arguments: &Value) -> Result<String, String> {
+        let clip_id = required_str(arguments, "clip_id")?;
+        let mut args = vec![
+            "timeline".to_owned(),
+            "clear-animation".to_owned(),
+            "--clip".to_owned(),
+            clip_id,
+        ];
+        append_options(&mut args, arguments, &[("channel", "--channel")])?;
+        self.run_or_owned(&args).and_then(pretty)
+    }
+
     fn set_clip_audio(&self, arguments: &Value) -> Result<String, String> {
         let clip_id = required_str(arguments, "clip_id")?;
         let mut args = vec![
@@ -1580,6 +1615,25 @@ fn tool_definitions() -> Value {
                 "rate": {"type": "string"},
                 "reversed": {"type": "boolean"},
                 "frozen": {"type": "boolean"}
+            }), &["clip_id"]),
+        },
+        {
+            "name": "add_keyframe",
+            "description": "Add a keyframe to a clip channel, or replace the keyframe already at that offset. Channel is opacity (basis points), x/y (milli-canvas), scale_x/scale_y (milli) or rotation (milli-degrees). The offset is measured from the clip start; a clip samples its nearest keyframe before the first and after the last. Call timeline_overview or get the clip settings first so values stay in range.",
+            "inputSchema": object_schema(json!({
+                "clip_id": {"type": "string"},
+                "channel": {"type": "string", "enum": ["opacity", "x", "y", "scale_x", "scale_y", "rotation"]},
+                "at": {"type": "string", "description": "Offset from the clip start as exact NUM/DEN seconds or decimal seconds, e.g. 0.5."},
+                "value": {"type": ["number", "string"]},
+                "easing": {"type": "string", "enum": ["linear", "ease_in", "ease_out", "ease_in_out"]}
+            }), &["clip_id", "channel", "at", "value"]),
+        },
+        {
+            "name": "clear_animation",
+            "description": "Remove every keyframe from a clip, or only one channel when channel is passed. The clip's static transform and opacity stay as they are.",
+            "inputSchema": object_schema(json!({
+                "clip_id": {"type": "string"},
+                "channel": {"type": "string", "enum": ["opacity", "x", "y", "scale_x", "scale_y", "rotation"]}
             }), &["clip_id"]),
         },
         {

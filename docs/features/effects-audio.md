@@ -61,7 +61,7 @@ a script. New effects require a typed parameter contract and render-path work.
 
 ## Agent surface
 
-`or timeline set-clip-visual|set-clip-audio|set-clip-playback` writes these
+`or timeline set-clip-visual|set-clip-audio|set-clip-playback|add-keyframe|clear-animation` writes these
 fields through `timeline.clip.update`, the same command the inspector uses, so a
 CLI edit cannot produce state the UI rejects. The CLI names the model's units
 (milli-canvas, milli-degrees, basis points, millidecibels) and takes transitions

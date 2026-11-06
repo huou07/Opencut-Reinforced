@@ -180,6 +180,8 @@ fn mcp_lists_tools_and_edits_the_live_project() {
         "set_clip_visual",
         "set_clip_audio",
         "set_clip_playback",
+        "add_keyframe",
+        "clear_animation",
         "move_clips",
         "captions_export",
         "export_start",
@@ -205,16 +207,20 @@ fn mcp_lists_tools_and_edits_the_live_project() {
         serde_json::from_str(&mcp.call("add_track", json!({"kind": "text"})).unwrap()).unwrap();
     let track_id = added["track_id"].as_str().expect("track id").to_owned();
 
-    mcp.call(
-        "insert_text",
-        json!({
-            "track_id": track_id,
-            "text": "Hello from the assistant",
-            "at": "1.5",
-            "duration": "2",
-        }),
+    let inserted: Value = serde_json::from_str(
+        &mcp.call(
+            "insert_text",
+            json!({
+                "track_id": track_id,
+                "text": "Hello from the assistant",
+                "at": "1.5",
+                "duration": "2",
+            }),
+        )
+        .expect("insert text"),
     )
-    .expect("insert text");
+    .unwrap();
+    let animated_clip = inserted["clip_id"].as_str().expect("clip id").to_owned();
 
     mcp.call("add_marker", json!({"at": "2", "label": "AI marker"}))
         .expect("add marker");
@@ -238,6 +244,35 @@ fn mcp_lists_tools_and_edits_the_live_project() {
         settings["timeline_sequence_settings"]["sequence_canvas"]["width"],
         1920
     );
+
+    // Keyframes are a first-class tool so an agent can animate, not only place clips.
+    let keyframe: Value = serde_json::from_str(
+        &mcp.call(
+            "add_keyframe",
+            json!({
+                "clip_id": animated_clip,
+                "channel": "opacity",
+                "at": "0/1",
+                "value": 0,
+                "easing": "ease_out",
+            }),
+        )
+        .expect("add keyframe"),
+    )
+    .unwrap();
+    assert_eq!(keyframe["clip_id"], animated_clip);
+    mcp.call(
+        "add_keyframe",
+        json!({
+            "clip_id": animated_clip,
+            "channel": "opacity",
+            "at": "1/1",
+            "value": 10000,
+        }),
+    )
+    .expect("second keyframe");
+    mcp.call("clear_animation", json!({"clip_id": animated_clip}))
+        .expect("clear animation");
 
     let error = mcp
         .call(

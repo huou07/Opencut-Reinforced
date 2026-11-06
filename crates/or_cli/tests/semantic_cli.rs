@@ -1,9 +1,9 @@
 use or_core::{
     ApplicationRequest, ApplicationResponse, ClipId, ClipSettings, CommandEnvelope, JobId,
-    JobState, MarkerId, MediaId, MotionMaterializeRequest, MotionMaterializeResponse,
-    ProjectDocument, ProjectFileSession, ProjectRevision, ProjectSession, QueryResult,
-    RationalTime, SequenceCanvas, TrackId, TrackKind, TranscriptionJobView,
-    TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
+    JobState, KeyframeEasing, MarkerId, MediaId, MotionMaterializeRequest,
+    MotionMaterializeResponse, ProjectDocument, ProjectFileSession, ProjectRevision,
+    ProjectSession, QueryResult, RationalTime, SequenceCanvas, TrackId, TrackKind,
+    TranscriptionJobView, TranscriptionProposalView, TranscriptionRequest, TranscriptionResponse,
     TranscriptionSegmentView, TransitionKind, load_project_file, save_project_file_atomic,
     write_recovery_checkpoint,
 };
@@ -206,10 +206,11 @@ fn paths_args(before: &[&str], paths: &[(&str, &Path)], after: &[&str]) -> Vec<O
 }
 
 fn json_success(args: impl IntoIterator<Item = OsString>) -> (Value, Output) {
-    let output = cli(args);
+    let args: Vec<OsString> = args.into_iter().collect();
+    let output = cli(args.clone());
     assert!(
         output.status.success(),
-        "expected success, stdout: {}, stderr: {}",
+        "expected success for {args:?}, stdout: {}, stderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
@@ -3757,6 +3758,137 @@ fn headless_canvas_and_clip_settings_round_trip() {
     };
     assert!(visual_settings.effects.is_empty());
     assert!(visual_settings.transition_in.is_none());
+}
+
+#[test]
+fn headless_keyframes_merge_replace_and_clear() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    create_project(&path, "Keyframes");
+
+    let track_id = TrackId::generate();
+    let clip_id = ClipId::generate();
+    add_track(&path, "text", track_id);
+    insert_text_clip(&path, track_id, clip_id, "0/1", "4/1", "Title");
+
+    for (at, value, easing) in [("0/1", "0", "ease_out"), ("2/1", "10000", "linear")] {
+        json_success(timeline_args(
+            &path,
+            &[
+                "add-keyframe",
+                "--clip",
+                &clip_id.to_string(),
+                "--channel",
+                "opacity",
+                "--at",
+                at,
+                "--value",
+                value,
+                "--easing",
+                easing,
+            ],
+        ));
+    }
+    // Re-adding the same offset replaces the value instead of duplicating it.
+    json_success(timeline_args(
+        &path,
+        &[
+            "add-keyframe",
+            "--clip",
+            &clip_id.to_string(),
+            "--channel",
+            "opacity",
+            "--at",
+            "2/1",
+            "--value",
+            "9000",
+        ],
+    ));
+
+    let project = load_project_file(&path).unwrap();
+    let clip = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.id() == track_id)
+        .unwrap()
+        .clips()
+        .iter()
+        .find(|clip| clip.id() == clip_id)
+        .unwrap();
+    let ClipSettings::Visual(visual) = clip.settings() else {
+        panic!("text clips carry visual settings");
+    };
+    let keyframes = &visual.animation.opacity_basis_points.keyframes;
+    assert_eq!(keyframes.len(), 2);
+    assert_eq!(keyframes[0].at, RationalTime::ZERO);
+    assert_eq!(keyframes[0].value, 0);
+    assert_eq!(keyframes[0].easing, KeyframeEasing::EaseOut);
+    assert_eq!(keyframes[1].at, RationalTime::new(2, 1).unwrap());
+    assert_eq!(keyframes[1].value, 9000);
+    assert_eq!(keyframes[1].easing, KeyframeEasing::Linear);
+
+    json_success(timeline_args(
+        &path,
+        &[
+            "add-keyframe",
+            "--clip",
+            &clip_id.to_string(),
+            "--channel",
+            "scale_x",
+            "--at",
+            "0/1",
+            "--value",
+            "1000",
+        ],
+    ));
+    json_success(timeline_args(
+        &path,
+        &[
+            "clear-animation",
+            "--clip",
+            &clip_id.to_string(),
+            "--channel",
+            "opacity",
+        ],
+    ));
+
+    let project = load_project_file(&path).unwrap();
+    let clip = project
+        .timeline()
+        .tracks()
+        .iter()
+        .find(|track| track.id() == track_id)
+        .unwrap()
+        .clips()
+        .iter()
+        .find(|clip| clip.id() == clip_id)
+        .unwrap();
+    let ClipSettings::Visual(visual) = clip.settings() else {
+        panic!("text clips carry visual settings");
+    };
+    assert!(visual.animation.opacity_basis_points.keyframes.is_empty());
+    assert_eq!(visual.animation.scale_x_milli.keyframes.len(), 1);
+    assert_eq!(visual.opacity.basis_points, 10_000);
+
+    assert_cli_error(
+        timeline_args(
+            &path,
+            &[
+                "add-keyframe",
+                "--clip",
+                &clip_id.to_string(),
+                "--channel",
+                "bogus",
+                "--at",
+                "0/1",
+                "--value",
+                "1",
+            ],
+        ),
+        2,
+        "channel",
+    );
 }
 
 #[test]
