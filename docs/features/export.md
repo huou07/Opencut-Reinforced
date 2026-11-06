@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-07
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -29,12 +29,42 @@ without a platform branch in the profile code. Every package also carries AAC.
 The same probe answers the UI: `or_media::describe_export_capability` reports
 which profiles this build can write and which encoder it would use, the bridge
 exposes it as `export_capabilities()`, and the app reads it once per launch.
+The richer `or_media::probe_h264_encoders` report records every candidate the
+build carries, whether it opened and why not, together with the decoders, the
+GPU adapter and the backend the preview device uses; Settings → Performance
+shows it and the export dialog names the planned encoder.
 Consequences in the surface: the Export dialog lists only formats whose encoder
 opens, starts on the engine's preferred profile instead of a hardcoded platform
 default, and shows a warning line when MP4 is missing; Settings → Resources
 lists MP4/WebM/lossless as Ready or Unavailable with the encoder name. A build
 whose only working encoder is FFV1 says so rather than offering an MP4 export
 that would fail.
+
+### Performance profiles
+
+The candidate walk above is the default, not the only path. Settings →
+Performance offers four profiles, and the export dialog can change the profile
+for one file:
+
+- `recommended` — the first candidate that opened, hardware first.
+- `maximum_performance` — the same order, and new exports start on the `speed`
+  quality preset so the choice is visible in the file too.
+- `balanced` — the operating-system encoder (VideoToolbox, Media Foundation or
+  VAAPI) before vendor drivers, because vendor encoders vary more between driver
+  versions.
+- `compatibility` — software only, for a driver that crashes or writes files
+  that will not play. It uses the first software encoder; when no software
+  H.264 encoder opened at all it takes the only encoder that did and records
+  that as a note rather than refusing to export.
+
+An advanced encoder override wins over the profile. If the named encoder did not
+open, the job falls back to one that did and records the reason; it does not fail
+on the name. `or_core::hardware::plan_h264_encoding` owns the policy,
+`or_media::probe_h264_encoders` supplies the facts, and the bridge exposes
+`performance_report()` and `encoding_plan()`. The decision travels on
+`ExportRequest::Start.performance`, so the writer resolves it once when the job
+starts and nothing re-probes inside the frame loop. A profile is a preference,
+not a promise: every profile still requires an encoder that opened here.
 
 The quality preference reaches the hardware encoder too: a `Quality` export sets
 the NVENC preset to `p5` and a `Speed` export to `p2`, so the choice trades time
@@ -119,6 +149,10 @@ the selected profile's muxer and encoders.
   bridge takes it as an optional argument so an old caller keeps compiling.
 - The chosen resolution is applied once to the output frame size; the project
   canvas and clip transforms are not rewritten by an export.
+- The performance profile and an optional encoder name are optional fields on
+  `ExportRequest::Start`. An older client that omits them gets `recommended`
+  and the candidate walk; a name that cannot open is a recorded fallback, not a
+  failed request. Settings persists the choice in `editor-settings.json`.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.

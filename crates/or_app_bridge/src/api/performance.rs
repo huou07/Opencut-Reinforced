@@ -192,4 +192,3 @@ fn adapter_columns(
         None,
     )
 }
-

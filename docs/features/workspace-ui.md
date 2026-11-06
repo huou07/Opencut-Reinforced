@@ -1,6 +1,6 @@
 # Feature — Workspace and UI Shell
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-07
 
 Scope: the application shell, where controls live, and the interaction rules the
 UI must keep. Visual language is in [design/design-language.md](../design/design-language.md);
@@ -129,6 +129,17 @@ is missing.
   **Export formats** (MP4/WebM/lossless as Ready or Unavailable, naming the
   encoder this build would use). Both read the engine and the host; neither
   keeps its own list of what "should" work.
+- **Settings → Performance** answers what this machine can encode and lets the
+  person choose how. It reports the processor, the GPU adapter and backend the
+  preview device actually opened (or why none did), the decoders this build
+  carries, and every H.264 candidate with whether it opened; then offers
+  Recommended, Maximum performance, Balanced and Compatibility, an encoder
+  override, and Reset to recommended. The plan line names the chosen encoder
+  and any fallback, so a profile never claims acceleration that was not
+  measured. The export dialog shows the same profile row and the encoder the
+  file will use. It sits beside Resources rather than inside it: Resources asks
+  whether the installation is complete, Performance asks how work should run.
+
   Optional components follow one lifecycle: **install** downloads a pinned asset
   after showing its source, version, licence, size and checksum; **repair**
   reinstalls over a half-installed folder; **remove** deletes only the files the
