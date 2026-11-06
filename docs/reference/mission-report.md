@@ -87,9 +87,9 @@ Dart inside the existing architecture.
 
 | Host | Build | Rust tests | Flutter | UI journey | Packaged app |
 |---|---|---|---|---|---|
-| macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1; `or_cli` 45 semantic + 4 MCP | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json`, `home-template.json` PASS | PASS (debug; release build not re-taken this mission) |
-| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
-| Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
+| macOS M5 (Metal, VideoToolbox) | PASS | workspace lib tests 706 pass / 10 ignored (incl. `or_core` 398, `or_render` 52, `or_media` 23, `or_app_bridge` 57); `or_cli` 45 semantic + 4 MCP | analyze clean, 526 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json`, `home-template.json`, `export-text.json` PASS | PASS (debug; release build not re-taken this mission) |
+| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `cargo check --workspace --all-targets` at `20543449`; `or_core` timeline 77; `or_render` NV12 4; `or_cli` keyframe verb | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, `home-template.json`, `export-text.json` PASS | PASS (debug) |
+| Windows 11 (Vulkan preview, Media Foundation) | PASS | `cargo check --workspace --all-targets` at `20543449`; `or_render` NV12 5; `or_core` hardware 11 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, `home-template.json`, `export-text.json` PASS | PASS (`or_app.exe` window, title, screenshot) |
 
 Benchmarks at this revision (300 frames, idle): macOS MP4 239.6/245.6 fps, MP4 +
 one text layer 240.4/234.7 fps, animated scale 238.9/243.8 fps — within the
@@ -119,12 +119,13 @@ iGPU. Rows in [export-performance.md](export-performance.md).
   real dialog on all three hosts (`scripts/ui_scenarios/export-text.json`, 30
   steps, receipt screenshot): macOS, Debian under Weston on the Intel UHD 770 and
   Windows in an interactive session.
-- **PASS** — all three checkouts build and run at `6072a678` and the core
-  editing and export workflows still pass their tests.
-- **PASS (macOS, Debian)** — an export with animated scale keyframes
-  (`OR_BENCH_ANIM=1`) matches the static row (macOS 238.9/243.8 vs 239.6/245.6;
-  Debian 260.6 video and 96.7–119.2 with text). The Windows animated row remains
-  **UNVERIFIED**.
+- **PASS** — all three checkouts build and run at `20543449` (`cargo check
+  --workspace --all-targets` on Debian and Windows, workspace lib tests on
+  macOS) and the core editing and export workflows still pass their tests.
+- **PASS (all three)** — an export with animated scale keyframes
+  (`OR_BENCH_ANIM=1`) stays inside the static spread: macOS 238.9/243.8 vs
+  239.6/245.6; Debian 260.6 video and 96.7–119.2 with text; Windows 126.9 video
+  and 80.0 with text vs 78.8–88.0 static.
 - **PASS (Debian)** — the video-only full pipeline improved from 225 to
   256–261 fps at this revision; the text row is readback-bound and documented.
 - **PASS (Windows)** — full MP4 improved from 121 to 127–129 fps, render-only
@@ -133,6 +134,21 @@ iGPU. Rows in [export-performance.md](export-performance.md).
 - **BLOCKED by hardware** — oneVPL/Quick Sync is absent from every packaged
   FFmpeg build (no `h264_qsv`), and no discrete NVIDIA/AMD device is available
   locally, so those paths are implemented and probed but not benchmarked.
+
+## Closing verification at `20543449`
+
+- `cargo test --workspace --lib`: 706 passed, 0 failed, 10 ignored (the ignored
+  ones are the media/export benchmarks that need `OR_BENCH_*` and a source).
+- `cargo check --workspace --all-targets`: no warnings beyond the
+  `block 0.1.6` future-incompatibility note; the two unused-`mut` warnings from
+  earlier revisions are gone.
+- `flutter analyze --no-pub`: “No issues found!”; `flutter test`: 526 passed.
+- `./scripts/check-repo.sh`: PASS (913 tracked files).
+- Debian and Windows checkouts fast-forwarded to `20543449` and compile; their
+  journeys at the same feature set pass (home-template, keyframes/easing,
+  composited export).
+- Nothing was pushed, tagged or released; the mission left 83 local commits on
+  `mission/hardware-profiles-and-polish` over `main`.
 
 ## Rust quality review
 
