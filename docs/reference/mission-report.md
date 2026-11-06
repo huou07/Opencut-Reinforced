@@ -4,7 +4,7 @@ Last reviewed: 2026-11-07
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
 parity, clip keyframes and motion presets) shipped, what was verified on each
-host, and what remains unverified. Revision `7fc8df3d`; branch
+host, and what remains unverified. Revision `bacf5cff`; branch
 `mission/hardware-profiles-and-polish`.
 
 ## Shipped
@@ -31,6 +31,21 @@ host, and what remains unverified. Revision `7fc8df3d`; branch
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.
+
+## What the twenty reviewed repositories contributed
+
+No runtime dependency was added; the ideas below were reimplemented in Rust and
+Dart inside the existing architecture.
+
+| Idea | Source | What shipped | What stayed deferred |
+|---|---|---|---|
+| Easing vocabulary and motion presets | GSAP, GSAP skills (MIT text) | Fade in, Slide up, Zoom in and Pop write ordinary keyframes with the four inspector easings; the presets are authored in OR, not copied runtime behaviour | A curve/graph editor |
+| Keyframe timeline editing | Motion, Anime.js | Add at playhead, edit time/value/easing, delete, Copy/Paste between clips, deterministic sampling in the Rust frame loop | Stagger across several selected clips |
+| Composition templates and scene sequencing | Remotion, Motion Canvas | Already covered by MotionScene; the mission reused it instead of adding a second scene model | A template gallery built on MotionScene assets |
+| Typography and vector workflow | Satori, SVGO | Existing text presets and the scene typography schema stay the native path | A Satori-style layout generator; no SVG import pipeline exists |
+| Animated vector assets | Rive, dotLottie | Not adopted: the MIT option (`dotlottie-rs`) needs a second asset pipeline | Lottie import behind a capability check, only if user demand appears |
+| 3D | Three.js, R3F, Drei | Not adopted: a sidecar renderer would be a second pipeline with no offline-deterministic path today | A separate 3D tool producing a clip |
+| Audio preview and media workflow | Howler.js, Mediabunny | Rust decode/playback and the export path already cover it | Nothing |
 
 ## Evidence
 
