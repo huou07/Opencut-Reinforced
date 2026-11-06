@@ -66,7 +66,7 @@ export row. Leave `OR_BENCH_MODE` unset for a full-pipeline number.
 |---|---|---|---|---|
 | MacBook Air | Apple M5, 10 cores, 16 GB | Metal / VideoToolbox | macOS 27.2 | 8.1.3, `h264_videotoolbox` |
 | Debian | Intel Core i5-13500T, 20 threads, 15 GB | Intel UHD 770 / VAAPI | Debian 13, kernel 7.2.6 | 8.1.3 with `h264_vaapi`, `h264_nvenc`, `libx264` |
-| Windows 11 | Intel Core 5 120U, 15.7 GB | Intel Graphics / D3D12 / Media Foundation | Windows 11 26200 | 8.1.3, `h264_mf`, `h264_nvenc`, `aac` |
+| Windows 11 | Intel Core 5 120U, 15.7 GB | Intel Graphics / Vulkan / Media Foundation | Windows 11 26200 | 8.1.3, `h264_mf`, `h264_nvenc`, `aac` |
 
 ## 2026-11-06 rows — GPU text compositing
 
@@ -248,7 +248,8 @@ workers could exist".
 - Each host reports the adapter that served the benchmark
   (`OR_EXPORT_BENCH_ADAPTER`), so a row can be attributed to a device instead of
   assumed: macOS prints `Apple M5 (, Metal)`, Debian prints the Intel UHD 770 /
-  Vulkan line above.
+  Vulkan line above, and Windows prints `Intel(R) Graphics (Intel Corporation,
+  Vulkan)` — so wgpu picked Vulkan on this Windows host rather than D3D12.
 - Windows rows were taken on the Media Foundation encoder, not QSV or NVENC:
   the host has no QSV-capable display driver and no NVIDIA device. The candidate
   list still prefers `h264_nvenc` then `h264_qsv` when they exist.
