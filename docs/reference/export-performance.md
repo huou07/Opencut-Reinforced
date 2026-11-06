@@ -144,6 +144,13 @@ VP9 CRF and FFV1 are rate-independent: the three encodes are the same file.
 | Debian (no GPU) | 25.1 fps | 4,109,503 | 33.4 fps | 39,278,557 |
 | Windows (Core 5 120U) | 9.4 fps | 4,109,503 | 6.6 fps | 39,278,557 |
 
+Re-checked at the scissor revision (`f0b44a24`) with one text layer on macOS, 150
+frames: MP4 213.7 fps (5,904,842 B, `h264` High `yuv420p` + `aac` LC 48 kHz
+stereo), WebM 54.5 fps (3,600,271 B, `vp9` Profile 0 + `opus`), Matroska 54.6 fps
+(47,874,201 B, `ffv1` `bgra` + `pcm_s16le`). Nothing on the codec path changed
+after the rows above, so those host rows still describe these containers, and the
+text column now shows the scissor helping the VP9 path as well (32.7 → 54.5 fps).
+
 `ffprobe` on all three outputs: `vp9` Profile 0 + `opus` in `matroska,webm`, and
 `ffv1` + `pcm_s16le` in `matroska,webm` — the encoders the profile names, not
 the profile label. WebM and lossless are software-only paths on every host, so
