@@ -2631,7 +2631,13 @@ fn run_timeline(args: &[OsString], json: bool) -> Result<String, CliError> {
             )?;
             let (path, attached) = media_project_path(&options, json)?;
             let clip_id = parse_clip_id(&required_name(&options, "--clip", json)?, json)?;
-            let (_, _, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            let (_, track_kind, clip) = find_clip_state(&path, attached, clip_id, json)?;
+            if !matches!(track_kind, TrackKind::Audio | TrackKind::Video) {
+                return Err(CliError::usage(
+                    json,
+                    "audio settings are available for an audio clip or a video clip with media",
+                ));
+            }
             let mut audio = match clip.settings.clone() {
                 ClipSettings::Audio(audio) => audio,
                 ClipSettings::Visual(visual) => visual.audio,
