@@ -1,6 +1,6 @@
 # Media capability matrix
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-06
 
 Scope: what media this product actually imports and decodes, per host, with the
 measurement that produced each row. A format is listed as supported only when a
@@ -115,14 +115,27 @@ and never asks it for x265; the licence position for that seam is recorded in
 [ADR 0011](../adr/0011-linux-delivery-encoder.md). The row is here to say what
 that build can decode, not to propose an encoder.
 
-## Windows 11
+## Windows 11, dev prefix FFmpeg 8.1.3
 
-Not measured. The `win11` host reachable from this session has no FFmpeg
-installed, and the product ships its own helper there, so a row produced from a
-different build would answer the wrong question. The matrix stays empty for
-Windows until the packaged helper is measured on that host; the product claim for
-Windows remains "the same import matrix and the same three export profiles",
-because both come from shared Rust code, not from a per-platform build.
+Measured 2026-11-06 on the `win11` host against the prefix that host's
+`.cargo/config.toml` names (`C:/orb/tmp/ffmpeg-8.1.3-install`), by listing the
+encoders and running the export benchmark through it:
+
+| Row | Result |
+|---|---|
+| `h264_videotoolbox`, `h264_nvenc`, `h264_mf`, `h264_vaapi`, `h264_open`, `libx264` | none present |
+| `ffv1`, `libvpx-vp9`, `libopus`, PCM family | present |
+| MP4 H.264 export | refused: "this FFmpeg build carries no H.264 encoder" |
+| WebM VP9/Opus export, 1080p | works, 8.4 fps (300 frames) |
+| Lossless FFV1 export | works |
+
+The prefix lists 18 encoders in total. The configure recipe enables a hardware
+H.264 encoder for macOS only (`--enable-videotoolbox
+--enable-encoder=h264_videotoolbox`); the Windows job enables none, and Media
+Foundation (`h264_mf`) is the LGPL-compatible answer for that host. Until the
+Windows prefix carries one, the export claim for Windows is WebM and lossless
+only, and the MP4 row must not be claimed. Linux is a different case: its
+prefix here is a local build with `h264_vaapi`, `h264_nvenc` and `libx264`.
 
 ## What the app tells the user
 

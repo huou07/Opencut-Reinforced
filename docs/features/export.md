@@ -1,6 +1,6 @@
 # Feature — Export
 
-Last reviewed: 2026-11-04
+Last reviewed: 2026-11-06
 
 Scope: turning a project into a playable file — profiles, job behaviour, failure
 semantics, and how an export is validated.
@@ -103,6 +103,11 @@ the selected profile's muxer and encoders.
   so a playing preview cannot starve it; the export pauses preview playback and
   releases its audio leases first. Timelines whose decoded audio exceeds the
   1 GB cache cap keep the streaming path rather than failing.
+- The cache decodes with every usable core rather than a fixed four, sizes its
+  in-flight budget from that worker count, and reserves each clip's estimated
+  footprint before decoding so the workers cannot jointly overshoot the cap. A
+  twelve-clip timeline went from 0.456 s to 0.158 s on the M5. See
+  [export performance](../reference/export-performance.md) for the rows.
 - Output is staged beside the destination and published only after streams and
   trailer complete. Cancellation, offline media or encode failure cleans staging,
   preserves an existing destination, and leaves a new destination absent.

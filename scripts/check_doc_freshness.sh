@@ -55,6 +55,7 @@ in_scope=(
   docs/operations/skills.md
   docs/reference/product.md
   docs/reference/roadmap.md
+  docs/reference/export-performance.md
   docs/reference/quality.md
   docs/reference/testing.md
   docs/reference/tooling.md

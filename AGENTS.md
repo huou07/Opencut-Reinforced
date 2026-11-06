@@ -121,6 +121,9 @@ any other rule to this file.
 - **Roadmap** — current owner-selected focus, acceptance target, deferred work.
   When: choosing what to work on next or checking whether work is in scope.
   Path: `docs/reference/roadmap.md`
+- **Export performance** — measured export and render rows per host, stage ceilings, and the commands that produce them.
+  When: measuring export or render throughput, or comparing the same workload across hosts.
+  Path: `docs/reference/export-performance.md`
 - **Quality bar** — attributes, measurements, known gaps.
   When: making or checking a quality, performance or reliability claim.
   Path: `docs/reference/quality.md`
