@@ -155,13 +155,12 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   readback or feeding the encoder from GPU memory is the next real step; it
   touches the export loop and the encoder boundary, so it was not started for a
   partial gain.
-- **GPU backend, decoder and CPU-worker choice** — Settings exposes the profile
-  and the H.264 encoder; the adapter is reported and used automatically. A
-  backend picker needs restart semantics (the device is process-global) and a
-  decoder picker needs a hardware-decode path the product declined until it is
-  measured, so both are recorded as open rather than faked.
+- **Decoder and CPU-worker choice** — the graphics backend now has a stored
+  picker (next start, automatic fallback); a decoder picker still needs a
+  hardware-decode path the product declined until it is measured, and an
+  explicit CPU-worker count would fight the runtime's own scheduling, so both
+  are recorded as open rather than faked.
 - **Discrete NVIDIA/AMD (NVENC, AMF)** — probed and probed-off paths exist, but no
   such device is attached to the three hosts, so no benchmark is claimed.
-- **Windows animated-export row** — the knob exists; only the row is missing.
 - **Template gallery on MotionScene** — the 20-repo table lists it as deferred;
   the library still starts empty and presets cover the beginner path.

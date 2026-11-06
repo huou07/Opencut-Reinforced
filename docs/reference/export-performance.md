@@ -409,19 +409,23 @@ Windows about 2x rather than 14x: the composited readback is cheaper on this
 driver, which is consistent with the readback explanation above and with the
 earlier note that the Windows text row was roughly half the Debian one.
 
-### Animated rows at `ab5d4620`
+### Animated rows (Debian at `ab5d4620`, Windows at `a0d33bc1`)
 
-The same `OR_BENCH_ANIM=1` knob (three scale keyframes, 1000 → 1120 → 1000)
-on the Debian host, 300 frames, `--release`, one-pass conversion:
+The same `OR_BENCH_ANIM=1` knob (three scale keyframes, 1000 → 1120 → 1000),
+300 frames, `--release`, one-pass conversion:
 
-| Row | fps |
-|---|---|
-| MP4 H.264 + AAC, animated | 260.6, 260.6 |
-| MP4 H.264 + AAC, animated + one text layer | 119.2, 96.7 |
+| Host | Row | fps |
+|---|---|---|
+| Debian / UHD 770 | MP4 H.264 + AAC, animated | 260.6, 260.6 |
+| Debian / UHD 770 | MP4 H.264 + AAC, animated + one text layer | 119.2, 96.7 |
+| Windows / Intel Graphics | MP4 H.264 + AAC, animated | 126.9 |
+| Windows / Intel Graphics | MP4 H.264 + AAC, animated + one text layer | 80.0 |
 
 Animation samples one transform per frame and the composited path already runs
-every frame, so the row sits inside the static text spread (101.9–118.3); the
-sample itself is not measurable next to the readback cost.
+every frame, so each animated text row sits inside its host's static text
+spread (Debian 101.9–118.3, Windows 78.8–88.0); the sample itself is not
+measurable next to the readback cost. Windows video-only animation costs
+about 5 % against its static row (126.9 vs 133.9–135.1).
 
 ## 2026-11-07 rows — one-pass NV12 conversion
 
