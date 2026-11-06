@@ -145,6 +145,13 @@ Evidence, all local:
 - A BT.709 inverse in the NV12 layer shader against BT.601 planes decoded by
   libswscale: PSNR 24.9 dB, a visible colour shift. Now BT.601 (42.9 dB luma,
   40.6 dB average), documented with the caveat about missing colour metadata.
+- The compositor's text-upload cache took its identity from the rasterizer, but
+  the texture pool belongs to the one process-wide `RenderDevice` while a
+  rasterizer belongs to a preview session. Opening a second project would have
+  re-used the first project's first title as a cached upload and drawn the wrong
+  pixels. The identity is now process-wide, and a regression test composites
+  "Left" then "Right" from two rasterizers and requires the second upload (it
+  fails when the counter is forced to collide).
 - The gate reference decayed ≈8.3 dB/s while its comment claimed 0.9 dB/s; the
   end-to-end export exposed it. Now derived from a documented 1 dB/s constant.
 - Windows and Debian had both "no H.264 encoder" from hand-built prefixes, not
