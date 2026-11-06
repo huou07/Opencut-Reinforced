@@ -110,10 +110,23 @@ mod desktop {
     /// enough to keep the GPU and the encoder busy at once without holding a long
     /// run of full-size frames in memory.
     const EXPORT_RENDER_AHEAD: usize = 2;
+
+    /// Experiment knob for the render-ahead depth; defaults to the constant.
+    fn export_render_ahead() -> usize {
+        std::env::var("OR_EXPORT_RENDER_AHEAD")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(EXPORT_RENDER_AHEAD)
+    }
     /// Export decodes each audio clip once into memory before rendering. The cap
     /// keeps a very long timeline from exhausting the process; above it the export
     /// keeps the streaming path instead of swapping.
     const MAX_EXPORT_AUDIO_CACHE_BYTES: usize = 1024 * 1024 * 1024;
+    /// Ceiling for the parallel audio pre-decode. The clips are independent files,
+    /// so the cache scales with the machine instead of stopping at four workers;
+    /// the memory reservation below, not the worker count, is what keeps it bounded.
+    const MAX_EXPORT_AUDIO_WORKERS: usize = 16;
 
     static RENDER_DEVICE: OnceLock<Result<RenderDevice, String>> = OnceLock::new();
     static FFMPEG_LICENSE_OK: OnceLock<bool> = OnceLock::new();
@@ -2746,7 +2759,7 @@ mod desktop {
             let (sender, receiver) = std::sync::mpsc::sync_channel::<(
                 u64,
                 Result<ExportFrame, String>,
-            )>(EXPORT_RENDER_AHEAD);
+            )>(export_render_ahead());
             let render_program = Arc::clone(&program);
             let render_resources_for_render = Arc::clone(&render_resources);
             scope.spawn(move || {
@@ -2890,24 +2903,27 @@ mod desktop {
         }
     }
 
+    /// Estimates the decoded size of one audio clip, in bytes.
+    fn estimated_audio_clip_bytes(clip: &AudioClip) -> Result<usize, String> {
+        let source_duration = clip
+            .playback_rate
+            .apply(clip.duration)
+            .map_err(|_| "audio source duration overflowed".to_owned())?;
+        let frames = audio_frames_ceil(source_duration)?;
+        let samples = frames
+            .checked_mul(2)
+            .ok_or_else(|| "audio sample count overflowed".to_owned())?;
+        Ok(usize::try_from(samples)
+            .unwrap_or(usize::MAX)
+            .saturating_mul(std::mem::size_of::<f32>()))
+    }
+
     /// Estimates the decoded size of every audio clip. Timelines larger than the
     /// cache budget keep the streaming path instead of failing the export.
     fn estimated_export_audio_bytes(program: &PreviewProgram) -> Result<usize, String> {
         let mut bytes = 0_usize;
         for clip in &program.audio_clips {
-            let source_duration = clip
-                .playback_rate
-                .apply(clip.duration)
-                .map_err(|_| "audio source duration overflowed".to_owned())?;
-            let frames = audio_frames_ceil(source_duration)?;
-            let samples = frames
-                .checked_mul(2)
-                .ok_or_else(|| "audio sample count overflowed".to_owned())?;
-            bytes = bytes.saturating_add(
-                usize::try_from(samples)
-                    .unwrap_or(usize::MAX)
-                    .saturating_mul(std::mem::size_of::<f32>()),
-            );
+            bytes = bytes.saturating_add(estimated_audio_clip_bytes(clip)?);
         }
         Ok(bytes)
     }
@@ -2922,24 +2938,37 @@ mod desktop {
         _budgets: &RuntimeBudgets,
         cancellation: &CancellationToken,
     ) -> Result<Vec<CachedAudioClip>, String> {
-        // The cache runs while the viewer and its audio clock may still hold
-        // leases on the shared playback budget. Give the export cache its own
-        // small budget so a playing preview cannot starve export preparation.
-        let cache_budgets = RuntimeBudgets::new(
-            BudgetLimits::new(4, 256 * 1024 * 1024).expect("nonzero render budget"),
-            BudgetLimits::new(64, 64 * 1024 * 1024).expect("nonzero export audio cache budget"),
-            BudgetLimits::new(16, 256 * 1024 * 1024).expect("nonzero decode budget"),
-        );
         let clips = &program.audio_clips;
         if clips.is_empty() {
             return Ok(Vec::new());
         }
         let key = program.key;
-        let worker_count = std::thread::available_parallelism()
-            .map(|count| count.get())
-            .unwrap_or(1)
-            .clamp(1, 4)
-            .min(clips.len());
+        let requested = std::env::var("OR_EXPORT_AUDIO_WORKERS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism()
+                    .map(|count| count.get())
+                    .unwrap_or(1)
+            });
+        // A knob exists for measurement; production takes every usable core.
+        let worker_count = requested.clamp(1, MAX_EXPORT_AUDIO_WORKERS).min(clips.len());
+        // The cache runs while the viewer and its audio clock may still hold
+        // leases on the shared playback budget. Give the export cache its own
+        // budget so a playing preview cannot starve export preparation, and size
+        // its in-flight allowance from the worker count: each decoder holds a
+        // small queue, so a fixed 64 would cap the cache at four workers.
+        let in_flight = worker_count
+            .saturating_mul(AUDIO_DECODE_QUEUE_CAPACITY.min(8))
+            .saturating_mul(2)
+            .max(64);
+        let cache_budgets = RuntimeBudgets::new(
+            BudgetLimits::new(4, 256 * 1024 * 1024).expect("nonzero render budget"),
+            BudgetLimits::new(in_flight, 64 * 1024 * 1024)
+                .expect("nonzero export audio cache budget"),
+            BudgetLimits::new(in_flight, 256 * 1024 * 1024).expect("nonzero decode budget"),
+        );
         let next = AtomicUsize::new(0);
         let slots: Mutex<Vec<Option<CachedAudioClip>>> =
             Mutex::new((0..clips.len()).map(|_| None).collect());
@@ -2956,20 +2985,45 @@ mod desktop {
                         let Some(clip) = clips.get(index) else {
                             return;
                         };
+                        // Reserve the estimated footprint *before* decoding, so N
+                        // workers cannot decode N large clips and only then notice
+                        // the cache is over budget. The post-decode check stays as
+                        // a guard for clips whose real size beats the estimate.
+                        let estimate = match estimated_audio_clip_bytes(clip) {
+                            Ok(estimate) => estimate,
+                            Err(error) => {
+                                let mut failure = lock(&failure);
+                                if failure.is_none() {
+                                    *failure = Some(error);
+                                }
+                                return;
+                            }
+                        };
+                        let reserved = bytes.fetch_add(estimate, Ordering::Relaxed);
+                        if reserved.saturating_add(estimate) > MAX_EXPORT_AUDIO_CACHE_BYTES {
+                            let mut failure = lock(&failure);
+                            if failure.is_none() {
+                                *failure = Some(
+                                    "the export audio cache exceeded its memory budget".to_owned(),
+                                );
+                            }
+                            return;
+                        }
                         match decode_audio_clip(clip, key, cache_budgets.clone(), cancellation) {
                             Ok(decoded) => {
-                                let before = bytes.fetch_add(decoded.bytes(), Ordering::Relaxed);
-                                if before.saturating_add(decoded.bytes())
-                                    > MAX_EXPORT_AUDIO_CACHE_BYTES
-                                {
-                                    let mut failure = lock(&failure);
-                                    if failure.is_none() {
-                                        *failure = Some(
-                                            "the export audio cache exceeded its memory budget"
-                                                .to_owned(),
-                                        );
+                                if decoded.bytes() > estimate {
+                                    let extra = decoded.bytes() - estimate;
+                                    let before = bytes.fetch_add(extra, Ordering::Relaxed);
+                                    if before.saturating_add(extra) > MAX_EXPORT_AUDIO_CACHE_BYTES {
+                                        let mut failure = lock(&failure);
+                                        if failure.is_none() {
+                                            *failure = Some(
+                                                "the export audio cache exceeded its memory budget"
+                                                    .to_owned(),
+                                            );
+                                        }
+                                        return;
                                     }
-                                    return;
                                 }
                                 if let Some(slot) = lock(&slots).get_mut(index) {
                                     *slot = Some(decoded);
@@ -4692,6 +4746,165 @@ mod desktop {
                 .len();
             println!(
                 "OR_EXPORT_BENCH profile={profile} source={source} out={width}x{height} frames={frames} text={with_text} bytes={bytes} seconds={elapsed:.3} fps={:.1}",
+                frames as f64 / elapsed.max(f64::EPSILON)
+            );
+        }
+
+        /// Exports one real `.orproj` through the path the Export dialog starts:
+        /// the same program load from the session, the same output-size
+        /// resolution, and the same render/encode pipeline.
+        ///
+        /// A synthetic fixture row answers "how fast is the pipeline on this
+        /// host". This row answers "how long does this project take", which is
+        /// the number a person compares between builds, so it names the project,
+        /// its clip counts and the profile it measured.
+        ///
+        /// `OR_PROJECT_BENCH` is the project path. `OR_PROJECT_BENCH_PROFILE`
+        /// takes `mp4`, `webm` or `mkv`; `OR_PROJECT_BENCH_QUALITY` takes
+        /// `quality` or `speed`; `OR_PROJECT_BENCH_SHORT_SIDE` overrides the
+        /// dialog's resolution choice. The file is written to the scratch
+        /// directory and left there for an independent `ffprobe`.
+        #[test]
+        #[ignore = "benchmark; set OR_PROJECT_BENCH to a .orproj path"]
+        fn export_project_benchmark() {
+            let project_path = std::env::var("OR_PROJECT_BENCH")
+                .unwrap_or_else(|_| "/tmp/or-bench/project.orproj".to_owned());
+            if !std::path::Path::new(&project_path).exists() {
+                println!("OR_EXPORT_PROJECT skipped: {project_path} is missing");
+                return;
+            }
+            // Opening reads the file and probes nothing; the session is never
+            // saved, so a benchmark cannot touch the project it measures.
+            let file_session =
+                or_core::ProjectFileSession::open(&project_path).expect("project opens");
+            let program = Arc::new(
+                load_program_from_session(file_session.session()).expect("program loads"),
+            );
+            let rate = program.frame_rate.expect("sequence frame rate");
+            let content_end = program.content_end.expect("content end");
+            let frames = rate.frame_index_ceil(content_end).expect("frame count");
+            let short_side = std::env::var("OR_PROJECT_BENCH_SHORT_SIDE")
+                .ok()
+                .and_then(|value| value.parse::<u32>().ok());
+            let (width, height) = export_size(
+                program.canvas,
+                short_side,
+                program
+                    .video_clips
+                    .iter()
+                    .find_map(|clip| clip.source_dimensions),
+            );
+            let profile = match std::env::var("OR_PROJECT_BENCH_PROFILE").as_deref() {
+                Ok("webm") => ExportProfile::WebmVp9Opus,
+                Ok("mkv") => ExportProfile::MatroskaFfv1PcmS16le,
+                _ => ExportProfile::Mp4H264Aac,
+            };
+            let quality = match std::env::var("OR_PROJECT_BENCH_QUALITY").as_deref() {
+                Ok("speed") => ExportQuality::Speed,
+                _ => ExportQuality::Quality,
+            };
+            let extension = match profile {
+                ExportProfile::WebmVp9Opus => "webm",
+                ExportProfile::MatroskaFfv1PcmS16le => "mkv",
+                ExportProfile::Mp4H264Aac => "mp4",
+            };
+            let directory = std::env::temp_dir().join("or-export-bench");
+            std::fs::create_dir_all(&directory).expect("scratch directory");
+            if std::env::var("OR_PROJECT_BENCH_MODE").as_deref() == Ok("audio") {
+                // Times the pre-decode stage on its own, so the cache can be
+                // compared across worker counts without a full export.
+                let budgets = RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                );
+                let cancellation = CancellationToken::new();
+                let started = Instant::now();
+                let cache = prepare_export_audio_cache(&program, &budgets, &cancellation)
+                    .expect("the audio cache decodes");
+                let elapsed = started.elapsed().as_secs_f64();
+                let bytes: usize = cache.iter().map(CachedAudioClip::bytes).sum();
+                println!(
+                    "OR_EXPORT_PROJECT_AUDIO clips={} bytes={bytes} seconds={elapsed:.3}",
+                    cache.len(),
+                );
+                return;
+            }
+            let destination = directory.join(format!("project.{extension}"));
+            let _ = std::fs::remove_file(&destination);
+            let render_resources = Arc::new(RenderResources {
+                budgets: RuntimeBudgets::new(
+                    BudgetLimits::new(4, 256 * 1024 * 1024).expect("render budget"),
+                    BudgetLimits::new(AUDIO_DECODE_QUEUE_CAPACITY, 32 * 1024 * 1024)
+                        .expect("audio budget"),
+                    BudgetLimits::new(16, 256 * 1024 * 1024).expect("decode budget"),
+                ),
+                text_rasterizer: Mutex::new(TextRasterizer::new()),
+                video_sessions: Mutex::new(VecDeque::new()),
+            });
+
+            let (video_clips, text_clips, audio_clips) = (
+                program.video_clips.len(),
+                program.text_clips.len(),
+                program.audio_clips.len(),
+            );
+            // The direct NV12 path needs the source dimensions the program
+            // carries, so a row that measured the composited path names them.
+            let source_dimensions = program
+                .video_clips
+                .first()
+                .and_then(|clip| clip.source_dimensions);
+            if let Some(clip) = program.video_clips.first() {
+                let resolved = clip.source.to_file_path();
+                println!(
+                    "OR_EXPORT_PROJECT_SOURCE uri={} path={:?} exists={:?}",
+                    clip.source.uri(),
+                    resolved.as_ref().map(|path| path.display().to_string()),
+                    resolved.as_ref().map(|path| path.exists()).ok(),
+                );
+            }
+            let jobs = JobManager::new(JobManagerConfig::new(1, 1, 32).expect("job manager"));
+            let cancellation = CancellationToken::new();
+            let outcome: Arc<Mutex<Option<Result<(), String>>>> = Arc::new(Mutex::new(None));
+            let slot = Arc::clone(&outcome);
+            let target = destination.clone();
+            let started = Instant::now();
+            jobs.submit(JobKind::Export, move |job| {
+                let result = export_program(
+                    program,
+                    target,
+                    profile,
+                    quality,
+                    (width, height),
+                    frames,
+                    rate,
+                    render_resources,
+                    job,
+                    &cancellation,
+                );
+                *lock(&slot) = Some(result);
+                Ok(())
+            })
+            .expect("export job submits");
+            let deadline = Instant::now() + Duration::from_secs(3600);
+            while lock(&outcome).is_none() {
+                assert!(Instant::now() < deadline, "the export did not finish");
+                thread::sleep(Duration::from_millis(20));
+            }
+            lock(&outcome)
+                .take()
+                .expect("the export ran")
+                .expect("the export succeeded");
+            jobs.shutdown();
+            let elapsed = started.elapsed().as_secs_f64();
+            let bytes = std::fs::metadata(&destination)
+                .expect("output exists")
+                .len();
+            println!(
+                "OR_EXPORT_PROJECT project={project_path} out={width}x{height} source={source_dimensions:?} rate={}/{} frames={frames} video={video_clips} text={text_clips} audio={audio_clips} profile={profile:?} quality={quality:?} bytes={bytes} seconds={elapsed:.3} fps={:.1}",
+                rate.numerator(),
+                rate.denominator(),
                 frames as f64 / elapsed.max(f64::EPSILON)
             );
         }
