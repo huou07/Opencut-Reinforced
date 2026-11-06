@@ -36,7 +36,7 @@ alone, so it is a starting point that the chips can then be edited or cleared;
 the project file stores keyframes, never a preset name. Graph editing and
 effect-parameter keyframes remain deferred.
 
-Verified 2026-11-07 at `4cf49782` on all three hosts with the `keyframes` UI
+Verified 2026-11-07 at `37f39a67` (presets) and `4cf49782` (manual keyframes) on all three hosts with the `keyframes` UI
 scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a
 Weston headless session on the Intel UHD 770 (Mesa GL), and Windows 11 in an
 interactive desktop session. The run selects a clip, reaches Animation, adds a

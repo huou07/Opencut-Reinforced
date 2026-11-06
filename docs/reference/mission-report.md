@@ -3,8 +3,8 @@
 Last reviewed: 2026-11-07
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
-parity and clip keyframes) shipped, what was verified on each host, and what
-remains unverified. Revision `4cf49782` plus the harness fix `13dca62d`; branch
+parity, clip keyframes and motion presets) shipped, what was verified on each
+host, and what remains unverified. Revision `37f39a67`; branch
 `mission/hardware-profiles-and-polish`.
 
 ## Shipped
@@ -25,6 +25,9 @@ remains unverified. Revision `4cf49782` plus the harness fix `13dca62d`; branch
   the visual settings and sampled in the shared frame loop, so preview and
   export animate identically. The inspector adds a keyframe at the playhead and
   edits time, value and easing in the unit the rest of the inspector uses.
+- **Motion presets.** Fade in, Slide up, Zoom in and Pop write ordinary
+  keyframes through the same animation command, so a preset is a starting point
+  whose chips stay editable and the project file never stores a preset name.
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.
@@ -34,8 +37,8 @@ remains unverified. Revision `4cf49782` plus the harness fix `13dca62d`; branch
 | Host | Build | Rust tests | Flutter | UI journey | Packaged app |
 |---|---|---|---|---|---|
 | macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1 | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json` PASS | PASS (debug; release build not re-taken this mission) |
-| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11 | analyze clean | `performance-profiles-linux.json`, `keyframes.json` PASS | PASS (debug) |
-| Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json` PASS | PASS (`or_app.exe` window, title, screenshot) |
+| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
+| Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
 
 Benchmarks at this revision (macOS only, 300 frames, idle): MP4 239.6/245.6 fps,
 MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
@@ -50,6 +53,8 @@ MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
   ordinary clip command and read back (`0.00s · 50.0% · Linear`) on macOS, Debian
   under Weston with a real Intel GPU, and Windows in an interactive desktop
   session.
+- **PASS** — applying Slide up writes ordinary keyframes and the chip reads back
+  (`0.00s · 0.12 · Ease out`) on all three hosts in the same journey.
 - **PASS** — all three checkouts build and run at `4cf49782` and the core editing
   and export workflows still pass their tests.
 - **UNVERIFIED** — export throughput with animated keyframes: the benchmark
