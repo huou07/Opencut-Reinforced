@@ -2863,6 +2863,65 @@ mod tests {
     }
 
     #[test]
+    fn a_second_rasterizer_never_reuses_the_first_ones_cached_upload() {
+        let renderer = match block_on(RenderDevice::new()) {
+            Ok(renderer) => renderer,
+            Err(error) => {
+                eprintln!("skipping wgpu text identity test: {error}");
+                return;
+            }
+        };
+        let size = render_size(256, 256);
+        let formatting = or_core::TextFormatting::DEFAULT;
+        let mut first = TextRasterizer::new();
+        let mut second = TextRasterizer::new();
+        let left = first
+            .rasterize_cached("Left", formatting, 256, 256)
+            .unwrap();
+        let right = second
+            .rasterize_cached("Right", formatting, 256, 256)
+            .unwrap();
+        assert_ne!(
+            left.id, right.id,
+            "the pool outlives a rasterizer, so ids must be process-wide"
+        );
+        let drawn = |readback: &OffscreenReadback| -> Vec<u8> {
+            readback
+                .pixels()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|pixel| pixel[0])
+                .collect()
+        };
+        let left_frame = renderer
+            .composite_layers(
+                size,
+                &[CompositorLayer::Rgba(
+                    RgbaVideoLayer::new(256, 256, &left.pixels)
+                        .unwrap()
+                        .with_cache_key(left.id),
+                )],
+            )
+            .unwrap();
+        let right_frame = renderer
+            .composite_layers(
+                size,
+                &[CompositorLayer::Rgba(
+                    RgbaVideoLayer::new(256, 256, &right.pixels)
+                        .unwrap()
+                        .with_cache_key(right.id),
+                )],
+            )
+            .unwrap();
+        assert_ne!(
+            drawn(&left_frame),
+            drawn(&right_frame),
+            "the second session's title must be uploaded, not read from the first's cache"
+        );
+    }
+
+    #[test]
     fn nv12_layers_composite_through_the_shared_pipeline_when_adapter_is_available() {
         let renderer = match block_on(RenderDevice::new()) {
             Ok(renderer) => renderer,

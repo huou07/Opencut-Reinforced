@@ -40,6 +40,20 @@ struct TextCacheKey {
     height: u32,
 }
 
+/// Process-wide counter for layer identities.
+///
+/// The compositor's texture pool is owned by the one `RenderDevice` a process
+/// opens, while a `TextRasterizer` is owned by a single preview session. A
+/// per-rasterizer counter would restart at 1 in every session, and the second
+/// session's first title would then reuse a cached upload of the first
+/// session's title. Counting once per process keeps every identity unique for
+/// as long as the pool can remember it.
+static NEXT_LAYER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_layer_id() -> u64 {
+    NEXT_LAYER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
 struct CachedTextLayer {
     key: TextCacheKey,
     pixels: Arc<[u8]>,
@@ -61,7 +75,6 @@ pub struct TextRasterizer {
     font_system: FontSystem,
     swash_cache: SwashCache,
     cache: Vec<CachedTextLayer>,
-    next_id: u64,
 }
 
 impl TextRasterizer {
@@ -86,7 +99,6 @@ impl TextRasterizer {
             font_system: FontSystem::new_with_locale_and_db("en-US".to_owned(), font_db),
             swash_cache: SwashCache::new(),
             cache: Vec::new(),
-            next_id: 1,
         }
     }
 
@@ -140,8 +152,7 @@ impl TextRasterizer {
         let pixels: Arc<[u8]> = self
             .rasterize_spans_uncached(text, spans, formatting, width, height)?
             .into();
-        let id = self.next_id;
-        self.next_id = self.next_id.wrapping_add(1);
+        let id = next_layer_id();
         self.cache.push(CachedTextLayer {
             key,
             pixels: Arc::clone(&pixels),
@@ -491,6 +502,20 @@ fn styled_attrs<'a>(family: &'a str, formatting: TextFormatting) -> Attrs<'a> {
 mod tests {
     use super::{TextRasterError, TextRasterizer};
     use or_core::{TextAlignment, TextColor, TextFormatting, TextVerticalAnchor, TextWeight};
+
+    #[test]
+    fn layer_ids_are_unique_across_rasterizers() {
+        // The compositor's upload cache outlives a preview session, so two
+        // sessions must never agree on an identity for different pixels.
+        let mut first = TextRasterizer::new();
+        let mut second = TextRasterizer::new();
+        let formatting = TextFormatting::DEFAULT;
+        let one = first.rasterize_cached("One", formatting, 64, 64).unwrap();
+        let again = first.rasterize_cached("One", formatting, 64, 64).unwrap();
+        let other = second.rasterize_cached("Two", formatting, 64, 64).unwrap();
+        assert_eq!(one.id, again.id, "a cache hit keeps its identity");
+        assert_ne!(one.id, other.id, "a second rasterizer never reuses an id");
+    }
 
     #[test]
     fn bundled_inter_rasterizes_deterministic_text_with_project_color() {
