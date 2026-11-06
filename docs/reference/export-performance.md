@@ -144,10 +144,13 @@ VP9 CRF and FFV1 are rate-independent: the three encodes are the same file.
 | Debian (no GPU) | 25.1 fps | 4,109,503 | 33.4 fps | 39,278,557 |
 | Windows (Core 5 120U) | 9.4 fps | 4,109,503 | 6.6 fps | 39,278,557 |
 
-Re-checked at the scissor revision (`f0b44a24`) with one text layer on macOS, 150
-frames: MP4 213.7 fps (5,904,842 B, `h264` High `yuv420p` + `aac` LC 48 kHz
+Re-checked at the scissor revision (`f0b44a24`) with one text layer, 150 frames.
+macOS: MP4 213.7 fps (5,904,842 B, `h264` High `yuv420p` + `aac` LC 48 kHz
 stereo), WebM 54.5 fps (3,600,271 B, `vp9` Profile 0 + `opus`), Matroska 54.6 fps
-(47,874,201 B, `ffv1` `bgra` + `pcm_s16le`). Nothing on the codec path changed
+(47,874,201 B, `ffv1` `bgra` + `pcm_s16le`). Debian: MP4 114.3 fps (6,222,521 B,
+`h264` High + `aac` LC), WebM 24.3 fps (3,606,822 B, `vp9` + `opus`), Matroska
+32.2 fps (47,874,935 B, `ffv1` + `pcm_s16le`). The Debian MP4 row with text has
+climbed from 62.5 fps at `b3650587` to 114.3 fps. Nothing on the codec path changed
 after the rows above, so those host rows still describe these containers, and the
 text column now shows the scissor helping the VP9 path as well (32.7 → 54.5 fps).
 
