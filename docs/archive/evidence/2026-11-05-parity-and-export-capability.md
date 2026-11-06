@@ -368,3 +368,15 @@ sequentially and each is a PowerShell launch on Windows, so the panel spent the
 wait as a spinner with no timeout and no failure state. The probes now run
 together, and a failure says "This machine could not be read: …" instead of
 spinning.
+
+## 0.1.19 at `b60d9167`, three hosts
+
+| Host | Suite | Result |
+|---|---|---|
+| macOS 26.5 (Apple M5) | `flutter test` | **504 pass**, no skips |
+| Debian (Intel UHD 770) | `flutter test` | **499 pass, 5 skipped** (the five host-only skips) |
+| Windows 11 (Intel Core 5 120U) | `flutter test` in `apps\or_app` | **499 pass, 5 skipped**, `03:17 +499 ~5: All other tests passed!` |
+
+The Windows run first printed `Test directory "test" not found.` because the
+command was started from the repository root; the suite lives in `apps\or_app`,
+which is now in the harness notes.
