@@ -47,9 +47,10 @@ trim; split; ripple delete; delete; duplicate; snap; markers; track lock,
 visibility, mute, solo; timeline zoom and scroll; playhead, scrubbing, frame
 stepping, follow playhead; undo/redo; save and reopen.
 
-**PLANNED:** grouping, compound clips, nested timelines, adjustment layers,
-keyframes, graph editor. **ADVANCED:** speed ramps, time remapping, freeze,
-reverse. **FUTURE:** multicam, audio/timecode sync. Linked-clip semantics are
+**MVP:** transform and opacity keyframes with four cubic easings, sampled in
+preview and export. **PLANNED:** grouping, compound clips, nested timelines,
+adjustment layers, graph editor, effect-parameter keyframes. **ADVANCED:** speed
+ramps, time remapping, freeze, reverse. **FUTURE:** multicam, audio/timecode sync. Linked-clip semantics are
 deferred until typed semantics and migrations are approved.
 
 ## Viewer

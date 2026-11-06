@@ -8,6 +8,7 @@ import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
+import 'clip_animation_panel.dart';
 import 'editor_frame_rate.dart';
 import 'editor_panel_header.dart';
 import 'inspector_audio_validation.dart';
@@ -95,6 +96,7 @@ class EditorInspectorPanel extends StatefulWidget {
     this.onSetFrozen,
     this.onClose,
     this.showHeader = true,
+    this.playhead,
   });
 
   final bool showHeader;
@@ -153,6 +155,10 @@ class EditorInspectorPanel extends StatefulWidget {
   )?
   onSetFrozen;
   final VoidCallback? onClose;
+
+  /// Where the playhead sits on the sequence, so a keyframe can be added at
+  /// the frame the person is looking at.
+  final ProjectRationalTime? playhead;
 
   @override
   State<EditorInspectorPanel> createState() => _EditorInspectorPanelState();
@@ -1495,6 +1501,25 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
                     'transition_out_duration',
                     'Duration out (s)',
                   ),
+                  const SizedBox(height: OrSpacing.x3),
+                  if (widget.gateway != null &&
+                      widget.session != null &&
+                      widget.project != null &&
+                      widget.clip != null &&
+                      widget.trackId != null &&
+                      widget.clipId != null)
+                    ClipAnimationPanel(
+                      gateway: widget.gateway!,
+                      session: widget.session!,
+                      project: widget.project!,
+                      trackId: widget.trackId!,
+                      clipId: widget.clipId!,
+                      clipStart: widget.clip!.timelineStart,
+                      clipDuration: widget.clip!.timelineDuration,
+                      playhead: widget.playhead,
+                      staticSettings: _readSettings(),
+                      enabled: !widget.trackLocked && !widget.busy,
+                    ),
                   if (_showsClipAudio) ...[
                     const SizedBox(height: OrSpacing.x3),
                     ..._audioFieldWidgets(),

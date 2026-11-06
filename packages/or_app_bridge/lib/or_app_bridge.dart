@@ -8,6 +8,7 @@ export 'src/rust/api/performance.dart'
         PerformanceReportView,
         encodingPlan,
         performanceReport;
+export 'src/rust/api/project_animation.dart';
 export 'src/rust/api/motion.dart'
     show
         MotionMaterializationView,

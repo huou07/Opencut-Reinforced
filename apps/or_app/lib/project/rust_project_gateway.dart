@@ -547,6 +547,52 @@ class RustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectClipAnimation> getTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async {
+    try {
+      final animation = await _host(session).getTimelineClipAnimation(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        expectedRevision: current.revision,
+        trackId: trackId,
+        clipId: clipId,
+      );
+      return _projectAnimation(animation);
+    } on rust.ProjectBridgeError catch (error) {
+      throw ProjectGatewayException(error.code, error.message);
+    }
+  }
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectClipAnimation animation,
+  }) async => _action(
+    await _host(session).updateTimelineClipAnimation(
+      projectId: current.projectId,
+      projectInstanceId: current.projectInstanceId,
+      expectedRevision: current.revision,
+      trackId: trackId,
+      clipId: clipId,
+      animation: rust.ProjectClipAnimationView(
+        opacityBasisPoints: _rustKeyframes(animation.opacityBasisPoints),
+        xMilliCanvas: _rustKeyframes(animation.xMilliCanvas),
+        yMilliCanvas: _rustKeyframes(animation.yMilliCanvas),
+        scaleXMilli: _rustKeyframes(animation.scaleXMilli),
+        scaleYMilli: _rustKeyframes(animation.scaleYMilli),
+        rotationMilliDegrees: _rustKeyframes(animation.rotationMilliDegrees),
+      ),
+    ),
+  );
+
+  @override
   Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
     ProjectSessionHandle session,
     ProjectReadModel current, {
@@ -1771,6 +1817,39 @@ class RustProjectGateway implements ProjectGateway {
     errorCode: request.errorCode,
     message: request.message,
   );
+
+  static ProjectClipAnimation _projectAnimation(
+    rust.ProjectClipAnimationView value,
+  ) => ProjectClipAnimation(
+    opacityBasisPoints: _projectKeyframes(value.opacityBasisPoints),
+    xMilliCanvas: _projectKeyframes(value.xMilliCanvas),
+    yMilliCanvas: _projectKeyframes(value.yMilliCanvas),
+    scaleXMilli: _projectKeyframes(value.scaleXMilli),
+    scaleYMilli: _projectKeyframes(value.scaleYMilli),
+    rotationMilliDegrees: _projectKeyframes(value.rotationMilliDegrees),
+  );
+
+  static List<ProjectKeyframe> _projectKeyframes(
+    List<rust.ProjectKeyframeView> values,
+  ) => [
+    for (final value in values)
+      ProjectKeyframe(
+        at: _projectRationalTime(value.at),
+        value: value.value,
+        easing: ProjectKeyframeEasing.fromWire(value.easing),
+      ),
+  ];
+
+  static List<rust.ProjectKeyframeView> _rustKeyframes(
+    List<ProjectKeyframe> keyframes,
+  ) => [
+    for (final keyframe in keyframes)
+      rust.ProjectKeyframeView(
+        at: _rustTime(keyframe.at),
+        value: keyframe.value,
+        easing: keyframe.easing.wireName,
+      ),
+  ];
 
   static ProjectRationalTime _projectRationalTime(
     rust.RationalTimeView value,

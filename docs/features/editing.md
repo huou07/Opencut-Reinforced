@@ -55,8 +55,9 @@ trim/split behave normally; preview maps every offset to `source_start`.
 
 ## Deferred
 
-Keyframes and graph editor, nested/compound clips, linked-clip semantics,
-speed ramps, multicam, adjustment layers. Do not add these without an approved
+The graph editor and effect-parameter keyframes (transform and opacity
+keyframes ship; see [effects-audio.md](effects-audio.md)), nested/compound
+clips, linked-clip semantics, speed ramps, multicam, adjustment layers. Do not add these without an approved
 scope and typed migration rules.
 
 ## Where

@@ -373,7 +373,7 @@ impl ProjectHostHandle {
         ))
     }
 
-    fn find_visual_clip(
+    pub(crate) fn find_visual_clip(
         &self,
         project_id: &str,
         project_instance_id: &str,

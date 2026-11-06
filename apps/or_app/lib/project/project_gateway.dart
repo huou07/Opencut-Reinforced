@@ -736,6 +736,96 @@ enum ProjectTimelineEffectKind {
   gaussianBlur,
 }
 
+/// How a keyframe hands its value to the next one.
+enum ProjectKeyframeEasing {
+  linear,
+  easeIn,
+  easeOut,
+  easeInOut;
+
+  String get wireName => switch (this) {
+    ProjectKeyframeEasing.linear => 'linear',
+    ProjectKeyframeEasing.easeIn => 'ease_in',
+    ProjectKeyframeEasing.easeOut => 'ease_out',
+    ProjectKeyframeEasing.easeInOut => 'ease_in_out',
+  };
+
+  static ProjectKeyframeEasing fromWire(String value) =>
+      ProjectKeyframeEasing.values.firstWhere(
+        (easing) => easing.wireName == value,
+        orElse: () => ProjectKeyframeEasing.linear,
+      );
+}
+
+/// One control point, measured from the clip's own start.
+class ProjectKeyframe {
+  const ProjectKeyframe({
+    required this.at,
+    required this.value,
+    this.easing = ProjectKeyframeEasing.linear,
+  });
+
+  final ProjectRationalTime at;
+  final int value;
+  final ProjectKeyframeEasing easing;
+
+  ProjectKeyframe copyWith({
+    ProjectRationalTime? at,
+    int? value,
+    ProjectKeyframeEasing? easing,
+  }) => ProjectKeyframe(
+    at: at ?? this.at,
+    value: value ?? this.value,
+    easing: easing ?? this.easing,
+  );
+}
+
+/// Every animated channel a clip has. An empty channel keeps the clip's
+/// static transform or opacity.
+class ProjectClipAnimation {
+  const ProjectClipAnimation({
+    this.opacityBasisPoints = const [],
+    this.xMilliCanvas = const [],
+    this.yMilliCanvas = const [],
+    this.scaleXMilli = const [],
+    this.scaleYMilli = const [],
+    this.rotationMilliDegrees = const [],
+  });
+
+  static const empty = ProjectClipAnimation();
+
+  final List<ProjectKeyframe> opacityBasisPoints;
+  final List<ProjectKeyframe> xMilliCanvas;
+  final List<ProjectKeyframe> yMilliCanvas;
+  final List<ProjectKeyframe> scaleXMilli;
+  final List<ProjectKeyframe> scaleYMilli;
+  final List<ProjectKeyframe> rotationMilliDegrees;
+
+  bool get isEmpty =>
+      opacityBasisPoints.isEmpty &&
+      xMilliCanvas.isEmpty &&
+      yMilliCanvas.isEmpty &&
+      scaleXMilli.isEmpty &&
+      scaleYMilli.isEmpty &&
+      rotationMilliDegrees.isEmpty;
+
+  ProjectClipAnimation copyWith({
+    List<ProjectKeyframe>? opacityBasisPoints,
+    List<ProjectKeyframe>? xMilliCanvas,
+    List<ProjectKeyframe>? yMilliCanvas,
+    List<ProjectKeyframe>? scaleXMilli,
+    List<ProjectKeyframe>? scaleYMilli,
+    List<ProjectKeyframe>? rotationMilliDegrees,
+  }) => ProjectClipAnimation(
+    opacityBasisPoints: opacityBasisPoints ?? this.opacityBasisPoints,
+    xMilliCanvas: xMilliCanvas ?? this.xMilliCanvas,
+    yMilliCanvas: yMilliCanvas ?? this.yMilliCanvas,
+    scaleXMilli: scaleXMilli ?? this.scaleXMilli,
+    scaleYMilli: scaleYMilli ?? this.scaleYMilli,
+    rotationMilliDegrees: rotationMilliDegrees ?? this.rotationMilliDegrees,
+  );
+}
+
 class ProjectTimelineAudioSettings {
   const ProjectTimelineAudioSettings({
     required this.gainMilliDecibels,
@@ -1088,6 +1178,19 @@ abstract interface class ProjectGateway {
     required String trackId,
     required String clipId,
     required ProjectTimelineVisualSettings settings,
+  });
+  Future<ProjectClipAnimation> getTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  });
+  Future<ProjectActionResult> updateTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectClipAnimation animation,
   });
   Future<ProjectTimelineAudioSettings> getTimelineClipAudioSettings(
     ProjectSessionHandle session,

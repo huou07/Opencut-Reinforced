@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -355963884;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 901513233;
 
 // Section: executor
 
@@ -921,6 +921,69 @@ let decode_indices_ = flutter_rust_bridge::for_generated::lockable_compute_decod
  let output_ok = crate::api::project::ProjectHostHandle::finish_transcription_model_download(&*api_that_guard, api_download_id)?;   std::result::Result::Ok(output_ok)
                     })())
                 } })
+}
+fn wire__crate__api__project__ProjectHostHandle_get_timeline_clip_animation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_get_timeline_clip_animation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_project_instance_id = <String>::sse_decode(&mut deserializer);
+            let api_expected_revision = <u64>::sse_decode(&mut deserializer);
+            let api_track_id = <String>::sse_decode(&mut deserializer);
+            let api_clip_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::views::ProjectBridgeError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        crate::api::project::ProjectHostHandle::get_timeline_clip_animation(
+                            &*api_that_guard,
+                            api_project_id,
+                            api_project_instance_id,
+                            api_expected_revision,
+                            api_track_id,
+                            api_clip_id,
+                        )?;
+                    std::result::Result::Ok(output_ok)
+                })(
+                ))
+            }
+        },
+    )
 }
 fn wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
@@ -4537,6 +4600,74 @@ fn wire__crate__api__project__ProjectHostHandle_undo_impl(
         },
     )
 }
+fn wire__crate__api__project__ProjectHostHandle_update_timeline_clip_animation_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ProjectHostHandle_update_timeline_clip_animation",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<ProjectHostHandle>,
+            >>::sse_decode(&mut deserializer);
+            let api_project_id = <String>::sse_decode(&mut deserializer);
+            let api_project_instance_id = <String>::sse_decode(&mut deserializer);
+            let api_expected_revision = <u64>::sse_decode(&mut deserializer);
+            let api_track_id = <String>::sse_decode(&mut deserializer);
+            let api_clip_id = <String>::sse_decode(&mut deserializer);
+            let api_animation =
+                <crate::api::project_animation::ProjectClipAnimationView>::sse_decode(
+                    &mut deserializer,
+                );
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = Ok::<_, ()>(
+                        crate::api::project::ProjectHostHandle::update_timeline_clip_animation(
+                            &*api_that_guard,
+                            api_project_id,
+                            api_project_instance_id,
+                            api_expected_revision,
+                            api_track_id,
+                            api_clip_id,
+                            api_animation,
+                        ),
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__project__ProjectHostHandle_update_timeline_clip_audio_settings_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5903,6 +6034,40 @@ fn wire__crate__api__performance__performance_report_impl(
         },
     )
 }
+fn wire__crate__api__project_animation__project_clip_animation_view_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "project_clip_animation_view_default",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Ok::<_, ()>(
+                        crate::api::project_animation::ProjectClipAnimationView::default(),
+                    )?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 
 // Section: related_funcs
 
@@ -6285,6 +6450,20 @@ impl SseDecode for Vec<crate::api::views::ProjectCaptionCueView> {
             ans_.push(<crate::api::views::ProjectCaptionCueView>::sse_decode(
                 deserializer,
             ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::project_animation::ProjectKeyframeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(
+                <crate::api::project_animation::ProjectKeyframeView>::sse_decode(deserializer),
+            );
         }
         return ans_;
     }
@@ -7077,6 +7256,32 @@ impl SseDecode for crate::api::views::ProjectCaptionImportPreviewView {
     }
 }
 
+impl SseDecode for crate::api::project_animation::ProjectClipAnimationView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_opacityBasisPoints =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        let mut var_xMilliCanvas =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        let mut var_yMilliCanvas =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        let mut var_scaleXMilli =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        let mut var_scaleYMilli =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        let mut var_rotationMilliDegrees =
+            <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_decode(deserializer);
+        return crate::api::project_animation::ProjectClipAnimationView {
+            opacity_basis_points: var_opacityBasisPoints,
+            x_milli_canvas: var_xMilliCanvas,
+            y_milli_canvas: var_yMilliCanvas,
+            scale_x_milli: var_scaleXMilli,
+            scale_y_milli: var_scaleYMilli,
+            rotation_milli_degrees: var_rotationMilliDegrees,
+        };
+    }
+}
+
 impl SseDecode for crate::api::views::ProjectExportJobView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7119,6 +7324,20 @@ impl SseDecode for crate::api::views::ProjectHostEventView {
             project_instance_id: var_projectInstanceId,
             revision: var_revision,
             dirty: var_dirty,
+        };
+    }
+}
+
+impl SseDecode for crate::api::project_animation::ProjectKeyframeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_at = <crate::api::views::RationalTimeView>::sse_decode(deserializer);
+        let mut var_value = <i32>::sse_decode(deserializer);
+        let mut var_easing = <String>::sse_decode(deserializer);
+        return crate::api::project_animation::ProjectKeyframeView {
+            at: var_at,
+            value: var_value,
+            easing: var_easing,
         };
     }
 }
@@ -8076,373 +8295,385 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        17 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
+        17 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_animation_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        18 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_visual_settings_impl(
+        18 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_audio_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        19 => wire__crate__api__project__ProjectHostHandle_import_media_impl(
+        19 => wire__crate__api__project__ProjectHostHandle_get_timeline_clip_visual_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        20 => wire__crate__api__project__ProjectHostHandle_import_reviewed_timeline_captions_impl(
+        20 => wire__crate__api__project__ProjectHostHandle_import_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        21 => wire__crate__api__project__ProjectHostHandle_import_timeline_captions_impl(
+        21 => wire__crate__api__project__ProjectHostHandle_import_reviewed_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        22 => wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
+        22 => wire__crate__api__project__ProjectHostHandle_import_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        23 => wire__crate__api__project__ProjectHostHandle_insert_timeline_text_clip_impl(
+        23 => wire__crate__api__project__ProjectHostHandle_insert_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        24 => wire__crate__api__project__ProjectHostHandle_list_media_page_impl(
+        24 => wire__crate__api__project__ProjectHostHandle_insert_timeline_text_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        25 => wire__crate__api__project__ProjectHostHandle_list_timeline_clips_impl(
+        25 => wire__crate__api__project__ProjectHostHandle_list_media_page_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        26 => wire__crate__api__project__ProjectHostHandle_list_timeline_markers_impl(
+        26 => wire__crate__api__project__ProjectHostHandle_list_timeline_clips_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        27 => wire__crate__api__project__ProjectHostHandle_list_timeline_tracks_impl(
+        27 => wire__crate__api__project__ProjectHostHandle_list_timeline_markers_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        28 => wire__crate__api__project__ProjectHostHandle_move_timeline_clip_impl(
+        28 => wire__crate__api__project__ProjectHostHandle_list_timeline_tracks_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__project__ProjectHostHandle_move_timeline_clips_impl(
+        29 => wire__crate__api__project__ProjectHostHandle_move_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__project__ProjectHostHandle_move_timeline_marker_impl(
+        30 => wire__crate__api__project__ProjectHostHandle_move_timeline_clips_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        31 => wire__crate__api__project__ProjectHostHandle_move_timeline_track_impl(
+        31 => wire__crate__api__project__ProjectHostHandle_move_timeline_marker_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        32 => wire__crate__api__project__ProjectHostHandle_preview_abort_prepared_impl(
+        32 => wire__crate__api__project__ProjectHostHandle_move_timeline_track_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        33 => wire__crate__api__project__ProjectHostHandle_preview_complete_prepared_impl(
+        33 => wire__crate__api__project__ProjectHostHandle_preview_abort_prepared_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        34 => wire__crate__api__project__ProjectHostHandle_preview_pause_impl(
+        34 => wire__crate__api__project__ProjectHostHandle_preview_complete_prepared_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        35 => wire__crate__api__project__ProjectHostHandle_preview_play_impl(
+        35 => wire__crate__api__project__ProjectHostHandle_preview_pause_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__project__ProjectHostHandle_preview_prepare_impl(
+        36 => wire__crate__api__project__ProjectHostHandle_preview_play_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__project__ProjectHostHandle_preview_seek_impl(
+        37 => wire__crate__api__project__ProjectHostHandle_preview_prepare_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__project__ProjectHostHandle_preview_set_speed_impl(
+        38 => wire__crate__api__project__ProjectHostHandle_preview_seek_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__project__ProjectHostHandle_preview_state_impl(
+        39 => wire__crate__api__project__ProjectHostHandle_preview_set_speed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        40 => wire__crate__api__project__ProjectHostHandle_preview_step_impl(
+        40 => wire__crate__api__project__ProjectHostHandle_preview_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        41 => wire__crate__api__project__ProjectHostHandle_preview_tick_impl(
+        41 => wire__crate__api__project__ProjectHostHandle_preview_step_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        42 => wire__crate__api__project__ProjectHostHandle_preview_timeline_captions_impl(
+        42 => wire__crate__api__project__ProjectHostHandle_preview_tick_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        43 => wire__crate__api__project__ProjectHostHandle_read_media_artifact_impl(
+        43 => wire__crate__api__project__ProjectHostHandle_preview_timeline_captions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        44 => wire__crate__api__project__ProjectHostHandle_redo_impl(
+        44 => wire__crate__api__project__ProjectHostHandle_read_media_artifact_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__project__ProjectHostHandle_relink_media_impl(
+        45 => wire__crate__api__project__ProjectHostHandle_redo_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        46 => wire__crate__api__project__ProjectHostHandle_remove_media_impl(
+        46 => wire__crate__api__project__ProjectHostHandle_relink_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        47 => wire__crate__api__project__ProjectHostHandle_remove_timeline_track_impl(
+        47 => wire__crate__api__project__ProjectHostHandle_remove_media_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        48 => wire__crate__api__project__ProjectHostHandle_remove_transcription_model_impl(
+        48 => wire__crate__api__project__ProjectHostHandle_remove_timeline_track_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__project__ProjectHostHandle_rename_impl(
+        49 => wire__crate__api__project__ProjectHostHandle_remove_transcription_model_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__project__ProjectHostHandle_rename_timeline_marker_impl(
+        50 => wire__crate__api__project__ProjectHostHandle_rename_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => wire__crate__api__project__ProjectHostHandle_request_media_thumbnail_impl(
+        51 => wire__crate__api__project__ProjectHostHandle_rename_timeline_marker_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        52 => wire__crate__api__project__ProjectHostHandle_request_media_waveform_impl(
+        52 => wire__crate__api__project__ProjectHostHandle_request_media_thumbnail_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
+        53 => wire__crate__api__project__ProjectHostHandle_request_media_waveform_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
+        54 => wire__crate__api__project__ProjectHostHandle_resolve_timeline_snap_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__project__ProjectHostHandle_roll_timeline_clip_impl(
+        55 => wire__crate__api__project__ProjectHostHandle_ripple_delete_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        56 => wire__crate__api__project__ProjectHostHandle_save_impl(
+        56 => wire__crate__api__project__ProjectHostHandle_roll_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => wire__crate__api__project__ProjectHostHandle_select_transcription_model_impl(
+        57 => wire__crate__api__project__ProjectHostHandle_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        58 => wire__crate__api__project__ProjectHostHandle_set_timeline_clip_frozen_impl(
+        58 => wire__crate__api__project__ProjectHostHandle_select_transcription_model_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        59 => wire__crate__api__project__ProjectHostHandle_set_timeline_clip_reversed_impl(
+        59 => wire__crate__api__project__ProjectHostHandle_set_timeline_clip_frozen_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_canvas_impl(
+        60 => wire__crate__api__project__ProjectHostHandle_set_timeline_clip_reversed_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_frame_rate_impl(
+        61 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_canvas_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => wire__crate__api__project__ProjectHostHandle_set_timeline_track_state_impl(
+        62 => wire__crate__api__project__ProjectHostHandle_set_timeline_sequence_frame_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        63 => wire__crate__api__project__ProjectHostHandle_slide_timeline_clip_impl(
+        63 => wire__crate__api__project__ProjectHostHandle_set_timeline_track_state_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        64 => wire__crate__api__project__ProjectHostHandle_slip_timeline_clip_impl(
+        64 => wire__crate__api__project__ProjectHostHandle_slide_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
+        65 => wire__crate__api__project__ProjectHostHandle_slip_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__project__ProjectHostHandle_start_export_impl(
+        66 => wire__crate__api__project__ProjectHostHandle_split_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__api__project__ProjectHostHandle_start_transcription_impl(
+        67 => wire__crate__api__project__ProjectHostHandle_start_export_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
+        68 => wire__crate__api__project__ProjectHostHandle_start_transcription_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        69 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
+        69 => wire__crate__api__project__ProjectHostHandle_subscribe_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        70 => wire__crate__api__project__ProjectHostHandle_summary_impl(
+        70 => wire__crate__api__project__ProjectHostHandle_subscribe_media_artifact_events_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        71 => wire__crate__api__project__ProjectHostHandle_timeline_sequence_settings_impl(
+        71 => wire__crate__api__project__ProjectHostHandle_summary_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        72 => wire__crate__api__project__ProjectHostHandle_transcription_job_impl(
+        72 => wire__crate__api__project__ProjectHostHandle_timeline_sequence_settings_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        73 => wire__crate__api__project__ProjectHostHandle_transcription_model_impl(
+        73 => wire__crate__api__project__ProjectHostHandle_transcription_job_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        74 => wire__crate__api__project__ProjectHostHandle_transcription_models_impl(
+        74 => wire__crate__api__project__ProjectHostHandle_transcription_model_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        75 => wire__crate__api__project__ProjectHostHandle_transcription_proposal_impl(
+        75 => wire__crate__api__project__ProjectHostHandle_transcription_models_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        76 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
+        76 => wire__crate__api__project__ProjectHostHandle_transcription_proposal_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        77 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+        77 => wire__crate__api__project__ProjectHostHandle_trim_timeline_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        78 => {
+        78 => wire__crate__api__project__ProjectHostHandle_undo_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        79 => wire__crate__api__project__ProjectHostHandle_update_timeline_clip_animation_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        80 => {
             wire__crate__api__project__ProjectHostHandle_update_timeline_clip_audio_settings_impl(
                 port,
                 ptr,
@@ -8450,13 +8681,13 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        79 => wire__crate__api__project__ProjectHostHandle_update_timeline_clip_playback_rate_impl(
+        81 => wire__crate__api__project__ProjectHostHandle_update_timeline_clip_playback_rate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        80 => {
+        82 => {
             wire__crate__api__project__ProjectHostHandle_update_timeline_clip_visual_settings_impl(
                 port,
                 ptr,
@@ -8464,130 +8695,136 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        81 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
+        83 => wire__crate__api__project__ProjectHostHandle_update_timeline_text_clip_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        82 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__performance__encoding_plan_impl(port, ptr, rust_vec_len, data_len),
-        88 => {
+        84 => wire__crate__api__app_info_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__project__apply_recovery_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__capabilities_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__project__create_project_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__project__discard_recovery_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__performance__encoding_plan_impl(port, ptr, rust_vec_len, data_len),
+        90 => {
             wire__crate__api__project__export_capabilities_impl(port, ptr, rust_vec_len, data_len)
         }
-        89 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__motion__materialize_motion_scene_impl(
+        91 => wire__crate__api__health_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__project__inspect_recovery_impl(port, ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__motion__materialize_motion_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
+        94 => wire__crate__api__motion__materialize_motion_scene_from_code_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__motion_library__motion_asset_import_image_impl(
+        95 => wire__crate__api__motion_library__motion_asset_import_image_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__motion_library__motion_asset_load_impl(
+        96 => wire__crate__api__motion_library__motion_asset_load_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        95 => wire__crate__api__motion_library__motion_asset_materialize_impl(
+        97 => wire__crate__api__motion_library__motion_asset_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__motion_library__motion_asset_remove_impl(
+        98 => wire__crate__api__motion_library__motion_asset_remove_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        97 => wire__crate__api__motion_library__motion_asset_save_impl(
+        99 => wire__crate__api__motion_library__motion_asset_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        98 => wire__crate__api__motion_library__motion_asset_scene_impl(
+        100 => wire__crate__api__motion_library__motion_asset_scene_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => {
+        101 => {
             wire__crate__api__motion_library__motion_library_impl(port, ptr, rust_vec_len, data_len)
         }
-        100 => wire__crate__api__motion_library__motion_scene_append_impl(
+        102 => wire__crate__api__motion_library__motion_scene_append_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__motion_library__motion_scene_compose_impl(
+        103 => wire__crate__api__motion_library__motion_scene_compose_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        102 => wire__crate__api__motion_library__motion_scene_edit_impl(
+        104 => wire__crate__api__motion_library__motion_scene_edit_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
+        105 => wire__crate__api__motion_library__motion_scene_from_asset_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__motion_library__motion_scene_materialize_impl(
+        106 => wire__crate__api__motion_library__motion_scene_materialize_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__motion_library__motion_scene_new_impl(
+        107 => wire__crate__api__motion_library__motion_scene_new_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        106 => wire__crate__api__motion_library__motion_scene_preview_impl(
+        108 => wire__crate__api__motion_library__motion_scene_preview_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__motion_library__motion_scene_read_impl(
+        109 => wire__crate__api__motion_library__motion_scene_read_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => wire__crate__api__motion_library__motion_scene_save_impl(
+        110 => wire__crate__api__motion_library__motion_scene_save_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        109 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
-        110 => wire__crate__api__performance__performance_report_impl(
+        111 => wire__crate__api__project__open_project_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__performance__performance_report_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        113 => wire__crate__api__project_animation__project_clip_animation_view_default_impl(
             port,
             ptr,
             rust_vec_len,
@@ -9414,6 +9651,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::views::ProjectCaptionImportPr
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project_animation::ProjectClipAnimationView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.opacity_basis_points.into_into_dart().into_dart(),
+            self.x_milli_canvas.into_into_dart().into_dart(),
+            self.y_milli_canvas.into_into_dart().into_dart(),
+            self.scale_x_milli.into_into_dart().into_dart(),
+            self.scale_y_milli.into_into_dart().into_dart(),
+            self.rotation_milli_degrees.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project_animation::ProjectClipAnimationView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project_animation::ProjectClipAnimationView>
+    for crate::api::project_animation::ProjectClipAnimationView
+{
+    fn into_into_dart(self) -> crate::api::project_animation::ProjectClipAnimationView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectExportJobView {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -9463,6 +9725,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::views::ProjectHostEventView>
     for crate::api::views::ProjectHostEventView
 {
     fn into_into_dart(self) -> crate::api::views::ProjectHostEventView {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::project_animation::ProjectKeyframeView {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.at.into_into_dart().into_dart(),
+            self.value.into_into_dart().into_dart(),
+            self.easing.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::project_animation::ProjectKeyframeView
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::project_animation::ProjectKeyframeView>
+    for crate::api::project_animation::ProjectKeyframeView
+{
+    fn into_into_dart(self) -> crate::api::project_animation::ProjectKeyframeView {
         self
     }
 }
@@ -10758,6 +11042,16 @@ impl SseEncode for Vec<crate::api::views::ProjectCaptionCueView> {
     }
 }
 
+impl SseEncode for Vec<crate::api::project_animation::ProjectKeyframeView> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::project_animation::ProjectKeyframeView>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::views::ProjectMediaItemView> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11321,6 +11615,36 @@ impl SseEncode for crate::api::views::ProjectCaptionImportPreviewView {
     }
 }
 
+impl SseEncode for crate::api::project_animation::ProjectClipAnimationView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.opacity_basis_points,
+            serializer,
+        );
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.x_milli_canvas,
+            serializer,
+        );
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.y_milli_canvas,
+            serializer,
+        );
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.scale_x_milli,
+            serializer,
+        );
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.scale_y_milli,
+            serializer,
+        );
+        <Vec<crate::api::project_animation::ProjectKeyframeView>>::sse_encode(
+            self.rotation_milli_degrees,
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::views::ProjectExportJobView {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11345,6 +11669,15 @@ impl SseEncode for crate::api::views::ProjectHostEventView {
         <String>::sse_encode(self.project_instance_id, serializer);
         <u64>::sse_encode(self.revision, serializer);
         <bool>::sse_encode(self.dirty, serializer);
+    }
+}
+
+impl SseEncode for crate::api::project_animation::ProjectKeyframeView {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::views::RationalTimeView>::sse_encode(self.at, serializer);
+        <i32>::sse_encode(self.value, serializer);
+        <String>::sse_encode(self.easing, serializer);
     }
 }
 

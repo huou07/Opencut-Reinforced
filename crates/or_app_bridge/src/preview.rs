@@ -69,7 +69,8 @@ mod desktop {
     };
     use or_audio::{AudioDeviceOutput, AudioDeviceOutputError};
     use or_core::{
-        ApplicationRequest, ApplicationResponse, AudioSettings, ClipContent, ClipSettings, Crop,
+        ApplicationRequest, ApplicationResponse, AudioSettings, ClipAnimation, ClipContent,
+        ClipSettings, Crop,
         EffectReference, ExportProfile, ExportQuality, ExportRequest, ExportResponse,
         JobCancelOutcome, JobContext, JobFailure, JobKind, JobManager, JobManagerConfig, JobState,
         MAX_TIMELINE_CLIP_PAGE_SIZE, MediaId, MediaSourceRef, MediaStreamMetadata,
@@ -1582,23 +1583,35 @@ mod desktop {
                 .map(|((frame, clip), processed)| match frame {
                     DecodedVideoFrame::Rgba(rgba) => {
                         let pixels = processed.as_deref().unwrap_or_else(|| rgba.pixels());
+                        let (transform, opacity) = animated_settings(
+                            &clip.animation,
+                            clip.transform,
+                            clip.opacity,
+                            clip.timeline_start,
+                            time,
+                        );
                         Ok(CompositorLayer::Rgba(
                             RgbaVideoLayer::new(
                                 rgba.descriptor().width(),
                                 rgba.descriptor().height(),
                                 pixels,
                             )?
-                            .with_visual_settings(
-                                clip.transform,
-                                clip.crop,
-                                clip.opacity,
-                            )?,
+                            .with_visual_settings(transform, clip.crop, opacity)?,
                         ))
                     }
-                    DecodedVideoFrame::Nv12(nv12) => Ok(CompositorLayer::Nv12(
-                        Nv12VideoLayer::from_contiguous(width, height, nv12.bytes())?
-                            .with_visual_settings(clip.transform, clip.crop, clip.opacity)?,
-                    )),
+                    DecodedVideoFrame::Nv12(nv12) => {
+                                let (transform, opacity) = animated_settings(
+                            &clip.animation,
+                            clip.transform,
+                            clip.opacity,
+                            clip.timeline_start,
+                            time,
+                        );
+                        Ok(CompositorLayer::Nv12(
+                            Nv12VideoLayer::from_contiguous(width, height, nv12.bytes())?
+                                .with_visual_settings(transform, clip.crop, opacity)?,
+                        ))
+                    }
                 })
                 .collect::<Result<Vec<_>, or_render::RenderError>>()
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
@@ -1685,9 +1698,16 @@ mod desktop {
                     // off the canvas), so there is no frame to blend.
                     continue;
                 }
+                let (transform, opacity) = animated_settings(
+                    &clip.animation,
+                    clip.transform,
+                    clip.opacity,
+                    clip.timeline_start,
+                    time,
+                );
                 let mut layer = RgbaVideoLayer::new(width, height, pixels)
                     .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?
-                    .with_visual_settings(clip.transform, clip.crop, clip.opacity)
+                    .with_visual_settings(transform, clip.crop, opacity)
                     .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
                 if let Some(key) = cache_key {
                     layer = layer.with_cache_key(*key);
@@ -2141,6 +2161,7 @@ mod desktop {
                     transform: Transform::IDENTITY,
                     crop: Crop::NONE,
                     opacity: Opacity::OPAQUE,
+                    animation: ClipAnimation::default(),
                     effects: Vec::new(),
                     transition_in: None,
                     transition_out: None,
@@ -2183,6 +2204,7 @@ mod desktop {
                 transform: Transform::IDENTITY,
                 crop: Crop::NONE,
                 opacity: Opacity::OPAQUE,
+                animation: ClipAnimation::default(),
                 effects: Vec::new(),
                 transition_in: None,
                 transition_out: None,
@@ -2197,6 +2219,7 @@ mod desktop {
                 transform: Transform::IDENTITY,
                 crop: Crop::NONE,
                 opacity: Opacity::OPAQUE,
+                animation: ClipAnimation::default(),
                 effects: Vec::new(),
                 transition_in: None,
                 transition_out: None,
@@ -2283,6 +2306,7 @@ mod desktop {
         transform: Transform,
         crop: Crop,
         opacity: Opacity,
+        animation: ClipAnimation,
         effects: Vec<EffectReference>,
         transition_in: Option<TransitionReference>,
         transition_out: Option<TransitionReference>,
@@ -2316,9 +2340,27 @@ mod desktop {
         pub(super) transform: Transform,
         pub(super) crop: Crop,
         pub(super) opacity: Opacity,
+        pub(super) animation: ClipAnimation,
         pub(super) effects: Vec<EffectReference>,
         pub(super) transition_in: Option<TransitionReference>,
         pub(super) transition_out: Option<TransitionReference>,
+    }
+
+    /// The transform and opacity a clip has at `time`, after animation.
+    ///
+    /// A clip with no keyframes returns its static values, so the common case
+    /// costs one empty-vector check per layer.
+    fn animated_settings(
+        animation: &ClipAnimation,
+        transform: Transform,
+        opacity: Opacity,
+        timeline_start: RationalTime,
+        time: RationalTime,
+    ) -> (Transform, Opacity) {
+        let elapsed = time
+            .checked_sub(timeline_start)
+            .unwrap_or(RationalTime::zero());
+        animation.sample(transform, opacity, elapsed)
     }
 
     #[derive(Clone)]
@@ -2570,6 +2612,7 @@ mod desktop {
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
+                    animation: settings.animation,
                     effects: settings.effects,
                     transition_in: settings.transition_in,
                     transition_out: settings.transition_out,
@@ -2606,6 +2649,7 @@ mod desktop {
                     transform: settings.transform,
                     crop: settings.crop,
                     opacity: settings.opacity,
+                    animation: settings.animation,
                     effects: settings.effects,
                     transition_in: settings.transition_in,
                     transition_out: settings.transition_out,
@@ -4808,6 +4852,7 @@ mod desktop {
                     transform: Transform::IDENTITY,
                     crop: Crop::NONE,
                     opacity: Opacity::OPAQUE,
+                    animation: ClipAnimation::default(),
                     effects: Vec::new(),
                     transition_in: None,
                     transition_out: None,
@@ -4821,6 +4866,7 @@ mod desktop {
                         transform: Transform::IDENTITY,
                         crop: Crop::NONE,
                         opacity: Opacity::OPAQUE,
+                        animation: ClipAnimation::default(),
                         effects: Vec::new(),
                         transition_in: None,
                         transition_out: None,
@@ -5283,7 +5329,7 @@ pub(crate) use desktop::PreviewRuntime;
 mod text_scissor_tests {
     use super::desktop::{TextClip, text_scissor};
     use or_core::{
-        Crop, EffectReference, Opacity, RationalTime, TextFormatting, Transform,
+        ClipAnimation, Crop, EffectReference, Opacity, RationalTime, TextFormatting, Transform,
         TransitionReference,
     };
     use or_render::TextInkBounds;
@@ -5297,6 +5343,7 @@ mod text_scissor_tests {
             transform,
             crop: Crop::NONE,
             opacity: Opacity::OPAQUE,
+            animation: ClipAnimation::default(),
             effects: Vec::<EffectReference>::new(),
             transition_in: None::<TransitionReference>,
             transition_out: None::<TransitionReference>,

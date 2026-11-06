@@ -1,6 +1,6 @@
 # Feature — Visual Settings, Effects, Colour and Audio Controls
 
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-07
 
 Scope: per-clip visual and audio parameters, the closed effect/transition set, and
 the colour assumptions behind preview and export.
@@ -11,6 +11,24 @@ Bounded fixed-point transform (position, scale, rotation, anchor), crop and
 opacity, stored exactly in the project and applied in the wgpu layer pipeline.
 GPU uniforms and textures stay runtime-only. The inspector edits these in human
 units (%, °, px, dB, s) while retaining exact project values.
+
+## Keyframes
+
+Transform channels (position, scale, rotation) and opacity can be keyframed per
+clip. A keyframe stores an offset from the clip start, an exact integer value in
+the same fixed-point unit as the static field, and one of four cubic easings
+(linear, ease in, ease out, ease in and out). Before the first and after the last
+keyframe the track holds the nearest value, and a channel with no keyframes keeps
+the static field, so a project written before animation opens unchanged.
+
+Keyframes are sampled in the shared frame loop from clip-relative time, so
+preview and export animate identically and a seek lands on the same value. The
+inspector adds a keyframe at the playhead from the values currently in the
+fields; each chip can be edited in time, value and easing, or removed. The
+project file omits an empty animation, and validation rejects unsorted
+keyframes, offsets past the clip end, more than 64 keyframes per channel, and
+values outside the clip limits. Graph editing, effect parameter keyframes and
+clip-level motion presets remain deferred.
 
 ## Effects and transitions
 
@@ -83,7 +101,7 @@ still writes a new cleaned WAV; the timeline action no longer needs it.
 
 ## Deferred
 
-Keyframed parameters, effect stacks beyond the closed set, masks, adjustment
+Effect-parameter keyframes, effect stacks beyond the closed set, masks, adjustment
 layers, HDR, hardware-accelerated effects, spectral denoising (the current
 reduction is a gate, not a noise-print removal), and per-stream selection when a
 video file carries more than one audio stream.

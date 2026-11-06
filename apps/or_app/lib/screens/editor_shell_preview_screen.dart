@@ -1342,6 +1342,7 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
                                   widget.onUpdateTimelineClipPlaybackRate,
                               onSetReversed: widget.onSetTimelineClipReversed,
                               onSetFrozen: widget.onSetTimelineClipFrozen,
+                              playhead: _previewState.value?.position,
                             ),
                     ),
                   ],

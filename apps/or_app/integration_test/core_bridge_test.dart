@@ -1952,6 +1952,34 @@ class _ObservedRustProjectGateway implements ProjectGateway {
   );
 
   @override
+  Future<ProjectClipAnimation> getTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) => _gateway.getTimelineClipAnimation(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+  );
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAnimation(
+    ProjectSessionHandle session,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectClipAnimation animation,
+  }) => _gateway.updateTimelineClipAnimation(
+    session,
+    current,
+    trackId: trackId,
+    clipId: clipId,
+    animation: animation,
+  );
+
+  @override
   Future<ProjectActionResult> updateTimelineClipPlaybackRate(
     ProjectSessionHandle session,
     ProjectReadModel current, {

@@ -640,6 +640,29 @@ class _Runner {
         );
         await _settle();
         return;
+      case 'scroll_until':
+        // Long inspectors build rows lazily, so `ensureVisible` cannot find a
+        // row that was never built. Drag the named scroll view in steps until
+        // the target exists, then reveal it fully.
+        final target = _requireFinder(step);
+        final scroller = find.byKey(
+          ValueKey('${step['scroll'] ?? 'inspector-scroll'}'),
+        );
+        final delta = (step['dy'] as num?)?.toDouble() ?? -600;
+        final limit = (step['steps'] as num?)?.toInt() ?? 12;
+        for (var attempt = 0; attempt < limit; attempt++) {
+          if (target.evaluate().isNotEmpty) {
+            await _scrollIntoView(target);
+            return;
+          }
+          await tester.drag(scroller, Offset(0, delta));
+          await _settle();
+        }
+        if (target.evaluate().isEmpty) {
+          fail('scroll_until: no widget matched ${step['selector']}');
+        }
+        await _scrollIntoView(target);
+        return;
       case 'measure':
         result.measurement = await _measure(step);
         return;

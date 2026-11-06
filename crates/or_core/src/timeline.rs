@@ -18,6 +18,10 @@ pub const MAX_TIMELINE_MARKER_LABEL_BYTES: usize = 256;
 pub const MAX_TIMELINE_TEXT_BYTES: usize = 65_536;
 pub const MAX_TIMELINE_CAPTION_BYTES: usize = 4_096;
 pub const MAX_CLIP_EFFECTS: usize = 16;
+
+/// Most keyframes one channel may hold. Six channels per clip keep a project
+/// file predictable; a longer animation belongs in a MotionScene.
+pub const MAX_KEYFRAMES_PER_CHANNEL: usize = 64;
 pub const MIN_TEXT_SIZE_MILLI_POINTS: u32 = 4_000;
 pub const MAX_TEXT_SIZE_MILLI_POINTS: u32 = 256_000;
 pub const MAX_TRANSFORM_POSITION_MILLI_CANVAS: i32 = 100_000;
@@ -619,6 +623,11 @@ pub struct VisualSettings {
     pub transform: Transform,
     pub crop: Crop,
     pub opacity: Opacity,
+    /// Keyframes that override the transform and opacity above for the frames
+    /// they cover. Omitted from the file when unused, so a project written
+    /// before animation existed opens unchanged.
+    #[serde(default, skip_serializing_if = "ClipAnimation::is_empty")]
+    pub animation: ClipAnimation,
     #[serde(deserialize_with = "crate::project_document::deserialize_effect_references")]
     pub effects: Vec<EffectReference>,
     pub transition_in: Option<TransitionReference>,
@@ -634,6 +643,7 @@ impl VisualSettings {
         self.transform.is_valid()
             && self.crop.is_valid()
             && self.opacity.is_valid()
+            && self.animation.is_valid_for_duration(duration)
             && self.effects.len() <= MAX_CLIP_EFFECTS
             && self.effects.iter().all(|effect| effect.is_valid())
             && [self.transition_in, self.transition_out]
@@ -652,11 +662,279 @@ impl Default for VisualSettings {
             transform: Transform::IDENTITY,
             crop: Crop::NONE,
             opacity: Opacity::OPAQUE,
+            animation: ClipAnimation::default(),
             effects: Vec::new(),
             transition_in: None,
             transition_out: None,
             audio: AudioSettings::DEFAULT,
         }
+    }
+}
+
+/// One control point for a clip property, measured from the clip's own start.
+///
+/// Trimming a clip from the head keeps its keyframes attached to the picture
+/// they animate because the offset moves with the content, not with the
+/// timeline.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Keyframe {
+    pub at: RationalTime,
+    pub value: i32,
+    #[serde(default)]
+    pub easing: KeyframeEasing,
+}
+
+/// How the value travels from this keyframe to the next one.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KeyframeEasing {
+    #[default]
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+impl KeyframeEasing {
+    pub const ALL: [Self; 4] = [Self::Linear, Self::EaseIn, Self::EaseOut, Self::EaseInOut];
+
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::Linear => "linear",
+            Self::EaseIn => "ease_in",
+            Self::EaseOut => "ease_out",
+            Self::EaseInOut => "ease_in_out",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|easing| easing.wire_name() == value.trim())
+    }
+
+    /// Applies the easing to a fraction of the segment, in permille.
+    fn shape(self, permille: i32) -> f64 {
+        let t = f64::from(permille) / 1_000.0;
+        match self {
+            Self::Linear => t,
+            Self::EaseIn => t * t * t,
+            Self::EaseOut => 1.0 - (1.0 - t).powi(3),
+            Self::EaseInOut => {
+                if t < 0.5 {
+                    4.0 * t * t * t
+                } else {
+                    1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+                }
+            }
+        }
+    }
+}
+
+/// A sorted list of keyframes for one numeric channel.
+///
+/// An empty track means "use the clip's static value", which is what every
+/// project written before animation existed meant.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyframeTrack {
+    #[serde(default)]
+    pub keyframes: Vec<Keyframe>,
+}
+
+impl KeyframeTrack {
+    pub fn is_empty(&self) -> bool {
+        self.keyframes.is_empty()
+    }
+
+    /// The value at `elapsed` seconds from the clip start.
+    ///
+    /// Before the first keyframe and after the last one the track holds the
+    /// nearest value, so a clip that starts moving at 1 s is still while it
+    /// waits instead of snapping out of the static value.
+    pub fn sample_at(&self, elapsed: RationalTime, fallback: i32) -> i32 {
+        let Some((first, rest)) = self.keyframes.split_first() else {
+            return fallback;
+        };
+        if elapsed <= first.at {
+            return first.value;
+        }
+        let Some(last) = self.keyframes.last() else {
+            return fallback;
+        };
+        if elapsed >= last.at {
+            return last.value;
+        }
+        let mut previous = first;
+        for next in rest {
+            if elapsed < next.at {
+                return interpolate(previous, next, elapsed);
+            }
+            previous = next;
+        }
+        last.value
+    }
+
+    fn is_valid_for_duration(&self, duration: RationalTime) -> bool {
+        if self.keyframes.len() > MAX_KEYFRAMES_PER_CHANNEL {
+            return false;
+        }
+        let mut previous: Option<Keyframe> = None;
+        for keyframe in &self.keyframes {
+            if keyframe.at.is_negative() || keyframe.at > duration {
+                return false;
+            }
+            if let Some(previous) = previous
+                && keyframe.at <= previous.at
+            {
+                return false;
+            }
+            previous = Some(*keyframe);
+        }
+        true
+    }
+}
+
+fn sample_scale(track: &KeyframeTrack, elapsed: RationalTime, fallback: u32) -> u32 {
+    let fallback = i32::try_from(fallback).unwrap_or(1_000);
+    let value = track.sample_at(elapsed, fallback);
+    u32::try_from(value.clamp(1, MAX_TRANSFORM_SCALE_MILLI as i32)).unwrap_or(1_000)
+}
+
+fn sample_opacity(track: &KeyframeTrack, elapsed: RationalTime, fallback: u16) -> u16 {
+    let fallback = i32::from(fallback);
+    let value = track.sample_at(elapsed, fallback);
+    u16::try_from(value.clamp(0, 10_000)).unwrap_or(u16::MAX)
+}
+
+fn interpolate(previous: &Keyframe, next: &Keyframe, at: RationalTime) -> i32 {
+    let permille = permille_between(previous.at, next.at, at).unwrap_or(0);
+    let shaped = previous.easing.shape(permille);
+    let delta = f64::from(next.value - previous.value) * shaped;
+    previous.value + delta.round() as i32
+}
+
+/// The position of `at` inside `start..=end`, in permille.
+fn permille_between(start: RationalTime, end: RationalTime, at: RationalTime) -> Option<i32> {
+    let span = end.checked_sub(start).ok()?;
+    if !span.is_positive() {
+        return None;
+    }
+    let elapsed = at.checked_sub(start).ok()?;
+    let numerator =
+        i128::from(elapsed.numerator()) * i128::from(span.denominator()) * 1_000;
+    let denominator = i128::from(span.numerator()) * i128::from(elapsed.denominator());
+    if denominator == 0 {
+        return None;
+    }
+    i32::try_from(numerator / denominator)
+        .ok()
+        .map(|permille| permille.clamp(0, 1_000))
+}
+
+/// Keyframes for every property a clip can animate.
+///
+/// Effects, crops and transitions stay static: they are closed sets whose
+/// parameters are not a single number, and a graph editor for them is separate
+/// work. Transform channels and opacity cover slide, zoom, spin and fade.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClipAnimation {
+    #[serde(default)]
+    pub opacity_basis_points: KeyframeTrack,
+    #[serde(default)]
+    pub x_milli_canvas: KeyframeTrack,
+    #[serde(default)]
+    pub y_milli_canvas: KeyframeTrack,
+    #[serde(default)]
+    pub scale_x_milli: KeyframeTrack,
+    #[serde(default)]
+    pub scale_y_milli: KeyframeTrack,
+    #[serde(default)]
+    pub rotation_milli_degrees: KeyframeTrack,
+}
+
+impl ClipAnimation {
+    pub fn is_empty(&self) -> bool {
+        [
+            &self.opacity_basis_points,
+            &self.x_milli_canvas,
+            &self.y_milli_canvas,
+            &self.scale_x_milli,
+            &self.scale_y_milli,
+            &self.rotation_milli_degrees,
+        ]
+        .into_iter()
+        .all(KeyframeTrack::is_empty)
+    }
+
+    pub fn is_valid_for_duration(&self, duration: RationalTime) -> bool {
+        [
+            &self.opacity_basis_points,
+            &self.x_milli_canvas,
+            &self.y_milli_canvas,
+            &self.scale_x_milli,
+            &self.scale_y_milli,
+            &self.rotation_milli_degrees,
+        ]
+        .into_iter()
+        .all(|track| track.is_valid_for_duration(duration))
+            && self
+                .opacity_basis_points
+                .keyframes
+                .iter()
+                .all(|keyframe| (0..=10_000).contains(&keyframe.value))
+            && self
+                .x_milli_canvas
+                .keyframes
+                .iter()
+                .chain(self.y_milli_canvas.keyframes.iter())
+                .all(|keyframe| {
+                    (-MAX_TRANSFORM_POSITION_MILLI_CANVAS..=MAX_TRANSFORM_POSITION_MILLI_CANVAS)
+                        .contains(&keyframe.value)
+                })
+            && self
+                .scale_x_milli
+                .keyframes
+                .iter()
+                .chain(self.scale_y_milli.keyframes.iter())
+                .all(|keyframe| (1..=MAX_TRANSFORM_SCALE_MILLI as i32).contains(&keyframe.value))
+            && self
+                .rotation_milli_degrees
+                .keyframes
+                .iter()
+                .all(|keyframe| (-360_000..=360_000).contains(&keyframe.value))
+    }
+
+    /// The transform and opacity a frame at `elapsed` seconds should use.
+    ///
+    /// Channels without keyframes keep the clip's static value, so adding one
+    /// keyframe to a clip does not disturb the other settings.
+    pub fn sample(
+        &self,
+        transform: Transform,
+        opacity: Opacity,
+        elapsed: RationalTime,
+    ) -> (Transform, Opacity) {
+        let transform = Transform {
+            x_milli_canvas: self
+                .x_milli_canvas
+                .sample_at(elapsed, transform.x_milli_canvas),
+            y_milli_canvas: self
+                .y_milli_canvas
+                .sample_at(elapsed, transform.y_milli_canvas),
+            scale_x_milli: sample_scale(&self.scale_x_milli, elapsed, transform.scale_x_milli),
+            scale_y_milli: sample_scale(&self.scale_y_milli, elapsed, transform.scale_y_milli),
+            rotation_milli_degrees: self
+                .rotation_milli_degrees
+                .sample_at(elapsed, transform.rotation_milli_degrees),
+            ..transform
+        };
+        let opacity = Opacity {
+            basis_points: sample_opacity(&self.opacity_basis_points, elapsed, opacity.basis_points),
+        };
+        (transform, opacity)
     }
 }
 
@@ -1630,11 +1908,12 @@ mod tests {
     }
 
     use super::{
-        ClipContent, ClipId, ClipSettings, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
+        ClipAnimation, ClipContent, ClipId, ClipSettings, Keyframe, KeyframeEasing, KeyframeTrack,
+        MAX_KEYFRAMES_PER_CHANNEL, MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK,
         MAX_TIMELINE_MARKER_LABEL_BYTES, MAX_TIMELINE_MARKERS, MAX_TIMELINE_TRACKS, MarkerId,
-        ProjectTimeline, SequenceTimingError, TextBackground, TextColor, TextFormatting,
+        Opacity, ProjectTimeline, SequenceTimingError, TextBackground, TextColor, TextFormatting,
         TextVerticalAnchor, TimelineClip, TimelineMarker, TimelineTrack, TrackId, TrackKind,
-        TrackState, VisualSettings,
+        TrackState, Transform, VisualSettings,
     };
     use crate::{
         AudioStreamMetadata, MediaId, MediaItem, MediaMetadata, MediaSourceRef,
@@ -2411,5 +2690,104 @@ mod tests {
         assert_eq!(timeline.frame_time(0), Ok(None));
         assert_eq!(timeline.next_frame_time(time(0, 1)), Ok(None));
         assert_eq!(timeline.previous_frame_time(time(0, 1)), Ok(None));
+    }
+    fn keyframe(at: RationalTime, value: i32) -> Keyframe {
+        Keyframe {
+            at,
+            value,
+            easing: KeyframeEasing::Linear,
+        }
+    }
+
+    fn two_keyframes(easing: KeyframeEasing) -> KeyframeTrack {
+        KeyframeTrack {
+            keyframes: vec![
+                Keyframe {
+                    at: time(0, 1),
+                    value: 0,
+                    easing,
+                },
+                keyframe(time(1, 1), 1_000),
+            ],
+        }
+    }
+
+    #[test]
+    fn keyframes_hold_the_nearest_value_outside_their_range() {
+        let track = two_keyframes(KeyframeEasing::Linear);
+        assert_eq!(track.sample_at(time(-1, 1), 42), 0);
+        assert_eq!(track.sample_at(time(3, 1), 42), 1_000);
+        assert_eq!(KeyframeTrack::default().sample_at(time(1, 1), 42), 42);
+    }
+
+    #[test]
+    fn linear_keyframes_interpolate_between_control_points() {
+        let track = two_keyframes(KeyframeEasing::Linear);
+        assert_eq!(track.sample_at(time(1, 2), 0), 500);
+        assert_eq!(track.sample_at(time(1, 4), 0), 250);
+    }
+
+    #[test]
+    fn easing_curves_shape_the_middle_of_a_segment() {
+        assert_eq!(
+            two_keyframes(KeyframeEasing::EaseIn).sample_at(time(1, 2), 0),
+            125
+        );
+        assert_eq!(
+            two_keyframes(KeyframeEasing::EaseOut).sample_at(time(1, 2), 0),
+            875
+        );
+        assert_eq!(
+            two_keyframes(KeyframeEasing::EaseInOut).sample_at(time(1, 2), 0),
+            500
+        );
+    }
+
+    #[test]
+    fn an_animated_channel_overrides_only_its_own_property() {
+        let mut animation = ClipAnimation::default();
+        animation.opacity_basis_points = two_keyframes(KeyframeEasing::Linear);
+        animation.x_milli_canvas = KeyframeTrack {
+            keyframes: vec![keyframe(time(0, 1), -500)],
+        };
+        let (transform, opacity) =
+            animation.sample(Transform::IDENTITY, Opacity::OPAQUE, time(1, 2));
+        assert_eq!(transform.x_milli_canvas, -500);
+        assert_eq!(transform.scale_x_milli, Transform::IDENTITY.scale_x_milli);
+        assert_eq!(opacity.basis_points, 500);
+    }
+
+    #[test]
+    fn animation_validation_rejects_unsorted_out_of_range_and_oversized_tracks() {
+        let duration = time(2, 1);
+        let valid = KeyframeTrack {
+            keyframes: vec![keyframe(time(0, 1), 0), keyframe(time(2, 1), 1_000)],
+        };
+        assert!(valid.is_valid_for_duration(duration));
+
+        let unsorted = KeyframeTrack {
+            keyframes: vec![keyframe(time(1, 1), 0), keyframe(time(1, 2), 1)],
+        };
+        assert!(!unsorted.is_valid_for_duration(duration));
+
+        let past_the_end = KeyframeTrack {
+            keyframes: vec![keyframe(time(3, 1), 0)],
+        };
+        assert!(!past_the_end.is_valid_for_duration(duration));
+
+        let mut too_many = ClipAnimation::default();
+        too_many.opacity_basis_points.keyframes = (0..=MAX_KEYFRAMES_PER_CHANNEL)
+            .map(|index| keyframe(time(index as i64, 100), 0))
+            .collect();
+        assert!(!too_many.is_valid_for_duration(duration));
+    }
+
+    #[test]
+    fn a_project_without_animation_serializes_without_the_field() {
+        let settings = VisualSettings::default();
+        let value = serde_json::to_value(&settings).expect("settings serialize");
+        assert!(value.get("animation").is_none());
+        let parsed: VisualSettings = serde_json::from_value(value).expect("settings parse");
+        assert!(parsed.animation.is_empty());
     }
 }

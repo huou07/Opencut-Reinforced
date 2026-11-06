@@ -70,6 +70,7 @@ pub mod motion_library;
 pub mod performance;
 pub mod project;
 mod project_artifacts;
+pub mod project_animation;
 pub mod project_clip_settings;
 mod project_media;
 pub mod project_preview;

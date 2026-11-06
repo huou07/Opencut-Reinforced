@@ -21,6 +21,7 @@ import 'package:or_app/project/export_capability.dart';
 import 'package:or_app/project/export_profile.dart';
 import 'package:or_app/project/project_file_picker.dart';
 import 'package:or_app/project/project_gateway.dart';
+import 'package:or_app/screens/clip_animation_panel.dart';
 import 'package:or_app/screens/editor_media_library.dart';
 import 'package:or_app/screens/editor_timeline_panel.dart';
 import 'package:or_app/shell/app_shell.dart';
@@ -7537,6 +7538,96 @@ void main() {
     expect(gateway.lastTextContent?.kind, ProjectTimelineClipContentKind.text);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a keyframe at the playhead starts an animation', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final view = ProjectReadModel(
+      projectId: 'project-id',
+      projectInstanceId: 'instance-id',
+      revision: BigInt.zero,
+      name: 'Animation',
+      dirty: false,
+      descriptorPath: '/tmp/or-animation.json',
+    );
+    final session = _FakeSession('/tmp/or-animation.orproj', view);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClipAnimationPanel(
+            gateway: gateway,
+            session: session,
+            project: view,
+            trackId: 'track-1',
+            clipId: 'clip-1',
+            clipStart: ProjectRationalTime(BigInt.zero, 1),
+            clipDuration: ProjectRationalTime(BigInt.from(4), 1),
+            playhead: ProjectRationalTime(BigInt.from(3), 2),
+            staticSettings: ProjectTimelineVisualSettings.identity,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('animation-add-opacity')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAnimationCalls, 1);
+    final keyframes = gateway.lastAnimation.opacityBasisPoints;
+    expect(keyframes, hasLength(1));
+    expect(keyframes.single.value, 10000);
+    expect(keyframes.single.at.secondsForDisplay, closeTo(1.5, 0.001));
+    expect(
+      find.byKey(const ValueKey('animation-keyframe-opacity-0')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('clearing the animation removes every keyframe', (tester) async {
+    final gateway = _FakeProjectGateway()
+      ..lastAnimation = ProjectClipAnimation(
+        opacityBasisPoints: [
+          ProjectKeyframe(
+            at: ProjectRationalTime(BigInt.zero, 1),
+            value: 10000,
+          ),
+        ],
+      );
+    final view = ProjectReadModel(
+      projectId: 'project-id',
+      projectInstanceId: 'instance-id',
+      revision: BigInt.zero,
+      name: 'Animation',
+      dirty: false,
+      descriptorPath: '/tmp/or-animation.json',
+    );
+    final session = _FakeSession('/tmp/or-animation.orproj', view);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClipAnimationPanel(
+            gateway: gateway,
+            session: session,
+            project: view,
+            trackId: 'track-1',
+            clipId: 'clip-1',
+            clipStart: ProjectRationalTime(BigInt.zero, 1),
+            clipDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('animation-clear')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAnimationCalls, 1);
+    expect(gateway.lastAnimation.isEmpty, isTrue);
+    expect(find.byKey(const ValueKey('animation-keyframe-opacity-0')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {
@@ -8055,6 +8146,8 @@ class _FakeProjectGateway implements ProjectGateway {
   int getAudioSettingsCalls = 0;
   int updateAudioSettingsCalls = 0;
   ProjectTimelineAudioSettings? lastAudioSettings;
+  int updateAnimationCalls = 0;
+  ProjectClipAnimation lastAnimation = ProjectClipAnimation.empty;
   int updatePlaybackRateCalls = 0;
   ProjectRationalRate? lastPlaybackRate;
   int timelineMarkersCalls = 0;
@@ -8608,6 +8701,30 @@ class _FakeProjectGateway implements ProjectGateway {
       return _timelineOperationFailure('TIMELINE_CLIP_NOT_FOUND');
     }
     session.audioSettings[clipId] = settings;
+    _timelineChanged(session);
+    return ProjectActionResult(succeeded: true, view: session.view);
+  }
+
+  @override
+  Future<ProjectClipAnimation> getTimelineClipAnimation(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+  }) async => lastAnimation;
+
+  @override
+  Future<ProjectActionResult> updateTimelineClipAnimation(
+    ProjectSessionHandle handle,
+    ProjectReadModel current, {
+    required String trackId,
+    required String clipId,
+    required ProjectClipAnimation animation,
+  }) async {
+    updateAnimationCalls++;
+    lastAnimation = animation;
+    final session = _session(handle);
+    if (current.revision != session.view.revision) return _revisionConflict();
     _timelineChanged(session);
     return ProjectActionResult(succeeded: true, view: session.view);
   }

@@ -1,0 +1,181 @@
+{
+ "name": "keyframes",
+ "harness": "or_ui",
+ "description": "Adds a transform keyframe to a selected clip at the playhead, edits its value in the dialog, and confirms the chip shows the new value. A passing run means the Animation section is reachable in the real inspector, the keyframe is written through the ordinary clip command, and the panel reads it back.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Keyframes"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 20000,
+   "label_regex": "Import a video"
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-import-media"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^timeline-clip-[0-9a-f-]+$"
+   }
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-add-opacity"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "shot",
+   "name": "animation-empty"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "animation-add-opacity"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 300
+  },
+  {
+   "op": "pump",
+   "ms": 600
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-keyframe-opacity-0"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "shot",
+   "name": "animation-one-keyframe"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "animation-keyframe-opacity-0"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Opacity keyframe",
+   "budget_ms": 5000
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "animation-dialog-value"
+   },
+   "value": "50"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Save"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 600
+  },
+  {
+   "op": "expect_absent",
+   "key": "animation-dialog-value"
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-keyframe-opacity-0"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "expect",
+   "key": "animation-keyframe-opacity-0"
+  },
+  {
+   "op": "tree",
+   "name": "edited"
+  },
+  {
+   "op": "shot",
+   "name": "animation-edited"
+  }
+ ]
+}

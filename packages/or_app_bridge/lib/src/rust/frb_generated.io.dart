@@ -8,6 +8,7 @@ import 'api/motion.dart';
 import 'api/motion_library.dart';
 import 'api/performance.dart';
 import 'api/project.dart';
+import 'api/project_animation.dart';
 import 'api/views.dart';
 
 import 'dart:async';
@@ -85,6 +86,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MediaArtifactBytesView dco_decode_box_autoadd_media_artifact_bytes_view(
+    dynamic raw,
+  );
+
+  @protected
+  ProjectClipAnimationView dco_decode_box_autoadd_project_clip_animation_view(
     dynamic raw,
   );
 
@@ -212,6 +218,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ProjectCaptionCueView> dco_decode_list_project_caption_cue_view(
     dynamic raw,
   );
+
+  @protected
+  List<ProjectKeyframeView> dco_decode_list_project_keyframe_view(dynamic raw);
 
   @protected
   List<ProjectMediaItemView> dco_decode_list_project_media_item_view(
@@ -371,10 +380,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_project_caption_import_preview_view(dynamic raw);
 
   @protected
+  ProjectClipAnimationView dco_decode_project_clip_animation_view(dynamic raw);
+
+  @protected
   ProjectExportJobView dco_decode_project_export_job_view(dynamic raw);
 
   @protected
   ProjectHostEventView dco_decode_project_host_event_view(dynamic raw);
+
+  @protected
+  ProjectKeyframeView dco_decode_project_keyframe_view(dynamic raw);
 
   @protected
   ProjectMediaItemView dco_decode_project_media_item_view(dynamic raw);
@@ -610,6 +625,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ProjectClipAnimationView sse_decode_box_autoadd_project_clip_animation_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectTextBackgroundView sse_decode_box_autoadd_project_text_background_view(
     SseDeserializer deserializer,
   );
@@ -757,6 +777,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProjectCaptionCueView> sse_decode_list_project_caption_cue_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ProjectKeyframeView> sse_decode_list_project_keyframe_view(
     SseDeserializer deserializer,
   );
 
@@ -968,12 +993,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_project_caption_import_preview_view(SseDeserializer deserializer);
 
   @protected
+  ProjectClipAnimationView sse_decode_project_clip_animation_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   ProjectExportJobView sse_decode_project_export_job_view(
     SseDeserializer deserializer,
   );
 
   @protected
   ProjectHostEventView sse_decode_project_host_event_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ProjectKeyframeView sse_decode_project_keyframe_view(
     SseDeserializer deserializer,
   );
 
@@ -1255,6 +1290,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_project_clip_animation_view(
+    ProjectClipAnimationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_project_text_background_view(
     ProjectTextBackgroundView self,
     SseSerializer serializer,
@@ -1443,6 +1484,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_project_caption_cue_view(
     List<ProjectCaptionCueView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_project_keyframe_view(
+    List<ProjectKeyframeView> self,
     SseSerializer serializer,
   );
 
@@ -1693,6 +1740,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_project_clip_animation_view(
+    ProjectClipAnimationView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_project_export_job_view(
     ProjectExportJobView self,
     SseSerializer serializer,
@@ -1701,6 +1754,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_project_host_event_view(
     ProjectHostEventView self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_project_keyframe_view(
+    ProjectKeyframeView self,
     SseSerializer serializer,
   );
 

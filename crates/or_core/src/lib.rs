@@ -108,8 +108,9 @@ pub use subtitle_io::{
 };
 pub use time::{RationalRate, RationalTime, TimeError, TimeRange};
 pub use timeline::{
-    AudioSettings, ClipContent, ClipId, ClipSettings, Crop, DEFAULT_TEXT_LINE_HEIGHT_PERMILLE,
-    EffectReference, FontIdentity, MAX_AUDIO_GAIN_MILLIDECIBELS, MAX_CLIP_EFFECTS,
+    AudioSettings, ClipAnimation, ClipContent, ClipId, ClipSettings, Crop, DEFAULT_TEXT_LINE_HEIGHT_PERMILLE,
+    EffectReference, FontIdentity, Keyframe, KeyframeEasing, KeyframeTrack,
+    MAX_AUDIO_GAIN_MILLIDECIBELS, MAX_CLIP_EFFECTS, MAX_KEYFRAMES_PER_CHANNEL,
     MAX_NOISE_REDUCTION_DECIBELS, MAX_TEXT_LETTER_SPACING_MILLI_POINTS,
     MAX_TEXT_LINE_HEIGHT_PERMILLE, MAX_TEXT_SIZE_MILLI_POINTS, MAX_TIMELINE_CAPTION_BYTES,
     MAX_TIMELINE_CLIPS, MAX_TIMELINE_CLIPS_PER_TRACK, MAX_TIMELINE_MARKER_LABEL_BYTES,

@@ -7,6 +7,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+import 'project_animation.dart';
 import 'views.dart';
 
 // These functions are ignored because they are not marked as `pub`: `action_error`, `action_operation_error`, `audio_settings_view`, `cache_artifact_kind`, `cache_unavailable_error`, `caption_time_error`, `command`, `dispatch_command`, `effect_from_view`, `effect_kind_code`, `effect_kind_modified`, `effects_from_view`, `ensure_decoders_available`, `ensure_visual_settings_snapshot`, `event_view`, `export_captions_at_revision`, `export_job_view`, `failed`, `find_timeline_clip_state`, `forward_events`, `forward_media_artifact_events`, `from_request`, `handle_export_application_request`, `host_error`, `invalid_arguments`, `invalid_timeline_id`, `media_artifact_event_view`, `media_item_view`, `operation_bridge_error`, `operation_error_code`, `parse_export_identity`, `parse_session_identity`, `prepare_import_source`, `probe_import_source`, `project_session_error`, `project_view`, `query`, `rational_rate_view`, `rational_time_millis`, `rational_time_view`, `read_bounded_caption_file`, `recovery_action_error`, `recovery_conflict_name`, `request_identity`, `revision_conflict_error`, `start_project_host`, `text_clip_content`, `text_formatting_from_view`, `text_formatting_view`, `time_from_view`, `timeline_arguments_error`, `timeline_clip_page_view`, `timeline_clip_view`, `timeline_command`, `timeline_marker_page_view`, `timeline_marker_query_arguments_error`, `timeline_marker_view`, `timeline_query_arguments_error`, `timeline_snap_view`, `timeline_track_view`, `transcription_failure`, `transcription_job`, `transcription_service_failure`, `transition_from_view`, `transition_kind_code`, `unexpected_response_error`, `unsupported_audio_settings`, `unsupported_visual_settings`, `view_from_query`, `visual_settings_view`, `write_caption_file_atomically`
@@ -129,6 +130,14 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
 
   Future<ProjectTranscriptionModelView> finishTranscriptionModelDownload({
     required String downloadId,
+  });
+
+  Future<ProjectClipAnimationView> getTimelineClipAnimation({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
   });
 
   Future<ProjectTimelineAudioSettingsView> getTimelineClipAudioSettings({
@@ -524,6 +533,15 @@ abstract class ProjectHostHandle implements RustOpaqueInterface {
     required String projectId,
     required String projectInstanceId,
     required BigInt expectedRevision,
+  });
+
+  Future<ProjectActionResult> updateTimelineClipAnimation({
+    required String projectId,
+    required String projectInstanceId,
+    required BigInt expectedRevision,
+    required String trackId,
+    required String clipId,
+    required ProjectClipAnimationView animation,
   });
 
   Future<ProjectActionResult> updateTimelineClipAudioSettings({
