@@ -673,6 +673,7 @@ fn code_line_opacity_animation(
         property: MotionProperty::Opacity,
         keyframes,
         easing: MotionEasing::Linear,
+        easing_curve: None,
     })
 }
 

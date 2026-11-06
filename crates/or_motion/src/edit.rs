@@ -725,6 +725,7 @@ pub fn apply_scene_edit(
                 property: *property,
                 keyframes: keyframes.clone(),
                 easing: *easing,
+                easing_curve: None,
             });
         }
     }
@@ -1112,6 +1113,7 @@ mod tests {
                 },
             ],
             easing: MotionEasing::Linear,
+            easing_curve: None,
         }
     }
 

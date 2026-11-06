@@ -24,6 +24,12 @@ product still needs.
   closing line says what happened, for example "Imported 12 selected files, then
   stopped; 188 were not added." Failures seen before the stop are still named.
 
+- **Scenes can carry a real easing curve.** Motion and camera keys accept a
+  cubic Bézier `easing_curve` next to the four named easings (scene schema
+  version 4), so an entrance can lead fast and settle slowly, and an emphasis can
+  overshoot and return. The curve is authored in the file or by the agent; older
+  scenes keep rendering exactly as before.
+
 ### Fixed
 - **The top bar no longer overflows while an import runs.** Holding a long
   transient line and a stop button in one row pushed the bar 168 pixels past a

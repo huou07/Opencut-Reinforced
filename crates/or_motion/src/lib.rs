@@ -43,7 +43,7 @@ pub const MOTION_SCENE_FORMAT: &str = "opencut-reinforced-motion-scene";
 /// height, tracking) and the optional text box. They are additive: a version 1
 /// document parses unchanged and renders exactly as it did, which is why the
 /// upgrade needs no migration step.
-pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 3;
+pub const MOTION_SCENE_SCHEMA_VERSION: u32 = 4;
 /// The oldest schema this crate still reads.
 pub const MIN_MOTION_SCENE_SCHEMA_VERSION: u32 = 1;
 /// The largest scene this accepts. A scene is authored text, not media, so this is
@@ -106,6 +106,10 @@ pub struct MotionCamera {
     pub keyframes: Vec<MotionCameraKeyframe>,
     #[serde(default)]
     pub easing: MotionEasing,
+    /// A custom cubic Bézier easing curve, used instead of `easing` when
+    /// present. Same shape and rules as an animation's curve.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub easing_curve: Option<[f64; 4]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -359,6 +363,12 @@ pub struct MotionAnimation {
     pub keyframes: Vec<MotionKeyframe>,
     #[serde(default)]
     pub easing: MotionEasing,
+    /// A custom cubic Bézier easing curve `[p1x, p1y, p2x, p2y]`, used instead
+    /// of `easing` when present. The x components must stay in `0..=1` so the
+    /// curve remains a function of time; the y components are free, which is
+    /// what makes an overshoot possible.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub easing_curve: Option<[f64; 4]>,
 }
 
 /// Why a scene could not be read at all.
@@ -601,6 +611,17 @@ pub fn validate_scene(scene: &MotionScene) -> MotionValidation {
             ));
         } else {
             animated.push((animation.node_id.clone(), animation.property));
+        }
+        if let Some(curve) = animation.easing_curve {
+            let finite = curve.iter().all(|value| value.is_finite());
+            let in_range = (0.0..=1.0).contains(&curve[0]) && (0.0..=1.0).contains(&curve[2]);
+            if !finite || !in_range {
+                errors.push(MotionDiagnostic::new(
+                    "MOTION_INVALID_EASING_CURVE",
+                    format!("{path}/easing_curve"),
+                    "an easing curve needs four finite numbers with both x components between 0 and 1",
+                ));
+            }
         }
         if animation.keyframes.is_empty() {
             errors.push(MotionDiagnostic::new(
@@ -1329,6 +1350,7 @@ mod tests {
                     },
                 ],
                 easing: MotionEasing::EaseOut,
+                easing_curve: None,
             }],
             camera: None,
         }
@@ -1355,6 +1377,7 @@ mod tests {
                 },
             ],
             easing: MotionEasing::Linear,
+            easing_curve: None,
         });
         let frame = evaluate_scene(&scene, RationalTime::new(2, 1).unwrap()).unwrap();
         let instruction = frame
@@ -1400,6 +1423,7 @@ mod tests {
                 },
             ],
             easing: MotionEasing::Linear,
+            easing_curve: None,
         });
         let validation = validate_scene(&scene);
         assert!(!validation.ok);
@@ -1454,6 +1478,95 @@ mod tests {
             parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap_err(),
             MotionSceneError::UnsupportedSchemaVersion
         );
+    }
+
+    #[test]
+    fn an_easing_curve_replaces_the_named_easing() {
+        let mut value = serde_json::to_value(scene()).unwrap();
+        // A strong ease-out: fast at the start, settling at the end.
+        value["animations"][0]["easing_curve"] = serde_json::json!([0.0, 0.9, 0.2, 1.0]);
+        let parsed = parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(validate_scene(&parsed).ok, "the curve must validate");
+        let frame = evaluate_scene(&parsed, RationalTime::new(1, 2).unwrap()).unwrap();
+        let opacity = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.kind == MotionNodeKind::Text)
+            .map(|instruction| instruction.opacity)
+            .expect("the scene has a text instruction");
+        // The named easing would give 0.75; the curve is well past it.
+        let named = 1.0 - (1.0 - 0.5) * (1.0 - 0.5);
+        assert!(opacity > named, "opacity {opacity} should exceed {named}");
+        assert!((opacity - ease_curve([0.0, 0.9, 0.2, 1.0], 0.5)).abs() < 0.000_1);
+    }
+
+    #[test]
+    fn a_curve_with_an_x_component_outside_the_unit_range_is_refused() {
+        let mut value = serde_json::to_value(scene()).unwrap();
+        value["animations"][0]["easing_curve"] = serde_json::json!([1.4, 0.0, 0.58, 1.0]);
+        let parsed = parse_motion_scene(&serde_json::to_vec(&value).unwrap()).unwrap();
+        let validation = validate_scene(&parsed);
+        assert!(!validation.ok);
+        assert_eq!(validation.errors[0].code, "MOTION_INVALID_EASING_CURVE");
+        assert_eq!(validation.errors[0].path, "/animations/0/easing_curve");
+    }
+
+    #[test]
+    fn a_camera_carries_its_own_easing_curve() {
+        let mut scene = scene();
+        scene.camera = Some(MotionCamera {
+            keyframes: vec![
+                MotionCameraKeyframe {
+                    at: RationalTime::new(0, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 1.0,
+                    rotation_degrees: 0.0,
+                },
+                MotionCameraKeyframe {
+                    at: RationalTime::new(2, 1).unwrap(),
+                    pan_x: 0.0,
+                    pan_y: 0.0,
+                    zoom: 2.0,
+                    rotation_degrees: 0.0,
+                },
+            ],
+            easing: MotionEasing::Linear,
+            easing_curve: Some([0.0, 0.9, 0.2, 1.0]),
+        });
+        let frame = evaluate_scene(&scene, RationalTime::new(1, 2).unwrap()).unwrap();
+        let instruction = frame
+            .instructions
+            .iter()
+            .find(|instruction| instruction.kind == MotionNodeKind::Text)
+            .expect("the scene has text");
+        // The linear camera would sit at 1.25×; the curve is further in.
+        let zoom = ease_curve([0.0, 0.9, 0.2, 1.0], 0.25);
+        assert!(zoom > 0.25, "expected the curve to lead, got {zoom}");
+        let raw = scene
+            .nodes
+            .iter()
+            .find(|node| node.node_id == instruction.node_id)
+            .and_then(|node| node.position)
+            .unwrap();
+        assert!((instruction.position.x - (960.0 + (raw.x - 960.0) * (1.0 + zoom))).abs() < 0.001);
+    }
+
+    #[test]
+    fn a_curve_solves_its_ends_exactly_and_never_runs_backwards() {
+        let curve = [0.42, 0.0, 0.58, 1.0];
+        assert_eq!(ease_curve(curve, 0.0), 0.0);
+        assert_eq!(ease_curve(curve, 1.0), 1.0);
+        let mut previous = 0.0;
+        for step in 0..=100 {
+            let value = ease_curve(curve, f64::from(step) / 100.0);
+            assert!(value >= previous - 1e-9, "step {step} went backwards");
+            previous = value;
+        }
+        // An overshoot above one is allowed on purpose: the y components are
+        // free, which is what makes a spring-like settle possible.
+        let overshoot = ease_curve([0.5, 1.8, 0.5, 1.0], 0.35);
+        assert!(overshoot > 1.0, "expected an overshoot, got {overshoot}");
     }
 
     #[test]
@@ -1720,6 +1833,7 @@ mod tests {
                     },
                 ],
                 easing: MotionEasing::Linear,
+                easing_curve: None,
             },
             MotionAnimation {
                 node_id: "code".to_owned(),
@@ -1735,6 +1849,7 @@ mod tests {
                     },
                 ],
                 easing: MotionEasing::Linear,
+                easing_curve: None,
             },
             MotionAnimation {
                 node_id: "diagram".to_owned(),
@@ -1750,6 +1865,7 @@ mod tests {
                     },
                 ],
                 easing: MotionEasing::Linear,
+                easing_curve: None,
             },
         ];
         let frame = evaluate_scene(&scene, RationalTime::new(1, 1).unwrap()).unwrap();
@@ -1947,6 +2063,17 @@ fn validate_camera(scene: &MotionScene, errors: &mut Vec<MotionDiagnostic>) {
     let Some(camera) = &scene.camera else {
         return;
     };
+    if let Some(curve) = camera.easing_curve {
+        let finite = curve.iter().all(|value| value.is_finite());
+        let in_range = (0.0..=1.0).contains(&curve[0]) && (0.0..=1.0).contains(&curve[2]);
+        if !finite || !in_range {
+            errors.push(MotionDiagnostic::new(
+                "MOTION_INVALID_EASING_CURVE",
+                "/camera/easing_curve",
+                "an easing curve needs four finite numbers with both x components between 0 and 1",
+            ));
+        }
+    }
     if camera.keyframes.len() > MAX_MOTION_KEYFRAMES {
         errors.push(MotionDiagnostic::new(
             "MOTION_TOO_MANY_CAMERA_KEYS",
@@ -2037,7 +2164,11 @@ fn sample_camera(camera: &MotionCamera, time: RationalTime) -> CameraState {
             if time >= start.at && time <= end.at {
                 let span = end.at.checked_sub(start.at).unwrap_or(RationalTime::ZERO);
                 let offset = time.checked_sub(start.at).unwrap_or(RationalTime::ZERO);
-                let eased = ease(camera.easing, ratio(offset, span));
+                let progress = ratio(offset, span);
+                let eased = match camera.easing_curve {
+                    Some(curve) => ease_curve(curve, progress),
+                    None => ease(camera.easing, progress),
+                };
                 return property(start) + (property(end) - property(start)) * eased;
             }
         }
@@ -2197,7 +2328,10 @@ pub fn sample_animation(animation: &MotionAnimation, time: RationalTime) -> Opti
             let span = end.at.checked_sub(start.at).ok()?;
             let offset = time.checked_sub(start.at).ok()?;
             let progress = ratio(offset, span);
-            let eased = ease(animation.easing, progress);
+            let eased = match animation.easing_curve {
+                Some(curve) => ease_curve(curve, progress),
+                None => ease(animation.easing, progress),
+            };
             return Some(start.value + (end.value - start.value) * eased);
         }
     }
@@ -2219,6 +2353,37 @@ fn ratio(offset: RationalTime, span: RationalTime) -> f64 {
 }
 
 /// The locked easing set, applied to a `0..=1` progress.
+/// Solves a cubic Bézier easing curve at `progress`.
+///
+/// The curve's x components are constrained by validation to `0..=1`, so x(t)
+/// is monotonic and a bisection on `t` is exact enough and deterministic — two
+/// hosts stepping the same frame get the same value, which a Newton iteration
+/// with a data-dependent iteration count would not guarantee.
+pub fn ease_curve(curve: [f64; 4], progress: f64) -> f64 {
+    let progress = progress.clamp(0.0, 1.0);
+    if progress <= 0.0 {
+        return 0.0;
+    }
+    if progress >= 1.0 {
+        return 1.0;
+    }
+    let [p1x, p1y, p2x, p2y] = curve;
+    let bezier = |first: f64, second: f64, t: f64| {
+        let inverse = 1.0 - t;
+        3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
+    };
+    let (mut low, mut high) = (0.0_f64, 1.0_f64);
+    for _ in 0..60 {
+        let middle = 0.5 * (low + high);
+        if bezier(p1x, p2x, middle) < progress {
+            low = middle;
+        } else {
+            high = middle;
+        }
+    }
+    bezier(p1y, p2y, 0.5 * (low + high))
+}
+
 pub fn ease(easing: MotionEasing, progress: f64) -> f64 {
     let progress = progress.clamp(0.0, 1.0);
     match easing {

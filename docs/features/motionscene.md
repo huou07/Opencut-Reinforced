@@ -11,9 +11,9 @@ MotionScene is a versioned, **declarative, non-executable** data format
 (`.ormotion.json`). It has no script, shader, HTTP, environment, glob, shell,
 provider or hidden font lookup, and evaluation makes **zero** model calls.
 
-Envelope: `format`, `schema_version` (3; a version 1 or 2 document still parses
-and renders identically), UUIDv4 `scene_id`, `name`, exact `duration`, `canvas`,
-typed `assets`, `nodes`, `animations`, and an optional `camera`.
+Envelope: `format`, `schema_version` (4; a version 1, 2 or 3 document still
+parses and renders identically), UUIDv4 `scene_id`, `name`, exact `duration`,
+`canvas`, typed `assets`, `nodes`, `animations`, and an optional `camera`.
 
 - Time is nonnegative finite `RationalTime` on a half-open `[0, duration)` local
   timeline with exact-time random access.
@@ -21,9 +21,14 @@ typed `assets`, `nodes`, `animations`, and an optional `camera`.
   0007's `Polyline` is absent from V1 rather than accepted and ignored, so a
   renderer-gated kind can never render as an empty node.
 - Animation: typed translation, scale, rotation, opacity, bounded geometry, and
-  supported fill/stroke values with a small locked easing set.
+  supported fill/stroke values with a small named easing set plus an optional
+  custom curve (`easing_curve`, schema version 4, ADR 0014): a CSS-style cubic
+  Bézier `[p1x, p1y, p2x, p2y]` whose x components must stay in `0..=1`. A
+  malformed curve is refused with `MOTION_INVALID_EASING_CURVE`. When the field
+  is absent the named `easing` applies, so old scenes are unchanged.
 - Camera: optional `camera.keyframes` with `pan_x`, `pan_y`, `zoom` (0.25–4) and
-  `rotation_degrees`, interpolated with the same easing set and applied to every
+  `rotation_degrees`, interpolated with the same easing set (and its own
+  optional `easing_curve`) and applied to every
   resolved instruction. Absent camera means identity, so old scenes render
   unchanged; assets may carry the camera body too.
 - Charts and diagrams start as typed templates over those primitives.

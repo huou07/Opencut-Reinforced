@@ -132,7 +132,11 @@ titles can carry hierarchy instead of one uniform weight. Shapes carry a corner
 radius and a two-stop gradient (schema version 3, ADR 0013), so a card, a chart
 panel or a lower third is styled in the scene language instead of being drawn as
 a hard-edged block; the inspector steps the radius and the gradient is authored
-in the file or by the agent. A project text clip reaches the same two metrics
+in the file or by the agent. Motion and camera keys accept a cubic Bézier
+`easing_curve` (schema version 4, ADR 0014) alongside the four named easings, so
+an entrance can lead fast and settle, and an emphasis can overshoot and return;
+the curve is authored in the file or by the agent until the inspector grows a
+graph. A project text clip reaches the same two metrics
 from its own dialog (line height 0.80–3.00 in tenths, tracking -5.0–20.0 points)
 and keeps the historical 1.32/0 when untouched. See
 [motion-assets.md](../features/motion-assets.md) and
