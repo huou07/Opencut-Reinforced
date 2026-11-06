@@ -49,6 +49,18 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('the guide tab says where every shortcut lives', (tester) async {
+    await _pump(tester, initialTab: LibraryTab.guide);
+    final hint = find.byKey(const ValueKey('library-shortcut-hint'));
+    await tester.scrollUntilVisible(
+      hint,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(hint, findsOneWidget);
+    expect(find.textContaining('Press ? anywhere'), findsOneWidget);
+  });
+
   testWidgets('the library opens on templates and lists every template', (
     tester,
   ) async {

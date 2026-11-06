@@ -31,6 +31,13 @@ class OpenCommandPaletteIntent extends Intent {
   const OpenCommandPaletteIntent();
 }
 
+/// Opens the shortcut sheet. A beginner cannot discover `B` splits or that the
+/// arrow keys move the playhead by reading a manual, so the sheet lists every
+/// binding the app installs.
+class ShowShortcutSheetIntent extends Intent {
+  const ShowShortcutSheetIntent();
+}
+
 class SaveProjectIntent extends Intent {
   const SaveProjectIntent();
 }

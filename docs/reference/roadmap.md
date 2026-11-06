@@ -293,6 +293,16 @@ One near-term delivery mission for the local macOS app, in this order:
     Bézier `easing_curve` on animations and on the camera (ADR 0014); the
     inspector has no graph editor yet, so the curve is authored in the file or by
     the agent.
+37. **0.1.20 is published (2026-11-06).** One pull request, one green CI run, one
+    tag run; the DMG, the `.deb`, the Windows `.setup.exe` and the `.zip` were
+    downloaded again, matched their checksums and were opened from those bytes —
+    including an in-place Windows upgrade over a running 0.1.19.
+38. **The key map was undiscoverable (2026-11-06).** Forty bindings lived only in
+    the shell's shortcut map. The `?` sheet lists them all and is checked against
+    that map by a test, so a binding cannot ship unlisted; `?` had to bind slash
+    plus shift, because the logical key never becomes `question`.
+
+
 
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion

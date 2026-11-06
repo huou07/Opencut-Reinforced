@@ -48,6 +48,7 @@ import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
 import 'command_palette.dart';
+import 'shortcut_sheet.dart';
 import 'autosave_controller.dart';
 import 'project_error_message.dart';
 import 'project_recovery.dart';
@@ -202,6 +203,13 @@ const Map<ShortcutActivator, Intent> _editingShortcuts = {
   // Guides are a viewing aid, so the shortcut sits with the other editing
   // verbs and stays out of text fields: `G` types a letter in a title field.
   SingleActivator(LogicalKeyboardKey.keyG): ToggleGuidesIntent(),
+  // `?` is Shift+/ on every desktop layout: the logical key stays slash and
+  // the character is what turns into `?`, so the binding is slash plus shift —
+  // binding `question` would never fire on a real keyboard. The command form is
+  // what a menu would offer. Both stay out of text fields.
+  SingleActivator(LogicalKeyboardKey.slash, shift: true):
+      ShowShortcutSheetIntent(),
+  OrCommandActivator(LogicalKeyboardKey.slash): ShowShortcutSheetIntent(),
   SingleActivator(LogicalKeyboardKey.digit1): SelectToolIntent('Media'),
   SingleActivator(LogicalKeyboardKey.digit2): SelectToolIntent('Text'),
   SingleActivator(LogicalKeyboardKey.digit3): SelectToolIntent('Audio'),
@@ -580,6 +588,14 @@ class _AppShellState extends State<AppShell> {
                 onInvoke: (_) {
                   if (editor && !_textInputFocused) {
                     _editorKey.currentState?.toggleGuides();
+                  }
+                  return null;
+                },
+              ),
+              ShowShortcutSheetIntent: CallbackAction<ShowShortcutSheetIntent>(
+                onInvoke: (_) {
+                  if (!_textInputFocused) {
+                    unawaited(showOrShortcutSheet(context));
                   }
                   return null;
                 },
@@ -1073,6 +1089,10 @@ class _AppShellState extends State<AppShell> {
       CommandPaletteAction(label: 'Open Project', onSelected: _openProject),
       CommandPaletteAction(label: 'Open Library', onSelected: _openLibrary),
       CommandPaletteAction(label: 'Open Guide', onSelected: _openGuide),
+      CommandPaletteAction(
+        label: 'Keyboard Shortcuts',
+        onSelected: () => unawaited(showOrShortcutSheet(context)),
+      ),
       if (_activeSession != null) ...[
         CommandPaletteAction(label: 'Save Project', onSelected: _saveProject),
         CommandPaletteAction(

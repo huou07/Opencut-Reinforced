@@ -339,6 +339,51 @@ void main() {
     },
   );
 
+  testWidgets('the shortcut sheet opens with ? and stays out of a text field', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-shortcut-sheet';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    // `?` is Shift+/ on a real keyboard: the logical key stays slash and the
+    // character carries the question mark.
+    Future<void> pressQuestion() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.slash, character: '?');
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.slash);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+    }
+
+    // A name field takes the character instead of the shell taking the key.
+    await tester.tap(find.byKey(const ValueKey('home-new-project')));
+    await tester.pumpAndSettle();
+    final nameField = find.byKey(const ValueKey('new-project-name'));
+    await tester.enterText(nameField, 'abc');
+    await tester.showKeyboard(nameField);
+    await tester.pump();
+    expect(orTextFieldHasFocus(), isTrue);
+    await pressQuestion();
+    expect(find.byKey(const ValueKey('shortcut-sheet')), findsNothing);
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: nameField, matching: find.byType(EditableText)),
+    );
+    expect(editable.controller.text, 'abc');
+
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    await pressQuestion();
+    expect(find.byKey(const ValueKey('shortcut-sheet')), findsOneWidget);
+    expect(find.text('Keyboard shortcuts'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('shortcut-sheet-close')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('shortcut-sheet')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('new project asks for a name and opens the created workspace', (
     tester,
   ) async {

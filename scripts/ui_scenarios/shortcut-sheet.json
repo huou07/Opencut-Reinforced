@@ -1,0 +1,40 @@
+{
+  "name": "shortcut-sheet",
+  "description": "Press ? and read the key list the app installs, then close it with its own button.",
+  "steps": [
+    {
+      "op": "wait",
+      "text": "Opencut Reinforced",
+      "budget_ms": 30000
+    },
+    {
+      "op": "key",
+      "chord": "shift+slash"
+    },
+    {
+      "op": "wait_key",
+      "key": "shortcut-sheet",
+      "budget_ms": 15000
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "shortcut-sheet-row-Split at the playhead"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "shortcut-sheet"
+    },
+    {
+      "op": "key",
+      "chord": "escape"
+    },
+    {
+      "op": "expect_absent",
+      "selector": {
+        "key": "shortcut-sheet"
+      }
+    }
+  ]
+}

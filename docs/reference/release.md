@@ -6,29 +6,30 @@ Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
-The published line is **0.1.19** (2026-11-06), cut from one pull request whose
+The published line is **0.1.20** (2026-11-06), cut from one pull request whose
 `release-gate` went green and built by one tag run of `desktop-release.yml`. It
-is the line where the Windows app is driven by the same semantics harness as
-macOS and Linux (`scripts/or_ui.py --target windows`), where the "This machine"
-panel stops spinning when a probe is slow, and where no checked-in scenario
-names a fixture on its author's Mac. It also carries everything in 0.1.16–0.1.18:
-the guided first project, scene typography in schema version 2, the shape style
-with a corner radius and a two-stop gradient in schema version 3, measured export
-capability, machine facts, removable optional components, library licence
-credits, the preview/export parity lane, the Windows rooted-path fix, the
-packaged Linux lane fix, and the Windows installer that updates and uninstalls
-over a running copy. Its five assets —
-`Opencut-Reinforced-0.1.19-arm64.dmg` (37,668,553 B),
-`Opencut-Reinforced-0.1.19-linux-x64.deb` (26,096,196 B),
-`Opencut-Reinforced-0.1.19-windows-x64-setup.exe` (28,637,395 B),
-`Opencut-Reinforced-0.1.19-windows-x64.zip` (41,891,227 B) and
+is the line where a batch import can be stopped instead of waited out and where
+scenes ease with a real cubic Bézier curve (scene schema version 4, ADR 0014),
+on top of everything in 0.1.16–0.1.19: the guided first project, scene
+typography in schema version 2, the shape style with a corner radius and a
+two-stop gradient in schema version 3, measured export capability, machine
+facts, removable optional components, library licence credits, the
+preview/export parity lane, the Windows rooted-path fix, the packaged Linux lane
+fix, the Windows harness target, the Windows installer that updates and
+uninstalls over a running copy, and the scene easing curve. Its five assets —
+`Opencut-Reinforced-0.1.20-arm64.dmg` (37,340,205 B),
+`Opencut-Reinforced-0.1.20-linux-x64.deb` (26,100,464 B),
+`Opencut-Reinforced-0.1.20-windows-x64-setup.exe` (28,647,456 B),
+`Opencut-Reinforced-0.1.20-windows-x64.zip` (41,902,754 B) and
 `SHA256SUMS.txt` — were downloaded again after publication and matched their
-recorded SHA-256 values; the DMG mounted read-only ran `or version` (0.1.19), the
-`.deb` installed with `dpkg -i` and ran `or version` from
-`/opt/opencut-reinforced` (0.1.19), and the `.setup.exe` installed silently on
-the local Windows host and reported 0.1.19 from `%LOCALAPPDATA%\Programs\Opencut
-Reinforced\or.exe`, with `certutil -hashfile` matching the release's own
-`SHA256SUMS.txt` row.
+recorded SHA-256 values. Each was then opened from those bytes: the DMG mounted
+read-only ran `or version` (0.1.20) and carried an ad-hoc signature
+(`Identifier=io.github.huou07.orApp`), the `.deb` upgraded an installed 0.1.19
+with `dpkg -i` (`Setting up opencut-reinforced (0.1.20+e5e49c8b7b02)`) and ran
+`/opt/opencut-reinforced/or version` (0.1.20), and the `.setup.exe` upgraded the
+installed 0.1.19 in place on the Windows host with a running app closed by the
+installer (`or: stopping a running copy before touching files`), exiting 0 and
+reporting 0.1.20 afterwards.
 
 
 Stable releases ship three desktop packages from one source tree:
