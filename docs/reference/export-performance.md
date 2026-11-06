@@ -377,8 +377,10 @@ NV12 conversion passes and two texture-to-buffer copies, then a blocking
 1080p frame, while the text raster cache hit in 2–4 µs and layer setup took
 0.5–0.8 ms. The text row is therefore readback-bound, not shaping-bound; it is
 also why the same workload beats 300 fps on the M5 (≈3 ms for the same path).
-Asynchronous or GPU-resident readback is the next step, and it is not part of
-this revision.
+The one-pass conversion above removes the two extra passes and the per-row
+repack at `1feb6108`; what remains is the 1080p host copy itself (~6 ms measured
+by the probe) plus the blocking poll, so asynchronous or GPU-resident readback
+is still the next step.
 
 A readback probe (`cargo test -p or_render --release readback_cost_by_size
 -- --ignored --nocapture`) separates the fixed part from the size part on the
@@ -407,7 +409,52 @@ Windows about 2x rather than 14x: the composited readback is cheaper on this
 driver, which is consistent with the readback explanation above and with the
 earlier note that the Windows text row was roughly half the Debian one.
 
-## Known limits
+## 2026-11-07 rows — one-pass NV12 conversion
+
+Measured at `1feb6108` (branch `mission/hardware-profiles-and-polish`),
+`--release`, 300 frames, `bench1080.mp4`, idle machine. The composited path no
+longer converts with two full-screen render passes and two padded copies; one
+compute shader writes a tight NV12 buffer and the readback copies it once.
+"Two-pass" is the same binary at `07d91f64` measured earlier in the session, not
+an interleaved A/B, so treat small deltas as spread.
+
+Debian 13 (Intel UHD 770, Vulkan, VAAPI H.264):
+
+| Workload | Two-pass | One compute pass |
+|---|---|---|
+| Render only, one text layer | 52.6 / 53.2 | 109.1 / 111.3 / 111.9 |
+| Full MP4, one text layer | 59.8 / 65.6 / 68.1 / 83.2 | 106.5 / 109.4 / 111.9 |
+| Full MP4, no text | 256.0 / 260.6 | 260.5 |
+
+The composited Debian ceiling roughly doubled. The video-only row is unchanged
+because that path still hands decoder NV12 straight to the encoder.
+
+macOS M5 (VideoToolbox):
+
+| Workload | Two-pass | One compute pass |
+|---|---|---|
+| Full MP4, one text layer | 240.4 / 234.7 | 219.8 / 229.2 / 231.7 / 236.7 / 243.6 |
+| Full MP4, no text | 239.6 / 245.6 | 242.7 / 243.9 |
+
+Text stays inside the run-to-run spread (the Apple GPU already paid ~3 ms for
+the old conversion), so no change is claimed there.
+
+Windows 11 (Intel Graphics, Vulkan, Media Foundation):
+
+| Workload | Two-pass | One compute pass |
+|---|---|---|
+| Full MP4, one text layer | 78.8 / 82.6 | 70.3 / 74.2 / 74.9 |
+| Render only, one text layer | 104.4 / 104.6 | 96.0 / 96.8 |
+| Full MP4, no text | 129.1 / 127.2 | 133.9 / 134.7 / 135.1 |
+
+This driver runs the compute conversion about 8 % slower than the two render
+passes on the text workload, while the video-only row moves up slightly. Both
+hosts report Vulkan, so the choice cannot be made from the backend name; a
+one-time per-device measurement between the two conversions is the follow-up,
+and this revision keeps the compute path everywhere because the Debian gain is
+the larger one and the Windows loss is inside one text-frame ceiling.
+
+## Known limits## Known limits
 
 - The project rows below `97f4f25e` used `/tmp/or-bench/opaque.orproj`, a copy of
   a real project with its video clip opacity repaired to 100 %. With the stored

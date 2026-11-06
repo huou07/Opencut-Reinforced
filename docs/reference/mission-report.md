@@ -33,6 +33,13 @@ host, and what remains unverified. Revision `bacf5cff`; branch
   feature is visible without opening the inspector. Verified at `07d91f64` on
   all three hosts in the `keyframes` journey, whose tree dump contains
   `, animated` for the edited clip.
+- **One-pass NV12 conversion.** The composited export path converts its RGBA
+  target with one compute shader into a tight NV12 buffer instead of two render
+  passes and two padded copies, which doubled the composited ceiling on the
+  Debian Intel host (52.6 → 109–112 fps render, 59.8–83.2 → 106–112 fps full MP4
+  with one text layer). macOS is unchanged within spread; the Windows Intel
+  driver runs the compute version about 8 % slower on that workload, recorded as
+  a measured tradeoff with a per-device follow-up.
 - **Harness fixes found by the above.** The UI harness gained `scroll_until`
   (long inspectors build rows lazily) and resolves `copy:` fixtures from the
   repository root; both were found while driving the keyframe journey.
