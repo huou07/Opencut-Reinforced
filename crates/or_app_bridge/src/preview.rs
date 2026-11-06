@@ -1667,7 +1667,10 @@ mod desktop {
                     <= text_bytes
             );
             for (clip, (pixels, cache_key, ink)) in active_text_clips.iter().zip(&text_pixels) {
-                if ink.width == 0 || ink.height == 0 {
+                // Effects rewrite the pixels and can spread them past the glyph
+                // rectangle, so only an untouched rasterisation may be clipped.
+                let untouched = cache_key.is_some();
+                if untouched && (ink.width == 0 || ink.height == 0) {
                     // Nothing was drawn (an empty string, or text placed entirely
                     // off the canvas), so there is no frame to blend.
                     continue;
@@ -1679,12 +1682,8 @@ mod desktop {
                 if let Some(key) = cache_key {
                     layer = layer.with_cache_key(*key);
                 }
-                if clip.transform == or_core::Transform::IDENTITY
-                    && clip.crop == or_core::Crop::NONE
-                {
-                    // The glyph rectangle is the only part of the canvas that can
-                    // paint, so blending the rest of the frame is wasted fill.
-                    layer = layer.with_scissor(ink.x, ink.y, ink.width, ink.height);
+                if let Some((x, y, width, height)) = text_scissor(clip, untouched, *ink) {
+                    layer = layer.with_scissor(x, y, width, height);
                 }
                 layers.push(CompositorLayer::Rgba(layer));
             }
@@ -2279,17 +2278,37 @@ mod desktop {
         transition_out: Option<TransitionReference>,
     }
 
-    struct TextClip {
-        text: String,
-        formatting: TextFormatting,
-        timeline_start: RationalTime,
-        duration: RationalTime,
-        transform: Transform,
-        crop: Crop,
-        opacity: Opacity,
-        effects: Vec<EffectReference>,
-        transition_in: Option<TransitionReference>,
-        transition_out: Option<TransitionReference>,
+    /// The part of the canvas a text layer can paint, when clipping it is safe.
+    ///
+    /// A rasterisation is a full-canvas buffer that is transparent almost
+    /// everywhere, so blending the rest of the frame is wasted fill. Only an
+    /// untouched rasterisation of an untransformed, uncropped clip qualifies:
+    /// effects can spread pixels past the glyph rectangle, and a moved or scaled
+    /// layer paints outside it.
+    pub(super) fn text_scissor(
+        clip: &TextClip,
+        untouched: bool,
+        ink: or_render::TextInkBounds,
+    ) -> Option<(u32, u32, u32, u32)> {
+        (untouched
+            && clip.transform == or_core::Transform::IDENTITY
+            && clip.crop == or_core::Crop::NONE
+            && ink.width > 0
+            && ink.height > 0)
+            .then_some((ink.x, ink.y, ink.width, ink.height))
+    }
+
+    pub(super) struct TextClip {
+        pub(super) text: String,
+        pub(super) formatting: TextFormatting,
+        pub(super) timeline_start: RationalTime,
+        pub(super) duration: RationalTime,
+        pub(super) transform: Transform,
+        pub(super) crop: Crop,
+        pub(super) opacity: Opacity,
+        pub(super) effects: Vec<EffectReference>,
+        pub(super) transition_in: Option<TransitionReference>,
+        pub(super) transition_out: Option<TransitionReference>,
     }
 
     #[derive(Clone)]
@@ -5217,6 +5236,64 @@ mod desktop {
 }
 
 pub(crate) use desktop::PreviewRuntime;
+
+#[cfg(test)]
+mod text_scissor_tests {
+    use super::desktop::{TextClip, text_scissor};
+    use or_core::{
+        Crop, EffectReference, Opacity, RationalTime, TextFormatting, Transform,
+        TransitionReference,
+    };
+    use or_render::TextInkBounds;
+
+    fn clip(transform: Transform) -> TextClip {
+        TextClip {
+            text: "Title".into(),
+            formatting: TextFormatting::DEFAULT,
+            timeline_start: RationalTime::new(0, 1).expect("valid"),
+            duration: RationalTime::new(1, 1).expect("valid"),
+            transform,
+            crop: Crop::NONE,
+            opacity: Opacity::OPAQUE,
+            effects: Vec::<EffectReference>::new(),
+            transition_in: None::<TransitionReference>,
+            transition_out: None::<TransitionReference>,
+        }
+    }
+
+    fn ink() -> TextInkBounds {
+        TextInkBounds {
+            x: 10,
+            y: 20,
+            width: 100,
+            height: 40,
+        }
+    }
+
+    #[test]
+    fn an_untouched_still_title_clips_to_its_glyph_rectangle() {
+        let scissor = text_scissor(&clip(Transform::IDENTITY), true, ink());
+        assert_eq!(scissor, Some((10, 20, 100, 40)));
+    }
+
+    #[test]
+    fn an_effected_or_transformed_title_paints_the_whole_layer() {
+        assert_eq!(text_scissor(&clip(Transform::IDENTITY), false, ink()), None);
+        let moved = Transform {
+            x_milli_canvas: 10_000,
+            ..Transform::IDENTITY
+        };
+        assert_eq!(text_scissor(&clip(moved), true, ink()), None);
+    }
+
+    #[test]
+    fn a_title_with_no_ink_is_skipped_rather_than_drawn() {
+        assert_eq!(
+            text_scissor(&clip(Transform::IDENTITY), true, TextInkBounds::EMPTY),
+            None
+        );
+    }
+}
 
 #[cfg(test)]
 mod source_time_tests {
