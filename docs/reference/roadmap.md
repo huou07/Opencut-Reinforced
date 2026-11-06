@@ -329,8 +329,7 @@ One near-term delivery mission for the local macOS app, in this order:
 42. **2026-11-07 export rows show no regression (2026-11-07).** At `4cf49782` the
     M5 recorded MP4 239.6/245.6 fps and MP4 with one text layer 240.4/234.7 fps,
     matching the 2026-11-06 rows within spread; a clip with no keyframes skips
-    sampling entirely. An export with animated keyframes is not covered by the
-    harness and stays UNVERIFIED. Rows in
+    sampling entirely. Animated rows were measured later (item 45). Rows in
     [export-performance.md](export-performance.md).
 
 43. **Animation reaches the timeline and the preset row (2026-11-07).** An
@@ -350,6 +349,16 @@ One near-term delivery mission for the local macOS app, in this order:
     both conversions once on the first composited frame and keeps the faster one
     (compute on Debian, render passes on Windows) instead of guessing from the
     backend name — both report Vulkan.
+
+45. **Animation reaches agents, and the backend is a stored choice (2026-11-07).**
+    `or timeline add-keyframe` / `clear-animation` and the MCP tools
+    `add_keyframe` / `clear_animation` write the same clip update as the
+    inspector, and re-adding an offset replaces it. Settings → Performance now
+    stores a graphics backend (`auto` or a compiled name) applied before the
+    first preview; an unknown name or a device that will not open falls back to
+    automatic and the report shows both. Animated export rows exist for Debian
+    (96.7–119.2 fps with a title) and Windows (126.9 video-only, 80.0 with a
+    title), inside each host's static spread.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
