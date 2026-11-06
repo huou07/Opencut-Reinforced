@@ -449,12 +449,29 @@ Windows 11 (Intel Graphics, Vulkan, Media Foundation):
 
 This driver runs the compute conversion about 8 % slower than the two render
 passes on the text workload, while the video-only row moves up slightly. Both
-hosts report Vulkan, so the choice cannot be made from the backend name; a
-one-time per-device measurement between the two conversions is the follow-up,
-and this revision keeps the compute path everywhere because the Debian gain is
-the larger one and the Windows loss is inside one text-frame ceiling.
+hosts report Vulkan, so the choice cannot be made from the backend name. The
+renderer therefore times both conversions once on the first composited frame
+and keeps the faster one for the life of the device; the rows above are the
+measurement that decision is based on. The first frame pays for the warm-up
+(two conversions per path), which is inside the noise of a delivery export.
 
-## Known limits## Known limits
+### After the per-device choice
+
+The renderer times both conversions once on the first composited frame and keeps
+the faster one for the life of the device. Rows with that choice in place:
+
+| Host | Full MP4, one text layer | Full MP4, no text |
+|---|---|---|
+| macOS M5 (Metal, VideoToolbox) | 232.2 / 235.4 | — |
+| Debian 13, Intel UHD 770 (Vulkan, VA-API) | 101.9 / 104.9 / 118.3 | 256.5 |
+| Windows 11, Intel Graphics (Vulkan, Media Foundation) | 88.0 | 135.1 |
+
+The Windows row is above both previous variants (78.8 / 82.6 with two passes,
+70.3–74.9 with the forced compute pass) because the choice now picks the two
+render passes there and the run followed a warm build; it is one run, so treat
+the size of the gain as indicative rather than settled.
+
+## Known limits
 
 - The project rows below `97f4f25e` used `/tmp/or-bench/opaque.orproj`, a copy of
   a real project with its video clip opacity repaired to 100 %. With the stored

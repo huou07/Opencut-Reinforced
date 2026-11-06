@@ -25,6 +25,10 @@ host, and what remains unverified. Revision `bacf5cff`; branch
   the visual settings and sampled in the shared frame loop, so preview and
   export animate identically. The inspector adds a keyframe at the playhead and
   edits time, value and easing in the unit the rest of the inspector uses.
+- **Per-device conversion choice.** The renderer times the compute conversion
+  and the two render passes once on the first composited frame and keeps the
+  faster one for the device; Debian keeps the compute pass, Windows the render
+  passes.
 - **Motion presets.** Fade in, Slide up, Zoom in and Pop write ordinary
   keyframes through the same animation command, so a preset is a starting point
   whose chips stay editable and the project file never stores a preset name.

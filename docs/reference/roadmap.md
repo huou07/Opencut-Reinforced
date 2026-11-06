@@ -346,8 +346,10 @@ One near-term delivery mission for the local macOS app, in this order:
     composited ceiling (render + text 52.6 → 109–112 fps, full MP4 + text
     59.8–83.2 → 106–112 fps) and left video-only rows unchanged. The Windows
     Intel driver runs the compute version about 8 % slower on the same
-    workload; the follow-up is a one-time per-device measurement between the two
-    conversions rather than a backend-name guess (both report Vulkan).
+    workload. The same revision makes the choice per device: the renderer times
+    both conversions once on the first composited frame and keeps the faster one
+    (compute on Debian, render passes on Windows) instead of guessing from the
+    backend name — both report Vulkan.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

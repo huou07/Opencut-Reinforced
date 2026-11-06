@@ -330,6 +330,9 @@ pub struct RenderDevice {
     /// One entry keyed by size keeps a delivery export's steady state to a
     /// single submit and a single wait per frame.
     nv12_scratch: Mutex<Option<Nv12Scratch>>,
+    /// Which conversion this device measured as faster: 0 unknown, 1 compute
+    /// pass, 2 the older two render passes. Chosen once on the real frame size.
+    nv12_mode: std::sync::atomic::AtomicU8,
     /// Compositor targets and source textures reused across frames.
     ///
     /// A frame used to allocate a fresh target, one texture per layer and a
@@ -960,6 +963,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             nv12_layer_bind_group_layout,
             nv12_layer_pipeline,
             nv12_scratch: Mutex::new(None),
+            nv12_mode: std::sync::atomic::AtomicU8::new(0),
             compositor_pool: Mutex::new(CompositorPool::default()),
             adapter_info: RenderAdapterInfo {
                 name: adapter_info.name,
@@ -1208,6 +1212,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     /// Converts one offscreen RGBA texture into NV12 and reads back both planes.
+    ///
+    /// Both conversions produce the same bytes. Which one runs is measured once
+    /// on this device with the frame size the export is about to use: the
+    /// compute pass wins on Intel's Linux driver, the two render passes win on
+    /// Intel's Windows driver, and neither is assumed from the backend name
+    /// (both report Vulkan).
     fn readback_texture_nv12(
         &self,
         texture: &wgpu::Texture,
@@ -1218,12 +1228,71 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
             return Err(RenderError::OddSizeForNv12 { size });
         }
-        let (chroma_width, chroma_height) = (width / 2, height / 2);
-
         let source_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        if width.is_multiple_of(4) {
-            return self.readback_texture_nv12_compute(&source_view, size);
+        if !width.is_multiple_of(4) {
+            return self.readback_texture_nv12_passes(&source_view, size);
         }
+        match self
+            .nv12_mode
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            1 => self.readback_texture_nv12_compute(&source_view, size),
+            2 => self.readback_texture_nv12_passes(&source_view, size),
+            _ => {
+                let mode = self.choose_nv12_mode(&source_view, size);
+                match mode {
+                    1 => self.readback_texture_nv12_compute(&source_view, size),
+                    _ => self.readback_texture_nv12_passes(&source_view, size),
+                }
+            }
+        }
+    }
+
+    /// Times both conversions on this frame and remembers the faster one.
+    ///
+    /// Runs once per device. Each path converts twice: the first call pays for
+    /// the lazily built scratch buffers and bind groups, the second is the
+    /// steady state the export will see.
+    fn choose_nv12_mode(&self, source_view: &wgpu::TextureView, size: RenderSize) -> u8 {
+        let measure = |mut run: &mut dyn FnMut() -> Result<Nv12Planes, RenderError>| {
+            if run().is_err() {
+                return None;
+            }
+            let started = std::time::Instant::now();
+            let result = run();
+            result.ok().map(|_| started.elapsed())
+        };
+        let mut compute = || self.readback_texture_nv12_compute(source_view, size);
+        let mut passes = || self.readback_texture_nv12_passes(source_view, size);
+        let compute_time = measure(&mut compute);
+        let passes_time = measure(&mut passes);
+        let mode = match (compute_time, passes_time) {
+            (Some(compute), Some(passes)) => {
+                if compute <= passes {
+                    1
+                } else {
+                    2
+                }
+            }
+            (Some(_), None) => 1,
+            (None, Some(_)) => 2,
+            (None, None) => 2,
+        };
+        self.nv12_mode
+            .store(mode, std::sync::atomic::Ordering::Relaxed);
+        mode
+    }
+
+    /// Converts with the two original render passes, for devices where that is
+    /// measurably faster (the Windows Intel driver is one).
+    fn readback_texture_nv12_passes(
+        &self,
+        source_view: &wgpu::TextureView,
+        size: RenderSize,
+    ) -> Result<Nv12Planes, RenderError> {
+        let width = size.width();
+        let height = size.height();
+        let (chroma_width, chroma_height) = (width / 2, height / 2);
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("or_render.nv12_sampler"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
