@@ -125,6 +125,17 @@
       "key": "inspector-audio-noise_reduction_db"
     },
     {
+      "op": "scroll",
+      "selector": {
+        "key": "inspector-scroll"
+      },
+      "dy": -1200
+    },
+    {
+      "op": "pump",
+      "ms": 600
+    },
+    {
       "op": "expect_value",
       "key": "inspector-audio-noise_reduction_db",
       "value": "0"
@@ -210,7 +221,7 @@
     },
     {
       "op": "pump",
-      "ms": 2500
+      "ms": 4000
     },
     {
       "op": "scroll",

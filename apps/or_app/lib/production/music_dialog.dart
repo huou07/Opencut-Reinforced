@@ -141,10 +141,13 @@ class _MusicDialogState extends State<MusicDialog> {
   Future<void> _loadTracks() async {
     try {
       final tracks = await widget.gateway.listTimelineTracks(widget.session);
+      // A video track's clips carry their own soundtrack, so a talking-head
+      // take is a voice the music can duck under just like a placed audio clip.
       final audio = tracks.items
           .where(
             (track) =>
-                track.kind == ProjectTimelineTrackKind.audio &&
+                (track.kind == ProjectTimelineTrackKind.audio ||
+                    track.kind == ProjectTimelineTrackKind.video) &&
                 track.clipCount > 0 &&
                 !track.state.locked,
           )
@@ -480,7 +483,8 @@ class _MusicDialogState extends State<MusicDialog> {
               const SizedBox(height: 4),
               if (_audioTracks.isEmpty)
                 Text(
-                  'No existing audio track to duck under. The bed will be placed at full level.',
+                  'No existing audio or video track to duck under. The bed will '
+                  'be placed at full level.',
                   style: TextStyle(color: OrColors.textSecondary),
                 )
               else ...[
@@ -500,7 +504,8 @@ class _MusicDialogState extends State<MusicDialog> {
                       DropdownMenuItem<String?>(
                         value: track.trackId,
                         child: Text(
-                          'Audio track ${track.trackId.substring(0, 8)} '
+                          '${track.kind == ProjectTimelineTrackKind.video ? 'Video' : 'Audio'} '
+                          'track ${track.trackId.substring(0, 8)} '
                           '(${track.clipCount} clips)',
                         ),
                       ),

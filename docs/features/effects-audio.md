@@ -39,8 +39,11 @@ Automatic ducking is not a project field yet. `timeline.clip.duck` computes the
 edit in Rust: the music clip is split at every overlapping voice boundary and the
 overlapping segments are set to the chosen duck level (−12 dB by default). It is
 one revision, one history entry and one undo step even when it creates many
-segments; the result is ordinary editable clip gain. The app uses the same
-command from its music dialog, and the CLI exposes it as `timeline duck-clip`.
+segments; the result is ordinary editable clip gain. The voice track may be an
+audio track or a video track, because a video clip carries its own soundtrack:
+the music dialog lists both kinds and labels them, so a talking-head take ducks
+the bed the same way a placed narration clip does. The app uses the same command
+from its music dialog, and the CLI exposes it as `timeline duck-clip`.
 
 Clip gain and mute are canonical clip state; gain, pan, fades and later DSP belong
 to the audio engine (`or_audio`), never to Flutter widgets. Desktop audio output

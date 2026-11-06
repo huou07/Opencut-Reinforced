@@ -161,11 +161,30 @@ Evidence, all local:
   dependency was adopted. A per-library table was not rewritten because the
   existing review already carries verdicts and nothing measured this week
   changed them.
-- Windows UI journeys and Debian UI journeys were not run as UI flows; the new
-  video-clip audio journey was driven on macOS only. Benchmarks cover MP4/WebM/lossless on
-  the harness path; MP4 rows were re-measured at the final revision on macOS and
-  Debian.
+- Windows UI journeys were not run as UI flows: the SSH session has no
+  interactive desktop. Debian UI journeys were run under Xvfb:
+  `scripts/ui_scenarios/reduce-noise.json` and
+  `scripts/ui_scenarios/video-clip-audio.json` both report `OR_UI=PASS` through
+  `python3 scripts/or_ui.py --target linux run …`, so the Debian inspector proof
+  is a real Linux run, not an inference from the macOS one. The Linux lane needed
+  longer settle pumps than macOS after an apply, which is why the video journey
+  scrolls and pumps twice before each expectation.
 - `qsv`, `nvenc`, `amf` and VideoToolbox acceleration paths were not exercised
   on hardware that carries the corresponding devices (the Windows host has no
   QSV-capable display driver and no NVIDIA device, the Debian host has no
   display GPU).
+
+## Ducking under a video track (later in the session)
+
+`timeline.clip.duck` used to refuse a voice track that was not `TrackKind::Audio`,
+so a talking-head video could not duck the music bed even though its clip now
+carries a soundtrack. The command accepts an audio or a video voice track; the
+music track stays audio because ducking rewrites its gain.
+
+Proof on macOS: project `duck2.orproj` (silent 1080p video 0–10 s, 20 s music
+bed 0–20 s), `or timeline duck-clip --track …3333 --clip …285c13dd --voice-track
+…2222 --duck-db -12` split the bed at 10 s with gains `[−12000, 0]`. Exported
+twice (600 frames, MP4 quality): before `-44.1 dBFS` in both windows; after
+`-56.1 dBFS` from 1–9 s (exactly the requested −12 dB) and `-44.1 dBFS` from
+11–19 s. `cargo test -p or_core --lib` 379 passed, including
+`a_video_track_voice_ducks_the_music_under_its_own_soundtrack`.

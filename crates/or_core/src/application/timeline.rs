@@ -971,7 +971,9 @@ impl ProjectSession {
     ///
     /// The project model has static clip gain, so the edit is expressed as a
     /// whole-track replacement: the music clip is split at every overlapping
-    /// voice boundary and the overlapping segments get the duck gain. Reusing
+    /// voice boundary and the overlapping segments get the duck gain. The voice
+    /// track may be a video track, whose clips carry their own soundtrack, so a
+    /// talking-head take can duck the music too. Reusing
     /// `TimelineClipsOverwritten` keeps this one history entry and one undo step,
     /// unlike a client issuing split and update commands one by one.
     pub(super) fn apply_timeline_clip_duck(
@@ -1010,7 +1012,13 @@ impl ProjectSession {
                 OperationErrorCode::TimelineTrackNotFound,
             ));
         };
-        if self.project.timeline().tracks()[voice_index].kind() != TrackKind::Audio {
+        // The voice can be a video clip's own soundtrack, not only a placed
+        // audio clip, so the voice track may be either kind. The music track
+        // stays audio: ducking rewrites its gain.
+        if !matches!(
+            self.project.timeline().tracks()[voice_index].kind(),
+            TrackKind::Audio | TrackKind::Video
+        ) {
             return Err(OperationError::new(
                 OperationErrorCode::TimelineMediaIncompatible,
             ));
