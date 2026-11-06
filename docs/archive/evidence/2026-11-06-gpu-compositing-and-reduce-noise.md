@@ -119,6 +119,18 @@ Evidence, all local:
   234.1 fps / 223.6 with text, Debian 232.0 fps (6,237,429 bytes, h264 High +
   aac LC), Windows 111.5 fps (6,055,754 bytes, h264 Constrained Baseline + aac
   LC) with the writer logging `[h264_mf @ …] MFT name: 'H264 Encoder MFT'`.
+- Three-host proof of the soundtrack path, same fixture and project at
+  `0eb453c8` (300 frames, MP4 quality, `OR_PROJECT_BENCH`): macOS 264,158 →
+  264,353 bytes with hiss −51.4 → −66.8 dB; Debian 257,928 → 257,932 bytes with
+  hiss −51.3 → −66.7 dB; Windows 261,515 → 261,566 bytes with hiss −51.3 →
+  −66.8 dB. Tone stays −24.1 dB on all three hosts. The byte counts differ per
+  host because each uses its own H.264 encoder (VideoToolbox, VA-API, Media
+  Foundation), which is why the level measurement, not the file size, is the
+  evidence.
+- Host trap: the shipped Windows FFmpeg has neither the `null` muxer nor the
+  `volumedetect` filter, so the Windows levels were measured by decoding each
+  MP4 to PCM WAV with the bundled ffmpeg and computing RMS in Python; the
+  Debian build does have both.
 - Cross-host confirmation at `0eb453c8` (the commit after the feature):
   `cargo test -p or_core -p or_audio -p or_app_bridge --lib` gives 378 / 18 / 54
   passed on macOS and Debian and 376 / 18 / 50 on Windows (the bridge count
