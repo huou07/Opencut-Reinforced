@@ -154,6 +154,20 @@ climbed from 62.5 fps at `b3650587` to 114.3 fps. Windows at the same revision:
 MP4 81.7 fps (5,895,002 B, `h264` Constrained Baseline + `aac` LC), WebM 9.0 fps
 (3,615,894 B), Matroska 6.4 fps (47,874,924 B).
 
+A 4K source is now measured on the two hosts that encode H.264 through the
+pinned runtime, 100 frames of the same 3840×2160 fixture, scaled to a 1080p
+canvas and then kept at 4K:
+
+| Host | 4K → 1080p | 4K → 4K (direct path) | Encoder evidence |
+| --- | --- | --- | --- |
+| Debian | 45.8 fps (3,353,843 B) | not measured | `h264_vaapi` |
+| Windows | 14.6 fps (3,478,383 B) | 35.2 fps (6,119,753 B) | `[h264_mf @ …] MFT name: 'H264 Encoder MFT'` |
+
+The Windows downscale row was 6.8 fps before this session; the 4K→4K row is
+faster than the downscale because it matches the source size exactly and takes
+the direct NV12 path with no scaler and no compositor pass, so it measures the
+encoder rather than the pipeline.
+
 One caveat the text rows made visible: with a text layer the byte counts are no
 longer identical across hosts (47 874 201 / 47 874 935 / 47 874 924 for lossless),
 because the composited frame reaches the encoder through the GPU YUV conversion
