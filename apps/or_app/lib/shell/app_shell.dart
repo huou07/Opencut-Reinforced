@@ -823,6 +823,7 @@ class _AppShellState extends State<AppShell> {
       onOpenResources: _openResources,
       onOpenLibrary: _openLibrary,
       onOpenGuide: _openGuide,
+      onUseTemplate: (template) => unawaited(_createProject(template: template)),
       showWelcome: _welcomeLoaded && !_welcomeDismissed,
       onDismissWelcome: _dismissWelcome,
       machineSummary: _hostFacts?.summary,

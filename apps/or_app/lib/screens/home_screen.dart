@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
+import '../library/project_templates.dart';
 import '../project/recent_projects.dart';
 import 'recent_projects_list.dart';
 import '../widgets/or_widgets.dart';
@@ -21,6 +22,7 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenResources,
     required this.onOpenLibrary,
     required this.onOpenGuide,
+    this.onUseTemplate,
     this.showWelcome = false,
     this.onDismissWelcome,
     this.machineSummary,
@@ -39,6 +41,9 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenResources;
   final VoidCallback onOpenLibrary;
   final VoidCallback onOpenGuide;
+
+  /// Creates a project from a starter template; null hides the template row.
+  final ValueChanged<ProjectTemplate>? onUseTemplate;
 
   /// The first-run panel. It appears until it is dismissed once, and it explains
   /// how the app stores work instead of advertising features.
@@ -60,6 +65,7 @@ class HomeScreen extends StatelessWidget {
     return OrPageLayout(
       title: 'Home',
       subtitle: 'Projects and recent work',
+      scrollKey: const ValueKey('home-scroll'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -127,6 +133,34 @@ class HomeScreen extends StatelessWidget {
               ),
             ],
           ),
+          if (onUseTemplate != null) ...[
+            const SizedBox(height: OrSpacing.x8),
+            const OrSectionHeader('Start from a template'),
+            Text(
+              'Sets the frame rate and canvas, and places starter titles you '
+              'can retype. No media is added.',
+              style: TextStyle(color: OrColors.textMuted, fontSize: OrType.bodySize),
+            ),
+            const SizedBox(height: OrSpacing.x2),
+            Wrap(
+              spacing: OrSpacing.x3,
+              runSpacing: OrSpacing.x3,
+              children: [
+                for (final template in projectTemplates.take(4))
+                  OutlinedButton.icon(
+                    key: ValueKey('home-template-${template.id}'),
+                    onPressed: () => onUseTemplate!(template),
+                    icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+                    label: Text(template.name),
+                  ),
+                TextButton(
+                  key: const ValueKey('home-all-templates'),
+                  onPressed: onOpenLibrary,
+                  child: const Text('All templates'),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: OrSpacing.x8),
           OrPanel(
             title: 'Recent Projects',

@@ -72,6 +72,7 @@ class OrPageLayout extends StatelessWidget {
     required this.subtitle,
     required this.child,
     this.action,
+    this.scrollKey,
   });
 
   final String title;
@@ -79,12 +80,17 @@ class OrPageLayout extends StatelessWidget {
   final Widget child;
   final Widget? action;
 
+  /// Key on the page's scroll view, so a UI scenario can scroll a long page
+  /// without guessing at the first Scrollable.
+  final Key? scrollKey;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = OrBreakpoints.isCompact(constraints.maxWidth);
         return SingleChildScrollView(
+          key: scrollKey,
           padding: EdgeInsets.fromLTRB(
             compact ? OrSpacing.x4 : OrSpacing.x8,
             OrSpacing.x6,

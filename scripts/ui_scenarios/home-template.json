@@ -1,0 +1,17 @@
+{
+ "name": "home-template",
+ "harness": "or_ui",
+ "description": "Starts a project from the Tutorial template on the Home screen, without opening the Library first: the template row is reachable, the dialog asks only for a name (the template carries its frame rate), and the editor opens with the chapter overlay on the timeline.",
+ "viewport": { "width": 1440, "height": 900 },
+ "steps": [
+  { "op": "expect", "key": "home-template-tutorial" },
+  { "op": "scroll_until", "selector": { "key": "home-template-tutorial" }, "scroll": "home-scroll", "dy": -400 },
+  { "op": "tap", "selector": { "key": "home-template-tutorial" } },
+  { "op": "expect", "key": "new-project-name" },
+  { "op": "enter_text", "selector": { "key": "new-project-name" }, "value": "Tutorial from home" },
+  { "op": "tap", "selector": { "key": "confirm-new-project" } },
+  { "op": "wait_label", "label_regex": "Tutorial from home", "budget_ms": 20000 },
+  { "op": "wait_label", "label_regex": "01 · Introduction", "budget_ms": 20000 },
+  { "op": "shot", "name": "editor" }
+ ]
+}

@@ -7581,6 +7581,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a Home template starts a project without opening the library', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    final gateway = _FakeProjectGateway();
+    final picker = _FakeProjectPicker()..savePath = '/tmp/or-template-home';
+    await _mount(tester, gateway: gateway, picker: picker);
+
+    final tutorial = find.byKey(const ValueKey('home-template-tutorial'));
+    await tester.scrollUntilVisible(
+      tutorial,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(tutorial);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('new-project-name')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('confirm-new-project')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.lastCreateName, 'Tutorial');
+    expect(gateway.lastSequenceCanvas, const ProjectSequenceCanvas(1920, 1080));
+    expect(gateway.insertTimelineTextClipCalls, greaterThan(0));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a keyframe at the playhead starts an animation', (tester) async {
     final gateway = _FakeProjectGateway();
     final view = ProjectReadModel(

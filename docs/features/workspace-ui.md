@@ -38,6 +38,12 @@ measurements Settings shows — so the first sentence a beginner reads about
 their computer is the one the editor will act on. When the disk is short of the
 4 GB staging headroom the line becomes a warning that says why and what to do.
 Until the measurement lands the lines are absent, never guessed.
+A "Start from a template" row sits under the quick actions with the four
+most-used shapes (landscape, vertical, square, tutorial) and an "All templates"
+link into the Library. Picking one opens the same new-project dialog with the
+name prefilled; the template supplies the canvas and frame rate, so the dialog
+does not ask for a rate, and its overlays become ordinary text clips the person
+can retype. A template never bundles media.
 
 ## Library
 
