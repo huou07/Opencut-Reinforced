@@ -161,18 +161,14 @@ Evidence, all local:
   dependency was adopted. A per-library table was not rewritten because the
   existing review already carries verdicts and nothing measured this week
   changed them.
-- Windows UI journeys were not run as UI flows: the SSH session has no
-  interactive desktop. Debian UI journeys were run under Xvfb:
-  `scripts/ui_scenarios/reduce-noise.json` and
-  `scripts/ui_scenarios/video-clip-audio.json` both report `OR_UI=PASS` through
-  `python3 scripts/or_ui.py --target linux run …`, so the Debian inspector proof
-  is a real Linux run, not an inference from the macOS one. The Linux lane needed
-  longer settle pumps than macOS after an apply, which is why the video journey
-  scrolls and pumps twice before each expectation.
-- `qsv`, `nvenc`, `amf` and VideoToolbox acceleration paths were not exercised
-  on hardware that carries the corresponding devices (the Windows host has no
-  QSV-capable display driver and no NVIDIA device, the Debian host has no
-  display GPU).
+- Windows UI journeys stay blocked, and the reason is now measured rather than
+  inferred: the SSH session is Windows **session 0** while `explorer.exe` and
+  `dwm.exe` live in session 1, so the harness can launch `or_app.exe` and the
+  first ten scenario steps run, but the first decoded image throws
+  `Exception: No Impeller context is available` from the image resource service
+  and the journey fails. `ANGLE_DEFAULT_PLATFORM=swiftshader` stops the app from
+  starting at all; `warp` reaches the same image failure. There is no GPU-backed
+  window station in session 0 to give the engine.
 
 ## Ducking under a video track (later in the session)
 

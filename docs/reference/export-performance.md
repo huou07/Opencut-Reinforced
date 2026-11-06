@@ -162,6 +162,27 @@ the writer now logs `[h264_mf @ …] MFT name: 'H264 Encoder MFT'`, which is the
 encoder itself rather than an inference from the profile). The audio work adds
 nothing to these rows because the fixture has no audio stream.
 
+## Stage concurrency (2026-11-06)
+
+Per-core and per-GPU-engine counters, taken while the harness ran the same
+1080p fixture. They answer "which stage owns the machine", not "how many
+workers could exist".
+
+- Debian (20 threads, no display GPU; 600 frames, text layer): the render stage
+  ran at 49.8 fps while the busiest core sat at 15.4 % and the mean over all 20
+  cores was 3.0 % — about 0.6 cores in total. The full export (84.6 fps,
+  VAAPI `h264_vaapi`) used about 1.2 cores with a 20 % peak. Nothing there is
+  waiting on a thread pool: the stage is one serial chain of decode, upload,
+  composite and submit, and hardware encode is off the CPU.
+- Windows (12 logical, Media Foundation): a 1080p export at 111 fps moved the
+  GPU engine counters by at most 0.2 % on the 3D engine and produced no
+  `engtype_VideoEncode` samples at all, so the MFT in use on this host is the
+  software H.264 encoder, not the hardware one. The row is CPU-bound.
+- macOS: per-core and per-GPU counters were **not measured**. `powermetrics`
+  is the only source for per-core residency and GPU busy on this OS and it
+  requires root, which this session does not take. The VideoToolbox rows are
+  therefore evidence about wall-clock throughput only.
+
 ## What the rows prove
 
 - Compositing text over an NV12 frame on the GPU removes the text penalty. The
