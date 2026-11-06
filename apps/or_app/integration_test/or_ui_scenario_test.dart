@@ -409,6 +409,15 @@ class _Runner {
           _milliseconds(step['budget_ms'] ?? 8000),
         );
         return;
+      case 'wait_key':
+        // A panel that fills in after an async probe has a key from the first
+        // frame but content only later, so an `expect` races the probe while a
+        // `wait` needs literal text. This waits for the key itself.
+        await _waitForKey(
+          '${step['key_regex'] ?? step['key']}',
+          _milliseconds(step['budget_ms'] ?? 8000),
+        );
+        return;
       case 'wait_absent':
         await _waitForText(
           '${step['text']}',
@@ -1162,6 +1171,26 @@ class _Runner {
   /// Wait for a semantics label, which is the portable selector: the same
   /// control presents its name as its own Text widget on desktop and as one
   /// multi-line semantics label in the compact sheet.
+  Future<void> _waitForKey(String pattern, int budgetMs) async {
+    final regex = RegExp(pattern);
+    final deadline = DateTime.now().add(Duration(milliseconds: budgetMs));
+    while (DateTime.now().isBefore(deadline)) {
+      final seen = tester.allWidgets.any((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> && regex.hasMatch(key.value);
+      });
+      if (seen) return;
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 8)),
+      );
+    }
+    throw _StepFailure(
+      'timeout',
+      'no widget keyed /$pattern/ appeared within ${budgetMs}ms',
+    );
+  }
+
   Future<void> _waitForLabel(
     String pattern,
     int budgetMs, {
@@ -1196,6 +1225,20 @@ class _Runner {
       image.dispose();
       artifacts.writeBytes(file, bytes!.buffer.asUint8List());
     } catch (error) {
+      // The Windows test runner cannot snapshot the surface: `RepaintBoundary`
+      // `toImage` fails with "operation failed" there because the test binding
+      // has no raster surface to read back. Every other observation still holds,
+      // so the step records the limitation instead of failing a scenario that
+      // drove the real app correctly. Any other host keeps the hard failure.
+      if (Platform.isWindows) {
+        artifacts.writeBytes(
+          '$file.unavailable.txt',
+          utf8.encode(
+            'the Windows test runner cannot capture the surface: $error',
+          ),
+        );
+        return '$file.unavailable';
+      }
       throw _StepFailure('shot_failed', 'could not capture $name: $error');
     }
     return file;

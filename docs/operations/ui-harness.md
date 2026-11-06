@@ -1,6 +1,6 @@
 # Agent-Facing UI Harness
 
-Last reviewed: 2026-10-26
+Last reviewed: 2026-11-06
 
 Scope: how to drive the real application by semantics instead of coordinates, and
 how to read the result. Prefer this over screenshots, MCP or vision.
@@ -28,6 +28,18 @@ host filesystem. A 1440x900 window launches in about twenty seconds.
 The run also names the CLI the assistant edits through (`OR_CLI_PATH`, the
 checkout's `target/debug/or`), because a debug build has no packaged CLI beside
 it and its working directory is not the checkout.
+
+`--target linux` runs the same scenario on Debian under Xvfb, and `--target
+windows` runs it on the Windows host through `flutter test -d windows`. The
+Windows run needs three things the Mac does not: the Flutter entry point is
+`flutter.bat` (a bare `flutter` never resolves through `subprocess`), the
+FFmpeg shared libraries the bridge links must be reachable (`FFMPEG_INSTALL_PREFIX`
+or `OR_FFMPEG_PREFIX`, whose `bin` the harness prepends to `PATH`), and a
+screenshot step records `shot-*.png.unavailable.txt` instead of an image,
+because the Windows test binding has no raster surface for `RepaintBoundary`
+to read back. Everything the transcript reports — keys tapped, labels seen,
+timing — still comes from the real app, so behavioural evidence is complete and
+only the pixels are missing.
 
 Run one scenario at a time: every run rewrites `apps/or_app/build/ui-harness/`,
 so two concurrent runs (or a run started while another is finishing) corrupt each

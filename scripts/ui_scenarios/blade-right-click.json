@@ -104,6 +104,6 @@
     "height": 900
   },
   "fixtures": [
-    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+    "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
   ]
 }

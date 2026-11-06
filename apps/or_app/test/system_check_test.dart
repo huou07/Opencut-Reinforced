@@ -191,5 +191,24 @@ void main() {
         contains('Free some space, or export a shorter range.'),
       );
     });
+
+    testWidgets('a machine that cannot be read says so instead of spinning', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SystemCheckPanel(
+              facts: () async => throw StateError('no machine data'),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('system-check-error')), findsOneWidget);
+      expect(find.byKey(const ValueKey('system-check-summary')), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
   });
 }

@@ -83,12 +83,20 @@ Future<HostFacts> readHostFacts({
   CommandRunner run = _run,
 }) async {
   final host = platform ?? HostPlatform.current();
+  // The two probes are independent processes (on Windows each is a PowerShell
+  // launch), so they run together: sequentially the panel waited for two process
+  // startups before it could name the machine at all. Neither probe throws — a
+  // launch that fails answers null — so no timer is needed to bound the wait.
+  final probes = await Future.wait([
+    _memoryBytes(host, run),
+    _freeDiskBytes(host, volume.path, run),
+  ]);
   return HostFacts(
     platformName: host.name,
     osVersion: Platform.operatingSystemVersion,
     cpuCount: Platform.numberOfProcessors,
-    memoryBytes: await _memoryBytes(host, run),
-    freeDiskBytes: await _freeDiskBytes(host, volume.path, run),
+    memoryBytes: probes[0],
+    freeDiskBytes: probes[1],
   );
 }
 

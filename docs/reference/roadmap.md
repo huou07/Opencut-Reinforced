@@ -260,6 +260,27 @@ One near-term delivery mission for the local macOS app, in this order:
     files, the uninstall data and the shortcuts are gone and the user's projects
     are untouched.
 
+33. **The Windows app could only be checked by reading its process (2026-11-06).**
+    `scripts/or_ui.py` drove macOS and Debian but had no Windows target, so the
+    Windows evidence stopped at widget tests and an installer smoke test that
+    only proved the process launched. `--target windows` now runs the same
+    scenarios through `flutter test -d windows`, which needed the `flutter.bat`
+    entry point (a bare `flutter` never resolves through `subprocess`), the
+    FFmpeg prefix on `PATH` (the bridge links `avcodec-62.dll` and friends), and
+    a screenshot step that records `shot-*.png.unavailable.txt` because that test
+    binding has no raster surface. Behavioural scenarios pass on the real app
+    (workspace chrome, the library tour, and the speech-runtime install and
+    removal); scenarios that insert a clip stop at the engine's "No Impeller
+    context is available", which is a property of that headless test surface, not
+    a verdict on the packaged app — recorded as a limit, not a pass.
+34. **The machine panel could spin forever (2026-11-06).** `readHostFacts` ran its
+    memory probe and its disk probe one after the other, and on Windows each is a
+    PowerShell launch, so the panel showed a spinner while two processes started.
+    The probes now run together, and a failure renders "This machine could not be
+    read: …" instead of an endless spinner. A timer-based budget was written
+    first and removed: a `Future.timeout` leaves a pending timer that fails every
+    widget test that disposes its tree while the probe is in flight.
+
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
     row naming the last render, with **Render again** which re-materialises the

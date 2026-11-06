@@ -335,3 +335,48 @@ downloaded with `gh release download v0.1.18` and checked:
 `shasum -a 256 -c SHA256SUMS.txt` on the downloaded set printed `OK` for all four.
 The uninstall row is the one that matters for this release: the same command
 against the published 0.1.17 setup exited 1 and removed nothing.
+
+## The real Windows app, driven by the harness, 2026-11-06
+
+The Windows evidence had stopped at widget tests plus an installer smoke test
+that only proved the process launched. `scripts/or_ui.py` grew a `windows`
+target that runs the same scenarios through `flutter test -d windows`.
+
+| Scenario | Result | What it observed |
+|---|---|---|
+| `workspace-chrome` | `RESULT: OR_UI=PASS` | opened Projects, created a project through the dialog, reached the empty timeline |
+| `library-tour` | `RESULT: OR_UI=PASS` (fresh profile) | visited every Library tab and the licence panel; a second run starts inside the app because the welcome panel stays dismissed |
+| `speech-runtime-install` | `RESULT: OR_UI=PASS` | installed the pinned engine from GitHub, confirmed the manifest, removed it after confirmation, saw Install return |
+| `resources-setup` | `RESULT: OR_UI=PASS` | Resources & updates reported the machine and the measured export formats |
+| `editor-journey`, `save-reopen`, `export-encode` | stopped at the clip insert | the engine raised `No Impeller context is available` when a clip reached the timeline |
+
+The first three runs exposed what the target needed, and each fix is part of the
+harness rather than a scenario workaround: the Flutter entry point is
+`flutter.bat` (a bare `flutter` never resolves through `subprocess`), the FFmpeg
+prefix's `bin` must be on `PATH` (the bridge links `avcodec-62.dll`), a
+screenshot step records `shot-*.png.unavailable.txt` instead of an image, and
+eighteen scenarios named a host-absolute `copy:/Users/meomeo/...` fixture, which
+staged nothing on Windows — they now name a repository-relative path.
+
+The clip-insert stop is a property of that headless test surface: `RepaintBoundary`
+read-back fails there too, and both failures are the engine reporting no raster
+context. It is recorded as a limit of the Windows harness, not as a pass for the
+packaged app, whose window was launched but not inspected frame by frame.
+
+The same runs found a real defect: `readHostFacts` ran its two probes
+sequentially and each is a PowerShell launch on Windows, so the panel spent the
+wait as a spinner with no timeout and no failure state. The probes now run
+together, and a failure says "This machine could not be read: …" instead of
+spinning.
+
+## 0.1.19 at `b60d9167`, three hosts
+
+| Host | Suite | Result |
+|---|---|---|
+| macOS 26.5 (Apple M5) | `flutter test` | **504 pass**, no skips |
+| Debian (Intel UHD 770) | `flutter test` | **499 pass, 5 skipped** (the five host-only skips) |
+| Windows 11 (Intel Core 5 120U) | `flutter test` in `apps\or_app` | **499 pass, 5 skipped**, `03:17 +499 ~5: All other tests passed!` |
+
+The Windows run first printed `Test directory "test" not found.` because the
+command was started from the repository root; the suite lives in `apps\or_app`,
+which is now in the harness notes.

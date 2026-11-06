@@ -4,7 +4,7 @@
     "height": 800
   },
   "fixtures": [
-    "copy:/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/illustration-source.rs"
+    "copy:scripts/ui_scenarios/illustration-source.rs"
   ],
   "budget_ms": 900000,
   "steps": [
