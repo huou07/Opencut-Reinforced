@@ -1,7 +1,7 @@
 {
  "name": "keyframes",
  "harness": "or_ui",
- "description": "Adds a transform keyframe to a selected clip at the playhead, edits its value in the dialog, and confirms the chip shows the new value. A passing run means the Animation section is reachable in the real inspector, the keyframe is written through the ordinary clip command, and the panel reads it back.",
+ "description": "Adds an opacity keyframe at the playhead, edits its value in the dialog, applies the Slide up motion preset on the same clip, and confirms both the chip and the preset keyframe are read back. A passing run means the Animation section is reachable in the real inspector, manual and preset keyframes are written through the ordinary clip command, and the panel re-reads them.",
  "viewport": {
   "width": 1440,
   "height": 900
@@ -176,6 +176,44 @@
   {
    "op": "shot",
    "name": "animation-edited"
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-preset-slide-up"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "animation-preset-slide-up"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 600
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "animation-keyframe-y-0"
+   },
+   "scroll": "inspector-scroll",
+   "dy": -600
+  },
+  {
+   "op": "expect",
+   "key": "animation-keyframe-y-0"
+  },
+  {
+   "op": "tree",
+   "name": "preset"
+  },
+  {
+   "op": "shot",
+   "name": "animation-preset"
   }
  ]
 }

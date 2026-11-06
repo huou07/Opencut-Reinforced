@@ -27,8 +27,14 @@ inspector adds a keyframe at the playhead from the values currently in the
 fields; each chip can be edited in time, value and easing, or removed. The
 project file omits an empty animation, and validation rejects unsorted
 keyframes, offsets past the clip end, more than 64 keyframes per channel, and
-values outside the clip limits. Graph editing, effect parameter keyframes and
-clip-level motion presets remain deferred.
+values outside the clip limits.
+
+Four motion presets write ordinary keyframes through the same command: Fade in
+(opacity), Slide up (position), Zoom in (scale) and Pop (a short scale bump).
+A preset replaces the keyframes on the channels it animates and leaves the rest
+alone, so it is a starting point that the chips can then be edited or cleared;
+the project file stores keyframes, never a preset name. Graph editing and
+effect-parameter keyframes remain deferred.
 
 Verified 2026-11-07 at `4cf49782` on all three hosts with the `keyframes` UI
 scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a

@@ -189,6 +189,11 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
     unawaited(_save(next));
   }
 
+  Future<void> _applyPreset(_MotionPreset preset) async {
+    final span = widget.clipDuration.secondsForDisplay.clamp(0.05, 0.7);
+    await _save(preset.build(_animation, span));
+  }
+
   @override
   Widget build(BuildContext context) {
     final channels = _channelDefinitions;
@@ -227,6 +232,34 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
                     'Add another at a different playhead position to animate.'
               : 'Add a keyframe at the playhead to start animating this clip. '
                     'Move the playhead, change the value above, then add again.',
+          style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        Text(
+          'MOTION PRESETS',
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        Wrap(
+          spacing: OrSpacing.x1,
+          runSpacing: OrSpacing.x1,
+          children: [
+            for (final preset in _motionPresets)
+              ActionChip(
+                key: ValueKey('animation-preset-${preset.wire}'),
+                label: Text(preset.label),
+                onPressed: widget.enabled && !_saving
+                    ? () => unawaited(_applyPreset(preset))
+                    : null,
+              ),
+          ],
+        ),
+        Text(
+          'A preset replaces the keyframes on the channels it animates.',
           style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
         ),
         if (_error != null) ...[
@@ -475,6 +508,95 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
     ],
   );
 }
+
+ProjectRationalTime _secondsTime(double seconds) =>
+    ProjectRationalTime(BigInt.from((seconds * 1000).round()), 1000);
+
+/// One-tap animation built from ordinary keyframes.
+///
+/// A preset is only a starting point: it writes the same command the manual
+/// controls use, so the chips can be edited or cleared afterwards and the
+/// project file stores keyframes, not a preset name.
+class _MotionPreset {
+  const _MotionPreset({
+    required this.wire,
+    required this.label,
+    required this.build,
+  });
+
+  final String wire;
+  final String label;
+  final ProjectClipAnimation Function(ProjectClipAnimation current, double span)
+  build;
+}
+
+ProjectKeyframe _keyframe(double at, int value, ProjectKeyframeEasing easing) =>
+    ProjectKeyframe(at: _secondsTime(at), value: value, easing: easing);
+
+const List<_MotionPreset> _motionPresets = [
+  _MotionPreset(
+    wire: 'fade-in',
+    label: 'Fade in',
+    build: _fadeIn,
+  ),
+  _MotionPreset(
+    wire: 'slide-up',
+    label: 'Slide up',
+    build: _slideUp,
+  ),
+  _MotionPreset(
+    wire: 'zoom-in',
+    label: 'Zoom in',
+    build: _zoomIn,
+  ),
+  _MotionPreset(
+    wire: 'pop',
+    label: 'Pop',
+    build: _pop,
+  ),
+];
+
+ProjectClipAnimation _fadeIn(ProjectClipAnimation current, double span) =>
+    current.copyWith(
+      opacityBasisPoints: [
+        _keyframe(0, 0, ProjectKeyframeEasing.easeOut),
+        _keyframe(span, 10000, ProjectKeyframeEasing.linear),
+      ],
+    );
+
+ProjectClipAnimation _slideUp(ProjectClipAnimation current, double span) =>
+    current.copyWith(
+      yMilliCanvas: [
+        _keyframe(0, 120, ProjectKeyframeEasing.easeOut),
+        _keyframe(span, 0, ProjectKeyframeEasing.linear),
+      ],
+    );
+
+ProjectClipAnimation _zoomIn(ProjectClipAnimation current, double span) =>
+    current.copyWith(
+      scaleXMilli: [
+        _keyframe(0, 850, ProjectKeyframeEasing.easeOut),
+        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
+      ],
+      scaleYMilli: [
+        _keyframe(0, 850, ProjectKeyframeEasing.easeOut),
+        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
+      ],
+    );
+
+ProjectClipAnimation _pop(ProjectClipAnimation current, double span) => current
+    .copyWith(
+      scaleXMilli: [
+        _keyframe(0, 1000, ProjectKeyframeEasing.easeOut),
+        _keyframe(span / 2, 1120, ProjectKeyframeEasing.easeInOut),
+        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
+      ],
+      scaleYMilli: [
+        _keyframe(0, 1000, ProjectKeyframeEasing.easeOut),
+        _keyframe(span / 2, 1120, ProjectKeyframeEasing.easeInOut),
+        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
+      ],
+    );
 
 class _AnimationChannel {
   const _AnimationChannel({

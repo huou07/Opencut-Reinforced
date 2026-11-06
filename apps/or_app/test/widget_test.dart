@@ -7628,6 +7628,50 @@ void main() {
     expect(find.byKey(const ValueKey('animation-keyframe-opacity-0')), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a motion preset writes editable keyframes', (tester) async {
+    final gateway = _FakeProjectGateway();
+    final view = ProjectReadModel(
+      projectId: 'project-id',
+      projectInstanceId: 'instance-id',
+      revision: BigInt.zero,
+      name: 'Animation',
+      dirty: false,
+      descriptorPath: '/tmp/or-animation.json',
+    );
+    final session = _FakeSession('/tmp/or-animation.orproj', view);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ClipAnimationPanel(
+            gateway: gateway,
+            session: session,
+            project: view,
+            trackId: 'track-1',
+            clipId: 'clip-1',
+            clipStart: ProjectRationalTime(BigInt.zero, 1),
+            clipDuration: ProjectRationalTime(BigInt.from(4), 1),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('animation-preset-fade-in')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.updateAnimationCalls, 1);
+    final keyframes = gateway.lastAnimation.opacityBasisPoints;
+    expect(keyframes, hasLength(2));
+    expect(keyframes.first.value, 0);
+    expect(keyframes.last.value, 10000);
+    expect(keyframes.last.at.secondsForDisplay, closeTo(0.7, 0.001));
+    expect(
+      find.byKey(const ValueKey('animation-keyframe-opacity-1')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {
