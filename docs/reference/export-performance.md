@@ -341,6 +341,12 @@ per row (full pipeline, `OR_BENCH_MODE` unset):
 |---|---|
 | MP4 H.264 + AAC | 239.6, 245.6 |
 | MP4 H.264 + AAC + one text layer | 240.4, 234.7 |
+| MP4 H.264 + AAC, animated scale keyframes (`OR_BENCH_ANIM=1`) | 238.9, 243.8 |
+
+Animated rows are measured at `37f39a67`; the keyframes sample once per frame
+and the row stays inside the static spread, so animation does not add a
+measurable export cost on this host. Debian and Windows animated rows are not
+re-taken.
 
 These match the 2026-11-06 rows within run-to-run spread (242 and 208–233), so
 the keyframe plumbing did not move the static path: a clip with no keyframes

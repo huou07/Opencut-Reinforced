@@ -4821,6 +4821,33 @@ mod desktop {
             let source_height = env_number("OR_BENCH_SRC_H", height);
             let frames = u64::from(env_number("OR_BENCH_FRAMES", 300));
             let with_text = std::env::var("OR_BENCH_TEXT").is_ok_and(|value| value == "1");
+            let with_animation = std::env::var("OR_BENCH_ANIM").is_ok_and(|value| value == "1");
+            let animation = if with_animation {
+                or_core::ClipAnimation {
+                    scale_x_milli: or_core::KeyframeTrack {
+                        keyframes: vec![
+                            or_core::Keyframe {
+                                at: RationalTime::ZERO,
+                                value: 1_000,
+                                easing: or_core::KeyframeEasing::Linear,
+                            },
+                            or_core::Keyframe {
+                                at: RationalTime::new(5, 1).expect("keyframe time"),
+                                value: 1_120,
+                                easing: or_core::KeyframeEasing::EaseInOut,
+                            },
+                            or_core::Keyframe {
+                                at: RationalTime::new(10, 1).expect("keyframe time"),
+                                value: 1_000,
+                                easing: or_core::KeyframeEasing::Linear,
+                            },
+                        ],
+                    },
+                    ..or_core::ClipAnimation::default()
+                }
+            } else {
+                or_core::ClipAnimation::default()
+            };
             let profile = std::env::var("OR_BENCH_PROFILE").unwrap_or_else(|_| "mp4".to_owned());
             let quality = match std::env::var("OR_BENCH_QUALITY").as_deref() {
                 Ok("speed") => ExportQuality::Speed,
@@ -4852,7 +4879,7 @@ mod desktop {
                     transform: Transform::IDENTITY,
                     crop: Crop::NONE,
                     opacity: Opacity::OPAQUE,
-                    animation: ClipAnimation::default(),
+                    animation: animation.clone(),
                     effects: Vec::new(),
                     transition_in: None,
                     transition_out: None,

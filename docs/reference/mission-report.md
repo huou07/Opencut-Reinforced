@@ -57,8 +57,9 @@ MP4 + one text layer 240.4/234.7 fps — within the 2026-11-06 spread. Rows in
   (`0.00s · 0.12 · Ease out`) on all three hosts in the same journey.
 - **PASS** — all three checkouts build and run at `4cf49782` and the core editing
   and export workflows still pass their tests.
-- **UNVERIFIED** — export throughput with animated keyframes: the benchmark
-  builds a static clip only.
+- **PASS (macOS)** — an export with animated scale keyframes (`OR_BENCH_ANIM=1`)
+  ran at 238.9/243.8 fps against the static 239.6/245.6 spread; Debian and
+  Windows animated rows remain **UNVERIFIED**.
 - **UNVERIFIED** — Debian and Windows benchmark rows were not re-taken at this
   revision; the last rows are from 2026-11-06.
 - **BLOCKED by hardware** — oneVPL/Quick Sync is absent from every packaged
