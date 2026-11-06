@@ -82,6 +82,30 @@ void main() {
     expect(find.textContaining('libx264'), findsWidgets);
   });
 
+  testWidgets('a plan with several notes builds without duplicate keys', (
+    tester,
+  ) async {
+    gateway.planNotes = const [
+      'h264_nvenc: the device this encoder needs did not open',
+      'no software H.264 encoder opened',
+    ];
+    await pumpPanel(tester);
+
+    expect(
+      find.byKey(const ValueKey('performance-plan-note-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('performance-plan-note-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('performance-plan-notes')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reset clears the encoder override and returns to recommended', (
     tester,
   ) async {
@@ -109,6 +133,7 @@ class _FakeGateway implements CoreGateway {
   int planCalls = 0;
   String? lastProfile;
   String? lastEncoder;
+  List<String> planNotes = const [];
 
   @override
   Future<AppInfo> appInfo() async =>
@@ -176,7 +201,7 @@ class _FakeGateway implements CoreGateway {
       h264Encoder: hardware ? 'h264_videotoolbox' : 'libx264',
       hardware: hardware,
       software: !hardware,
-      notes: const [],
+      notes: planNotes,
       summary: hardware
           ? 'h264_videotoolbox (hardware)'
           : 'libx264 (software)',

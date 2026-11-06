@@ -49,7 +49,7 @@ the job. The resolved encoder is written into the job snapshot (`detail`, e.g.
 |---|---|---|---|---|
 | MacBook Air M5, macOS 15 | Apple M5, Metal, integrated | `h264_videotoolbox` (hardware) | no software encoder in the build; falls back to VideoToolbox with the recorded note | `scripts/ui_scenarios/performance-profiles.json` PASS, receipt scenario PASS |
 | Debian 13, Intel UHD 770 | Intel UHD Graphics 770, Vulkan (Mesa), integrated | `h264_vaapi` (hardware) | `libx264` (software) | `scripts/ui_scenarios/performance-profiles-linux.json` PASS on Weston headless with `--renderer=gl`; shots `shot-performance-recommended-4.png`, `shot-performance-compatibility-7.png` |
-| Windows 11, Core 5 120U | Direct3D 12, integrated | `h264_mf` (hardware) | no software encoder in the build; falls back to Media Foundation with the recorded note | `scripts/ui_scenarios/performance-profiles-windows.json`; see status below |
+| Windows 11, Core 5 120U | Direct3D 12, integrated | `h264_mf` (hardware) | no software encoder in the build; falls back to Media Foundation with the recorded note | `scripts/ui_scenarios/performance-profiles-windows.json` PASS in an interactive session; desktop shots `shot-3..7.png` |
 
 The Debian row needs the GPL-capable prefix (`~/or-build/ffmpeg-8.1.3-install`)
 on `LD_LIBRARY_PATH`; the minimal LGPL prefix linked by default on that host
@@ -74,9 +74,23 @@ either host because there is no NVIDIA device; the report records
 no test hardware in this mission: their paths are implemented through the same
 candidate list and probe, but no benchmark row is claimed for them.
 
-## Windows status
+## Windows verification
 
-The interactive GUI lane is proven (Task Scheduler with `/IT` runs in session 1
-as the logged-in user). The release build and the Windows UI journey are
-recorded in the mission's results report; until that row is filled, treat the
-Windows plan as **UNVERIFIED** even though its encoder inventory is measured.
+The interactive lane is proven: a Task Scheduler task with `/IT` runs in
+session 1 as the logged-in user, not in the SSH session 0. `flutter test -d
+windows` drove the real desktop window through the scenario and captured the
+desktop while it ran.
+
+The first run failed at step 5 with `Duplicate keys found ... multiple
+children with key [<'performance-plan-notes'>]`: the panel keyed every plan
+note identically, and Windows has two notes (`h264_nvenc` did not open, no
+software encoder), so the plan block could not build. That was a real
+Windows-only crash: the same panel built on macOS and Debian because those
+hosts had one note. Each note now carries its own index key, the block keeps
+one key, and a widget test covers a multi-note plan. The rerun passed in 9 s.
+
+The packaged release `or_app.exe` also starts in session 1 with a real
+`Opencut Reinforced` window (`Handle=329874`, `Exited=False` after 15 s,
+desktop shot `shot-app.png`). That is launch evidence, not a second journey:
+the semantic steps above ran against the test binding, which renders the same
+widget tree on the same desktop.

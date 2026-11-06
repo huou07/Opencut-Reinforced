@@ -263,6 +263,7 @@ class _PerformancePanelState extends State<PerformancePanel> {
         borderRadius: BorderRadius.circular(OrRadii.small),
       ),
       child: Column(
+        key: const ValueKey('performance-plan-notes'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
@@ -288,11 +289,11 @@ class _PerformancePanelState extends State<PerformancePanel> {
               ),
             ),
           ],
-          for (final note in plan.notes) ...[
+          for (final (index, note) in plan.notes.indexed) ...[
             const SizedBox(height: OrSpacing.x1),
             Text(
               note,
-              key: const ValueKey('performance-plan-notes'),
+              key: ValueKey('performance-plan-note-$index'),
               style: const TextStyle(
                 color: OrColors.textSecondary,
                 fontSize: OrType.metadataSize,
