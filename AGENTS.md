@@ -142,6 +142,9 @@ any other rule to this file.
 - **Media capability matrix** — measured import/decode/encode rows per host, and the command that produced them.
   When: claiming a container, codec or export capability, or diagnosing an import refusal.
   Path: `docs/reference/media-capability-matrix.md`
+- **Hardware profiles** — what each host detects (GPU backend, opened encoders, decoders) and which profile plan an export takes.
+  When: explaining an encoder choice, a fallback, or a hardware claim on a host.
+  Path: `docs/reference/hardware-profiles.md`
 - **Release** — Developer Preview pipeline and stable-release requirements.
   When: packaging or distribution work is explicitly in scope.
   Path: `docs/reference/release.md`
