@@ -345,8 +345,8 @@ per row (full pipeline, `OR_BENCH_MODE` unset):
 
 Animated rows are measured at `37f39a67`; the keyframes sample once per frame
 and the row stays inside the static spread, so animation does not add a
-measurable export cost on this host. Debian and Windows animated rows are not
-re-taken.
+measurable export cost on this host. Debian animated rows were re-taken at
+`ab5d4620` (below); Windows animated rows are not taken.
 
 These match the 2026-11-06 rows within run-to-run spread (242 and 208–233), so
 the keyframe plumbing did not move the static path: a clip with no keyframes
@@ -408,6 +408,20 @@ the text row is unchanged within spread. Unlike Debian, one text layer costs
 Windows about 2x rather than 14x: the composited readback is cheaper on this
 driver, which is consistent with the readback explanation above and with the
 earlier note that the Windows text row was roughly half the Debian one.
+
+### Animated rows at `ab5d4620`
+
+The same `OR_BENCH_ANIM=1` knob (three scale keyframes, 1000 → 1120 → 1000)
+on the Debian host, 300 frames, `--release`, one-pass conversion:
+
+| Row | fps |
+|---|---|
+| MP4 H.264 + AAC, animated | 260.6, 260.6 |
+| MP4 H.264 + AAC, animated + one text layer | 119.2, 96.7 |
+
+Animation samples one transform per frame and the composited path already runs
+every frame, so the row sits inside the static text spread (101.9–118.3); the
+sample itself is not measurable next to the readback cost.
 
 ## 2026-11-07 rows — one-pass NV12 conversion
 

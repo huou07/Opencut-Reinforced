@@ -72,9 +72,9 @@ Dart inside the existing architecture.
 
 | Host | Build | Rust tests | Flutter | UI journey | Packaged app |
 |---|---|---|---|---|---|
-| macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1 | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json` PASS | PASS (debug; release build not re-taken this mission) |
-| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
-| Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
+| macOS M5 (Metal, VideoToolbox) | PASS | `or_core` hardware 11, timeline 75, jobs 17; `or_media` 23; `or_render` NV12 1; `or_cli` 45 semantic + 4 MCP | analyze clean, 520 widget tests | `performance-profiles.json`, `performance-receipt.json`, `keyframes.json` PASS | PASS (debug; release build not re-taken this mission) |
+| Debian 13 (Weston headless, Mesa GL, UHD 770) | PASS | `or_core` timeline 75, hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean | `performance-profiles-linux.json`, `keyframes.json`, preset run PASS | PASS (debug) |
+| Windows 11 (Vulkan preview, Media Foundation) | PASS | `or_core` hardware 11; `or_cli` keyframe verb + MCP 4 | analyze clean, `export_flow`/`performance_panel` 10 | `performance-profiles-windows.json`, `keyframes.json`, preset run PASS | PASS (`or_app.exe` window, title, screenshot) |
 
 Benchmarks at this revision (300 frames, idle): macOS MP4 239.6/245.6 fps, MP4 +
 one text layer 240.4/234.7 fps, animated scale 238.9/243.8 fps — within the
