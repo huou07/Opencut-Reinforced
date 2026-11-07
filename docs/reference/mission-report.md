@@ -379,8 +379,8 @@ reports no issues, `scripts/check-repo.sh` passes over 926 tracked files.
 | Host | Artifact | Bytes | SHA-256 |
 | --- | --- | --- | --- |
 | macOS arm64 | `dist/Opencut-Reinforced-0.1.23-arm64.dmg` | 36055281 | `6df9d8139904d4776de221c8c5e535368a3709786e07b7adf97cf96d03330938` |
-| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64-setup.exe` | 25945416 | `5e800854b08baefe4b8ce48b7530f31a2a97cbffe6dab00ff013483258a07602` |
-| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64.zip` | 35803846 | `8013473a1691d09a161e694b4be8910ba8145673a7b9bf3988c6e1c733b474f4` |
+| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64-setup.exe` | 25216732 | `ea74ef0e0025c2bb1a477f46239fcedafaa88093f7f93a858d9203790477a472` |
+| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64.zip` | 34840720 | `952a3bd34bb90c92165cac42e892a733336a3c71fc2b502a80f301b2c218a583` |
 | Debian amd64 | `opencut-reinforced-linux-x64-release.deb` | 23316744 | `d9b90b3668f5e9d95f6f5a1b1229ac82751d4733cd7c23dc59b7e0ce179ac789` |
 
 **Installed and exercised on all three hosts** (evidence in
@@ -419,7 +419,12 @@ was the stale Debug bundle, so the CLI and speech runtime were staged into
 install's `or.exe` survived in place. The script now prefers a bridge DLL inside
 the bundle it is staging and throws when none exists; after restaging, the
 installed CLI reports `Opencut Reinforced 0.1.23` and the zip/uninstall test
-(`scripts/test_desktop_archive_install.py`) passes.
+(`scripts/test_desktop_archive_install.py`) passes. The first 0.1.23 packages
+also shipped `ffmpeg-link-probe.exe`, the staging diagnostic; the Windows
+stager now deletes it after its checks (the Linux packager already did), and the
+artifacts in the table above were rebuilt, uninstalled and installed again: the
+fresh install contains no probe, opens the saved project, and exported the three
+profiles once more.
 
 **Known limits of this release, with reasons.**
 
