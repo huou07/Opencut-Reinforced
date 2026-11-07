@@ -145,6 +145,15 @@ iGPU. Rows in [export-performance.md](export-performance.md).
 - **BLOCKED by hardware** — oneVPL/Quick Sync is absent from every packaged
   FFmpeg build (no `h264_qsv`), and no discrete NVIDIA/AMD device is available
   locally, so those paths are implemented and probed but not benchmarked.
+- **Corrected at `b1347dfa`** — the text-vs-no-text ratios above compared two
+  different stages: a no-text render with one covering clip takes the direct
+  decode path, while a text row composites and waits on a synchronous NV12
+  readback. Measured like for like (`OR_BENCH_SCALED=1`, both rows through the
+  compositor), one text layer costs 0.7 % on macOS, 1.3 % on Debian and 0.2 % on
+  Windows. The full-pipeline text cost that remains (about 25 % on Debian and
+  Windows, 1 % on macOS) is the compositor plus GPU conversion replacing the
+  copy-free passthrough, not the text layer. Rows and commands in
+  [export-performance.md](export-performance.md).
 
 ## Closing verification at `20543449`
 

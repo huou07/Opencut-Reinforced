@@ -29,8 +29,12 @@ OR_BENCH_SOURCE=/tmp/or-bench/bench4k.mp4 OR_BENCH_SRC_W=3840 OR_BENCH_SRC_H=216
   OR_BENCH_OUT_W=1920 OR_BENCH_OUT_H=1080 OR_BENCH_FRAMES=150 \
   "$BIN" export_media_benchmark --ignored --nocapture
 
-# One stage at a time: decode, render, encode.
-OR_BENCH_MODE=render OR_BENCH_SOURCE=/tmp/or-bench/bench1080.mp4 OR_BENCH_FRAMES=300 "$BIN" export_media_benchmark --ignored --nocapture
+# One stage at a time: decode, render, encode. A no-text render without
+# OR_BENCH_SCALED=1 is a decode passthrough: one covering clip with no effects
+# and no text returns the decoded frame before the compositor runs. Add the
+# knob to measure the composited stage (and a text row) fairly.
+OR_BENCH_MODE=render OR_BENCH_SCALED=1 OR_BENCH_SOURCE=/tmp/or-bench/bench1080.mp4 OR_BENCH_FRAMES=300 "$BIN" export_media_benchmark --ignored --nocapture
+OR_BENCH_MODE=render OR_BENCH_SCALED=1 OR_BENCH_TEXT=1 OR_BENCH_SOURCE=/tmp/or-bench/bench1080.mp4 OR_BENCH_FRAMES=300 "$BIN" export_media_benchmark --ignored --nocapture
 OR_BENCH_MODE=decode OR_BENCH_NV12=1 OR_BENCH_SOURCE=/tmp/or-bench/bench1080.mp4 OR_BENCH_FRAMES=300 "$BIN" export_media_benchmark --ignored --nocapture
 
 # A real project through the path the Export dialog starts.
@@ -88,7 +92,10 @@ macOS M5 (VideoToolbox H.264, 300 frames):
 
 macOS stage ceilings after the change: render 1342 fps without text and 313 fps
 with one text layer (was 1279 / 130). VideoToolbox H.264 blank frames 280.9 fps,
-so the text path is now encoder-bound rather than compositor-bound.
+so the text path is now encoder-bound rather than compositor-bound. The two
+render rows in that table were not the same stage: the no-text row took the
+direct decode path while the text row composited and waited for its readback.
+The 2026-11-07 section below repeats them like for like.
 
 Debian 13 (VAAPI H.264, 150 frames for the export rows):
 
@@ -102,13 +109,13 @@ Debian 13 (VAAPI H.264, 150 frames for the export rows):
 
 The Debian host composites on its integrated Intel UHD 770 through Vulkan
 (`OR_EXPORT_BENCH_ADAPTER Intel(R) UHD Graphics 770 (ADL-S GT1) (Intel
-open-source Mesa driver, Vulkan)`), not on a software rasteriser. Its text row
-still improves only 1.45× where macOS reaches 2.4×, so a full-canvas text blend
-plus readback costs roughly 20 ms/frame there against 3.5 ms on the Apple GPU;
-the gap between this host's integrated device and the Windows one (91–102 fps on
-the same workload) is measured but not explained — see "Known limits". Output
-bytes are unchanged by the compositor: 6 237 429 without text and 6 222 521 with
-text, LSB-identical at the same settings.
+open-source Mesa driver, Vulkan)`), not on a software rasteriser. The text rows
+in this table composite and wait for the NV12 readback on every frame, while the
+no-text rows took the direct path; the like-for-like rows in the 2026-11-07
+section show what the text layer itself costs (within noise). The gap between
+this host's integrated device and the Windows one is measured but not explained —
+see "Known limits". Output bytes are unchanged by the compositor: 6 237 429
+without text and 6 222 521 with text, LSB-identical at the same settings.
 
 Windows 11 (Media Foundation H.264, 300 frames):
 
@@ -131,6 +138,45 @@ on the produced file, never from the profile name:
 | macOS | `h264_videotoolbox` selected by `FfmpegExportWriter` | h264 High 1920×1080 + aac LC |
 | Debian | `[CUDA @ …] Could not dynamically load CUDA` then `[h264_vaapi @ …] No quality level set; using default (20).` | h264 High 1920×1080 yuv420p + aac LC |
 | Windows | Media Foundation path (no CUDA, no QSV driver); `ffprobe` shows Constrained Baseline | h264 Constrained Baseline 1920×1080 + aac LC |
+
+## 2026-11-07 rows — the text row measured a different stage
+
+At `b1347dfa` (branch `mission/hardware-profiles-and-polish`), 300 frames of the
+same `/tmp/or-bench/bench1080.mp4` fixture, 1920×1080, one idle machine per host.
+The commit adds `OR_BENCH_SCALED=1`, which shrinks the clip by one thousandth so
+`clip_covers_output` declines; both the no-text and text rows then run the same
+compositor and the same synchronous readback. Without the knob, a no-text render
+is a decode passthrough and the comparison is meaningless.
+
+| Workload | macOS M5 | Debian (UHD 770) | Windows (Intel Graphics) |
+| --- | --- | --- | --- |
+| Full MP4, one clip | 221.8 | 260.7 | 128.2 |
+| Full MP4, one text layer | 219.5 | 196.1 | 95.6 |
+| Compositor + sync readback, no text | 116.2 | 88.2 | 41.0 |
+| Compositor + sync readback, one text layer | 115.4 | 87.1 | 40.9 |
+| Decode only, NV12 | 587.4 | 768.6 | 208.6 |
+| Decode only, RGBA | 191.7 | 279.5 | 57.8 |
+| Encoder ceiling, blank NV12, 150 frames | 275.7 | 444.3 | 257.1 |
+
+The text layer itself costs 0.7 % on macOS, 1.3 % on Debian and 0.2 % on Windows
+once both rows take the same path, so there is no text-compositing problem to
+fix: the earlier "6–8× text" reading compared a passthrough with a composited
+frame. What the full-pipeline rows still show is the compositor pass plus the
+GPU YUV conversion replacing the copy-free passthrough: about 1 % on macOS (the
+VideoToolbox encoder is the ceiling), 25 % on Debian and 25 % on Windows. The
+fully synchronous pipeline (compositor plus an immediate readback) runs at
+8.6 ms/frame on the Apple GPU, 11.3 ms on the UHD 770 and 24.4 ms on the Windows
+machine; the export writer queues that readback, which is why the full-pipeline
+text row reaches 196 fps on Debian even though the same stage path measures
+87 fps.
+
+The Windows render rows are also the slowest of the three on identical work, and
+its decode-only NV12 row (208.6 fps) is well below Debian's (768.6 fps), so the
+Windows gap is decode throughput and CPU, not the compositor. A hardware Media
+Foundation MFT exists (`h264_mf -hw_encoding 1 -pix_fmt nv12` selects "Intel(R)
+Quick Sync Video H.264 Encoder MFT") but measured slower than the software MFT in
+the command-line test, and the encoder is not the Windows bottleneck (257 fps
+ceiling against a 128 fps pipeline), so it is not integrated.
 
 ### Container and codec rows at the final revision
 
