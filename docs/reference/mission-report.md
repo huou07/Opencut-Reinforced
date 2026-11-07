@@ -200,6 +200,77 @@ arguments:
   -9` on this UHD 770, so QSV would ship as an encoder that cannot run. AMF is
   not compiled into any prefix at all.
 
+## Starter compositions and the 0.1.22 local release
+
+Four starter compositions ship as app assets —
+`apps/or_app/assets/motion_starters/{title-card,name-bar,end-card,quote-card}.ormotion.json`
+— and appear at the top of the Motion panel's empty state as `Start from a
+starter`. Each is an ordinary MotionScene document, so the flow is the one the
+panel already had: the document is copied to
+`<motion library root>/starters/<id>.ormotion.json` on use (rewritten every time,
+which costs ~3 KB and avoids a version table), parsed and validated before it is
+ever offered, then opened as the draft and materialised through the existing
+"Add to timeline" path. Nothing new renders them and there is no second asset
+pipeline. `crates/or_motion/tests/starter_scenes.rs` keeps the four documents
+parseable, 1920x1080, animation-bearing and uniquely identified;
+`apps/or_app/test/motion_library_test.dart` covers the copy and the tap-through.
+
+Verified: macOS `python3 scripts/or_ui.py run scripts/ui_scenarios/motion-starter.json`
+passes with the tree showing `On timeline · 1920×1080 · 96 frames`; the Windows
+and Debian journeys pass the same scenario (insert-to-timeline 7077 ms and
+1930 ms against 2249 ms on macOS, measured on the debug bundle).
+
+### The 0.1.22 local release
+
+Built and installed on the three hosts, never published:
+
+| Host | Artifact | Bytes | SHA-256 |
+|---|---|---|---|
+| macOS 27.2, Apple M5 | `Opencut-Reinforced-0.1.22-arm64.dmg` | 36035782 | `9ea6467e…453202` |
+| Windows 11 26200, Intel Core 5 120U | `Opencut-Reinforced-0.1.22-windows-x64-setup.exe` | 21277018 | `f534988b…f4a34` |
+| Windows 11 26200 | `or-windows-x64-release.zip` | 28566099 | `c92016e4…a5f71e` |
+| Debian 13, i5-13500T | `opencut-reinforced-linux-x64-release.deb` | 23309152 | `50d5b0c5…f2d9d8` |
+
+The full artifact set with install commands, checksums and screenshots lives in
+`dist/release-0.1.22/` (`SHA256SUMS.txt`, `README.md`); `dist/` is not tracked.
+
+- **macOS** — `scripts/build_macos_dmg.sh` with
+  `OR_WHISPER_CLI_PATH=/tmp/whisper-build/bin/whisper-cli` (whisper.cpp v1.9.4
+  built with `-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0`; the debug bundle's copy
+  required macOS 26 and failed the deployment-target check). `hdiutil verify`
+  reports the checksum valid; the app is installed in `/Applications`,
+  `codesign --verify --deep --strict` exits 0 with `Signature=adhoc`, and
+  `spctl -a -t exec -vv` **rejects** it — locally signed, not notarized, which is
+  the honest state. The installed app was driven by real clicks: Home renders,
+  `New Project` opens the dialog, a name typed through System Events is accepted,
+  `Choose Folder` creates the project and the editor opens with the Media/Text/
+  Audio/Motion panel set. Import and export through the installed bundle were
+  **not** completed: the native file panels cannot be driven reliably from the
+  harness (⌘⇧G accepts a typed path but Return does not commit it), so those
+  remain UNVERIFIED for the installed macOS build.
+- **Windows** — the lane's `build,stage,zip,installer` steps produce the setup
+  and the ZIP; the ZIP lane's install → launch → replace → uninstall → project
+  data preserved round trip passes. The setup was then run silently against the
+  same machine, installing `%LOCALAPPDATA%\Programs\Opencut Reinforced`, and the
+  installed `or_app.exe` was started in the interactive desktop session
+  (scheduled task, session 1) where it reported window title `Opencut Reinforced`
+  and rendered Home with its template row and recent projects.
+- **Linux** — the release `.deb` builds in 149 s and the packaged journey passes
+  in 391 s at `10c28fbe`. Installing it with `dpkg -i` replaced an existing
+  0.1.20 package in place, `or version` reports `Opencut Reinforced 0.1.22`, and
+  the installed `or_app` renders Home under Xvfb.
+
+Two defects were found by doing this, and both are fixed rather than described:
+
+- the `.deb` shipped no `or` binary while the DMG and the Windows bundle did, so
+  a Linux install had no scriptable surface at all; the lane now builds and
+  stages `or_cli` and refuses a package whose `or version` disagrees with the
+  workspace version (`10c28fbe`);
+- the packaged journey tapped a recent-project row at y=968 in a 1440x900 window
+  and missed it. `ensureVisible` and `scrollUntilVisible` both stop early because
+  the row is off-screen but still in the tree; the journey now scrolls the page
+  by its own scroll position first (`f089fa1e`).
+
 ## Rust quality review
 
 Reviewed the new policy, keyframe and bridge code against the Rust API
@@ -241,8 +312,12 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   are recorded as open rather than faked.
 - **Discrete NVIDIA/AMD (NVENC, AMF)** — probed and probed-off paths exist, but no
   such device is attached to the three hosts, so no benchmark is claimed.
-- **Template gallery on MotionScene** — the 20-repo table lists it as deferred;
-  the library still starts empty and presets cover the beginner path.
+- **Template gallery on MotionScene** — four starter compositions ship in the
+  Motion panel (see above), which is the "pick a starting point" half of the
+  idea. A browsable gallery with previews per asset is still not built: it needs
+  preview renders committed beside each document, and the panel's empty state is
+  a list precisely because four title-shaped scenes cannot be told apart from a
+  screenshot grid at that size.
 - **Masks, graph editor, 3D and vector import** — each is a numbered product
   decision, not a silent omission: masks and the graph editor are PLANNED in
   `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the
