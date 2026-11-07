@@ -1,6 +1,6 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-08
 
 Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
@@ -30,6 +30,13 @@ with `dpkg -i` (`Setting up opencut-reinforced (0.1.20+e5e49c8b7b02)`) and ran
 installed 0.1.19 in place on the Windows host with a running app closed by the
 installer (`or: stopping a running copy before touching files`), exiting 0 and
 reporting 0.1.20 afterwards.
+
+Beyond the published line, a **local-only 0.1.23 build** exists for the three
+hosts in this checkout (macOS arm64 DMG, Windows x64 setup + portable zip,
+Debian amd64 deb); it was built, installed and exercised locally and is not
+published: no tag, no hosted job, no GitHub release. Artifact names and SHA-256
+values are in `dist/release-0.1.23/README.md` and the per-host evidence in
+`docs/reference/mission-report.md`.
 
 
 Stable releases ship three desktop packages from one source tree:
