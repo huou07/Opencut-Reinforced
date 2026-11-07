@@ -405,6 +405,15 @@ the next attempt from repeating the work:
   `--disable-asm` build, and `yuv420p`→BGRA conversion came out within noise of a
   NEON build. The cost of that conversion is memory traffic, not missing SIMD, so
   the flag buys nothing at this size.
+- **Assembly on Windows (2026-11-07).** A local FFmpeg 8.1.3 for MSVC with
+  `--disable-asm` removed decoded the same 1080p H.264 clip to NV12 at 218.8,
+  221.7 and 220.2 fps against 211.7 and 213.3 fps for the shipped
+  `--disable-asm` DLLs on the Windows host (Intel Core 5 120U, 12 threads, 300
+  frames). That ~4% is inside the gap to the Debian host (768.6 fps NV12, 20
+  CPUs), which the host's 14-core i5-13500T explains, not the flag: Debian's
+  packaged build also ships `--disable-asm` and still decodes at 768.6. The
+  ad-hoc build also aborted the full export path with `0xC0000005`, so it was not
+  adopted; the shipped flag stays.
 - **VideoToolbox decode.** Software 1080p H.264 decode already runs at 309 fps
   and spends 0.97 CPU-seconds on ten seconds of video — about a tenth of one
   core. VideoToolbox would remove most of that tenth, and the vendored build does
