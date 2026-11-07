@@ -25,7 +25,13 @@ if ([string]::IsNullOrWhiteSpace($FfmpegPrefix)) {
   throw 'FFMPEG_INSTALL_PREFIX is not set; run scripts/build_windows_ffmpeg.sh first'
 }
 
-$bridge = @(Get-ChildItem -Path (Join-Path $RepoRoot 'apps/or_app/build/windows') -Filter '*or_app_bridge*.dll' -Recurse) | Select-Object -First 1
+# A checkout can hold a Debug and a Release bridge DLL. The runtime has to land in
+# the bundle the installer packages, so that bundle's bridge wins; the recursive
+# search stays for a hosted job that stages into a separate directory.
+$bridge = @(Get-ChildItem -Path $Bundle -Filter '*or_app_bridge*.dll' -Recurse -ErrorAction SilentlyContinue) | Select-Object -First 1
+if ($null -eq $bridge) {
+  $bridge = @(Get-ChildItem -Path (Join-Path $RepoRoot 'apps/or_app/build/windows') -Filter '*or_app_bridge*.dll' -Recurse) | Select-Object -First 1
+}
 if ($null -eq $bridge) { throw 'Packaged or_app_bridge DLL not found' }
 $runtimeDir = $bridge.Directory.FullName
 if ($env:GITHUB_ENV) {

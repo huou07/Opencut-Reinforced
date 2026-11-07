@@ -1,6 +1,6 @@
 # Mission report — native performance and product polish
 
-Last reviewed: 2026-11-07
+Last reviewed: 2026-11-08
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
 parity, clip keyframes, motion presets and agent animation verbs) shipped, what was verified on each
@@ -358,3 +358,83 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   20-repo table because each would add a second renderer or asset pipeline with
   no offline-deterministic path today. Crop, the closed effect set, keyframes
   and text presets cover the same intents on the current renderer.
+
+## 0.1.23 local release (2026-11-08)
+
+Revision `8e4cba4abec3acaeda43c7e2ba9f6ede4d6e689b` on the same local branch,
+synced to the Debian and Windows checkouts with `git bundle` (no push, no tag,
+no CI). The macOS DMG, the Windows setup/zip and the Debian deb in this section
+were built from that revision, installed on their own machine and exercised as
+installed applications.
+
+**Shipped since 0.1.22.** Stagger: one entrance preset across a multi-clip
+timeline selection, each clip delayed 0–0.5 s, applied per clip so every clip
+keeps its own undo step; toolbar button, `A` key, dialog with preset chips and
+a delay slider; clips too short for their delay keep their current animation and
+are counted in the result message. 542 Flutter tests pass, `flutter analyze`
+reports no issues, `scripts/check-repo.sh` passes over 926 tracked files.
+
+**Local artifacts** (SHA-256; install commands in `dist/release-0.1.23/README.md`):
+
+| Host | Artifact | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| macOS arm64 | `dist/Opencut-Reinforced-0.1.23-arm64.dmg` | 36055281 | `6df9d8139904d4776de221c8c5e535368a3709786e07b7adf97cf96d03330938` |
+| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64-setup.exe` | 25945416 | `5e800854b08baefe4b8ce48b7530f31a2a97cbffe6dab00ff013483258a07602` |
+| Windows x64 | `Opencut-Reinforced-0.1.23-windows-x64.zip` | 35803846 | `8013473a1691d09a161e694b4be8910ba8145673a7b9bf3988c6e1c733b474f4` |
+| Debian amd64 | `opencut-reinforced-linux-x64-release.deb` | 23316744 | `d9b90b3668f5e9d95f6f5a1b1229ac82751d4733cd7c23dc59b7e0ce179ac789` |
+
+**Installed and exercised on all three hosts** (evidence in
+`dist/release-0.1.23/evidence/{macos,linux,windows}`):
+
+- macOS: `hdiutil attach` + `ditto` into `/Applications/Opencut Reinforced.app`;
+  `codesign --verify --deep --strict` OK (ad-hoc, **not notarized**); bundled
+  `or version` = 0.1.23. A project created through the GUI, media added, a text
+  clip with keyframes and a video clip, ⌘S written (rev 10), then three exports:
+  MP4 `Encoding with h264_videotoolbox (hardware).` 16988 B h264+aac,
+  WebM 11844 B vp9+opus, FFV1 156833 B ffv1+pcm_s16le, all at 1280×720 and
+  0.500–0.512 s.
+- Debian: `sudo dpkg -i` → `0.1.23+8e4cba4abec3`, `/opt/opencut-reinforced`.
+  Desktop GUI runs under `Xvfb :99` (the host has no display server and no
+  seat); the viewer reports "Viewer texture unavailable" there, so this is a
+  software-GL UI path, not a GPU-compositor result. Export does use the real
+  Intel GPU: MP4 job detail `Encoding with h264_vaapi (hardware) — h264_nvenc:
+  the device this encoder needs did not open.` 36804 B, WebM 25687 B,
+  FFV1 349143 B; `vulkaninfo` reports Intel UHD Graphics 770 (ANV, Mesa 25.0.7)
+  and `vainfo` the iHD driver 25.2.3.
+- Windows: silent install to `%LOCALAPPDATA%\Programs\Opencut Reinforced`,
+  `or_app.exe` ProductVersion 0.1.23+24. The app was started in the interactive
+  session 1 through a scheduled task and driven with synthetic input (Flutter
+  exposes no UIA tree without an accessibility client): File → Open Project
+  opened `win0123.orproj`, Ctrl+S wrote rev 7 with the video and text clips, and
+  the three exports succeeded — MP4 `Encoding with h264_mf (hardware) — h264_nvenc:
+  the device this encoder needs did not open.` 26821 B, WebM 20528 B,
+  FFV1 409435 B — with `ffprobe` confirming h264+aac / vp9+opus /
+  ffv1+pcm_s16le.
+
+**Release defect found and fixed here.** The installed Windows app shipped a
+0.1.20 `or.exe` while `or_app.exe` was 0.1.23: `scripts/stage_windows_bundle.ps1`
+picked the first `*or_app_bridge*.dll` under `apps/or_app/build/windows`, which
+was the stale Debug bundle, so the CLI and speech runtime were staged into
+`...\runner\Debug` — a directory Inno Setup does not package — and the previous
+install's `or.exe` survived in place. The script now prefers a bridge DLL inside
+the bundle it is staging and throws when none exists; after restaging, the
+installed CLI reports `Opencut Reinforced 0.1.23` and the zip/uninstall test
+(`scripts/test_desktop_archive_install.py`) passes.
+
+**Known limits of this release, with reasons.**
+
+- `h264_mf` refuses the 32×24 canvas a CLI-created project inherits from a
+  32×24 fixture: `EXPORT_FAILED … the h264_mf encoder did not open (Generic
+  error in an external library)`. The packaged Windows FFmpeg carries only
+  `h264_mf`, `h264_nvenc` and `mpeg4`, so there is no software H.264 fallback,
+  and the failure message does not name the canvas size. Setting a 1280×720
+  canvas makes the same project export. FAIL as shipped behaviour for that
+  canvas size; the honest fix is a size-aware message (and, where the build has
+  libx264, a software fallback), not a silent resize.
+- Debian's GPU claim above covers the export path only. No display server or
+  seat exists on that host, so a GPU-composited desktop UI is UNVERIFIED there
+  (Xvfb is the software renderer the brief says not to count).
+- macOS signing is ad-hoc; Gatekeeper will refuse the DMG on another machine
+  without a Developer ID, and this is not notarized.
+- NVENC/AMF remain UNVERIFIED for real performance: no such device is attached
+  to any of the three hosts.
