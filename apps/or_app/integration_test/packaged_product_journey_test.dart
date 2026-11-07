@@ -314,25 +314,7 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     () => recentProject.evaluate().isNotEmpty,
     'saved project in recent history',
   );
-  // A short window pushes the recent rows under the fold: a 1440x900 desktop
-  // put the first row's centre at y=968, outside the render tree, and gesture
-  // drags did not move the page. Scroll the home page by its own position, then
-  // record the offset so a failure says whether the page could move at all.
-  final homeScroll = find.byKey(const ValueKey('home-scroll'));
-  final scrollable = find.descendant(
-    of: homeScroll,
-    matching: find.byType(Scrollable),
-  );
-  final position = tester.state<ScrollableState>(scrollable).position;
-  debugPrint(
-    'home scroll: extent=${position.maxScrollExtent} '
-    'before=${position.pixels} '
-    'row=${tester.getCenter(recentProject)}',
-  );
-  position.jumpTo(position.maxScrollExtent);
-  await tester.pumpAndSettle();
-  debugPrint('home scroll after=${position.pixels} row=${tester.getCenter(recentProject)}');
-  await tester.tap(recentProject);
+  await _openRecentProject(tester, recentProject);
   await _pumpUntil(
     tester,
     () =>
@@ -369,7 +351,7 @@ Future<void> _reopenAndExport(
     () => recentProject.evaluate().isNotEmpty,
     'project history after application restart',
   );
-  await tester.tap(recentProject);
+  await _openRecentProject(tester, recentProject);
   await _pumpUntil(
     tester,
     () =>
@@ -950,4 +932,22 @@ Future<void> _openTitleEditor(WidgetTester tester, String clipId) async {
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(ValueKey('timeline-edit-text-$clipId')));
   await tester.pumpAndSettle();
+}
+
+/// Opens a Home recent-project row.
+///
+/// A short window pushes the recent rows under the fold: at 1440x900 the first
+/// row's centre sat at y=968, outside the render tree, and the page's own
+/// scroll extent is only ~133 px, so the row is reachable — but gesture drags
+/// and `ensureVisible` both left it where it was. Scroll the page by its
+/// position and tap, the way the row would be reached by hand.
+Future<void> _openRecentProject(WidgetTester tester, Finder row) async {
+  final scrollable = find.descendant(
+    of: find.byKey(const ValueKey('home-scroll')),
+    matching: find.byType(Scrollable),
+  );
+  final position = tester.state<ScrollableState>(scrollable).position;
+  position.jumpTo(position.maxScrollExtent);
+  await tester.pumpAndSettle();
+  await tester.tap(row);
 }
