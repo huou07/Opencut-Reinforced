@@ -4971,7 +4971,21 @@ mod desktop {
                     playback_rate: RationalRate::new(1, 1).expect("playback rate"),
                     reversed: false,
                     frozen: false,
-                    transform: Transform::IDENTITY,
+                    // `OR_BENCH_SCALED=1` shrinks the clip by one thousandth so
+                    // the direct decode path declines and the compositor runs.
+                    // Without it the no-text render row measures a passthrough,
+                    // not the composited stage, and comparing it with a text row
+                    // overstates what text costs.
+                    transform: if std::env::var("OR_BENCH_SCALED").is_ok_and(|value| value == "1")
+                    {
+                        Transform {
+                            scale_x_milli: 999,
+                            scale_y_milli: 999,
+                            ..Transform::IDENTITY
+                        }
+                    } else {
+                        Transform::IDENTITY
+                    },
                     crop: Crop::NONE,
                     opacity: Opacity::OPAQUE,
                     animation: animation.clone(),
