@@ -405,6 +405,19 @@ packaged_build_deb() {
   helper_rpath="\$ORIGIN/$(basename "$runtime")"
   patchelf --set-rpath "$helper_rpath" "$bundle/ffmpeg" "$bundle/ffprobe" || exit 1
 
+  # Ship the CLI beside the app, as the macOS DMG and the Windows bundle do.
+  # Without it a Linux install has no scriptable surface at all: the deb used to
+  # carry `or_app` and the media helpers and nothing else.
+  (cd "$root" && cargo build --locked --release -p or_cli) || exit 1
+  install -m 755 "$root/target/release/or" "$bundle/or" || exit 1
+  local cli_version expected_version
+  cli_version="$(env -u LD_LIBRARY_PATH "$bundle/or" version 2>/dev/null | head -n1 || true)"
+  expected_version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$root/Cargo.toml" | head -n1)"
+  if [[ "$cli_version" != *"$expected_version"* ]]; then
+    echo "the staged or reports '$cli_version' but the workspace version is $expected_version; rebuild it with cargo build --locked --release -p or_cli" >&2
+    exit 1
+  fi
+
   # Prove the staged payload loads through its relative RUNPATH and still carries
   # the encoders the packaged export needs. A package that only looks right fails
   # much later, inside the journey, where the cause is harder to see.
