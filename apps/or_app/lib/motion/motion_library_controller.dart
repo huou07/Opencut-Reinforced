@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'motion_insert_log.dart';
 import 'motion_library_models.dart';
+import 'motion_starters.dart';
 
 /// The bridge calls the library surface needs. A fake implements this in tests.
 abstract class MotionLibraryGateway {
@@ -765,6 +766,29 @@ class MotionLibraryController extends ChangeNotifier {
       _busy = false;
       _notify();
     }
+  }
+
+  /// Opens one of the bundled starters as the editable draft.
+  ///
+  /// The starter is copied into the library root first, so the draft this
+  /// produces is indistinguishable from an imported scene: the user can edit it,
+  /// save it back under a new name, and render it again later.
+  Future<MotionSceneView?> loadStarter(MotionStarter starter) async {
+    if (_root.isEmpty) return null;
+    final String path;
+    try {
+      path = await installMotionStarter(starter, _root);
+    } catch (error) {
+      _error = 'The starter scene could not be opened: $error';
+      _notify();
+      return null;
+    }
+    final view = await importSceneFile(path);
+    if (view != null && !_disposed) {
+      _notice = 'Loaded ${starter.name}';
+      _notify();
+    }
+    return view;
   }
 
   /// Reopens a scene saved to this library so it can be edited again.

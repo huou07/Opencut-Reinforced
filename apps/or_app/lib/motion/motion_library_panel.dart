@@ -14,6 +14,7 @@ import 'motion_insert_log.dart';
 import 'motion_library_controller.dart';
 import 'motion_library_models.dart';
 import 'motion_scene_editor.dart';
+import 'motion_starters.dart';
 
 const List<String> motionAssetCategories = [
   'background',
@@ -1211,32 +1212,131 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
     );
   }
 
+  /// The bundled compositions, offered while the canvas is empty.
+  ///
+  /// A row per starter rather than a menu: the summary is the only thing that
+  /// tells four title-shaped compositions apart, so hiding it behind a click
+  /// would make the choice blind.
+  Widget _starterList() {
+    return Container(
+      padding: const EdgeInsets.all(OrSpacing.x2),
+      decoration: BoxDecoration(
+        color: OrColors.surface,
+        borderRadius: BorderRadius.circular(OrRadii.card),
+        border: Border.all(color: OrColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Start from a starter',
+            style: TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.metadataSize,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x1),
+          for (final starter in motionStarters)
+            Padding(
+              padding: const EdgeInsets.only(top: OrSpacing.x1),
+              child: InkWell(
+                key: ValueKey('motion-starter-${starter.id}'),
+                borderRadius: BorderRadius.circular(OrRadii.control),
+                onTap: controller.busy
+                    ? null
+                    : () => unawaited(_loadStarter(starter)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: OrSpacing.x1,
+                    vertical: OrSpacing.x1,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.movie_creation_outlined,
+                        size: 16,
+                        color: OrColors.textSecondary,
+                      ),
+                      const SizedBox(width: OrSpacing.x2),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              starter.name,
+                              style: TextStyle(
+                                color: OrColors.text,
+                                fontSize: OrType.bodySize,
+                              ),
+                            ),
+                            Text(
+                              starter.summary,
+                              style: TextStyle(
+                                color: OrColors.textMuted,
+                                fontSize: OrType.tinySize,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadStarter(MotionStarter starter) async {
+    final view = await controller.loadStarter(starter);
+    if (!mounted) return;
+    if (view == null) {
+      widget.onNotice(
+        controller.error ?? 'The starter scene could not be opened.',
+      );
+      return;
+    }
+    widget.onNotice('${starter.name} is ready to add to the timeline.');
+  }
+
   Widget _sceneActions() {
     if (!controller.hasDraft) {
       // No composition yet: the first gesture starts one, so a user who wants a
-      // title does not have to add an asset first.
-      return Row(
+      // title does not have to add an asset first. The starters sit above the
+      // empty-canvas buttons because a finished composition is a better first
+      // step than a blank frame for most projects.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const ValueKey('motion-add-text'),
-              onPressed: controller.busy
-                  ? null
-                  : () => unawaited(controller.addTextNode()),
-              icon: const Icon(Icons.title, size: 16),
-              label: const Text('Add text'),
-            ),
-          ),
-          const SizedBox(width: OrSpacing.x2),
-          Expanded(
-            child: OutlinedButton.icon(
-              key: const ValueKey('motion-add-asset'),
-              onPressed: controller.busy
-                  ? null
-                  : () => unawaited(showAddAssetSheet(context, controller)),
-              icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
-              label: const Text('Add asset'),
-            ),
+          _starterList(),
+          const SizedBox(height: OrSpacing.x2),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('motion-add-text'),
+                  onPressed: controller.busy
+                      ? null
+                      : () => unawaited(controller.addTextNode()),
+                  icon: const Icon(Icons.title, size: 16),
+                  label: const Text('Add text'),
+                ),
+              ),
+              const SizedBox(width: OrSpacing.x2),
+              Expanded(
+                child: OutlinedButton.icon(
+                  key: const ValueKey('motion-add-asset'),
+                  onPressed: controller.busy
+                      ? null
+                      : () => unawaited(showAddAssetSheet(context, controller)),
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                  label: const Text('Add asset'),
+                ),
+              ),
+            ],
           ),
         ],
       );

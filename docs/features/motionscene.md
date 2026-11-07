@@ -114,7 +114,33 @@ timeline-referenced materialised asset is not cache-only.
   the motion library, imports the render and inserts the clip, so the agent's
   default path is the CLI. `or mcp` still exposes `motion_insert_scene` as the
   fallback.
+- Four starter compositions ship inside the app bundle. Opening one copies its
+  document into the motion library root and opens it through the ordinary
+  `motion_scene_read` path, so a starter is editable, saveable and renderable
+  exactly like a scene the user composed; see [Bundled starters](#bundled-starters).
 - Materialised output appears in the library and on the timeline like any media.
+
+## Bundled starters
+
+`apps/or_app/assets/motion_starters/` carries four scene documents — a title
+card, a name bar, an end card and a quote card. They are ordinary
+`.ormotion.json` files: the same schema, the same validator and the same
+renderer as an authored scene, so the content cannot drift from the contract.
+`or motion validate --file <path>` accepts each one, and
+`crates/or_motion/tests/starter_scenes.rs` keeps them valid as the schema moves.
+
+The Motion panel lists them above the empty canvas
+(`motion-starter-<id>`). Choosing one copies the document to
+`<motion library root>/starters/<id>.ormotion.json` and opens it as the draft;
+the copy is rewritten on every use, so an app update ships corrected content
+instead of leaving a stale scene behind. From there the flow is the normal one:
+edit the draft, **Add to timeline** materialises it, and the on-timeline row
+offers **Render again**.
+
+Four compositions are the shapes a first project most often needs, not a
+gallery: the library, not the bundle, is where user content lives. A template
+that wanted a composition used to be text overlays only; a starter is the
+materialised scene that fills that gap without a second asset pipeline.
 
 ## Bounds
 
@@ -127,12 +153,13 @@ Live `MotionClip` in the timeline without a separate schema/architecture gate,
 WebMotion (isolated browser sidecar for HTML/CSS/Canvas/WebGL), Remotion/Motion
 Canvas as runtimes, and generative motion providers.
 
-A reusable, parameterised motion asset format and app-level library exist as
-**P1** of [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md): the
-document, typed parameters, classifier, store and `or motion asset` verbs are
-implemented in [motion-assets.md](motion-assets.md). There is no Motion surface,
-drag and drop, bridge command or MCP tool yet, and the placed clip remains
-materialised video.
+A reusable, parameterised motion asset format and app-level library are
+implemented as [ADR 0010](../adr/0010-motion-assets-and-reusable-library.md)
+phases 1–2: the document, typed parameters, classifier, store, `or motion asset`
+verbs, the Motion panel (browse, edit, compose, drag and drop) and the
+`motion_asset_list` / `motion_asset_insert` MCP tools all exist. A placed clip
+still becomes materialised video, not a live scene reference, because the
+timeline has no scene clip type: that remains the deferred part.
 
 ## Where
 

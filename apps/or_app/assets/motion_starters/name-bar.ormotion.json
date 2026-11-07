@@ -1,0 +1,285 @@
+{
+ "format": "opencut-reinforced-motion-scene",
+ "schema_version": 1,
+ "scene_id": "b1a4d3e2-8c7f-4a21-9f60-3d5e2c1a8b44",
+ "name": "Starter · Name bar",
+ "duration": {
+  "numerator": 3000,
+  "denominator": 1000
+ },
+ "canvas": {
+  "width": 1920,
+  "height": 1080
+ },
+ "assets": [],
+ "nodes": [
+  {
+   "node_id": "bg",
+   "kind": "rectangle",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "size": {
+    "width": 1920,
+    "height": 1080
+   },
+   "fill": {
+    "red": 9,
+    "green": 9,
+    "blue": 9,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "bar",
+   "kind": "rectangle",
+   "position": {
+    "x": 120,
+    "y": 700
+   },
+   "size": {
+    "width": 780,
+    "height": 168
+   },
+   "fill": {
+    "red": 15,
+    "green": 15,
+    "blue": 16,
+    "alpha": 255
+   },
+   "corner_radius": 18,
+   "stroke": {
+    "red": 42,
+    "green": 42,
+    "blue": 45,
+    "alpha": 255
+   },
+   "stroke_width": 1
+  },
+  {
+   "node_id": "accent",
+   "kind": "rectangle",
+   "position": {
+    "x": 120,
+    "y": 700
+   },
+   "size": {
+    "width": 6,
+    "height": 168
+   },
+   "fill": {
+    "red": 63,
+    "green": 199,
+    "blue": 255,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "name",
+   "kind": "text",
+   "text": "Alex Nguyen",
+   "position": {
+    "x": 168,
+    "y": 736
+   },
+   "font_size": 52,
+   "fill": {
+    "red": 245,
+    "green": 245,
+    "blue": 245,
+    "alpha": 255
+   },
+   "size": {
+    "width": 660,
+    "height": 64
+   },
+   "font": "inter",
+   "font_weight": "semibold"
+  },
+  {
+   "node_id": "role",
+   "kind": "text",
+   "text": "Director of photography",
+   "position": {
+    "x": 168,
+    "y": 806
+   },
+   "font_size": 26,
+   "fill": {
+    "red": 166,
+    "green": 166,
+    "blue": 171,
+    "alpha": 255
+   },
+   "size": {
+    "width": 660,
+    "height": 40
+   },
+   "font": "inter"
+  }
+ ],
+ "animations": [
+  {
+   "node_id": "bar",
+   "property": "translation_x",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": -40.0
+    },
+    {
+     "at": {
+      "numerator": 420,
+      "denominator": 1000
+     },
+     "value": 0.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "bar",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 420,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "accent",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 240,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "name",
+   "property": "translation_x",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": -24.0
+    },
+    {
+     "at": {
+      "numerator": 560,
+      "denominator": 1000
+     },
+     "value": 0.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "name",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 560,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "role",
+   "property": "translation_x",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": -18.0
+    },
+    {
+     "at": {
+      "numerator": 420,
+      "denominator": 1000
+     },
+     "value": -18.0
+    },
+    {
+     "at": {
+      "numerator": 820,
+      "denominator": 1000
+     },
+     "value": 0.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "role",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 420,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 820,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  }
+ ]
+}

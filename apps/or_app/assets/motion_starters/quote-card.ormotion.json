@@ -1,0 +1,190 @@
+{
+ "format": "opencut-reinforced-motion-scene",
+ "schema_version": 1,
+ "scene_id": "c58f2be4-91d7-4a63-bf02-6e7c4d81a2e5",
+ "name": "Starter · Quote card",
+ "duration": {
+  "numerator": 3600,
+  "denominator": 1000
+ },
+ "canvas": {
+  "width": 1920,
+  "height": 1080
+ },
+ "assets": [],
+ "nodes": [
+  {
+   "node_id": "bg",
+   "kind": "rectangle",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "size": {
+    "width": 1920,
+    "height": 1080
+   },
+   "fill": {
+    "red": 9,
+    "green": 9,
+    "blue": 9,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "accent",
+   "kind": "rectangle",
+   "position": {
+    "x": 160,
+    "y": 300
+   },
+   "size": {
+    "width": 6,
+    "height": 240
+   },
+   "fill": {
+    "red": 63,
+    "green": 199,
+    "blue": 255,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "quote",
+   "kind": "text",
+   "text": "“The cut is where the story is written.”",
+   "position": {
+    "x": 200,
+    "y": 296
+   },
+   "font_size": 64,
+   "fill": {
+    "red": 245,
+    "green": 245,
+    "blue": 245,
+    "alpha": 255
+   },
+   "size": {
+    "width": 1480,
+    "height": 260
+   },
+   "font": "inter",
+   "font_weight": "medium",
+   "line_height": 1.2
+  },
+  {
+   "node_id": "who",
+   "kind": "text",
+   "text": "— Editor's note",
+   "position": {
+    "x": 200,
+    "y": 600
+   },
+   "font_size": 28,
+   "fill": {
+    "red": 113,
+    "green": 113,
+    "blue": 118,
+    "alpha": 255
+   },
+   "size": {
+    "width": 1200,
+    "height": 44
+   },
+   "font": "inter"
+  }
+ ],
+ "animations": [
+  {
+   "node_id": "accent",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 200,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "quote",
+   "property": "translation_y",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 24.0
+    },
+    {
+     "at": {
+      "numerator": 620,
+      "denominator": 1000
+     },
+     "value": 0.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "quote",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 620,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "who",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 900,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 1260,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  }
+ ]
+}

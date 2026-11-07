@@ -1,0 +1,198 @@
+{
+ "format": "opencut-reinforced-motion-scene",
+ "schema_version": 1,
+ "scene_id": "7d3b9a51-2e64-4c0a-8b17-5a9e6f2d3c90",
+ "name": "Starter · End card",
+ "duration": {
+  "numerator": 3400,
+  "denominator": 1000
+ },
+ "canvas": {
+  "width": 1920,
+  "height": 1080
+ },
+ "assets": [],
+ "nodes": [
+  {
+   "node_id": "bg",
+   "kind": "rectangle",
+   "position": {
+    "x": 0,
+    "y": 0
+   },
+   "size": {
+    "width": 1920,
+    "height": 1080
+   },
+   "fill": {
+    "red": 9,
+    "green": 9,
+    "blue": 9,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "thanks",
+   "kind": "text",
+   "text": "Thanks for watching",
+   "position": {
+    "x": 0,
+    "y": 380
+   },
+   "font_size": 92,
+   "fill": {
+    "red": 245,
+    "green": 245,
+    "blue": 245,
+    "alpha": 255
+   },
+   "size": {
+    "width": 1920,
+    "height": 200
+   },
+   "font": "inter",
+   "font_weight": "bold",
+   "text_align": "center"
+  },
+  {
+   "node_id": "rule",
+   "kind": "rectangle",
+   "position": {
+    "x": 760,
+    "y": 620
+   },
+   "size": {
+    "width": 400,
+    "height": 2
+   },
+   "fill": {
+    "red": 42,
+    "green": 42,
+    "blue": 45,
+    "alpha": 255
+   }
+  },
+  {
+   "node_id": "cta",
+   "kind": "text",
+   "text": "Subscribe for the next one",
+   "position": {
+    "x": 0,
+    "y": 664
+   },
+   "font_size": 30,
+   "fill": {
+    "red": 166,
+    "green": 166,
+    "blue": 171,
+    "alpha": 255
+   },
+   "size": {
+    "width": 1920,
+    "height": 60
+   },
+   "font": "inter",
+   "text_align": "center"
+  }
+ ],
+ "animations": [
+  {
+   "node_id": "thanks",
+   "property": "scale",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.96
+    },
+    {
+     "at": {
+      "numerator": 700,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "thanks",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 700,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  },
+  {
+   "node_id": "rule",
+   "property": "width",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 500,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 1100,
+      "denominator": 1000
+     },
+     "value": 400.0
+    }
+   ],
+   "easing": "ease_in_out"
+  },
+  {
+   "node_id": "cta",
+   "property": "opacity",
+   "keyframes": [
+    {
+     "at": {
+      "numerator": 0,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 1000,
+      "denominator": 1000
+     },
+     "value": 0.0
+    },
+    {
+     "at": {
+      "numerator": 1400,
+      "denominator": 1000
+     },
+     "value": 1.0
+    }
+   ],
+   "easing": "ease_out"
+  }
+ ]
+}

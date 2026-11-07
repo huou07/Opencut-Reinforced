@@ -36,3 +36,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/agent_workspace/bundle.json
+    - assets/motion_starters/title-card.ormotion.json
+    - assets/motion_starters/name-bar.ormotion.json
+    - assets/motion_starters/end-card.ormotion.json
+    - assets/motion_starters/quote-card.ormotion.json

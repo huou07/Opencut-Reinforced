@@ -11,6 +11,7 @@ import 'package:or_app/motion/motion_library_controller.dart';
 import 'package:or_app/motion/motion_library_models.dart';
 import 'package:or_app/motion/motion_library_panel.dart';
 import 'package:or_app/motion/motion_scene_editor.dart';
+import 'package:or_app/motion/motion_starters.dart';
 
 final Uint8List _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
@@ -330,6 +331,7 @@ class _FakeMotionGateway implements MotionLibraryGateway {
   int appends = 0;
   String? lastMaterializedOutput;
   String? lastAppendedAsset;
+  String? lastReadPath;
   final List<Map<String, dynamic>> edits = [];
   Map<String, dynamic> scene = jsonDecode(_sceneJson) as Map<String, dynamic>;
 
@@ -612,7 +614,9 @@ class _FakeMotionGateway implements MotionLibraryGateway {
   Future<MotionSceneView> readScene({
     required String root,
     required String path,
-  }) async => MotionSceneView(
+  }) async {
+    lastReadPath = path;
+    return MotionSceneView(
     ok: true,
     code: 'OK',
     message: '',
@@ -624,7 +628,8 @@ class _FakeMotionGateway implements MotionLibraryGateway {
     durationMilliseconds: 5000,
     previewPng: _png,
     nodes: _fakeNodes(scene),
-  );
+    );
+  }
 
   @override
   Future<MotionSceneView> sceneFromAsset({
@@ -695,6 +700,86 @@ void main() {
       expect(gateway.lastMaterializedOutput, '/tmp/drag.mkv');
     },
   );
+
+  test('a starter is copied into the library and opened as the draft', () async {
+    final (controller, gateway, support) = await buildController();
+    final starter = motionStarters.first;
+    expect(controller.hasDraft, isFalse);
+
+    final view = await controller.loadStarter(starter);
+
+    expect(view, isNotNull);
+    expect(controller.hasDraft, isTrue);
+    expect(gateway.lastReadPath, endsWith('starters/title-card.ormotion.json'));
+    final installed = File(gateway.lastReadPath!);
+    expect(installed.existsSync(), isTrue);
+    expect(installed.lengthSync(), greaterThan(500));
+    expect(installed.readAsStringSync(), contains('opencut-reinforced-motion-scene'));
+    expect(installed.path, startsWith(support.path));
+    expect(controller.notice, contains('Title card'));
+
+    // Loading the same starter twice keeps one file and still seeds a draft.
+    final again = await controller.loadStarter(starter);
+    expect(again, isNotNull);
+    final installedFiles = Directory('${support.path}/motion-library/starters')
+        .listSync()
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.ormotion.json'));
+    expect(
+      installedFiles.where((file) => file.path.endsWith('title-card.ormotion.json')),
+      hasLength(1),
+    );
+  });
+
+  testWidgets('an empty composition offers the bundled starters', (tester) async {
+    tester.view.physicalSize = const Size(900, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    late MotionLibraryController controller;
+    late _FakeMotionGateway gateway;
+    late Directory support;
+    await tester.runAsync(() async {
+      (controller, gateway, support) = await buildController();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OrTheme.dark,
+        home: Scaffold(
+          body: SizedBox(
+            width: 340,
+            height: 2000,
+            child: MotionLibraryPanel(
+              controller: controller,
+              outputDirectory: support.path,
+              onInsertClip: (_) async => true,
+              onNotice: (_) {},
+              onOpenCodeMotion: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(controller.hasDraft, isFalse);
+    for (final starter in motionStarters) {
+      expect(find.byKey(ValueKey('motion-starter-${starter.id}')), findsOneWidget);
+    }
+    expect(find.text('Start from a starter'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('motion-starter-end-card')));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(controller.hasDraft, isTrue);
+    expect(gateway.lastReadPath, endsWith('starters/end-card.ormotion.json'));
+    // The starters give way to the composition actions once a draft exists.
+    expect(find.byKey(const ValueKey('motion-starter-end-card')), findsNothing);
+    expect(find.byKey(const ValueKey('motion-insert-draft')), findsOneWidget);
+  });
 
   testWidgets('the panel browses, edits, composes and inserts', (tester) async {
     tester.view.physicalSize = const Size(900, 2400);

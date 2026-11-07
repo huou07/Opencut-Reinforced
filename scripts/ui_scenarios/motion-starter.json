@@ -1,0 +1,92 @@
+{
+  "name": "motion-starter",
+  "harness": "or_ui",
+  "description": "Create a project, open the Motion tool, pick the bundled Title card starter, watch it become the editable draft, add it to the timeline through the real materialiser and confirm the on-timeline row appears. This exercises the starter catalogue the app now ships instead of starting every composition from a blank canvas.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Motion starter journey"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "No timeline tracks",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-motion"
+      }
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "motion-starter-title-card"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "motion-starters"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-starter-title-card"
+      }
+    },
+    {
+      "op": "expect",
+      "selector": {
+        "key": "motion-insert-draft"
+      }
+    },
+    {
+      "op": "shot",
+      "name": "motion-starter-draft"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "motion-insert-draft"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "Render again",
+      "budget_ms": 180000
+    },
+    {
+      "op": "tree",
+      "name": "motion-starter-inserted"
+    },
+    {
+      "op": "shot",
+      "name": "motion-starter-inserted"
+    }
+  ]
+}
