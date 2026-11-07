@@ -289,6 +289,13 @@ Guidelines and the `rust-review` checks, and fixed what had a real cost:
 the workspace-wide pedantic run is still noisy from older code and was not
 turned into a mass refactor.
 
+Five `crates/or_core/tests/project_recovery.rs` tests were failing at the
+mission revision because they still asserted schema `9` while the codec writes
+schema `11`; they now compare against `CURRENT_PROJECT_SCHEMA_VERSION` and are
+named for the current schema instead of `v8`. The workspace suite
+(`cargo test --workspace --all-targets --no-fail-fast`) then reports 751 passed,
+0 failed across 28 test binaries, and `flutter test` reports 528 passed.
+
 ## Remaining work
 
 The broader mission (full audit of decode/composite/encode, 20-repo ideas beyond
