@@ -13,6 +13,29 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.22 — 2026-11-07
+
+### Added
+- **Four starter compositions ship in the app.** The Motion panel now opens on
+  a short list — title card, name bar, end card, quote card — instead of a blank
+  canvas. Choosing one copies an ordinary `.ormotion.json` document into the
+  motion library and opens it through the same import path as any authored
+  scene, so it can be edited, saved and rendered like one; **Add to timeline**
+  materialises it with the existing renderer. A Rust lane
+  (`crates/or_motion/tests/starter_scenes.rs`) fails if the schema moves away
+  from the bundled documents, and a `motion-starter` journey drives the whole
+  flow on macOS, Linux and Windows.
+
+### Changed
+- **The export no longer blocks the render thread on its own NV12 readback.**
+  The colour conversion and the buffer map are queued, and the writer thread
+  waits for that submission before handing the planes to the encoder, so the
+  render thread decodes and rasterises the next frame while the GPU converts
+  this one. Measured with one text layer at 1080p: Debian 107.9 → 190.6–201.2
+  fps (1.77×, byte-identical output), Windows 81.7–82.6 → 105.2 fps, macOS
+  inside its own run-to-run spread. No new dependency; the queue holds at most
+  `EXPORT_RENDER_AHEAD` screens.
+
 ## 0.1.21 — 2026-11-06
 
 ### Added
