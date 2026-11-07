@@ -1337,11 +1337,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             });
         Ok(PendingNv12Planes {
             size,
-            lease,
+            lease: Some(lease),
             layout,
             submission,
-            mapping,
+            mapping: Some(mapping),
             device: self.device.clone(),
+            resolved: false,
         })
     }
 
@@ -1967,11 +1968,38 @@ enum Nv12ReadbackLayout {
 /// frame before this one has been read back.
 pub struct PendingNv12Planes {
     size: RenderSize,
-    lease: Nv12ScratchLease,
+    /// Taken by `resolve`; a pending readback is never resolved twice.
+    lease: Option<Nv12ScratchLease>,
     layout: Nv12ReadbackLayout,
     submission: wgpu::SubmissionIndex,
-    mapping: std::sync::mpsc::Receiver<Result<(), String>>,
+    mapping: Option<std::sync::mpsc::Receiver<Result<(), String>>>,
     device: wgpu::Device,
+    resolved: bool,
+}
+
+impl Drop for PendingNv12Planes {
+    fn drop(&mut self) {
+        if self.resolved {
+            return;
+        }
+        // An abandoned frame still owns a checked-out buffer with a mapping in
+        // flight. Waiting here keeps the pool honest: the next frame that
+        // checks this entry out must be able to map it again.
+        if self
+            .device
+            .poll(wgpu::PollType::WaitForSubmissionIndex(
+                self.submission.clone(),
+            ))
+            .is_ok()
+        {
+            if let Some(mapping) = &self.mapping {
+                let _ = mapping.recv_timeout(std::time::Duration::from_secs(5));
+            }
+        }
+        if let Some(lease) = self.lease.take() {
+            lease.buffer.unmap();
+        }
+    }
 }
 
 impl PendingNv12Planes {
@@ -1981,17 +2009,22 @@ impl PendingNv12Planes {
     }
 
     /// Waits for this frame's conversion and reads the two planes back.
-    pub fn resolve(self) -> Result<Nv12Planes, RenderError> {
-        let Self {
-            size,
-            lease,
-            layout,
-            submission,
-            mapping,
-            device,
-        } = self;
-        device
-            .poll(wgpu::PollType::WaitForSubmissionIndex(submission))
+    pub fn resolve(mut self) -> Result<Nv12Planes, RenderError> {
+        self.resolved = true;
+        let size = self.size;
+        let layout = self.layout;
+        let lease = self
+            .lease
+            .take()
+            .expect("a pending readback holds its lease until it resolves");
+        let mapping = self
+            .mapping
+            .take()
+            .expect("a pending readback holds its mapping until it resolves");
+        self.device
+            .poll(wgpu::PollType::WaitForSubmissionIndex(
+                self.submission.clone(),
+            ))
             .map_err(|error| RenderError::DevicePoll {
                 message: error.to_string(),
             })?;

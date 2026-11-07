@@ -2437,6 +2437,25 @@ mod desktop {
         error_message: Option<String>,
     }
 
+    impl Presentation {
+        /// Waits for a queued readback, if any, and leaves the planes in place.
+        ///
+        /// Every consumer that wants pixels has to call this: the export does it
+        /// on the writer thread, and a measurement of the render stage does it
+        /// right after the frame, so a queued conversion is never mistaken for a
+        /// finished one.
+        fn resolve_planes(&mut self) -> Result<(), PreviewError> {
+            if let Some(pending) = self.pending_planes.take() {
+                self.planes = Some(
+                    pending
+                        .resolve()
+                        .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?,
+                );
+            }
+            Ok(())
+        }
+    }
+
     /// Which CPU layout a render request wants back.
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum RenderOutput {
@@ -3033,7 +3052,7 @@ mod desktop {
         let written = std::thread::scope(|scope| -> Result<(), String> {
             let (sender, receiver) = std::sync::mpsc::sync_channel::<(
                 u64,
-                Result<ExportFrame, String>,
+                Result<Presentation, String>,
             )>(export_render_ahead());
             let render_program = Arc::clone(&program);
             let render_resources_for_render = Arc::clone(&render_resources);
@@ -3056,7 +3075,6 @@ mod desktop {
                                     render_output,
                                     cancellation,
                                 )
-                                .map(ExportFrame::from)
                                 .map_err(|error| error.to_string())
                         });
                     // A closed channel means the writer stopped; there is no one
@@ -3077,8 +3095,13 @@ mod desktop {
                 if rendered_index != frame_index {
                     return Err("the renderer produced frames out of order".to_owned());
                 }
-                let mut frame = frame?;
-                frame.resolve_planes()?;
+                let mut presentation = frame?;
+                // The conversion was queued a frame ago; waiting for it here
+                // keeps the render thread decoding instead of blocking on the GPU.
+                presentation
+                    .resolve_planes()
+                    .map_err(|error| error.to_string())?;
+                let frame = ExportFrame::from(presentation);
                 match &frame.planes {
                     Some(planes) => writer.write_video_frame_nv12(
                         planes.luma(),
@@ -3139,18 +3162,6 @@ mod desktop {
         height: u32,
         pixels: Vec<u8>,
         planes: Option<or_render::Nv12Planes>,
-        pending_planes: Option<or_render::PendingNv12Planes>,
-    }
-
-    impl ExportFrame {
-        /// Waits for this frame's colour conversion if the renderer queued it
-        /// instead of waiting, so the encoder writes the same planes either way.
-        fn resolve_planes(&mut self) -> Result<(), String> {
-            if let Some(pending) = self.pending_planes.take() {
-                self.planes = Some(pending.resolve().map_err(|error| error.to_string())?);
-            }
-            Ok(())
-        }
     }
 
     impl From<Presentation> for ExportFrame {
@@ -3160,7 +3171,6 @@ mod desktop {
                 height: presentation.height,
                 pixels: presentation.pixels,
                 planes: presentation.planes,
-                pending_planes: presentation.pending_planes,
             }
         }
     }
@@ -5072,7 +5082,9 @@ mod desktop {
                             output,
                             &cancellation,
                         )
-                        .expect("render succeeds");
+                        .expect("render succeeds")
+                        .resolve_planes()
+                        .expect("the frame's readback resolves");
                 }
                 let elapsed = started.elapsed().as_secs_f64();
                 println!(
