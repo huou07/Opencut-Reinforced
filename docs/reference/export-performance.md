@@ -283,6 +283,33 @@ The same reasoning applies to the Windows and Linux rows: their decode is
 CPU-side, and the measured encode ceilings above (Media Foundation on Windows,
 `h264_vaapi` on Debian) show the pipeline is not decode-starved at 1080p.
 
+The two Intel hosts were then measured on 2026-11-07 rather than argued from
+the macOS result. Both probes intentionally include the frame transfer, because
+OR's compositor consumes system-memory NV12 and would pay it too.
+
+Debian, 300 frames of the 1080p fixture, decode to raw NV12 on `/dev/null`
+(static probe build in `~/or-build/ffmpeg-decode-probe`, three runs each):
+
+| Decode path | Wall time | Rate |
+| --- | --- | --- |
+| software libavcodec | 0.388 / 0.404 / 0.481 s | ≈743 fps |
+| VA-API + `hwdownload,format=nv12` | 0.364 / 0.492 / 0.511 s | ≈610 fps |
+
+Windows 11, same 12-second fixture decoded and re-encoded through `h264_mf`
+(the encoder is identical in both arms, so the difference is the decoder):
+
+| Decode path | Wall time | Rate |
+| --- | --- | --- |
+| software libavcodec | 1.437 / 1.454 / 1.491 s | 264 fps |
+| D3D11VA + download | 1.515 / 1.524 / 1.561 s | 253 fps |
+
+Hardware decode is 5–18 % slower than software decode on both hosts, and the
+export's own decode row (772.6 fps on Debian, 214.7 fps on Windows) is already
+far above the composited export rate. Integrating a hwaccel would need a
+GPU-resident compositor input to pay off; wgpu has no VAAPI or D3D11VA surface
+import, so the frames would be copied back anyway. Not integrated, with the
+numbers above as the reason.
+
 ## Stage concurrency (2026-11-06)
 
 Per-core and per-GPU-engine counters, taken while the harness ran the same
@@ -488,6 +515,71 @@ The Windows row is above both previous variants (78.8 / 82.6 with two passes,
 70.3–74.9 with the forced compute pass) because the choice now picks the two
 render passes there and the run followed a warm build; it is one run, so treat
 the size of the gain as indicative rather than settled.
+
+## 2026-11-07 rows — queued NV12 readback
+
+Measured at `02cd025c` against its parent `69aa1b31` on the same three hosts,
+`--release`, 300 frames, 1080p `bench1080.mp4`, idle machine, one text layer,
+`mp4`/`h264` profile. The renderer no longer blocks on its own readback: it
+queues the colour conversion and the map, and the export's writer thread waits
+for that submission before it hands the planes to the encoder. The render
+thread is therefore free to decode and rasterise the next frame while the GPU
+converts this one. Each host was measured by checking out the parent, rebuilding
+and running the same row in the same session, so the numbers are an interleaved
+A/B and not a comparison with an older document.
+
+Debian 13, Intel UHD 770 (Vulkan, `h264_vaapi`):
+
+| Row | Parent `69aa1b31` (waited readback) | `02cd025c` (queued readback) |
+|---|---|---|
+| Full MP4, one text layer | 107.9 | 190.6 / 193.6 / 198.0 / 201.2 |
+| Full MP4, one text layer, animated clip | — | 195.9 |
+| Render stage only, one text layer | 52.6 / 53.2 at `1feb6108` | 115.8 |
+| Full MP4, no text | — | 260.7 |
+| Decode only, NV12 | — | 772.6 |
+
+Both exports are byte-identical: `md5 540f516aeedc13b29cfbcdd3959eb164` for the
+parent's file and for the queued one, 12,099,456 bytes each. The 1.77× on the
+composited row therefore costs nothing in picture.
+
+macOS M5 (Metal, VideoToolbox):
+
+| Row | Parent `69aa1b31` | `02cd025c` |
+|---|---|---|
+| Full MP4, one text layer | 179.9 / 196.4 / 212.9 | 187.3 / 190.6 / 215.8 / 220.6 |
+| Full MP4, one text layer, animated clip | — | 222.0 |
+| Full MP4, no text | — | 228.1 |
+| Render stage only, one text layer | — | 256.3 |
+| Decode only, NV12 | — | 547.6 |
+
+The two distributions overlap, so no change is claimed on this host: the Apple
+GPU already finishes the conversion inside the frame's other work. The decoded
+pictures are identical between the two revisions (`PSNR y:inf u:inf v:inf`);
+only the bitstream bytes move run to run, because the VideoToolbox encoder is
+not bit-exact.
+
+Windows 11, Intel Graphics (Vulkan, Media Foundation):
+
+| Row | Parent `69aa1b3` | `02cd025` |
+|---|---|---|
+| Full MP4, one text layer | 81.7 / 82.6 | 105.2 / 105.2 |
+| Full MP4, one text layer, animated clip | — | 105.2 / 105.2 |
+| Full MP4, no text | — | 136.5 / 138.0 |
+| Render stage only, one text layer | — | 104.7 / 109.4 |
+| Decode only, NV12 | — | 214.7 / 214.8 |
+
+The queued readback is worth +27 % on the composited row here and keeps the
+video-only row where it was. The render-stage-only row no longer has a queue to
+hide behind, so it stays latency-bound at about 108 fps: that row measures one
+serialised submit-wait round trip per frame and is not the export's ceiling.
+
+### What the queue costs
+
+The queue holds at most `EXPORT_RENDER_AHEAD` frames (2, `OR_EXPORT_RENDER_AHEAD`
+overrides it) plus the one the render thread is building, so at most four
+1080p NV12 buffers are in flight — about 25 MB with the pooled staging buffers.
+A frame that is dropped without resolving waits for its own submission and
+unmaps its buffer in `Drop`, so the pool can hand it out again.
 
 ## Known limits
 

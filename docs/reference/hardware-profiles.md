@@ -77,7 +77,25 @@ cannot produce a file.
 ## What is not available in the packaged runtimes
 
 The runtimes this mission measured link no oneVPL, so Quick Sync is not an
-option without rebuilding FFmpeg with `libvpl`:
+option without rebuilding FFmpeg with `libvpl`. The packaged configure lines
+say so directly: the Debian prefix passes `--enable-vaapi
+--enable-hwaccel=h264_vaapi --enable-encoder=h264_vaapi --enable-ffnvcodec
+--enable-nvenc --enable-encoder=h264_nvenc` and no `--enable-libvpl`, and the
+Windows prefix passes `--enable-encoder=h264_mf --enable-nvenc
+--enable-encoder=h264_nvenc` and no `--enable-amf`. FFmpeg 8 has no
+`--enable-libmfx`; `h264_qsv` exists only when the build links oneVPL.
+
+A `libvpl` rebuild was produced and probed on the Debian host on 2026-11-07
+(`~/or-build/ffmpeg-qsv-install`, `libvpl-dev` 2.14.0, `intel-media-va-driver`
+25.2.3). It compiles and advertises `h264_qsv`, but every session fails at
+device creation: `Use Intel(R) oneVPL to create MFX session, API version is
+2.14` then `Error creating a MFX session: -9` and
+`Device creation failed: -1313558101`. On this integrated UHD 770 the VAAPI
+path opens and encodes, so shipping QSV would add an encoder that cannot run
+here, and encode is not the bottleneck anyway (the blank-frame encoder ceiling
+is 454 fps against a 201 fps composited export). Quick Sync therefore stays out
+of the packaged builds; the probe build is kept as the evidence.
+
 
 - macOS prefix: VideoToolbox family only (no libx264, no OpenH264).
 - Debian minimal prefix: no H.264 encoder at all; the GPL prefix has
@@ -89,7 +107,10 @@ option without rebuilding FFmpeg with `libvpl`:
 either host because there is no NVIDIA device; the report records
 `the device this encoder needs did not open`. Discrete NVIDIA and AMD GPUs have
 no test hardware in this mission: their paths are implemented through the same
-candidate list and probe, but no benchmark row is claimed for them.
+candidate list and probe, but no benchmark row is claimed for them. AMD AMF is
+not compiled into any prefix (no `--enable-amf`), so on an AMD host the plan
+falls back the same way an unopenable candidate does: the encoder is never
+offered, the reason is recorded, and the software encoder is used.
 
 ## Windows verification
 

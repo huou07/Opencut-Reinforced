@@ -1,8 +1,12 @@
 # Agent Authority — Current Local Mission
 
-Last reviewed: 2026-11-03. Source: the owner's direct mission request. This
+Last reviewed: 2026-11-07. Source: the owner's direct mission request. This
 records a task permission boundary; it grants no system privilege and does not
 replace OS or session security controls.
+
+The 2026-11-07 mission supersedes the 2026-11-02 release permission: work is
+local only. Nothing is pushed, no pull request, tag, GitHub release or CI run is
+created, and no remote branch is touched.
 
 ## Authorized
 
@@ -13,14 +17,14 @@ replace OS or session security controls.
 - Create isolated test projects, profiles and small fixtures for repeatable
   verification.
 - Make coherent local commits after a change and its relevant checks are complete.
-- Publish the GitHub patch release the owner asked for on 2026-11-02: land the
-  release commit through a pull request, push a `v*` tag, and let the desktop
-  release workflow build and publish the macOS DMG, the Linux `.deb`, the Windows
-  `.zip`, one checksum file and the release notes. Verify the published assets
-  with `gh`.
-- Open, update and merge pull requests, because the `main-safety` ruleset refuses
-  a direct push to `main` until a `release-gate` check is green. The pull request
-  is the delivery path, not a change of scope.
+- Build local release artifacts and install them on the three mission hosts: a
+  macOS DMG built and signed locally (ad-hoc, not notarized), a Windows installer
+  and portable archive, and a Linux `.deb`. These are local files; nothing is
+  published.
+- Run the local lanes and packaging scripts, and install the resulting packages
+  on each host as the user's own account. Installing a native build tool or a
+  language runtime on the mission hosts is part of this task; the mission hosts
+  are dedicated to it.
 - Inspect public source and documentation for the open-source editor references
   named in the mission.
 
@@ -29,13 +33,12 @@ or cross-platform acceptance.
 
 ## Out of scope
 
-No GitHub settings changes, no deliberate deletion of remote branches or tags,
-no contact with third parties, no deployment beyond the release described above.
-Do not push a tag before the release commit is on `main`. Do not discard, reset,
+No push, pull request, tag, release, CI run or any other remote action, and no
+GitHub settings change. No contact with third parties. Do not discard, reset,
 rebase, amend or clean user work or other worktrees. Do not overwrite existing
-projects or application data. Do not install system tooling, change machine
-security settings, use sudo, or
-accept platform licences as a workaround.
+projects or application data, or replace a user's installed app before its
+project data is safe. Do not change machine security settings or accept platform
+licences as a workaround.
 
 ## Host snapshot
 

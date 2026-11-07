@@ -4,8 +4,19 @@ Last reviewed: 2026-11-07
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
 parity, clip keyframes, motion presets and agent animation verbs) shipped, what was verified on each
-host, and what remains unverified. Revision `bacf5cff`; branch
-`mission/hardware-profiles-and-polish`.
+host, and what remains unverified. Branch `mission/hardware-profiles-and-polish`.
+
+Three revisions appear in this report and they are not interchangeable:
+
+- `bacf5cff0150757b0a74fd416e64ed02ef235cd5` is the revision the export rows
+  below were recorded at (`perf(export): record the Windows benchmark rows at
+  the mission revision`).
+- `20543449ec39b52d209d58d6393d7355f45da608` is the revision the closing
+  verification ran at (`chore: remove the two unused-mut warnings the checks
+  reported`).
+- `f1db393cac65c5285780a2b82d3b8d1e95fcd9e3` is the tip that was synced to the
+  Debian and Windows checkouts; `git diff 20543449..f1db393c` touches only this
+  file, so the three hosts built and tested identical code.
 
 ## Shipped
 
@@ -151,6 +162,44 @@ iGPU. Rows in [export-performance.md](export-performance.md).
 - Nothing was pushed, tagged or released; the mission left 83 local commits on
   `mission/hardware-profiles-and-polish` over `main`.
 
+## Queued NV12 readback (2026-11-07, later than the rows above)
+
+The composited export used to block the render thread on its own readback:
+`composite_layers_nv12` submitted the conversion, waited for that submission
+with `PollType::Wait`, repacked both planes and only then returned, so decode,
+text rasterisation and the GPU conversion never overlapped. The renderer now
+queues that work: `composite_layers_nv12_pending` submits the conversion and the
+buffer mapping and returns a `PendingNv12Planes`, the export channel carries the
+`Presentation` itself, and the writer thread resolves it before handing the
+planes to the encoder. A dropped frame waits for its own submission and unmaps
+its buffer in `Drop`, so a pooled staging buffer is never handed out mapped.
+
+Measured as an interleaved A/B in the same session on each host, parent
+`69aa1b31` against `02cd025c`, 300 frames, 1080p, one text layer, `--release`:
+
+| Host | Waited readback | Queued readback | Output |
+|---|---|---|---|
+| Debian 13, UHD 770 (Vulkan, `h264_vaapi`) | 107.9 fps | 190.6 / 193.6 / 198.0 / 201.2 fps | byte-identical, `md5 540f516a…9eb164` |
+| Windows 11, Intel Graphics (Vulkan, Media Foundation) | 81.7 / 82.6 fps | 105.2 / 105.2 fps | identical frames |
+| macOS M5 (Metal, VideoToolbox) | 179.9 / 196.4 / 212.9 fps | 187.3 / 190.6 / 215.8 / 220.6 fps | `PSNR y:inf`, identical pictures |
+
+The Debian composited row is 1.77× faster with an unchanged file; Windows gains
+27 %; macOS is unchanged inside its ±8 % spread. Stage rows are in
+[export-performance](export-performance.md#2026-11-07-rows--queued-nv12-readback).
+
+The same session closed two other questions with measurements instead of
+arguments:
+
+- **Hardware decode** is slower than software decode on both Intel hosts when
+  the frames must come back to CPU memory, which is what this compositor needs:
+  VA-API + `hwdownload` 610 fps against 743 fps software on Debian, D3D11VA
+  253 fps against 264 fps on Windows. Not integrated.
+- **Quick Sync.** The packaged FFmpeg builds pass no `--enable-libvpl`, which is
+  why no `h264_qsv` exists in them. A oneVPL build was produced and probed on
+  the Debian host; device creation fails with `Error creating a MFX session:
+  -9` on this UHD 770, so QSV would ship as an encoder that cannot run. AMF is
+  not compiled into any prefix at all.
+
 ## Rust quality review
 
 Reviewed the new policy, keyframe and bridge code against the Rust API
@@ -178,11 +227,13 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
 
 ## Remaining, with the reason
 
-- **Async or GPU-resident readback** — the composited export still waits for one
-  NV12 readback per frame (6–14 ms at 1080p on the Intel iGPU). A double-buffered
-  readback or feeding the encoder from GPU memory is the next real step; it
-  touches the export loop and the encoder boundary, so it was not started for a
-  partial gain.
+- **Async or GPU-resident readback** — the queued readback shipped (see above)
+  and removed the per-frame stall: the render thread no longer waits for its own
+  conversion. What is still not done is keeping the frame on the GPU: the planes
+  still travel through system memory into FFmpeg. That needs a VAAPI/D3D11
+  surface the compositor can write and the encoder can read; wgpu has no such
+  interop, so the encoder boundary stays CPU-side with a measured, queued path
+  instead of an unmeasured zero-copy claim.
 - **Decoder and CPU-worker choice** — the graphics backend now has a stored
   picker (next start, automatic fallback); a decoder picker still needs a
   hardware-decode path the product declined until it is measured, and an
