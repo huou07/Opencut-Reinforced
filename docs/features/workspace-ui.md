@@ -53,7 +53,12 @@ a sound can be browsed before a project exists. Four tabs:
 - **Templates** — canvas and frame rate per template, with starter text overlays
   placed through the ordinary `timeline.insertText` command after the create
   action releases the shell's busy flag. A template never asks for a frame rate;
-  its own rate is applied and the create dialog's rate row disappears.
+  its own rate is applied and the create dialog's rate row disappears. A
+  template that opens with a MotionScene shows the opening still of that
+  composition above its summary (`library/template_previews.dart` renders it
+  through the same `motionScenePreview` bridge call the Motion panel uses, once
+  per template and cached for the session); a template without a scene or a
+  still that fails to render keeps the text-only card.
 - **Text** — seven text looks shown with their real font, size, weight,
   alignment and anchor, so the sample is the result rather than a promise.
 - **Sound** — generated sound effects (tick, click, pop, whoosh, riser, impact,

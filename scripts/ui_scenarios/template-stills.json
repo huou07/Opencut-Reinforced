@@ -1,0 +1,52 @@
+{
+  "name": "template-stills",
+  "harness": "or_ui",
+  "description": "Opens the Library before any project exists and checks that each template card renders the opening still of the composition it opens with: the card must show an image node labelled '<template> opening frame', and the card's own controls must stay reachable underneath it.",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "expect",
+      "key": "home-library",
+      "role": "button"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "home-library"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 900
+    },
+    {
+      "op": "expect",
+      "key": "library-tabs"
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Title card opening frame",
+      "budget_ms": 30000
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "End card opening frame",
+      "budget_ms": 30000
+    },
+    {
+      "op": "expect",
+      "key": "library-template-use-title-card"
+    },
+    {
+      "op": "shot",
+      "name": "templates-with-stills"
+    },
+    {
+      "op": "tree",
+      "name": "templates-with-stills"
+    }
+  ]
+}

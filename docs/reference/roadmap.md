@@ -369,6 +369,12 @@ One near-term delivery mission for the local macOS app, in this order:
     one reuses the create-project dialog with the name prefilled and no frame
     rate question. The `home-template` journey passes on macOS, Debian and
     Windows.
+48. **Templates show their opening still (2026-11-07).** A template card in the
+    Library now renders the first visible frame of the MotionScene it opens with
+    through the same `motionScenePreview` bridge call the Motion panel uses,
+    once per template and cached for the session; a template without a scene or
+    a render that fails keeps the text-only card. `template-stills` drives the
+    real macOS app to the template grid and waits on the image label.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

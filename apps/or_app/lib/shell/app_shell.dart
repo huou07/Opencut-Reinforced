@@ -38,6 +38,7 @@ import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
 import '../production/welcome_store.dart';
 import '../screens/editor_shell_preview_screen.dart';
+import '../library/template_previews.dart';
 import '../screens/library_screen.dart';
 import '../screens/home_screen.dart';
 import '../screens/projects_screen.dart';
@@ -115,6 +116,7 @@ class AppShell extends StatefulWidget {
     this.assistantController,
     this.editorSettingsStore,
     this.exportCapabilityCache,
+    this.templatePreviews,
   });
 
   final CoreGateway gateway;
@@ -142,6 +144,9 @@ class AppShell extends StatefulWidget {
   /// Injected in tests so a build with no H.264 encoder can be described
   /// without a real engine.
   final ExportCapabilityCache? exportCapabilityCache;
+
+  /// Injected in tests so opening the library never calls the renderer.
+  final TemplatePreviews? templatePreviews;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -257,6 +262,8 @@ class _AppShellState extends State<AppShell> {
       widget.editorSettingsStore ?? EditorSettingsStore();
   late final ExportCapabilityCache _exportCapability =
       widget.exportCapabilityCache ?? ExportCapabilityCache();
+  late final TemplatePreviews _templatePreviews =
+      widget.templatePreviews ?? MotionTemplatePreviews();
   ProjectSessionHandle? _activeSession;
   ProjectReadModel? _activeProject;
   String? _activeProjectPath;
@@ -827,7 +834,8 @@ class _AppShellState extends State<AppShell> {
       onOpenResources: _openResources,
       onOpenLibrary: _openLibrary,
       onOpenGuide: _openGuide,
-      onUseTemplate: (template) => unawaited(_createProject(template: template)),
+      onUseTemplate: (template) =>
+          unawaited(_createProject(template: template)),
       showWelcome: _welcomeLoaded && !_welcomeDismissed,
       onDismissWelcome: _dismissWelcome,
       machineSummary: _hostFacts?.summary,
@@ -854,6 +862,7 @@ class _AppShellState extends State<AppShell> {
     AppDestination.library => LibraryScreen(
       canPickProjects: widget.projectFilePicker.isSupported,
       projectOpen: _activeSession != null,
+      templatePreviews: _templatePreviews,
       onUseTemplate: _createProjectFromTemplate,
       onAddTextPreset: _addTextPresetFromLibrary,
       onAddSoundEffect: _addSoundEffectFromLibrary,
@@ -1744,7 +1753,8 @@ class _AppShellState extends State<AppShell> {
     (int, int) range, {
     Iterable<ProjectTimelineTrack>? tracks,
   }) {
-    for (final track in tracks ?? _timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+    for (final track
+        in tracks ?? _timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
       if (track.kind != ProjectTimelineTrackKind.text || track.state.locked) {
         continue;
       }
@@ -3557,7 +3567,8 @@ class _AppShellState extends State<AppShell> {
             }
 
             EncodingPlanView? planFor(String wire) {
-              for (final plan in performance?.plans ?? const <EncodingPlanView>[]) {
+              for (final plan
+                  in performance?.plans ?? const <EncodingPlanView>[]) {
                 if (plan.profile == wire) return plan;
               }
               return null;
@@ -3628,9 +3639,7 @@ class _AppShellState extends State<AppShell> {
                         setDialogState(() => performanceProfile = option.wire);
                         unawaited(
                           _editorSettingsStore.save(
-                            settings.copyWith(
-                              performanceProfile: option.wire,
-                            ),
+                            settings.copyWith(performanceProfile: option.wire),
                           ),
                         );
                       },

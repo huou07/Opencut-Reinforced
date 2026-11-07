@@ -330,10 +330,12 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   such device is attached to the three hosts, so no benchmark is claimed.
 - **Template gallery on MotionScene** — four starter compositions ship in the
   Motion panel (see above), which is the "pick a starting point" half of the
-  idea. A browsable gallery with previews per asset is still not built: it needs
-  preview renders committed beside each document, and the panel's empty state is
-  a list precisely because four title-shaped scenes cannot be told apart from a
-  screenshot grid at that size.
+  idea. The Library's template cards now show the opening still of the scene
+  each template opens with (`library/template_previews.dart`, rendered through
+  the panel's own preview call and cached for the session), so a beginner sees
+  the result before creating a project. Inside the Motion panel the asset picker
+  is still a list, and per-asset previews for scenes the user saves remain a
+  next step.
 - **Masks, graph editor, 3D and vector import** — each is a numbered product
   decision, not a silent omission: masks and the graph editor are PLANNED in
   `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the

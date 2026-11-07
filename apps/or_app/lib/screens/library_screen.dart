@@ -1,9 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../library/project_templates.dart';
+import '../library/template_previews.dart';
 import '../motion/motion_starters.dart';
 import '../library/content_credits.dart';
 import '../library/sound_library.dart';
@@ -32,6 +35,7 @@ class LibraryScreen extends StatefulWidget {
     required this.onOpenEditor,
     this.initialTab = LibraryTab.templates,
     this.hostPlatform,
+    this.templatePreviews,
   });
 
   final bool canPickProjects;
@@ -46,6 +50,9 @@ class LibraryScreen extends StatefulWidget {
 
   /// Injectable so a test can render the Windows wording while running on macOS.
   final HostPlatform? hostPlatform;
+
+  /// Renders the opening still of each template; null keeps the text-only card.
+  final TemplatePreviews? templatePreviews;
 
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
@@ -72,6 +79,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             LibraryTab.templates => _TemplateGrid(
               canPickProjects: widget.canPickProjects,
               onUseTemplate: widget.onUseTemplate,
+              templatePreviews: widget.templatePreviews,
             ),
             LibraryTab.text => _TextPresetList(
               projectOpen: widget.projectOpen,
@@ -196,10 +204,12 @@ class _TemplateGrid extends StatelessWidget {
   const _TemplateGrid({
     required this.canPickProjects,
     required this.onUseTemplate,
+    this.templatePreviews,
   });
 
   final bool canPickProjects;
   final ValueChanged<ProjectTemplate> onUseTemplate;
+  final TemplatePreviews? templatePreviews;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +230,7 @@ class _TemplateGrid extends StatelessWidget {
                   template: template,
                   enabled: canPickProjects,
                   onUse: () => onUseTemplate(template),
+                  previews: templatePreviews,
                 ),
               ),
           ],
@@ -229,25 +240,48 @@ class _TemplateGrid extends StatelessWidget {
   }
 }
 
-class _TemplateCard extends StatelessWidget {
+class _TemplateCard extends StatefulWidget {
   const _TemplateCard({
     required this.template,
     required this.enabled,
     required this.onUse,
+    this.previews,
   });
 
   final ProjectTemplate template;
   final bool enabled;
   final VoidCallback onUse;
+  final TemplatePreviews? previews;
+
+  @override
+  State<_TemplateCard> createState() => _TemplateCardState();
+}
+
+class _TemplateCardState extends State<_TemplateCard> {
+  Future<Uint8List?>? _still;
+
+  @override
+  void initState() {
+    super.initState();
+    _still = widget.previews?.still(widget.template);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final template = widget.template;
+    final enabled = widget.enabled;
+    final onUse = widget.onUse;
+    final still = _still;
     return OrPanel(
       title: template.name,
       trailing: OrBadge('${template.canvasLabel} · ${template.frameRateLabel}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (still != null) ...[
+            _TemplateStill(future: still, name: template.name),
+            const SizedBox(height: OrSpacing.x3),
+          ],
           Text(
             template.summary,
             style: OrType.body.copyWith(color: OrColors.textSecondary),
@@ -314,6 +348,38 @@ class _TemplateCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The opening still of a template's scene, or nothing while it renders.
+class _TemplateStill extends StatelessWidget {
+  const _TemplateStill({required this.future, required this.name});
+
+  final Future<Uint8List?> future;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: future,
+      builder: (context, snapshot) {
+        final png = snapshot.data;
+        if (png == null || png.isEmpty) return const SizedBox.shrink();
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.memory(
+              png,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
+              semanticLabel: '$name opening frame',
+            ),
+          ),
+        );
+      },
     );
   }
 }
