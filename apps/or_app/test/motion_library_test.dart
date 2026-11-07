@@ -710,7 +710,11 @@ void main() {
 
     expect(view, isNotNull);
     expect(controller.hasDraft, isTrue);
-    expect(gateway.lastReadPath, endsWith('starters/title-card.ormotion.json'));
+    // The separator is platform-dependent: the app writes a real path.
+    expect(
+      gateway.lastReadPath!.replaceAll(r'\', '/'),
+      endsWith('starters/title-card.ormotion.json'),
+    );
     final installed = File(gateway.lastReadPath!);
     expect(installed.existsSync(), isTrue);
     expect(installed.lengthSync(), greaterThan(500));
@@ -775,7 +779,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(controller.hasDraft, isTrue);
-    expect(gateway.lastReadPath, endsWith('starters/end-card.ormotion.json'));
+    expect(
+      gateway.lastReadPath!.replaceAll(r'\', '/'),
+      endsWith('starters/end-card.ormotion.json'),
+    );
     // The starters give way to the composition actions once a draft exists.
     expect(find.byKey(const ValueKey('motion-starter-end-card')), findsNothing);
     expect(find.byKey(const ValueKey('motion-insert-draft')), findsOneWidget);
