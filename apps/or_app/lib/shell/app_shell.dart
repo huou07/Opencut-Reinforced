@@ -206,6 +206,7 @@ const Map<ShortcutActivator, Intent> _editingShortcuts = {
   SingleActivator(LogicalKeyboardKey.delete, shift: true):
       RippleDeleteClipIntent(),
   SingleActivator(LogicalKeyboardKey.keyM): AddMarkerIntent(),
+  SingleActivator(LogicalKeyboardKey.keyA): StaggerTimelineSelectionIntent(),
   // Guides are a viewing aid, so the shortcut sits with the other editing
   // verbs and stays out of text fields: `G` types a letter in a title field.
   SingleActivator(LogicalKeyboardKey.keyG): ToggleGuidesIntent(),
@@ -534,6 +535,15 @@ class _AppShellState extends State<AppShell> {
                     onInvoke: (_) {
                       if (editor && !_textInputFocused) {
                         _editorKey.currentState?.confirmDeleteSelectedClip();
+                      }
+                      return null;
+                    },
+                  ),
+              StaggerTimelineSelectionIntent:
+                  CallbackAction<StaggerTimelineSelectionIntent>(
+                    onInvoke: (_) {
+                      if (editor && !_textInputFocused) {
+                        _editorKey.currentState?.staggerSelectedClips();
                       }
                       return null;
                     },

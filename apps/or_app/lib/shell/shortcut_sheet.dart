@@ -47,6 +47,7 @@ const List<OrShortcutGroup> orShortcutGroups = [
     OrShortcut('⇧ Delete', 'Ripple delete the selected clip'),
     OrShortcut('C  /  V', 'Blade mode  /  select mode'),
     OrShortcut('M', 'Add a marker at the playhead'),
+    OrShortcut('A', 'Stagger the selected clips'),
     OrShortcut('Esc', 'Clear the selection'),
   ]),
   OrShortcutGroup('Playback', [

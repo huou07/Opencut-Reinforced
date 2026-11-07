@@ -138,6 +138,11 @@ class ExportProjectIntent extends Intent {
   const ExportProjectIntent();
 }
 
+/// Cascades one entrance across the selected clips (`A`).
+class StaggerTimelineSelectionIntent extends Intent {
+  const StaggerTimelineSelectionIntent();
+}
+
 /// Opens the assistant rail without a pointer.
 class ShowAssistantIntent extends Intent {
   const ShowAssistantIntent();

@@ -6,6 +6,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
+import 'clip_motion_presets.dart';
 
 /// Keyframes for the selected clip, edited at the playhead.
 ///
@@ -189,9 +190,9 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
     unawaited(_save(next));
   }
 
-  Future<void> _applyPreset(_MotionPreset preset) async {
-    final span = widget.clipDuration.secondsForDisplay.clamp(0.05, 0.7);
-    await _save(preset.build(_animation, span));
+  Future<void> _applyPreset(MotionPreset preset) async {
+    final span = motionSpanFor(widget.clipDuration.secondsForDisplay);
+    await _save(preset.build(_animation, span, 0));
   }
 
   @override
@@ -280,7 +281,7 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
           spacing: OrSpacing.x1,
           runSpacing: OrSpacing.x1,
           children: [
-            for (final preset in _motionPresets)
+            for (final preset in motionPresets)
               ActionChip(
                 key: ValueKey('animation-preset-${preset.wire}'),
                 label: Text(preset.label),
@@ -546,95 +547,6 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
     ],
   );
 }
-
-ProjectRationalTime _secondsTime(double seconds) =>
-    ProjectRationalTime(BigInt.from((seconds * 1000).round()), 1000);
-
-/// One-tap animation built from ordinary keyframes.
-///
-/// A preset is only a starting point: it writes the same command the manual
-/// controls use, so the chips can be edited or cleared afterwards and the
-/// project file stores keyframes, not a preset name.
-class _MotionPreset {
-  const _MotionPreset({
-    required this.wire,
-    required this.label,
-    required this.build,
-  });
-
-  final String wire;
-  final String label;
-  final ProjectClipAnimation Function(ProjectClipAnimation current, double span)
-  build;
-}
-
-ProjectKeyframe _keyframe(double at, int value, ProjectKeyframeEasing easing) =>
-    ProjectKeyframe(at: _secondsTime(at), value: value, easing: easing);
-
-const List<_MotionPreset> _motionPresets = [
-  _MotionPreset(
-    wire: 'fade-in',
-    label: 'Fade in',
-    build: _fadeIn,
-  ),
-  _MotionPreset(
-    wire: 'slide-up',
-    label: 'Slide up',
-    build: _slideUp,
-  ),
-  _MotionPreset(
-    wire: 'zoom-in',
-    label: 'Zoom in',
-    build: _zoomIn,
-  ),
-  _MotionPreset(
-    wire: 'pop',
-    label: 'Pop',
-    build: _pop,
-  ),
-];
-
-ProjectClipAnimation _fadeIn(ProjectClipAnimation current, double span) =>
-    current.copyWith(
-      opacityBasisPoints: [
-        _keyframe(0, 0, ProjectKeyframeEasing.easeOut),
-        _keyframe(span, 10000, ProjectKeyframeEasing.linear),
-      ],
-    );
-
-ProjectClipAnimation _slideUp(ProjectClipAnimation current, double span) =>
-    current.copyWith(
-      yMilliCanvas: [
-        _keyframe(0, 120, ProjectKeyframeEasing.easeOut),
-        _keyframe(span, 0, ProjectKeyframeEasing.linear),
-      ],
-    );
-
-ProjectClipAnimation _zoomIn(ProjectClipAnimation current, double span) =>
-    current.copyWith(
-      scaleXMilli: [
-        _keyframe(0, 850, ProjectKeyframeEasing.easeOut),
-        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
-      ],
-      scaleYMilli: [
-        _keyframe(0, 850, ProjectKeyframeEasing.easeOut),
-        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
-      ],
-    );
-
-ProjectClipAnimation _pop(ProjectClipAnimation current, double span) => current
-    .copyWith(
-      scaleXMilli: [
-        _keyframe(0, 1000, ProjectKeyframeEasing.easeOut),
-        _keyframe(span / 2, 1120, ProjectKeyframeEasing.easeInOut),
-        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
-      ],
-      scaleYMilli: [
-        _keyframe(0, 1000, ProjectKeyframeEasing.easeOut),
-        _keyframe(span / 2, 1120, ProjectKeyframeEasing.easeInOut),
-        _keyframe(span, 1000, ProjectKeyframeEasing.linear),
-      ],
-    );
 
 class _AnimationChannel {
   const _AnimationChannel({

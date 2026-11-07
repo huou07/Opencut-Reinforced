@@ -49,6 +49,15 @@ reused on a clip that already fades; the clipboard lives in the process and is
 never written to the project file. Graph editing and effect-parameter keyframes
 remain deferred.
 
+Stagger applies one of those presets across a multi-clip selection, each clip
+starting a little later than the one before, so a row of titles enters as a
+cascade instead of together. The timeline's selection toolbar and the `A` key
+open the same dialog (preset and 0–0.5 s offset); the action writes each clip as
+one ordinary animation command, so every clip stays editable in the inspector
+and one undo removes that clip's keyframes. Clips too short to hold their delay
+plus a minimum 50 ms entrance are left unchanged and the confirmation says how
+many were skipped, because a truncated entrance would pop in mid-clip.
+
 Verified 2026-11-07 at `07d91f64` (timeline badge), `37f39a67` (presets) and `4cf49782` (manual keyframes) on all three hosts with the `keyframes` UI
 scenario (`scripts/ui_scenarios/keyframes.json`): macOS M5, Debian through a
 Weston headless session on the Intel UHD 770 (Mesa GL), and Windows 11 in an

@@ -1406,6 +1406,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: false,
+            gateway: widget.projectGateway,
+            session: widget.projectSession,
             previewState: _previewState,
             onScrubTo: widget.projectSession == null ? null : scrubPreviewTo,
             isProjectWorkspace: widget.isProjectWorkspace,
@@ -1478,6 +1480,11 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     );
   }
 
+  /// Forwards the `A` shortcut to the timeline's stagger action.
+  void staggerSelectedClips() {
+    _timelineKey.currentState?.openStaggerSelection();
+  }
+
   Widget _compactLayout() {
     final guided = _guidedBar();
     return Column(
@@ -1509,6 +1516,8 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
             onMotionAssetDropped: _insertMotionAsset,
             key: _timelineKey,
             compact: true,
+            gateway: widget.projectGateway,
+            session: widget.projectSession,
             previewState: _previewState,
             onScrubTo: widget.projectSession == null ? null : scrubPreviewTo,
             isProjectWorkspace: widget.isProjectWorkspace,

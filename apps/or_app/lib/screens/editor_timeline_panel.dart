@@ -12,6 +12,8 @@ import '../design/or_typography.dart';
 import '../motion/motion_library_models.dart';
 import '../project/project_gateway.dart';
 import '../widgets/or_widgets.dart';
+import 'clip_motion_presets.dart';
+import 'clip_stagger.dart';
 import 'editor_labels.dart';
 import 'editor_media_preview.dart';
 import 'editor_panel_header.dart';
@@ -28,6 +30,8 @@ int timelinePanelBuilds = 0;
 class EditorTimelinePanel extends StatefulWidget {
   const EditorTimelinePanel({
     super.key,
+    this.gateway,
+    this.session,
     required this.compact,
     this.guidance,
     this.onMotionAssetDropped,
@@ -289,6 +293,13 @@ class EditorTimelinePanel extends StatefulWidget {
   )?
   onClipSelectionChanged;
 
+  /// The gateway and session the stagger action writes through.
+  ///
+  /// Both are optional so the many layout tests can build the panel without a
+  /// project host; the action is only offered when they are present.
+  final ProjectGateway? gateway;
+  final ProjectSessionHandle? session;
+
   /// Snapping and the creation menu live in this zone's single control row.
   final ValueChanged<bool>? onSnapChanged;
   final VoidCallback? onImportCaptions;
@@ -323,6 +334,9 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
   final Set<String> _selectedClipIds = <String>{};
   double _timelineZoom = 1;
   double _pixelsPerSecond = 64;
+
+  /// True while a staggered entrance is being written clip by clip.
+  bool _staggering = false;
   bool _fitTimelineToView = false;
   int _gestureToken = 0;
 
@@ -1083,6 +1097,17 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
                     : null,
                 icon: const Icon(Icons.delete_outline, size: 16),
               ),
+              if (_selectedClipIds.length > 1 &&
+                  widget.gateway != null &&
+                  widget.session != null)
+                TextButton.icon(
+                  key: const ValueKey('timeline-selection-stagger'),
+                  onPressed: widget.busy || _staggering
+                      ? null
+                      : () => unawaited(_staggerSelection()),
+                  icon: const Icon(Icons.animation, size: 15),
+                  label: const Text('Stagger'),
+                ),
               if (selectedTrack != null &&
                   selectedTrack.kind == ProjectTimelineTrackKind.audio &&
                   selectedClip.contentKind ==
@@ -1477,6 +1502,100 @@ class EditorTimelinePanelState extends State<EditorTimelinePanel> {
       _selectedClipId = null;
     });
     widget.onClipSelectionChanged?.call(null, null, null);
+  }
+
+  /// The selected clips on visual tracks, in the order a cascade follows.
+  ///
+  /// Track order breaks ties at the same time so two titles starting together
+  /// still animate top-down instead of in map-iteration order.
+  List<(ProjectTimelineClip, ProjectTimelineTrack)> _selectedVisualClips() {
+    final tracks = widget.tracks?.items ?? const <ProjectTimelineTrack>[];
+    final order = <String, int>{
+      for (var index = 0; index < tracks.length; index++)
+        tracks[index].trackId: index,
+    };
+    final result = <(ProjectTimelineClip, ProjectTimelineTrack)>[];
+    for (final track in tracks) {
+      if (track.kind == ProjectTimelineTrackKind.audio) continue;
+      final page = widget.clipPages[track.trackId];
+      if (page == null) continue;
+      for (final clip in page.items) {
+        if (_selectedClipIds.contains(clip.clipId)) result.add((clip, track));
+      }
+    }
+    result.sort((left, right) {
+      final byTime = compareProjectRational(
+        left.$1.timelineStart,
+        right.$1.timelineStart,
+      );
+      if (byTime != 0) return byTime;
+      return (order[left.$2.trackId] ?? 0).compareTo(
+        order[right.$2.trackId] ?? 0,
+      );
+    });
+    return result;
+  }
+
+  /// Opens the stagger dialog for the current selection (the `A` shortcut).
+  void openStaggerSelection() {
+    unawaited(_staggerSelection());
+  }
+
+  /// Writes one entrance across the selection, each clip a little later.
+  ///
+  /// The offsets are ordinary keyframes on each clip, so the result stays
+  /// editable in the inspector and every clip remains one undo step.
+  Future<void> _staggerSelection() async {
+    final gateway = widget.gateway;
+    final session = widget.session;
+    final project = widget.project;
+    if (gateway == null || session == null || project == null) return;
+    final selected = _selectedVisualClips();
+    if (selected.length < 2) {
+      OrSnackBar.show(
+        context,
+        'Select two or more video or text clips to stagger.',
+      );
+      return;
+    }
+    final request = await showStaggerDialog(
+      context: context,
+      clipCount: selected.length,
+    );
+    if (request == null || !mounted) return;
+    setState(() => _staggering = true);
+    final outcome = await applyStagger(
+      gateway: gateway,
+      session: session,
+      project: project,
+      clips: [for (final entry in selected) entry.$1],
+      trackIdByClipId: {
+        for (final entry in selected) entry.$1.clipId: entry.$2.trackId,
+      },
+      preset: request.preset,
+      delaySeconds: request.delaySeconds,
+    );
+    if (!mounted) return;
+    setState(() => _staggering = false);
+    OrSnackBar.show(context, _staggerSummary(outcome, request.preset));
+    if (outcome.failure != null) {
+      widget.onTimelineEditError?.call(outcome.failure!);
+      widget.onRefresh?.call();
+    }
+  }
+
+  String _staggerSummary(StaggerOutcome outcome, MotionPreset preset) {
+    final applied = outcome.appliedClipIds.length;
+    final skipped = outcome.skippedClipIds.length;
+    if (outcome.failure != null) {
+      return 'Staggered $applied of ${outcome.clipCount} clips: '
+          '${outcome.failure}';
+    }
+    if (skipped == 0) {
+      return '${preset.label} staggered across $applied clips.';
+    }
+    return '${preset.label} staggered across $applied clips; $skipped too '
+        'short and left unchanged.';
   }
 
   void confirmDeleteSelectedClip() {
