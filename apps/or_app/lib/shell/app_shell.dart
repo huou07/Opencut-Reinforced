@@ -1101,6 +1101,24 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Brings the first-run panel back. It is a real interface state, not a test
+  /// hook: a user who dismissed the explanation without reading it has no other
+  /// way back to the machine facts it names, and the panel also offers the only
+  /// in-app route to the machine warning.
+  Future<void> _showWelcome() async {
+    if (!mounted) return;
+    setState(() {
+      _welcomeDismissed = false;
+      _destination = AppDestination.home;
+    });
+    try {
+      await _welcomeStore.save(const WelcomeState());
+    } catch (_) {
+      // Ignored on purpose: the panel is already on screen; a failed write
+      // costs one extra showing on the next start, never a lost edit.
+    }
+  }
+
   Future<void> _openCommandPalette() => showOrCommandPalette(
     context,
     _select,
@@ -1109,6 +1127,10 @@ class _AppShellState extends State<AppShell> {
       CommandPaletteAction(label: 'Open Project', onSelected: _openProject),
       CommandPaletteAction(label: 'Open Library', onSelected: _openLibrary),
       CommandPaletteAction(label: 'Open Guide', onSelected: _openGuide),
+      CommandPaletteAction(
+        label: 'Show the Introduction',
+        onSelected: () => unawaited(_showWelcome()),
+      ),
       CommandPaletteAction(
         label: 'Keyboard Shortcuts',
         onSelected: () => unawaited(showOrShortcutSheet(context)),

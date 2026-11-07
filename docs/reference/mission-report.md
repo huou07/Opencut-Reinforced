@@ -342,6 +342,13 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   YMAX 235) rather than a window capture. Inside the Motion panel the asset
   picker is still a list, and per-asset previews for scenes the user saves
   remain a next step.
+- **First-run panel recovery** — the introduction could be dismissed but never
+  reopened, so its machine facts and disk warning were lost for good on a
+  machine where someone clicked past it. The command palette now offers
+  **Show the Introduction** (resets `welcome.json`, returns to Home), and the
+  `library-tour` scenario reaches the panel through that command instead of
+  assuming first-run state; it passes on macOS, which also removed the scenario's
+  dependency on whatever `welcome.json` the machine already had.
 - **Masks, graph editor, 3D and vector import** — each is a numbered product
   decision, not a silent omission: masks and the graph editor are PLANNED in
   `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the

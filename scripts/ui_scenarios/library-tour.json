@@ -1,7 +1,7 @@
 {
   "name": "library-tour",
   "harness": "or_ui",
-  "description": "The library a beginner meets before a project exists: the first-run Home panel, then every library tab by its visible content. Every step names a widget key or visible text; no step injects project state, so a failure is a real interface failure.",
+  "description": "The library a beginner meets: the introduction panel (brought back through the command palette, so the tour never depends on first-run state), then every library tab by its visible content. Every step names a widget key or visible text.",
   "viewport": {
     "width": 1440,
     "height": 900
@@ -10,6 +10,40 @@
     {
       "op": "shot",
       "name": "home-first-run"
+    },
+    {
+      "op": "key",
+      "chord": "cmd+k"
+    },
+    {
+      "op": "pump",
+      "ms": 700
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "command-palette-query"
+      },
+      "value": "Show the Introduction"
+    },
+    {
+      "op": "pump",
+      "ms": 400
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "command-show-the-introduction"
+      }
+    },
+    {
+      "op": "pump",
+      "ms": 700
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Start here",
+      "budget_ms": 30000
     },
     {
       "op": "expect",

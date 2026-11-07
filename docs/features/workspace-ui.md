@@ -29,6 +29,10 @@ has one. The panel is three sentences and three actions (New Project, Open
 Library, Read Guide) — no tour, no overlay, no modal. Dismissal is stored in
 `welcome.json` beside the other preferences, and a preference file that cannot
 be read shows the panel rather than hiding the only explanation a beginner gets.
+The command palette's **Show the Introduction** action brings the panel back
+without restarting: a person who dismissed it without reading the machine facts
+has no other route to them, and the panel is the only place the machine warning
+appears.
 
 The same panel also states what the machine is, measured once off the first
 frame: the platform and build, processors, memory, free space on the volume that

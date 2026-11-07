@@ -7530,6 +7530,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the introduction can be brought back from the command palette', (
+    tester,
+  ) async {
+    _setViewport(tester, const Size(1440, 900));
+    await _mount(tester);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    // Dismiss it the way a user would, then bring it back without restarting.
+    await tester.tap(find.byKey(const ValueKey('home-welcome-dismiss')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('home-welcome')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('open-command-palette')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('command-palette-query')),
+      'Show the Introduction',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('command-show-the-introduction')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('home-welcome')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-welcome-new')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the library is reachable from Home and opens its tabs', (
     tester,
   ) async {

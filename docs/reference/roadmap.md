@@ -380,6 +380,14 @@ One near-term delivery mission for the local macOS app, in this order:
     the rendered PNGs themselves (`or motion render` at 1.4 s: 1920×1080,
     YMAX 235) rather than a window capture.
 
+49. **The introduction can be reopened (2026-11-07).** The command palette
+    gains **Show the Introduction**, which resets `welcome.json` and returns to
+    Home with the first-run panel on screen. It gives the panel a route back for
+    anyone who dismissed it unread, and it makes the `library-tour` scenario
+    independent of first-run state: the scenario opens the panel through the
+    same command every user has, walks every Library tab, then dismisses it.
+    `library-tour` passes on the real macOS app.
+
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
     row naming the last render, with **Render again** which re-materialises the
