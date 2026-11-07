@@ -135,6 +135,21 @@ void main() {
     );
   });
 
+  testWidgets('a still that cannot decode leaves the text-only card', (
+    tester,
+  ) async {
+    // A rasterizer without a GPU context still returns bytes; the decode step
+    // is what fails. The card must survive it rather than break the grid.
+    final previews = _FakePreviews(Uint8List.fromList(<int>[1, 2, 3, 4]));
+    await _pump(tester, previews);
+    expect(find.text('Title card'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('library-template-use-title-card')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a failed still leaves the text-only card', (tester) async {
     final previews = _FakePreviews(null);
     await _pump(tester, previews);

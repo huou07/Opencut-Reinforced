@@ -131,7 +131,7 @@ def require_guest() -> None:
     if not adb:
         raise Blocked("adb is not on PATH", "install the Android platform tools")
     completed = subprocess.run([adb, "-s", ANDROID_SERIAL, "get-state"],
-                               capture_output=True, text=True, timeout=30)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     if completed.stdout.strip() != "device":
         raise Blocked(
             f"the dedicated guest {ANDROID_SERIAL} is not running "
@@ -167,7 +167,7 @@ def require_macos_tools() -> None:
 
 def adb(*args: str, capture: bool = True) -> subprocess.CompletedProcess[str]:
     command = ["adb", "-s", ANDROID_SERIAL, *args]
-    return subprocess.run(command, capture_output=capture, text=True, timeout=300)
+    return subprocess.run(command, capture_output=capture, text=True, encoding="utf-8", errors="replace", timeout=300)
 
 
 def ensure_ui_apk() -> Path:
@@ -246,7 +246,7 @@ def run_linux(payload: dict, report_dir: Path) -> int:
     command = [sys.executable, str(ROOT / "scripts/run_linux_ui_preflight.py"),
                "--exec", "--", "bash", "-c", inner]
     completed = subprocess.run(command, cwd=ROOT, env=environment,
-                               capture_output=True, text=True,
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=LINUX_BUDGET_SECONDS)
     (report_dir / "run.log").write_text(
         f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n",
@@ -305,7 +305,7 @@ def run_macos(payload: dict, report_dir: Path) -> int:
     command = ["flutter", "--no-version-check", "test", "--no-pub", "-d", "macos",
                SCENARIO_RUNNER]
     completed = subprocess.run(command, cwd=str(APP), env=environment,
-                               capture_output=True, text=True,
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=MACOS_BUDGET_SECONDS)
     log = (f"$ {' '.join(command)}\nexit {completed.returncode}\n"
            f"{completed.stdout}\n{completed.stderr}\n")
@@ -321,7 +321,7 @@ def run_macos(payload: dict, report_dir: Path) -> int:
         shutil.rmtree(artifacts)
         artifacts.mkdir(parents=True)
         completed = subprocess.run(command, cwd=str(APP), env=environment,
-                                   capture_output=True, text=True,
+                                   capture_output=True, text=True, encoding="utf-8", errors="replace",
                                    timeout=MACOS_BUDGET_SECONDS)
         log = (log + "\n--- retried after a launch failure ---\n"
                f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n")
@@ -428,7 +428,7 @@ def run_windows(payload: dict, report_dir: Path) -> int:
     command = [flutter, "--no-version-check", "test", "--no-pub", "-d", "windows",
                SCENARIO_RUNNER]
     completed = subprocess.run(command, cwd=str(APP), env=environment,
-                               capture_output=True, text=True,
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=WINDOWS_BUDGET_SECONDS)
     (report_dir / "run.log").write_text(
         f"$ {' '.join(command)}\nexit {completed.returncode}\n"
@@ -503,7 +503,7 @@ def run_android(payload: dict, report_dir: Path) -> int:
         "-d", ANDROID_SERIAL, "--no-dds", f"--use-application-binary={apk}",
     ]
     completed = subprocess.run(command, cwd=APP, env=environment,
-                               capture_output=True, text=True,
+                               capture_output=True, text=True, encoding="utf-8", errors="replace",
                                timeout=ANDROID_BUDGET_SECONDS)
     (report_dir / "run.log").write_text(
         f"$ {' '.join(command)}\n{completed.stdout}\n{completed.stderr}\n",

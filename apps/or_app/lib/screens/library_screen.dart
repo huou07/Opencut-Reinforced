@@ -376,6 +376,11 @@ class _TemplateStill extends StatelessWidget {
               gaplessPlayback: true,
               filterQuality: FilterQuality.medium,
               semanticLabel: '$name opening frame',
+              // A still that cannot decode (a rasterizer that has no GPU
+              // context, a truncated render) must cost the card its picture,
+              // never the whole grid: the text card is the fallback state.
+              errorBuilder: (context, error, stack) =>
+                  const SizedBox.shrink(),
             ),
           ),
         );
