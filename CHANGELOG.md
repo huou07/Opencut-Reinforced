@@ -13,6 +13,19 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.23 — 2026-11-08
+
+### Added
+- **Stagger one entrance across a selected row of clips.** With two or more
+  video or text clips selected, the timeline toolbar (and the `A` key) opens one
+  dialog for the preset and a 0-0.5 s offset, then writes each clip's entrance
+  in timeline order so a title sequence cascades instead of appearing together.
+  Every clip is still an ordinary animation command: its keyframes stay editable
+  in the inspector and one undo removes that clip's entrance. Clips too short to
+  hold their delay plus a 50 ms entrance are left unchanged and counted in the
+  confirmation. The four presets moved into `clip_motion_presets.dart` so the
+  inspector and the stagger action cannot drift apart.
+
 ## 0.1.22 — 2026-11-07
 
 ### Added
