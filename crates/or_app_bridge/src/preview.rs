@@ -1394,6 +1394,7 @@ mod desktop {
                                 height,
                                 pixels: Vec::new(),
                                 planes: Some(planes),
+                                pending_planes: None,
                                 error_code: None,
                                 error_message: None,
                             });
@@ -1463,6 +1464,7 @@ mod desktop {
                                         height,
                                         pixels: Vec::new(),
                                         planes: Some(planes),
+                                        pending_planes: None,
                                         error_code: None,
                                         error_message: None,
                                     });
@@ -1473,6 +1475,7 @@ mod desktop {
                                 height,
                                 pixels: frame.pixels().to_vec(),
                                 planes: None,
+                                pending_planes: None,
                                 error_code: None,
                                 error_message: None,
                             });
@@ -1753,18 +1756,21 @@ mod desktop {
                 layers.push(CompositorLayer::Rgba(layer));
             }
             let renderer = renderer()?;
-            let (pixels, planes) = match output {
+            let (pixels, planes, pending_planes) = match output {
                 RenderOutput::Packed => {
                     let rendered = renderer
                         .composite_layers(size, &layers)
                         .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
-                    (rendered.pixels().to_vec(), None)
+                    (rendered.pixels().to_vec(), None, None)
                 }
                 RenderOutput::Nv12 => {
-                    let planes = renderer
-                        .composite_layers_nv12(size, &layers)
+                    // Queued, not waited for: the export resolves this once the
+                    // frame reaches the writer, which is a frame later, so the
+                    // readback overlaps the next frame's decode and compositing.
+                    let pending = renderer
+                        .composite_layers_nv12_pending(size, &layers)
                         .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
-                    (Vec::new(), Some(planes))
+                    (Vec::new(), None, Some(pending))
                 }
             };
             if cancellation.is_cancelled() {
@@ -1778,6 +1784,7 @@ mod desktop {
                 height,
                 pixels,
                 planes,
+                pending_planes,
                 error_code: decode_error
                     .as_ref()
                     .map(|_| "MEDIA_DECODE_FAILED".to_owned()),
@@ -2422,6 +2429,10 @@ mod desktop {
         /// Set when the caller asked for NV12 output: the same composition in the
         /// layout the hardware encoder takes, converted on the GPU.
         planes: Option<or_render::Nv12Planes>,
+        /// Set instead of `planes` when the conversion was queued but not waited
+        /// for. The export resolves it on the writer thread, so this frame's
+        /// colour conversion runs while the renderer decodes the next one.
+        pending_planes: Option<or_render::PendingNv12Planes>,
         error_code: Option<String>,
         error_message: Option<String>,
     }
@@ -3066,7 +3077,8 @@ mod desktop {
                 if rendered_index != frame_index {
                     return Err("the renderer produced frames out of order".to_owned());
                 }
-                let frame = frame?;
+                let mut frame = frame?;
+                frame.resolve_planes()?;
                 match &frame.planes {
                     Some(planes) => writer.write_video_frame_nv12(
                         planes.luma(),
@@ -3127,6 +3139,18 @@ mod desktop {
         height: u32,
         pixels: Vec<u8>,
         planes: Option<or_render::Nv12Planes>,
+        pending_planes: Option<or_render::PendingNv12Planes>,
+    }
+
+    impl ExportFrame {
+        /// Waits for this frame's colour conversion if the renderer queued it
+        /// instead of waiting, so the encoder writes the same planes either way.
+        fn resolve_planes(&mut self) -> Result<(), String> {
+            if let Some(pending) = self.pending_planes.take() {
+                self.planes = Some(pending.resolve().map_err(|error| error.to_string())?);
+            }
+            Ok(())
+        }
     }
 
     impl From<Presentation> for ExportFrame {
@@ -3136,6 +3160,7 @@ mod desktop {
                 height: presentation.height,
                 pixels: presentation.pixels,
                 planes: presentation.planes,
+                pending_planes: presentation.pending_planes,
             }
         }
     }

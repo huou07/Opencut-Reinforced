@@ -322,14 +322,15 @@ pub struct RenderDevice {
     nv12_compute_pipeline: wgpu::ComputePipeline,
     nv12_layer_bind_group_layout: wgpu::BindGroupLayout,
     nv12_layer_pipeline: wgpu::RenderPipeline,
-    /// Reusable NV12 targets and readback buffer for the last picture size.
+    /// Reusable NV12 conversion targets and readback buffers.
     ///
     /// An export renders hundreds of frames at one size. Creating two textures
     /// and one staging buffer per frame, then waiting on the GPU twice to read
     /// them back, spent more time in bookkeeping than in the colour conversion.
-    /// One entry keyed by size keeps a delivery export's steady state to a
-    /// single submit and a single wait per frame.
-    nv12_scratch: Mutex<Option<Nv12Scratch>>,
+    /// A pool keyed by size keeps a delivery export's steady state to one
+    /// submit per frame — and, because each pipelined frame holds its own
+    /// entry, lets a frame be converted while the next one is being composited.
+    nv12_scratches: std::sync::Arc<Nv12ScratchPool>,
     /// Which conversion this device measured as faster: 0 unknown, 1 compute
     /// pass, 2 the older two render passes. Chosen once on the real frame size.
     nv12_mode: std::sync::atomic::AtomicU8,
@@ -976,7 +977,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             nv12_compute_pipeline,
             nv12_layer_bind_group_layout,
             nv12_layer_pipeline,
-            nv12_scratch: Mutex::new(None),
+            nv12_scratches: std::sync::Arc::new(Nv12ScratchPool::default()),
             nv12_mode: std::sync::atomic::AtomicU8::new(0),
             compositor_pool: Mutex::new(CompositorPool::default()),
             adapter_info: RenderAdapterInfo {
@@ -1138,27 +1139,20 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         self.readback_texture_nv12(&frame.target.texture, frame.surface.size())
     }
 
-    /// Converts one RGBA target into tight NV12 planes with one compute pass.
+    /// Starts the one-pass compute conversion into a tight NV12 buffer.
     ///
     /// The dispatch writes the luma plane and the interleaved chroma plane into
     /// one storage buffer, so the host copy is a single contiguous range and the
     /// compositor does not pay for two full-screen conversion passes plus two
     /// padded texture copies.
-    fn readback_texture_nv12_compute(
+    fn begin_nv12_readback_compute(
         &self,
         source_view: &wgpu::TextureView,
         size: RenderSize,
-    ) -> Result<Nv12Planes, RenderError> {
+    ) -> Result<PendingNv12Planes, RenderError> {
         let width = size.width();
         let height = size.height();
-        let mut slot = self
-            .nv12_scratch
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if slot.as_ref().is_none_or(|scratch| scratch.size != size) {
-            *slot = Some(Nv12Scratch::new(&self.device, size)?);
-        }
-        let scratch = slot.as_ref().expect("the NV12 scratch was just built");
+        let lease = self.nv12_scratches.lease(&self.device, size)?;
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("or_render.nv12_compute_bind_group"),
             layout: &self.nv12_compute_bind_group_layout,
@@ -1169,7 +1163,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: scratch.tight_buffer.as_entire_binding(),
+                    resource: lease.tight_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -1191,116 +1185,20 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 1,
             );
         }
-        encoder.copy_buffer_to_buffer(
-            &scratch.tight_buffer,
-            0,
-            &scratch.buffer,
-            0,
-            scratch.tight_size,
-        );
-        self.queue.submit(Some(encoder.finish()));
-
-        let slice = scratch.buffer.slice(0..scratch.tight_size);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result.map_err(|error| error.to_string()));
-        });
-        self.device
-            .poll(wgpu::PollType::Wait)
-            .map_err(|error| RenderError::DevicePoll {
-                message: error.to_string(),
-            })?;
-        receiver
-            .recv()
-            .map_err(|error| RenderError::ReadbackMap {
-                message: error.to_string(),
-            })?
-            .map_err(|message| RenderError::ReadbackMap { message })?;
-        let bytes = {
-            let mapped = slice.get_mapped_range();
-            mapped[..scratch.tight_size as usize].to_vec()
+        encoder.copy_buffer_to_buffer(&lease.tight_buffer, 0, &lease.buffer, 0, lease.tight_size);
+        let layout = Nv12ReadbackLayout::Tight {
+            bytes: lease.tight_size,
         };
-        scratch.buffer.unmap();
-        Nv12Planes::from_shared(width, height, std::sync::Arc::from(bytes))
-            .ok_or(RenderError::OddSizeForNv12 { size })
+        self.submit_nv12_readback(lease, size, encoder, layout)
     }
 
-    /// Converts one offscreen RGBA texture into NV12 and reads back both planes.
-    ///
-    /// Both conversions produce the same bytes. Which one runs is measured once
-    /// on this device with the frame size the export is about to use: the
-    /// compute pass wins on Intel's Linux driver, the two render passes win on
-    /// Intel's Windows driver, and neither is assumed from the backend name
-    /// (both report Vulkan).
-    fn readback_texture_nv12(
-        &self,
-        texture: &wgpu::Texture,
-        size: RenderSize,
-    ) -> Result<Nv12Planes, RenderError> {
-        let width = size.width();
-        let height = size.height();
-        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
-            return Err(RenderError::OddSizeForNv12 { size });
-        }
-        let source_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        if !width.is_multiple_of(4) {
-            return self.readback_texture_nv12_passes(&source_view, size);
-        }
-        match self.nv12_mode.load(std::sync::atomic::Ordering::Relaxed) {
-            1 => self.readback_texture_nv12_compute(&source_view, size),
-            2 => self.readback_texture_nv12_passes(&source_view, size),
-            _ => {
-                let mode = self.choose_nv12_mode(&source_view, size);
-                match mode {
-                    1 => self.readback_texture_nv12_compute(&source_view, size),
-                    _ => self.readback_texture_nv12_passes(&source_view, size),
-                }
-            }
-        }
-    }
-
-    /// Times both conversions on this frame and remembers the faster one.
-    ///
-    /// Runs once per device. Each path converts twice: the first call pays for
-    /// the lazily built scratch buffers and bind groups, the second is the
-    /// steady state the export will see.
-    fn choose_nv12_mode(&self, source_view: &wgpu::TextureView, size: RenderSize) -> u8 {
-        let measure = |run: &mut dyn FnMut() -> Result<Nv12Planes, RenderError>| {
-            if run().is_err() {
-                return None;
-            }
-            let started = std::time::Instant::now();
-            let result = run();
-            result.ok().map(|_| started.elapsed())
-        };
-        let mut compute = || self.readback_texture_nv12_compute(source_view, size);
-        let mut passes = || self.readback_texture_nv12_passes(source_view, size);
-        let compute_time = measure(&mut compute);
-        let passes_time = measure(&mut passes);
-        let mode = match (compute_time, passes_time) {
-            (Some(compute), Some(passes)) => {
-                if compute <= passes {
-                    1
-                } else {
-                    2
-                }
-            }
-            (Some(_), None) => 1,
-            (None, Some(_)) => 2,
-            (None, None) => 2,
-        };
-        self.nv12_mode
-            .store(mode, std::sync::atomic::Ordering::Relaxed);
-        mode
-    }
-
-    /// Converts with the two original render passes, for devices where that is
-    /// measurably faster (the Windows Intel driver is one).
-    fn readback_texture_nv12_passes(
+    /// Starts the conversion with the two original render passes, for devices
+    /// where that is measurably faster (the Windows Intel driver is one).
+    fn begin_nv12_readback_passes(
         &self,
         source_view: &wgpu::TextureView,
         size: RenderSize,
-    ) -> Result<Nv12Planes, RenderError> {
+    ) -> Result<PendingNv12Planes, RenderError> {
         let width = size.width();
         let height = size.height();
         let (chroma_width, chroma_height) = (width / 2, height / 2);
@@ -1317,13 +1215,14 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
+        let lease = self.nv12_scratches.lease(&self.device, size)?;
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("or_render.nv12_bind_group"),
             layout: &self.nv12_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&source_view),
+                    resource: wgpu::BindingResource::TextureView(source_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1331,17 +1230,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 },
             ],
         });
-
-        let mut slot = self
-            .nv12_scratch
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if slot.as_ref().is_none_or(|scratch| scratch.size != size) {
-            // A size change is a new picture, not a new export: replacing the
-            // entry is cheaper than carrying a pool nobody asked for.
-            *slot = Some(Nv12Scratch::new(&self.device, size)?);
-        }
-        let scratch = slot.as_ref().expect("the NV12 scratch was just built");
 
         // One encoder, one submit, one wait. Each of the two planes used to cost
         // its own submit and its own device poll, which put the render thread to
@@ -1352,8 +1240,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 label: Some("or_render.nv12_encoder"),
             });
         for (pipeline, view) in [
-            (&self.nv12_luma_pipeline, &scratch.luma_view),
-            (&self.nv12_chroma_pipeline, &scratch.chroma_view),
+            (&self.nv12_luma_pipeline, &lease.luma_view),
+            (&self.nv12_chroma_pipeline, &lease.chroma_view),
         ] {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("or_render.nv12_pass"),
@@ -1375,16 +1263,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &scratch.luma,
+                texture: &lease.luma,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &scratch.buffer,
+                buffer: &lease.buffer,
                 layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(scratch.luma_row_bytes),
+                    bytes_per_row: Some(lease.luma_row_bytes),
                     rows_per_image: Some(height),
                 },
             },
@@ -1396,16 +1284,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         );
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture: &scratch.chroma,
+                texture: &lease.chroma,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
-                buffer: &scratch.buffer,
+                buffer: &lease.buffer,
                 layout: wgpu::TexelCopyBufferLayout {
-                    offset: scratch.chroma_offset,
-                    bytes_per_row: Some(scratch.chroma_row_bytes),
+                    offset: lease.chroma_offset,
+                    bytes_per_row: Some(lease.chroma_row_bytes),
                     rows_per_image: Some(chroma_height),
                 },
             },
@@ -1415,51 +1303,125 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 depth_or_array_layers: 1,
             },
         );
-        self.queue.submit(Some(encoder.finish()));
-
-        let slice = scratch.buffer.slice(..);
-        let (sender, receiver) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |result| {
-            let _ = sender.send(result.map_err(|error| error.to_string()));
-        });
-        self.device
-            .poll(wgpu::PollType::Wait)
-            .map_err(|error| RenderError::DevicePoll {
-                message: error.to_string(),
-            })?;
-        receiver
-            .recv()
-            .map_err(|error| RenderError::ReadbackMap {
-                message: error.to_string(),
-            })?
-            .map_err(|message| RenderError::ReadbackMap { message })?;
-
-        let (luma, chroma) = {
-            let mapped = slice.get_mapped_range();
-            let luma = repack_plane(
-                &mapped,
-                scratch.luma_row_bytes,
-                usize::try_from(width).map_err(|_| RenderError::ReadbackSizeOverflow)?,
-                usize::try_from(height).map_err(|_| RenderError::ReadbackSizeOverflow)?,
-            )?;
-            let chroma = repack_plane(
-                &mapped[usize::try_from(scratch.chroma_offset)
-                    .map_err(|_| RenderError::ReadbackSizeOverflow)?..],
-                scratch.chroma_row_bytes,
-                usize::try_from(chroma_width).map_err(|_| RenderError::ReadbackSizeOverflow)? * 2,
-                usize::try_from(chroma_height).map_err(|_| RenderError::ReadbackSizeOverflow)?,
-            )?;
-            (luma, chroma)
+        let layout = Nv12ReadbackLayout::Padded {
+            luma_row_bytes: lease.luma_row_bytes,
+            chroma_row_bytes: lease.chroma_row_bytes,
+            chroma_offset: lease.chroma_offset,
         };
-        // Unmapping is a property of the buffer, not of this frame's slice, and
-        // the next readback maps the same range again.
-        scratch.buffer.unmap();
-        Ok(Nv12Planes {
-            width,
-            height,
-            luma: PlaneBytes::Owned(luma),
-            chroma: PlaneBytes::Owned(chroma),
+        self.submit_nv12_readback(lease, size, encoder, layout)
+    }
+
+    /// Submits one conversion and registers the readback mapping without
+    /// waiting for it.
+    ///
+    /// Everything the frame needs is now either queued on the device or held by
+    /// the returned [`PendingNv12Planes`], so the caller is free to start the
+    /// next frame's decode and compositing while this conversion is still
+    /// running. That is the whole point: the old readback blocked the render
+    /// thread inside `poll` for the length of the GPU pass, and no CPU work was
+    /// left to overlap with it.
+    fn submit_nv12_readback(
+        &self,
+        lease: Nv12ScratchLease,
+        size: RenderSize,
+        encoder: wgpu::CommandEncoder,
+        layout: Nv12ReadbackLayout,
+    ) -> Result<PendingNv12Planes, RenderError> {
+        let submission = self.queue.submit(Some(encoder.finish()));
+        let (sender, mapping) = std::sync::mpsc::channel();
+        lease
+            .buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                let _ = sender.send(result.map_err(|error| error.to_string()));
+            });
+        Ok(PendingNv12Planes {
+            size,
+            lease,
+            layout,
+            submission,
+            mapping,
+            device: self.device.clone(),
         })
+    }
+
+    /// Converts one offscreen RGBA texture into NV12 and reads back both planes.
+    ///
+    /// Both conversions produce the same bytes. Which one runs is measured once
+    /// on this device with the frame size the export is about to use: the
+    /// compute pass wins on Intel's Linux driver, the two render passes win on
+    /// Intel's Windows driver, and neither is assumed from the backend name
+    /// (both report Vulkan).
+    fn readback_texture_nv12(
+        &self,
+        texture: &wgpu::Texture,
+        size: RenderSize,
+    ) -> Result<Nv12Planes, RenderError> {
+        self.begin_texture_nv12(texture, size)?.resolve()
+    }
+
+    /// Queues the conversion of one RGBA texture and returns the pending
+    /// readback instead of waiting for it.
+    fn begin_texture_nv12(
+        &self,
+        texture: &wgpu::Texture,
+        size: RenderSize,
+    ) -> Result<PendingNv12Planes, RenderError> {
+        let width = size.width();
+        let height = size.height();
+        if !width.is_multiple_of(2) || !height.is_multiple_of(2) {
+            return Err(RenderError::OddSizeForNv12 { size });
+        }
+        let source_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        if !width.is_multiple_of(4) {
+            return self.begin_nv12_readback_passes(&source_view, size);
+        }
+        match self.nv12_mode.load(std::sync::atomic::Ordering::Relaxed) {
+            1 => self.begin_nv12_readback_compute(&source_view, size),
+            2 => self.begin_nv12_readback_passes(&source_view, size),
+            _ => match self.choose_nv12_mode(&source_view, size) {
+                1 => self.begin_nv12_readback_compute(&source_view, size),
+                _ => self.begin_nv12_readback_passes(&source_view, size),
+            },
+        }
+    }
+
+    /// Times both conversions on this frame and remembers the faster one.
+    ///
+    /// Runs once per device. Each path converts twice: the first call pays for
+    /// the lazily built scratch buffers and bind groups, the second is the
+    /// steady state the export will see.
+    fn choose_nv12_mode(&self, source_view: &wgpu::TextureView, size: RenderSize) -> u8 {
+        let run = |compute: bool| -> Option<std::time::Duration> {
+            let begin = |this: &Self| {
+                if compute {
+                    this.begin_nv12_readback_compute(source_view, size)
+                } else {
+                    this.begin_nv12_readback_passes(source_view, size)
+                }
+            };
+            begin(self).ok()?.resolve().ok()?;
+            let started = std::time::Instant::now();
+            begin(self).ok()?.resolve().ok()?;
+            Some(started.elapsed())
+        };
+        let compute_time = run(true);
+        let passes_time = run(false);
+        let mode = match (compute_time, passes_time) {
+            (Some(compute), Some(passes)) => {
+                if compute <= passes {
+                    1
+                } else {
+                    2
+                }
+            }
+            (Some(_), None) => 1,
+            (None, Some(_)) => 2,
+            (None, None) => 2,
+        };
+        self.nv12_mode
+            .store(mode, std::sync::atomic::Ordering::Relaxed);
+        mode
     }
 
     /// Composites a mixed RGBA/NV12 layer stack and reads the result back as
@@ -1493,6 +1455,29 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             .and_then(|()| self.readback_texture_nv12(&target.texture, size));
         self.return_target(target);
         planes
+    }
+
+    /// Composites the same stack and queues the NV12 readback without waiting
+    /// for it.
+    ///
+    /// The caller resolves the returned readback on whichever thread is about
+    /// to encode, so this frame's colour conversion overlaps the next frame's
+    /// decode and compositing instead of stopping the render thread inside a
+    /// device poll.
+    pub fn composite_layers_nv12_pending(
+        &self,
+        size: RenderSize,
+        layers: &[CompositorLayer<'_>],
+    ) -> Result<PendingNv12Planes, RenderError> {
+        let target = self.checkout_target(size)?;
+        let pending = self
+            .compose_into(size, layers, &target.view)
+            .and_then(|()| self.begin_texture_nv12(&target.texture, size));
+        // The conversion is already submitted, so the queue still reads this
+        // target after it goes back to the pool; a later frame reusing it is
+        // ordered behind that read.
+        self.return_target(target);
+        pending
     }
 
     /// Renders `layers` into a freshly allocated target owned by the frame.
@@ -1881,6 +1866,191 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if pool.sources.len() < CompositorPool::MAX_SOURCES {
             pool.sources.push(source);
         }
+    }
+}
+
+/// The set of NV12 conversion targets this renderer reuses, keyed by size.
+///
+/// An entry is checked out for as long as one conversion is in flight, so a
+/// pipelined export holds one per frame it has queued and never converts two
+/// frames into the same staging buffer.
+#[derive(Default)]
+struct Nv12ScratchPool {
+    entries: Mutex<Vec<Nv12Scratch>>,
+}
+
+impl Nv12ScratchPool {
+    fn lease(
+        self: &std::sync::Arc<Self>,
+        device: &wgpu::Device,
+        size: RenderSize,
+    ) -> Result<Nv12ScratchLease, RenderError> {
+        let mut entry = None;
+        {
+            let mut entries = self
+                .entries
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            while let Some(candidate) = entries.pop() {
+                if candidate.size == size {
+                    entry = Some(candidate);
+                    break;
+                }
+            }
+        }
+        let entry = match entry {
+            Some(entry) => entry,
+            None => Nv12Scratch::new(device, size)?,
+        };
+        Ok(Nv12ScratchLease {
+            pool: std::sync::Arc::clone(self),
+            entry: Some(entry),
+        })
+    }
+
+    fn give_back(&self, entry: Nv12Scratch) {
+        let mut entries = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if entries.first().is_some_and(|held| held.size != entry.size) {
+            // A new picture size: the targets that served the last one cannot
+            // serve this one, and keeping them would only hold GPU memory.
+            entries.clear();
+        }
+        entries.push(entry);
+    }
+}
+
+/// One checked-out entry of the NV12 target pool, returned when it is dropped
+/// so an error path cannot leak a staging buffer.
+struct Nv12ScratchLease {
+    pool: std::sync::Arc<Nv12ScratchPool>,
+    entry: Option<Nv12Scratch>,
+}
+
+impl std::ops::Deref for Nv12ScratchLease {
+    type Target = Nv12Scratch;
+
+    fn deref(&self) -> &Self::Target {
+        self.entry
+            .as_ref()
+            .expect("a lease holds its entry until it is dropped")
+    }
+}
+
+impl Drop for Nv12ScratchLease {
+    fn drop(&mut self) {
+        if let Some(entry) = self.entry.take() {
+            self.pool.give_back(entry);
+        }
+    }
+}
+
+/// How the two planes sit in the staging buffer this conversion wrote.
+#[derive(Clone, Copy)]
+enum Nv12ReadbackLayout {
+    /// Luma then chroma, no padding: the compute path.
+    Tight { bytes: u64 },
+    /// Each plane row-padded to the copy alignment: the render-pass path.
+    Padded {
+        luma_row_bytes: u32,
+        chroma_row_bytes: u32,
+        chroma_offset: u64,
+    },
+}
+
+/// NV12 planes the GPU is still producing.
+///
+/// Resolving waits for exactly the submission that converted this frame, not
+/// for every submission queued behind it, so a renderer can queue the next
+/// frame before this one has been read back.
+pub struct PendingNv12Planes {
+    size: RenderSize,
+    lease: Nv12ScratchLease,
+    layout: Nv12ReadbackLayout,
+    submission: wgpu::SubmissionIndex,
+    mapping: std::sync::mpsc::Receiver<Result<(), String>>,
+    device: wgpu::Device,
+}
+
+impl PendingNv12Planes {
+    /// The picture size these planes will have.
+    pub fn size(&self) -> RenderSize {
+        self.size
+    }
+
+    /// Waits for this frame's conversion and reads the two planes back.
+    pub fn resolve(self) -> Result<Nv12Planes, RenderError> {
+        let Self {
+            size,
+            lease,
+            layout,
+            submission,
+            mapping,
+            device,
+        } = self;
+        device
+            .poll(wgpu::PollType::WaitForSubmissionIndex(submission))
+            .map_err(|error| RenderError::DevicePoll {
+                message: error.to_string(),
+            })?;
+        mapping
+            .recv()
+            .map_err(|error| RenderError::ReadbackMap {
+                message: error.to_string(),
+            })?
+            .map_err(|message| RenderError::ReadbackMap { message })?;
+
+        let width = size.width();
+        let height = size.height();
+        let pixels = usize::try_from(width)
+            .ok()
+            .and_then(|width| width.checked_mul(usize::try_from(height).ok()?))
+            .ok_or(RenderError::ReadbackSizeOverflow)?;
+        let slice = lease.buffer.slice(..);
+        let (luma, chroma) = {
+            let mapped = slice.get_mapped_range();
+            match layout {
+                Nv12ReadbackLayout::Tight { bytes } => {
+                    let total =
+                        usize::try_from(bytes).map_err(|_| RenderError::ReadbackSizeOverflow)?;
+                    if mapped.len() < total || total < pixels + pixels / 2 {
+                        return Err(RenderError::ReadbackSizeOverflow);
+                    }
+                    (
+                        mapped[..pixels].to_vec(),
+                        mapped[pixels..pixels + pixels / 2].to_vec(),
+                    )
+                }
+                Nv12ReadbackLayout::Padded {
+                    luma_row_bytes,
+                    chroma_row_bytes,
+                    chroma_offset,
+                } => {
+                    let chroma_offset = usize::try_from(chroma_offset)
+                        .map_err(|_| RenderError::ReadbackSizeOverflow)?;
+                    let luma =
+                        repack_plane(&mapped, luma_row_bytes, width as usize, height as usize)?;
+                    let chroma = repack_plane(
+                        &mapped[chroma_offset..],
+                        chroma_row_bytes,
+                        (width / 2) as usize * 2,
+                        (height / 2) as usize,
+                    )?;
+                    (luma, chroma)
+                }
+            }
+        };
+        // Unmapping is a property of the buffer, not of this frame's slice, and
+        // the next checkout maps the same range again.
+        lease.buffer.unmap();
+        Ok(Nv12Planes {
+            width,
+            height,
+            luma: PlaneBytes::Owned(luma),
+            chroma: PlaneBytes::Owned(chroma),
+        })
     }
 }
 
