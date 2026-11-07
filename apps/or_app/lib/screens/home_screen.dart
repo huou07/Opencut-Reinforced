@@ -137,8 +137,9 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: OrSpacing.x8),
             const OrSectionHeader('Start from a template'),
             Text(
-              'Sets the frame rate and canvas, and places starter titles you '
-              'can retype. No media is added.',
+              'Sets the frame rate and canvas, places starter titles you can '
+              'retype, and loads a motion composition when the template has '
+              'one. No media is added.',
               style: TextStyle(color: OrColors.textMuted, fontSize: OrType.bodySize),
             ),
             const SizedBox(height: OrSpacing.x2),
@@ -146,7 +147,7 @@ class HomeScreen extends StatelessWidget {
               spacing: OrSpacing.x3,
               runSpacing: OrSpacing.x3,
               children: [
-                for (final template in projectTemplates.take(4))
+                for (final template in _homeTemplates)
                   OutlinedButton.icon(
                     key: ValueKey('home-template-${template.id}'),
                     onPressed: () => onUseTemplate!(template),
@@ -354,4 +355,17 @@ class _WelcomeFact extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The templates the Home row offers: the four shapes most people start from,
+/// plus one that carries a motion composition so the gallery's scene starters
+/// are reachable without opening the Library first.
+List<ProjectTemplate> get _homeTemplates {
+  final base = projectTemplates.take(4).toList(growable: false);
+  if (base.any((template) => template.startsWithMotionScene)) return base;
+  final withScene = projectTemplates.where(
+    (template) => template.startsWithMotionScene,
+  );
+  if (withScene.isEmpty) return base;
+  return [...base, withScene.first];
 }

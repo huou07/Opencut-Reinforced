@@ -774,6 +774,10 @@ class MotionLibraryController extends ChangeNotifier {
   /// produces is indistinguishable from an imported scene: the user can edit it,
   /// save it back under a new name, and render it again later.
   Future<MotionSceneView?> loadStarter(MotionStarter starter) async {
+    // The support folder resolves asynchronously, and a template can ask for its
+    // composition on the first frame of the editor; waiting here is what makes
+    // that request land instead of returning before the library exists.
+    await initialize();
     if (_root.isEmpty) return null;
     final String path;
     try {

@@ -4,6 +4,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../library/project_templates.dart';
+import '../motion/motion_starters.dart';
 import '../library/content_credits.dart';
 import '../library/sound_library.dart';
 import '../library/text_presets.dart';
@@ -251,6 +252,14 @@ class _TemplateCard extends StatelessWidget {
             template.summary,
             style: OrType.body.copyWith(color: OrColors.textSecondary),
           ),
+          if (template.startsWithMotionScene) ...[
+            const SizedBox(height: OrSpacing.x3),
+            Text(
+              'Opens with ${_starterName(template.motionStarterId!)} in the '
+              'Motion panel, ready to place.',
+              style: OrType.metadata.copyWith(color: OrColors.textSecondary),
+            ),
+          ],
           const SizedBox(height: OrSpacing.x4),
           Text(
             'Starts with',
@@ -734,3 +743,12 @@ String _anchorLabel(ProjectTextVerticalAnchor anchor) => switch (anchor) {
   ProjectTextVerticalAnchor.center => 'middle',
   ProjectTextVerticalAnchor.bottom => 'bottom',
 };
+
+/// The composition name a template opens with, falling back to the raw id so a
+/// renamed starter still names something.
+String _starterName(String id) {
+  for (final starter in motionStarters) {
+    if (starter.id == id) return starter.name;
+  }
+  return id;
+}

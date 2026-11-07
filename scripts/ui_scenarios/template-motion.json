@@ -1,0 +1,68 @@
+{
+ "name": "template-motion",
+ "harness": "or_ui",
+ "description": "Starts a project from the Title card template on Home: the template carries a composition, so the editor opens on the Motion panel with that composition loaded and the insert action ready, while the template's own text clips are already on the timeline.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "steps": [
+  {
+   "op": "expect",
+   "key": "home-template-title-card"
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "home-template-title-card"
+   },
+   "scroll": "home-scroll",
+   "dy": -400
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "home-template-title-card"
+   }
+  },
+  {
+   "op": "expect",
+   "key": "new-project-name"
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Title card from home"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Motion",
+   "budget_ms": 30000
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Loaded Title card",
+   "budget_ms": 30000
+  },
+  {
+   "op": "expect",
+   "key": "motion-insert-draft"
+  },
+  {
+   "op": "shot",
+   "name": "template-motion"
+  },
+  {
+   "op": "tree",
+   "name": "template-motion"
+  }
+ ]
+}

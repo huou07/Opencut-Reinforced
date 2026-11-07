@@ -20,6 +20,7 @@ import 'editor_guided_bar.dart';
 import 'editor_timeline_panel.dart';
 import 'editor_tool_actions.dart';
 import '../motion/motion_library_controller.dart';
+import '../motion/motion_starters.dart';
 import '../production/editor_settings.dart';
 import '../motion/motion_library_models.dart';
 import '../motion/motion_library_panel.dart';
@@ -120,6 +121,8 @@ class EditorShellPreviewScreen extends StatefulWidget {
     this.onRedo,
     this.onClose,
     this.onDiscardRecovery,
+    this.initialMotionStarterId,
+    this.onInitialMotionStarterConsumed,
   });
 
   final bool isProjectWorkspace;
@@ -177,6 +180,14 @@ class EditorShellPreviewScreen extends StatefulWidget {
 
   /// The last motion clip the Motion panel put on the timeline.
   final MotionInsertLog? motionInsertLog;
+
+  /// The bundled composition to open in the Motion panel on first build.
+  ///
+  /// A template that carries one sets this once; the panel then shows the scene
+  /// preview with its insert action, so the composition is reachable from the
+  /// gallery instead of only from inside the Motion tool.
+  final String? initialMotionStarterId;
+  final VoidCallback? onInitialMotionStarterConsumed;
   final Future<bool> Function(String path)? onInsertMotionClip;
   final Future<String?> Function()? pickMotionImage;
 
@@ -457,6 +468,33 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncAssistantContext();
     });
+    final starterId = widget.initialMotionStarterId;
+    if (starterId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_openInitialStarter(starterId));
+      });
+    }
+  }
+
+  /// Opens the composition a template carried, then releases the request so a
+  /// later rebuild of the same editor does not reopen it over the user's work.
+  Future<void> _openInitialStarter(String starterId) async {
+    MotionStarter? starter;
+    for (final candidate in motionStarters) {
+      if (candidate.id == starterId) starter = candidate;
+    }
+    widget.onInitialMotionStarterConsumed?.call();
+    if (starter == null || !mounted) return;
+    final view = await _motionLibrary.loadStarter(starter);
+    if (!mounted) return;
+    setState(() => _selectedTool = 'Motion');
+    if (view == null) {
+      OrSnackBar.show(
+        context,
+        _motionLibrary.error ??
+            'The ${starter.name} composition could not be opened.',
+      );
+    }
   }
 
   Future<void> _loadEditorSettings() async {
@@ -698,6 +736,15 @@ class EditorShellPreviewScreenState extends State<EditorShellPreviewScreen> {
     if (projectIdentityChanged || oldWidget.assistant != widget.assistant) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _syncAssistantContext();
+      });
+    }
+    // The shell keeps one GlobalKey across the empty and project workspaces, so
+    // a project created from a template reaches this screen as a widget update
+    // rather than a new State; initState alone would drop the composition.
+    final starterId = widget.initialMotionStarterId;
+    if (starterId != null && starterId != oldWidget.initialMotionStarterId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_openInitialStarter(starterId));
       });
     }
   }

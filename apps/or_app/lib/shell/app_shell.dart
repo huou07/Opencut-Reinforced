@@ -275,6 +275,10 @@ class _AppShellState extends State<AppShell> {
   Future<void> _eventQueue = Future<void>.value();
   BigInt _lastEventSequence = BigInt.zero;
   bool _busy = false;
+
+  /// Set while a freshly created project still has to open its template's
+  /// composition, then cleared once the editor has taken it.
+  String? _pendingMotionStarterId;
   String? get _autosaveStatus => _autosave.status.label;
   bool get _autosaveFailed => _autosave.status.failed;
   late final ExportFlow _export;
@@ -890,6 +894,11 @@ class _AppShellState extends State<AppShell> {
               onSetSequenceFrameRate: _setSequenceFrameRate,
               onProjectChanged: _adoptProjectView,
               notice: _projectNotice,
+              initialMotionStarterId: _pendingMotionStarterId,
+              onInitialMotionStarterConsumed: () {
+                if (_pendingMotionStarterId == null) return;
+                setState(() => _pendingMotionStarterId = null);
+              },
               busy: _busy,
               mediaPage: _mediaPage,
               mediaPreviews: Map.unmodifiable(_mediaPreviews),
@@ -1601,6 +1610,10 @@ class _AppShellState extends State<AppShell> {
         request.frameRate ?? template?.frameRate,
       );
       if (template != null) await _applyTemplateCanvas(session, template);
+      // A template that carries a composition opens the Motion panel with it
+      // loaded. The panel shows the preview and the insert action, so the user
+      // decides when the render happens.
+      _pendingMotionStarterId = template?.motionStarterId;
       final syncNotice = await _syncNotice(path);
       await _startProject(
         session,
@@ -1677,15 +1690,32 @@ class _AppShellState extends State<AppShell> {
   /// every clip goes through the ordinary insert command, so undo, overlap
   /// checks and the timeline refresh behave as they do for hand-placed text.
   Future<void> _insertTemplateOverlays(ProjectTemplate template) async {
-    var pair = await _ensureTextTrack();
+    // Overlays that share a moment (a title and its subtitle, a name and a
+    // role) cannot share one track: the insert command rejects an overlap, and
+    // the earlier code put every overlay on the first text track, so a template
+    // with two simultaneous lines placed one and stopped. Each overlay now takes
+    // the first text track with room for it, adding a track when none has.
+    final occupancy = <String, List<(int, int)>>{};
     var placed = 0;
     for (final overlay in template.overlays) {
-      if (pair == null) break;
       final preset = textPresetById(overlay.presetId);
       if (preset == null) continue;
+      final range = (
+        overlay.startMilliseconds,
+        overlay.startMilliseconds + overlay.durationMilliseconds,
+      );
+      var track = _templateTextTrack(occupancy, range);
+      if (track == null) {
+        final added = await _ensureTimelineTrack(ProjectTimelineTrackKind.text);
+        if (added == null) break;
+        track = _templateTextTrack(occupancy, range, tracks: added.$2.items);
+        if (track == null) break;
+      }
+      final model = _activeProject;
+      if (model == null) break;
       final updated = await _insertTimelineTextClip(
-        pair.$1,
-        pair.$2,
+        model,
+        track,
         overlay.start,
         overlay.duration,
         ProjectTimelineTextContent(
@@ -1695,9 +1725,8 @@ class _AppShellState extends State<AppShell> {
         ),
       );
       if (updated == null) break;
+      occupancy.putIfAbsent(track.trackId, () => []).add(range);
       placed++;
-      final track = _firstTextTrack(_timelineTracks?.items ?? const []);
-      pair = track == null ? null : (updated, track);
     }
     if (!mounted || placed == 0) return;
     setState(
@@ -1706,6 +1735,26 @@ class _AppShellState extends State<AppShell> {
           '${placed == 1 ? 'text clip' : 'text clips'} placed. '
           'Drag them where you want, or retype the words.',
     );
+  }
+
+  /// The first text track with no clip covering [range], so an overlay is never
+  /// silently dropped by the overlap check.
+  ProjectTimelineTrack? _templateTextTrack(
+    Map<String, List<(int, int)>> occupancy,
+    (int, int) range, {
+    Iterable<ProjectTimelineTrack>? tracks,
+  }) {
+    for (final track in tracks ?? _timelineTracks?.items ?? const <ProjectTimelineTrack>[]) {
+      if (track.kind != ProjectTimelineTrackKind.text || track.state.locked) {
+        continue;
+      }
+      final used = occupancy[track.trackId] ?? const <(int, int)>[];
+      final collides = used.any(
+        (span) => range.$1 < span.$2 && span.$1 < range.$2,
+      );
+      if (!collides) return track;
+    }
+    return null;
   }
 
   ProjectTimelineTrack? _firstTextTrack(Iterable<ProjectTimelineTrack> tracks) {

@@ -5,6 +5,7 @@ import 'package:or_app/library/project_templates.dart';
 import 'package:or_app/library/sound_library.dart';
 import 'package:or_app/library/text_presets.dart';
 import 'package:or_app/library/usage_guide.dart';
+import 'package:or_app/motion/motion_starters.dart';
 import 'package:or_app/screens/library_screen.dart';
 import 'package:or_app/support/host_platform.dart';
 
@@ -82,6 +83,31 @@ void main() {
         find.byKey(ValueKey('library-template-use-${template.id}')),
         findsOneWidget,
       );
+    }
+  });
+
+  testWidgets('a template that carries a composition names it', (tester) async {
+    await _pump(tester);
+    final titleCard = projectTemplates.firstWhere(
+      (template) => template.id == 'title-card',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(ValueKey('library-template-use-${titleCard.id}')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.textContaining('Opens with Title card in the Motion panel'),
+      findsOneWidget,
+    );
+  });
+
+  test('every template composition names a bundled starter', () {
+    final ids = {for (final starter in motionStarters) starter.id};
+    for (final template in projectTemplates) {
+      final id = template.motionStarterId;
+      if (id == null) continue;
+      expect(ids, contains(id), reason: '${template.id} names a missing starter');
     }
   });
 

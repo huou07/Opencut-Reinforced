@@ -42,6 +42,7 @@ class ProjectTemplate {
     required this.frameRate,
     required this.overlays,
     required this.nextSteps,
+    this.motionStarterId,
   });
 
   final String id;
@@ -54,6 +55,16 @@ class ProjectTemplate {
 
   /// What to do next, in order, for someone who has never used the editor.
   final List<String> nextSteps;
+
+  /// The bundled MotionScene composition this template opens with, if any.
+  ///
+  /// A template with a composition still starts as an ordinary project: the
+  /// scene is loaded into the Motion panel unfinished, so the user sees the
+  /// preview and decides when to place it, instead of resolving a render in the
+  /// same action that creates the project.
+  final String? motionStarterId;
+
+  bool get startsWithMotionScene => motionStarterId != null;
 
   String get canvasLabel => canvas.label;
 
@@ -191,8 +202,40 @@ const List<ProjectTemplate> projectTemplates = [
     ],
   ),
   ProjectTemplate(
+    id: 'title-card',
+    name: 'Title card',
+    motionStarterId: 'title-card',
+    summary:
+        'Three seconds of nothing but a title and a subtitle. Import it '
+        'into a longer edit as an opening.',
+    suggestedName: 'Title card',
+    canvas: ProjectSequenceCanvas(1920, 1080),
+    frameRate: ProjectRationalRate(30, 1),
+    overlays: [
+      TemplateOverlay(
+        label: 'Title',
+        presetId: 'title',
+        text: 'Title',
+        startMilliseconds: 0,
+        durationMilliseconds: 3000,
+      ),
+      TemplateOverlay(
+        label: 'Subtitle',
+        presetId: 'subtitle',
+        text: 'A line under the title',
+        startMilliseconds: 0,
+        durationMilliseconds: 3000,
+      ),
+    ],
+    nextSteps: [
+      'Set the canvas to match the sequence it will open.',
+      'Export as MP4 and import the file into the longer project.',
+    ],
+  ),
+  ProjectTemplate(
     id: 'interview',
     name: 'Interview',
+    motionStarterId: 'name-bar',
     summary:
         '16:9 with a lower third and a caption line, for a seated '
         'conversation.',
@@ -222,38 +265,9 @@ const List<ProjectTemplate> projectTemplates = [
     ],
   ),
   ProjectTemplate(
-    id: 'title-card',
-    name: 'Title card',
-    summary:
-        'Three seconds of nothing but a title and a subtitle. Import it '
-        'into a longer edit as an opening.',
-    suggestedName: 'Title card',
-    canvas: ProjectSequenceCanvas(1920, 1080),
-    frameRate: ProjectRationalRate(30, 1),
-    overlays: [
-      TemplateOverlay(
-        label: 'Title',
-        presetId: 'title',
-        text: 'Title',
-        startMilliseconds: 0,
-        durationMilliseconds: 3000,
-      ),
-      TemplateOverlay(
-        label: 'Subtitle',
-        presetId: 'subtitle',
-        text: 'A line under the title',
-        startMilliseconds: 0,
-        durationMilliseconds: 3000,
-      ),
-    ],
-    nextSteps: [
-      'Set the canvas to match the sequence it will open.',
-      'Export as MP4 and import the file into the longer project.',
-    ],
-  ),
-  ProjectTemplate(
     id: 'end-card',
     name: 'End card',
+    motionStarterId: 'end-card',
     summary: 'Two seconds of closing text with a follow-up line.',
     suggestedName: 'End card',
     canvas: ProjectSequenceCanvas(1920, 1080),
