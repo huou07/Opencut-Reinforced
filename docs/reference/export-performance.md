@@ -581,6 +581,106 @@ overrides it) plus the one the render thread is building, so at most four
 A frame that is dropped without resolving waits for its own submission and
 unmaps its buffer in `Drop`, so the pool can hand it out again.
 
+## 2026-11-07 matrix — formats, profiles and stages at `480e0a53`
+
+One revision, one fixture, one session per host: `--release`, 300 frames of
+1080p `bench1080.mp4`, one text layer, idle machine, the product's own FFmpeg
+prefix. Every row was produced by the same ignored Rust benchmark
+(`export_media_benchmark`) so a row differs from its neighbour only in the
+setting named beside it. `fps` is frames of output per second over the whole
+pipeline; `render-only` measures the renderer without an encoder, `decode-only`
+the decoder alone with `OR_BENCH_NV12=1`, and `encode-only` a blank NV12 frame
+through the encoder.
+
+macOS M5 (Metal, `h264_videotoolbox`):
+
+| Row | fps |
+|---|---|
+| MP4 H.264/AAC, no text | 243.5 |
+| MP4 H.264/AAC, one text layer | 240.6 / 237.3 |
+| MP4, text plus animated clip | 239.3 |
+| WebM VP9/Opus, one text layer | 53.0 |
+| Matroska FFV1/PCM (lossless), one text layer | 52.0 |
+| MP4, one text layer, Speed quality | 238.0 |
+| MP4, one text layer, Quality quality | 236.6 |
+| Render stage only, one text layer | 303.6 |
+| Decode only, NV12 | 1390.4 / 1486.6 / 1460.5 |
+| Decode only, RGBA | 412.7 |
+| Encode only, blank NV12 | 280.8 |
+| 4K source into 1080p, one text layer | 106.7 |
+| 4K source into 4K, one text layer | 63.1 |
+
+Debian 13, Intel UHD 770 (Vulkan, `h264_vaapi`), adapter
+`Intel(R) UHD Graphics 770 (ADL-S GT1)`, Mesa 25.0.7:
+
+| Row | fps |
+|---|---|
+| MP4 H.264/AAC, no text | 256.7 |
+| MP4 H.264/AAC, one text layer | 193.1 / 195.5 |
+| MP4, text plus animated clip | 196.0 |
+| WebM VP9/Opus, one text layer | 25.4 |
+| Matroska FFV1/PCM (lossless), one text layer | 32.6 |
+| MP4, one text layer, Speed quality | 203.9 |
+| MP4, one text layer, Quality quality | 198.5 |
+| Render stage only, one text layer | 119.5 |
+| Decode only, NV12 | 766.8 |
+| Encode only, blank NV12 | 454.9 |
+| 4K source into 1080p, one text layer | 45.1 |
+| 4K source into 4K, one text layer | 47.9 |
+
+Windows 11, Intel Graphics (Vulkan, Media Foundation), adapter
+`Intel(R) Graphics (Intel Corporation, Vulkan)`:
+
+| Row | fps |
+|---|---|
+| MP4 H.264/AAC, no text | 134.7 |
+| MP4 H.264/AAC, one text layer | 103.8 / 105.7 |
+| MP4, text plus animated clip | 104.2 |
+| WebM VP9/Opus, one text layer | 10.8 |
+| Matroska FFV1/PCM (lossless), one text layer | 14.3 |
+| MP4, one text layer, Speed quality | 104.8 |
+| MP4, one text layer, Quality quality | 103.4 |
+| Render stage only, one text layer | 124.5 |
+| Decode only, NV12 | 215.2 |
+| Encode only, blank NV12 | 274.2 |
+
+### What the matrix shows
+
+- **The composited MP4 row is now within 25 % of the video-only row on macOS and
+  Debian** (240.6 vs 243.5, 193.1 vs 256.7), where the same comparison was 2.2×
+  apart on Debian before the queued readback. Windows remains the host where the
+  text layer costs most relative to its own ceiling (103.8 vs 134.7).
+- **Speed and Quality are the same pipeline at different encoder settings**, so a
+  row that moves with quality is an encoder cost: macOS 238.0 vs 236.6, Debian
+  203.9 vs 198.5, Windows 104.8 vs 103.4. Nothing in the render path is paying for
+  quality.
+- **VP9 and FFV1 are software encoders on all three hosts** and are the slowest
+  rows everywhere. Windows is far slower than the other two on the same fixture
+  (10.8 vs 53.0 on macOS, 25.4 on Debian); the cause is not yet measured — the
+  candidate is the build's thread count on that host — so this is recorded as an
+  open gap, not a claim about the codec.
+- **Decode is not the ceiling anywhere**: 1390–1487 fps (NV12) on macOS, 766.8 on
+  Debian, 215.2 on Windows, against 104–257 fps for the full pipeline.
+- **4K costs what its pixels cost**: 63.1 fps 4K-in/4K-out on macOS, 47.9 on
+  Debian. A 4K source downscaled to 1080p is *not* cheaper on Debian (45.1 vs
+  47.9) because the decode and the render work on the source grid; on macOS it is
+  cheaper (106.7 vs 63.1).
+
+### Render-ahead depth, swept
+
+`OR_EXPORT_RENDER_AHEAD` was swept on the composited MP4 row with everything
+else fixed. Depth 1–4 is inside the run-to-run spread on both hosts, so the
+shipped default of 2 is not a bottleneck and a deeper queue would only hold more
+memory:
+
+| Depth | macOS M5 | Debian UHD 770 |
+|---|---|---|
+| 1 | 235.6 | 196.1 |
+| 2 (default) | 236.1 | 198.0 |
+| 3 | 235.4 | 192.9 |
+| 4 | 235.8 | 196.0 |
+| 6 | 239.8 | — |
+
 ## Known limits
 
 - The project rows below `97f4f25e` used `/tmp/or-bench/opaque.orproj`, a copy of
