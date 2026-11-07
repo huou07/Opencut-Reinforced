@@ -205,6 +205,13 @@ finally {
   $env:PATH = $originalPath
 }
 
+# The probe exists to prove the staged runtime links and runs; it is a build
+# diagnostic, not part of the shipped application. The Linux packager removes
+# its copy for the same reason.
+foreach ($probe in @((Join-Path $runtimeDir 'ffmpeg-link-probe.exe'), (Join-Path $Bundle 'ffmpeg-link-probe.exe'))) {
+  if (Test-Path $probe -PathType Leaf) { Remove-Item -Path $probe -Force }
+}
+
 Write-Output "WINDOWS_BUNDLE=$Bundle"
 Write-Output "OR_PACKAGED_BRIDGE_DIRECTORY=$runtimeDir"
 Write-Output 'STEP_DONE=stage'
