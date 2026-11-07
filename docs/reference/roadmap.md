@@ -386,7 +386,11 @@ One near-term delivery mission for the local macOS app, in this order:
     anyone who dismissed it unread, and it makes the `library-tour` scenario
     independent of first-run state: the scenario opens the panel through the
     same command every user has, walks every Library tab, then dismisses it.
-    `library-tour` passes on the real macOS app.
+    `library-tour` passes on macOS, on Debian (Xvfb, software GL) and on the
+    Windows SSH session. On Windows the template stills themselves still cannot
+    decode (no Impeller context in that session), so the cards fall back to
+    text; the card's `errorBuilder` keeps that failure from taking the grid
+    down, which is also what let the tour pass there.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"

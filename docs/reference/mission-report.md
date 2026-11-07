@@ -347,8 +347,11 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   machine where someone clicked past it. The command palette now offers
   **Show the Introduction** (resets `welcome.json`, returns to Home), and the
   `library-tour` scenario reaches the panel through that command instead of
-  assuming first-run state; it passes on macOS, which also removed the scenario's
-  dependency on whatever `welcome.json` the machine already had.
+  assuming first-run state; it passes on macOS, Debian (Xvfb, software GL) and
+  the Windows SSH session, and it no longer depends on whatever `welcome.json`
+  the machine already had. On Windows the stills cannot decode in that session,
+  so the cards show their text fallback (an `errorBuilder` now keeps a failed
+  still from reporting a framework error).
 - **Masks, graph editor, 3D and vector import** — each is a numbered product
   decision, not a silent omission: masks and the graph editor are PLANNED in
   `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the
