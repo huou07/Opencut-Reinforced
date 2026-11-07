@@ -313,9 +313,18 @@ Future<void> _createAndEdit(WidgetTester tester, _JourneyPicker picker) async {
     'saved project in recent history',
   );
   // A short window pushes the recent rows under the fold: a 1440x900 desktop
-  // put the first row's centre at y=968 and a plain tap missed it. Scroll it in
-  // the way a person would before tapping.
-  await tester.ensureVisible(recentProject);
+  // put the first row's centre at y=968, outside the render tree, and both a
+  // plain tap and `ensureVisible` left it there. Drag the page the way a person
+  // would until the row is on screen, then tap it.
+  final homeScroll = find.descendant(
+    of: find.byKey(const ValueKey('home-scroll')),
+    matching: find.byType(Scrollable),
+  );
+  await tester.scrollUntilVisible(
+    recentProject,
+    200,
+    scrollable: homeScroll,
+  );
   await tester.pumpAndSettle();
   await tester.tap(recentProject);
   await _pumpUntil(
