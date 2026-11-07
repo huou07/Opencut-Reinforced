@@ -333,9 +333,15 @@ evidence they produced. See [roadmap.md](roadmap.md) for the queue.
   idea. The Library's template cards now show the opening still of the scene
   each template opens with (`library/template_previews.dart`, rendered through
   the panel's own preview call and cached for the session), so a beginner sees
-  the result before creating a project. Inside the Motion panel the asset picker
-  is still a list, and per-asset previews for scenes the user saves remain a
-  next step.
+  the result before creating a project. Verified in the real app on macOS
+  (`template-stills`, PASS with both image labels) and Debian (Xvfb, software
+  GL, PASS); on Windows the scenario reaches the grid but an image frame cannot
+  resolve in the SSH session (`Exception: No Impeller context is available`,
+  the same window-station limit recorded for media thumbnails), so the Windows
+  evidence is the rendered stills from `or motion render` (1920×1080, luma
+  YMAX 235) rather than a window capture. Inside the Motion panel the asset
+  picker is still a list, and per-asset previews for scenes the user saves
+  remain a next step.
 - **Masks, graph editor, 3D and vector import** — each is a numbered product
   decision, not a silent omission: masks and the graph editor are PLANNED in
   `docs/reference/product.md`, 3D and Lottie/SVG import were declined in the

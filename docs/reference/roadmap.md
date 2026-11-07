@@ -374,7 +374,11 @@ One near-term delivery mission for the local macOS app, in this order:
     through the same `motionScenePreview` bridge call the Motion panel uses,
     once per template and cached for the session; a template without a scene or
     a render that fails keeps the text-only card. `template-stills` drives the
-    real macOS app to the template grid and waits on the image label.
+    real macOS app and the Debian app (Xvfb, software GL) to the template grid
+    and waits on the image labels; on Windows the same scenario reaches the grid
+    but the image cannot resolve in the SSH session, so the Windows stills are
+    the rendered PNGs themselves (`or motion render` at 1.4 s: 1920×1080,
+    YMAX 235) rather than a window capture.
 
 10. **Motion panel render record (owner request, 2026-10-28).** After a motion
     clip is inserted the panel keeps a persistent "On timeline · W×H · N frames"
