@@ -1,0 +1,152 @@
+{
+ "name": "templates-edit-style",
+ "harness": "or_ui",
+ "description": "The edit-style workflow a user meets: build a project, import a clip, then reach Build a Cut from the command palette, review the plan and cancel it without writing to the timeline.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Style journey"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-add-video"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "key",
+   "chord": "cmd+k"
+  },
+  {
+   "op": "pump",
+   "ms": 600
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "command-palette-query"
+   },
+   "value": "Build a Cut in an Edit Style"
+  },
+  {
+   "op": "pump",
+   "ms": 500
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "label_regex": "Build a Cut in an Edit Style"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "already in this project",
+   "budget_ms": 15000
+  },
+  {
+   "op": "shot",
+   "name": "edit-style-picker"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "edit-style-pick-cinematic-documentary"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Build a Cinematic documentary cut",
+   "budget_ms": 15000
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "one at a time",
+   "budget_ms": 10000
+  },
+  {
+   "op": "shot",
+   "name": "edit-style-plan"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "label": "Cancel"
+   }
+  }
+ ]
+}
