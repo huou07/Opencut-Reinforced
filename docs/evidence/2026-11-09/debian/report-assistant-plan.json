@@ -1,0 +1,264 @@
+{
+  "harness": "or_ui",
+  "target": "linux",
+  "scenario": "assistant-plan",
+  "result": "PASS",
+  "viewport": {
+    "width": 1440.0,
+    "height": 900.0
+  },
+  "evidence_class": {
+    "semantics": "VERIFIED_SEMANTIC",
+    "behaviour": "VERIFIED_BEHAVIORAL",
+    "visual": "VERIFIED_VISUAL",
+    "native": "NOT ESTABLISHED \u2014 a debug app under Xvfb, Weston or an emulator is not an installed package or a physical device"
+  },
+  "limits": [
+    "Linux runs under Xvfb with LIBGL_ALWAYS_SOFTWARE; Android runs on a SwiftShader x86_64 emulator. Timing here is software-path evidence on this host, never a GPU or physical-device performance claim.",
+    "The OS file picker is the one substituted host integration: the runner supplies synthetic fixtures, so the journey is real up to and beyond the picker but not a native file-dialog claim."
+  ],
+  "artifacts": "/home/huou07/or-mission/apps/or_app/build/ui-harness/artifacts",
+  "steps": [
+    {
+      "index": 0,
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      },
+      "status": "ok",
+      "elapsed_ms": 1944.49
+    },
+    {
+      "index": 1,
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 2065.24
+    },
+    {
+      "index": 2,
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "status": "ok",
+      "elapsed_ms": 1882.87
+    },
+    {
+      "index": 3,
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      },
+      "status": "ok",
+      "elapsed_ms": 2082.2
+    },
+    {
+      "index": 4,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "No timeline tracks"
+      },
+      "status": "ok",
+      "elapsed_ms": 8.63
+    },
+    {
+      "index": 5,
+      "op": "picker",
+      "status": "ok",
+      "elapsed_ms": 0.11,
+      "detail": "next pick: media"
+    },
+    {
+      "index": 6,
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-media"
+      },
+      "status": "ok",
+      "elapsed_ms": 1509.78
+    },
+    {
+      "index": 7,
+      "op": "tap",
+      "selector": {
+        "key": "media-import"
+      },
+      "status": "ok",
+      "elapsed_ms": 1713.18
+    },
+    {
+      "index": 8,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "tiny_h264"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.4
+    },
+    {
+      "index": 9,
+      "op": "tap",
+      "selector": {
+        "key": "or-brand-home"
+      },
+      "status": "ok",
+      "elapsed_ms": 1481.18
+    },
+    {
+      "index": 10,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "New Project"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.64
+    },
+    {
+      "index": 11,
+      "op": "tap",
+      "selector": {
+        "key": "nav-library"
+      },
+      "status": "ok",
+      "elapsed_ms": 1547.54
+    },
+    {
+      "index": 12,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "From an assistant"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.87
+    },
+    {
+      "index": 13,
+      "op": "scroll_until",
+      "selector": {
+        "key": "library-agent-plan"
+      },
+      "status": "ok",
+      "elapsed_ms": 697.58
+    },
+    {
+      "index": 14,
+      "op": "tap",
+      "selector": {
+        "key": "library-agent-plan"
+      },
+      "status": "ok",
+      "elapsed_ms": 1532.69
+    },
+    {
+      "index": 15,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "Review an assistant plan"
+      },
+      "status": "ok",
+      "elapsed_ms": 2.2
+    },
+    {
+      "index": 16,
+      "op": "enter_text",
+      "selector": {
+        "key": "agent-plan-json"
+      },
+      "status": "ok",
+      "elapsed_ms": 1514.21
+    },
+    {
+      "index": 17,
+      "op": "tap",
+      "selector": {
+        "key": "agent-plan-import-review"
+      },
+      "status": "ok",
+      "elapsed_ms": 1465.71
+    },
+    {
+      "index": 18,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "Add this cut to the timeline"
+      },
+      "status": "ok",
+      "elapsed_ms": 2.23
+    },
+    {
+      "index": 19,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "Opens on the imported clip"
+      },
+      "status": "ok",
+      "elapsed_ms": 1.97
+    },
+    {
+      "index": 20,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 827.72,
+      "screenshot": "shot-assistant-plan-review-20.png"
+    },
+    {
+      "index": 21,
+      "op": "tap",
+      "selector": {
+        "key": "agent-plan-apply"
+      },
+      "status": "ok",
+      "elapsed_ms": 1801.33
+    },
+    {
+      "index": 22,
+      "op": "pump",
+      "status": "ok",
+      "elapsed_ms": 2533.56
+    },
+    {
+      "index": 23,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 780.37,
+      "screenshot": "shot-assistant-plan-after-apply-23.png"
+    },
+    {
+      "index": 24,
+      "op": "tree",
+      "status": "ok",
+      "elapsed_ms": 716.18,
+      "semantics": "tree-assistant-plan-after-apply-24.json"
+    },
+    {
+      "index": 25,
+      "op": "wait_label",
+      "selector": {
+        "label_regex": "Assistant plan:"
+      },
+      "status": "ok",
+      "elapsed_ms": 0.31
+    },
+    {
+      "index": 26,
+      "op": "shot",
+      "status": "ok",
+      "elapsed_ms": 764.06,
+      "screenshot": "shot-assistant-plan-applied-26.png"
+    },
+    {
+      "index": 27,
+      "op": "expect_text",
+      "selector": {
+        "text": "tiny_h264_aac.mp4"
+      },
+      "status": "ok",
+      "elapsed_ms": 2.38
+    }
+  ],
+  "screens": null,
+  "not_run": []
+}

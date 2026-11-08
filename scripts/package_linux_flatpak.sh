@@ -64,9 +64,9 @@ desktop-file-validate "$packaging/io.github.huou07.or_app.desktop"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 src="$work/src"
-mkdir -p "$src"
-cp -a "$bundle/." "$src/"
-rm -f "$src/ffmpeg-link-probe"
+mkdir -p "$src/bundle"
+cp -a "$bundle/." "$src/bundle/"
+rm -f "$src/bundle/ffmpeg-link-probe"
 install -m 755 "$packaging/launcher.sh" "$src/launcher.sh"
 install -m 644 "$packaging/io.github.huou07.or_app.desktop" "$src/io.github.huou07.or_app.desktop"
 install -m 644 "$packaging/io.github.huou07.or_app.metainfo.xml" "$src/io.github.huou07.or_app.metainfo.xml"
@@ -77,7 +77,7 @@ install -m 644 "$packaging/icon.png" "$src/icon.png"
 sed 's/^app-id:.*/app-id: '"$app_id"'/' "$packaging/io.github.huou07.or_app.yml" \
   | sed 's|path: \.|path: src|' > "$work/manifest.yml"
 
-flatpak-builder --user --force-clean --install-deps-from=flathub \
+flatpak-builder --user --force-clean \
   --repo="$work/repo" --state-dir="$work/state" "$work/build" "$work/manifest.yml"
 
 mkdir -p "$(dirname -- "$output")"

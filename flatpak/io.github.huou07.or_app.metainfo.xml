@@ -21,7 +21,9 @@
   </description>
   <launchable type="desktop-id">io.github.huou07.or_app.desktop</launchable>
   <url type="homepage">https://github.com/huou07/Opencut-Reinforced</url>
-  <developer_name>Opencut Reinforced contributors</developer_name>
+  <developer id="io.github.huou07.or_app">
+    <name>Opencut Reinforced contributors</name>
+  </developer>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.1.27" date="2026-11-08">

@@ -39,10 +39,10 @@ values are in `dist/release-0.1.23/README.md` and the per-host evidence in
 `docs/reference/mission-report.md`.
 
 
-Stable releases ship three desktop packages from one source tree:
-**macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` (Debian 13
-and Ubuntu 24.04, both amd64), and **Windows x86_64** as an Inno Setup
-`.setup.exe` plus the portable `.zip`, all published from
+Stable releases ship four desktop packages from one source tree:
+**macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` and a
+`.flatpak` (Debian 13 and Ubuntu 24.04, both amd64), and **Windows x86_64** as
+an Inno Setup `.setup.exe` plus the portable `.zip`, all published from
 `huou07/Opencut-Reinforced`. The Windows installer is per-user
 (`{localappdata}\Programs\Opencut Reinforced`, `PrivilegesRequired=lowest`), so
 it needs no administrator prompt and an in-place update never asks for one
@@ -180,9 +180,9 @@ manual check.
 - Publication requires a successful Platform Verification push run for the exact
   source commit; the `dev-<12-char-sha>` tag resolves to that commit, the release
   is a prerelease, and every required asset is non-empty and checksummed.
-- Four app packages come from three build jobs (Linux produces a `.deb` from the
-  same staged bundle): macOS `.dmg`, Windows `.zip` and `.setup.exe`, Linux
-  `.deb`. Count packages, not jobs.
+- Five app packages come from three build jobs (Linux produces a `.deb` and a
+  `.flatpak` from the same staged bundle): macOS `.dmg`, Windows `.zip` and
+  `.setup.exe`, Linux `.deb` and `.flatpak`. Count packages, not jobs.
 - Three desktop CLI packages plus build/provenance files and the FFmpeg, Opus and
   libvpx source archives complete the asset set.
 - macOS is ad-hoc debug-signed and not notarised. No package has production
@@ -194,9 +194,15 @@ manual check.
 
 A notarised build needs an Apple Developer Program identity and a hardened-runtime
 signing step; the local pipeline stops at ad-hoc signing because this mission has
-no account. The Windows `.zip`, the Windows `.setup.exe` and the Linux `.deb` are unsigned
-packages: they install by extraction, by the per-user installer and by `dpkg -i`
-respectively, and none of them is notarised.
+no account. The Windows `.zip`, the Windows `.setup.exe`, the Linux `.deb` and the Linux
+`.flatpak` are unsigned packages: they install by extraction, by the per-user
+installer, by `dpkg -i` and by `flatpak install` respectively, and none of them
+is notarised. The Flatpak manifest, AppStream metadata and packaging script live
+in `flatpak/` and `scripts/package_linux_flatpak.sh`; the sandbox grants only
+documents, videos, downloads, the display, the GPU device and network (for the
+configured assistant provider and loopback sidecars). Companion tools installed
+on the host are outside the sandbox by design and are not silently reachable
+from it.
 Android is out of the desktop matrix and iOS and web are not targets.
 
 ## Platforms

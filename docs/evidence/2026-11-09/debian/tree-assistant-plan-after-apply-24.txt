@@ -1,0 +1,798 @@
+SemanticsNode#0
+ │ Rect.fromLTRB(0.0, 0.0, 1440.0, 900.0)
+ │
+ └─SemanticsNode#1
+   │ Rect.fromLTRB(0.0, 0.0, 1440.0, 900.0)
+   │ textDirection: ltr
+   │
+   └─SemanticsNode#2
+     │ Rect.fromLTRB(0.0, 0.0, 1440.0, 900.0)
+     │ sortKey: OrdinalSortKey#3aa40(order: 0.0)
+     │
+     └─SemanticsNode#3
+       │ Rect.fromLTRB(0.0, 0.0, 1440.0, 900.0)
+       │ flags: scopesRoute
+       │
+       └─SemanticsNode#4
+         │ Rect.fromLTRB(0.0, 0.0, 1440.0, 900.0)
+         │ actions: focus
+         │ flags: isFocused, isFocusable
+         │ traversalParentIdentifier: _OverlayPortalState#cf904
+         │ label:
+         │   "Opencut Reinforced
+         │   Assistant plan journey
+         │   Unsaved
+         │   Assistant plan: 1 clip and a title added to the timeline.
+         │   1 item
+         │   Viewer
+         │   Viewer texture unavailable
+         │   00:00.000
+         │   00:03.000
+         │   00:00:00:00
+         │   Timeline"
+         │ tooltip: "Exit Editor Shell Preview"
+         │ textDirection: ltr
+         │
+         ├─SemanticsNode#5
+         │ │ Rect.fromLTRB(0.0, 0.0, 236.0, 40.0)
+         │ │
+         │ └─SemanticsNode#6
+         │   │ Rect.fromLTRB(6.0, 0.0, 230.0, 40.0)
+         │   │ flags: hasImplicitScrolling
+         │   │ scrollExtentMin: 0.0
+         │   │ scrollPosition: 0.0
+         │   │ scrollExtentMax: 0.0
+         │   │
+         │   ├─SemanticsNode#7
+         │   │ │ Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │ │ traversalParentIdentifier: _OverlayPortalState#25e57
+         │   │ │
+         │   │ └─SemanticsNode#8
+         │   │   │ merge boundary ⛔️
+         │   │   │ Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │   │ flags: hasExpandedState
+         │   │   │
+         │   │   └─SemanticsNode#9
+         │   │       merged up ⬆️
+         │   │       Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │       actions: focus, tap
+         │   │       flags: hasEnabledState, isEnabled, isFocusable
+         │   │       label: "File"
+         │   │       textDirection: ltr
+         │   │
+         │   ├─SemanticsNode#10
+         │   │ │ Rect.fromLTRB(56.0, 0.0, 112.0, 40.0)
+         │   │ │ traversalParentIdentifier: _OverlayPortalState#30b2a
+         │   │ │
+         │   │ └─SemanticsNode#11
+         │   │   │ merge boundary ⛔️
+         │   │   │ Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │   │ flags: hasExpandedState
+         │   │   │
+         │   │   └─SemanticsNode#12
+         │   │       merged up ⬆️
+         │   │       Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │       actions: focus, tap
+         │   │       flags: hasEnabledState, isEnabled, isFocusable
+         │   │       label: "Edit"
+         │   │       textDirection: ltr
+         │   │
+         │   ├─SemanticsNode#13
+         │   │ │ Rect.fromLTRB(112.0, 0.0, 168.0, 40.0)
+         │   │ │ traversalParentIdentifier: _OverlayPortalState#f8fbd
+         │   │ │
+         │   │ └─SemanticsNode#14
+         │   │   │ merge boundary ⛔️
+         │   │   │ Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │   │ flags: hasExpandedState
+         │   │   │
+         │   │   └─SemanticsNode#15
+         │   │       merged up ⬆️
+         │   │       Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │   │       actions: focus, tap
+         │   │       flags: hasEnabledState, isEnabled, isFocusable
+         │   │       label: "View"
+         │   │       textDirection: ltr
+         │   │
+         │   └─SemanticsNode#16
+         │     │ Rect.fromLTRB(168.0, 0.0, 224.0, 40.0)
+         │     │ traversalParentIdentifier: _OverlayPortalState#0a963
+         │     │
+         │     └─SemanticsNode#17
+         │       │ merge boundary ⛔️
+         │       │ Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │       │ flags: hasExpandedState
+         │       │
+         │       └─SemanticsNode#18
+         │           merged up ⬆️
+         │           Rect.fromLTRB(0.0, 0.0, 56.0, 40.0)
+         │           actions: focus, tap
+         │           flags: hasEnabledState, isEnabled, isFocusable
+         │           label: "OR"
+         │           textDirection: ltr
+         │
+         ├─SemanticsNode#359
+         │   Rect.fromLTRB(20.0, 48.5, 60.0, 88.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │
+         ├─SemanticsNode#360
+         │   Rect.fromLTRB(68.0, 51.5, 102.0, 85.5)
+         │   actions: focus, tap
+         │   flags: isFocusable
+         │   label: "OR"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#361
+         │   Rect.fromLTRB(945.5, 52.5, 979.5, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#0c003
+         │   tooltip: "Rename project"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#362
+         │   Rect.fromLTRB(979.5, 52.5, 1013.5, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#f5e4e
+         │   tooltip: "Save now (Ctrl+S)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#363
+         │   Rect.fromLTRB(1013.5, 52.5, 1047.5, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#3c833
+         │   tooltip: "Undo (Ctrl+Z)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#364
+         │   Rect.fromLTRB(1047.5, 52.5, 1081.5, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#68815
+         │   tooltip: "Redo (Ctrl+Shift+Z)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#365
+         │   Rect.fromLTRB(1081.5, 52.5, 1115.5, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#a3497
+         │   tooltip: "Close project"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#366
+         │   Rect.fromLTRB(1123.5, 52.5, 1211.8, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   label: "Export"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#20
+         │   Rect.fromLTRB(1215.8, 52.5, 1420.0, 84.5)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   label:
+         │     "Search commands
+         │     Ctrl+K"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#367
+         │   Rect.fromLTRB(8.0, 139.0, 84.0, 164.0)
+         │   actions: focus, tap
+         │   flags: isSelected, isButton, isFocusable, hasSelectedState
+         │   traversalParentIdentifier: _OverlayPortalState#5fcda
+         │   label:
+         │     "Media library
+         │     Media"
+         │   tooltip: "Media library"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#368
+         │   Rect.fromLTRB(84.0, 139.0, 160.0, 164.0)
+         │   actions: focus, tap
+         │   flags: isButton, isFocusable, hasSelectedState
+         │   traversalParentIdentifier: _OverlayPortalState#91043
+         │   label:
+         │     "Text
+         │     Text"
+         │   tooltip: "Titles and captions"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#369
+         │   Rect.fromLTRB(160.0, 139.0, 236.0, 164.0)
+         │   actions: focus, tap
+         │   flags: isButton, isFocusable, hasSelectedState
+         │   traversalParentIdentifier: _OverlayPortalState#684be
+         │   label:
+         │     "Audio
+         │     Audio"
+         │   tooltip: "Audio tools"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#370
+         │   Rect.fromLTRB(236.0, 139.0, 312.0, 164.0)
+         │   actions: focus, tap
+         │   flags: isButton, isFocusable, hasSelectedState
+         │   traversalParentIdentifier: _OverlayPortalState#a0448
+         │   label:
+         │     "Motion
+         │     Motion"
+         │   tooltip: "Illustration video (MotionScene)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#379
+         │   Rect.fromLTRB(930.5, 134.0, 964.5, 166.0)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable,
+         │     hasSelectedState
+         │   traversalParentIdentifier: _OverlayPortalState#60630
+         │   tooltip: "Show composition guides (G)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#380
+         │   Rect.fromLTRB(964.5, 131.0, 1004.5, 169.0)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable,
+         │     hasExpandedState
+         │   traversalParentIdentifier: _OverlayPortalState#ae74b
+         │   tooltip: "Preview zoom"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#381
+         │   Rect.fromLTRB(1004.5, 136.0, 1073.0, 164.0)
+         │   actions: focus, tap
+         │   flags: isFocusable, hasExpandedState
+         │   traversalParentIdentifier: _OverlayPortalState#99abd
+         │   label: "Auto"
+         │   tooltip: "Canvas: match the first clip"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#382
+         │   Rect.fromLTRB(1073.0, 134.0, 1107.0, 166.0)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#f5d1f
+         │   tooltip: "Full screen preview"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#391
+         │   Rect.fromLTRB(1128.0, 135.0, 1278.0, 165.0)
+         │   actions: focus, tap
+         │   flags: isSelected, isButton, isFocusable, hasSelectedState
+         │   label:
+         │     "Inspector panel
+         │     Inspector"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#392
+         │   Rect.fromLTRB(1282.0, 135.0, 1432.0, 165.0)
+         │   actions: focus, tap
+         │   flags: isButton, isFocusable, hasSelectedState
+         │   label:
+         │     "Assistant panel
+         │     Assistant"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#371
+         │   Rect.fromLTRB(8.0, 181.0, 157.0, 213.0)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   label: "Import Media"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#372
+         │   Rect.fromLTRB(161.0, 181.0, 311.1, 213.0)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   label: "Import Folder"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#373
+         │   Rect.fromLTRB(8.0, 221.0, 312.0, 251.0)
+         │   actions: didGainAccessibilityFocus, didLoseAccessibilityFocus,
+         │     focus, tap
+         │   flags: isTextField, hasEnabledState, isEnabled, isFocusable
+         │   label: "Search media"
+         │   textDirection: ltr
+         │   currentValueLength: 0
+         │   inputType: text
+         │
+         ├─SemanticsNode#374
+         │ │ Rect.fromLTRB(0.0, 275.0, 320.0, 591.8)
+         │ │
+         │ └─SemanticsNode#378
+         │   │ Rect.fromLTRB(0.0, 0.0, 320.0, 316.8)
+         │   │ flags: hasImplicitScrolling
+         │   │ scrollChildren: 1
+         │   │ scrollIndex: 0
+         │   │ scrollExtentMin: 0.0
+         │   │ scrollPosition: 0.0
+         │   │ scrollExtentMax: 0.0
+         │   │
+         │   └─SemanticsNode#375
+         │     │ Rect.fromLTRB(8.0, 8.0, 312.0, 95.0)
+         │     │ tags: RenderViewport.twoPane
+         │     │ actions: focus, tap
+         │     │ flags: isFocusable, hasExpandedState
+         │     │ traversalParentIdentifier: _OverlayPortalState#05eb9
+         │     │ label:
+         │     │   "tiny_h264_aac.mp4
+         │     │   mov, mp4, m4a, 3gp, 3g2, mj2 · 64/125 s · 32×24 h264 · Audio ·
+         │     │   48000 Hz 1 ch mono aac"
+         │     │ tooltip:
+         │     │   "Media ID: 88344e0e-f9e0-4d76-b9be-fa1999e0a042
+         │     │   file:///home/huou07/or-mission/apps/or_app/build/ui-harness/artifacts/replacements/tiny_h264_aac.mp4"
+         │     │ textDirection: ltr
+         │     │ indexInParent: 0
+         │     │
+         │     ├─SemanticsNode#376
+         │     │   Rect.fromLTRB(9.0, 21.5, 61.0, 57.5)
+         │     │   flags: isImage
+         │     │   label: "Thumbnail preview for tiny_h264_aac.mp4"
+         │     │   textDirection: ltr
+         │     │
+         │     └─SemanticsNode#377
+         │         Rect.fromLTRB(229.0, 23.5, 263.0, 55.5)
+         │         actions: focus, tap
+         │         flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │         traversalParentIdentifier: _OverlayPortalState#f6c4f
+         │         tooltip: "Add to Timeline"
+         │         textDirection: ltr
+         │
+         ├─SemanticsNode#383
+         │   Rect.fromLTRB(319.0, 491.8, 367.0, 539.8)
+         │   actions: decrease, focus, increase
+         │   flags: hasEnabledState, isEnabled, isFocusable, isSlider
+         │   value: "0%"
+         │   increasedValue: "5%"
+         │   decreasedValue: "0%"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#384
+         │   Rect.fromLTRB(333.0, 547.8, 373.0, 587.8)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#7298b
+         │   tooltip: "Back 5 seconds ([)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#385
+         │   Rect.fromLTRB(373.0, 547.8, 413.0, 587.8)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#4b7f5
+         │   tooltip: "Previous frame"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#386
+         │   Rect.fromLTRB(413.0, 547.8, 453.0, 587.8)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#be4fc
+         │   tooltip: "Play"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#387
+         │   Rect.fromLTRB(453.0, 547.8, 493.0, 587.8)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#0789b
+         │   tooltip: "Next frame"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#388
+         │   Rect.fromLTRB(493.0, 547.8, 533.0, 587.8)
+         │   actions: focus, tap
+         │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+         │   traversalParentIdentifier: _OverlayPortalState#54b73
+         │   tooltip: "Forward 5 seconds (])"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#389
+         │   Rect.fromLTRB(805.6, 547.8, 853.2, 587.8)
+         │   actions: focus, tap
+         │   flags: isFocusable, hasExpandedState
+         │   traversalParentIdentifier: _OverlayPortalState#20ac9
+         │   label: "30 fps"
+         │   tooltip: "Sequence frame rate (playback and export)"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#390
+         │   Rect.fromLTRB(853.2, 547.8, 881.9, 587.8)
+         │   actions: focus, tap
+         │   flags: isFocusable, hasExpandedState
+         │   traversalParentIdentifier: _OverlayPortalState#7fffb
+         │   label: "1×"
+         │   tooltip: "Playback speed"
+         │   textDirection: ltr
+         │
+         ├─SemanticsNode#393
+         │ │ Rect.fromLTRB(1120.0, 171.0, 1440.0, 591.8)
+         │ │
+         │ └─SemanticsNode#404
+         │   │ Rect.fromLTRB(0.0, 0.0, 320.0, 420.8)
+         │   │ flags: hasImplicitScrolling
+         │   │ scrollChildren: 10
+         │   │ scrollIndex: 0
+         │   │ scrollExtentMin: 0.0
+         │   │ scrollPosition: 0.0
+         │   │ scrollExtentMax: 0.0
+         │   │
+         │   ├─SemanticsNode#394
+         │   │   Rect.fromLTRB(12.0, 12.0, 308.0, 36.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label: "SEQUENCE"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 0
+         │   │
+         │   ├─SemanticsNode#395
+         │   │   Rect.fromLTRB(12.0, 36.0, 308.0, 58.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   actions: focus, tap
+         │   │   flags: isFocusable, hasExpandedState
+         │   │   traversalParentIdentifier: _OverlayPortalState#8260b
+         │   │   label:
+         │   │     "Frame rate
+         │   │     30 fps"
+         │   │   tooltip: "Sequence frame rate"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 1
+         │   │
+         │   ├─SemanticsNode#396
+         │   │   Rect.fromLTRB(12.0, 58.0, 308.0, 82.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label:
+         │   │     "Duration
+         │   │     3.00 s"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 2
+         │   │
+         │   ├─SemanticsNode#397
+         │   │   Rect.fromLTRB(12.0, 82.0, 308.0, 106.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label:
+         │   │     "Timeline
+         │   │     2 tracks · 2 clips"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 3
+         │   │
+         │   ├─SemanticsNode#398
+         │   │   Rect.fromLTRB(12.0, 106.0, 308.0, 122.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   indexInParent: 4
+         │   │
+         │   ├─SemanticsNode#399
+         │   │   Rect.fromLTRB(12.0, 122.0, 308.0, 146.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label: "PROJECT"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 5
+         │   │
+         │   ├─SemanticsNode#400
+         │   │   Rect.fromLTRB(12.0, 146.0, 308.0, 170.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label:
+         │   │     "Name
+         │   │     Assistant plan journey"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 6
+         │   │
+         │   ├─SemanticsNode#401
+         │   │   Rect.fromLTRB(12.0, 170.0, 308.0, 194.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   label:
+         │   │     "Save state
+         │   │     Unsaved edits"
+         │   │   textDirection: ltr
+         │   │   indexInParent: 7
+         │   │
+         │   ├─SemanticsNode#402
+         │   │   Rect.fromLTRB(12.0, 194.0, 308.0, 210.0)
+         │   │   tags: RenderViewport.twoPane
+         │   │   indexInParent: 8
+         │   │
+         │   └─SemanticsNode#403
+         │       Rect.fromLTRB(12.0, 210.0, 308.0, 244.0)
+         │       tags: RenderViewport.twoPane
+         │       label: "Select a clip on the timeline to edit its settings. These
+         │         sequence facts stay visible until you do."
+         │       textDirection: ltr
+         │       indexInParent: 9
+         │
+         └─SemanticsNode#405
+           │ Rect.fromLTRB(0.0, 624.8, 1440.0, 899.0)
+           │ actions: focus
+           │ flags: isFocusable
+           │
+           ├─SemanticsNode#406
+           │ │ Rect.fromLTRB(437.0, 0.0, 1003.0, 41.0)
+           │ │ flags: hasImplicitScrolling
+           │ │ scrollExtentMin: 0.0
+           │ │ scrollPosition: 0.0
+           │ │ scrollExtentMax: 0.0
+           │ │
+           │ ├─SemanticsNode#407
+           │ │ │ Rect.fromLTRB(8.0, 0.5, 48.0, 40.5)
+           │ │ │ traversalParentIdentifier: _OverlayPortalState#8dd64
+           │ │ │ tooltip: "Blade tool (C) · click a clip to cut it"
+           │ │ │ textDirection: ltr
+           │ │ │
+           │ │ └─SemanticsNode#408
+           │ │     Rect.fromLTRB(0.0, 0.0, 40.0, 40.0)
+           │ │     actions: focus, tap
+           │ │     flags: isButton, hasEnabledState, isEnabled, isFocusable,
+           │ │       hasSelectedState
+           │ │
+           │ ├─SemanticsNode#409
+           │ │   Rect.fromLTRB(52.0, 0.5, 92.0, 40.5)
+           │ │   actions: focus, tap
+           │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+           │ │   traversalParentIdentifier: _OverlayPortalState#f3fb1
+           │ │   tooltip: "Zoom out"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#410
+           │ │   Rect.fromLTRB(92.0, 12.5, 134.0, 28.5)
+           │ │   label: "100%"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#411
+           │ │   Rect.fromLTRB(134.0, 0.5, 174.0, 40.5)
+           │ │   actions: focus, tap
+           │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+           │ │   traversalParentIdentifier: _OverlayPortalState#3a3ab
+           │ │   tooltip: "Zoom in"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#412
+           │ │   Rect.fromLTRB(174.0, 4.5, 215.3, 36.5)
+           │ │   actions: focus, tap
+           │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+           │ │   label: "Fit"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#413
+           │ │   Rect.fromLTRB(224.3, 0.5, 301.8, 40.5)
+           │ │   actions: focus, tap
+           │ │   flags: isSelected, isButton, hasEnabledState, isEnabled,
+           │ │     isFocusable, hasSelectedState
+           │ │   traversalParentIdentifier: _OverlayPortalState#724e6
+           │ │   label: "Snap"
+           │ │   tooltip: "Snapping on · hold Option to bypass"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#414
+           │ │   Rect.fromLTRB(305.8, 0.5, 345.8, 40.5)
+           │ │   actions: focus, tap
+           │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable,
+           │ │     hasExpandedState
+           │ │   traversalParentIdentifier: _OverlayPortalState#ca132
+           │ │   tooltip: "Add a track, title, caption or marker"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#415
+           │ │   Rect.fromLTRB(366.8, 13.0, 381.8, 28.0)
+           │ │   traversalParentIdentifier: _OverlayPortalState#eb699
+           │ │   tooltip: "A voiceover or a music bed carries the pace of the
+           │ │     edit."
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#416
+           │ │   Rect.fromLTRB(385.8, 12.5, 453.8, 28.5)
+           │ │   label: "Add sound"
+           │ │   textDirection: ltr
+           │ │
+           │ ├─SemanticsNode#417
+           │ │   Rect.fromLTRB(461.8, 11.5, 536.0, 29.5)
+           │ │   actions: focus, tap
+           │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+           │ │   label: "Add sound"
+           │ │   textDirection: ltr
+           │ │
+           │ └─SemanticsNode#418
+           │     Rect.fromLTRB(536.0, 7.5, 562.0, 33.5)
+           │     actions: focus, tap
+           │     flags: isButton, hasEnabledState, isEnabled, isFocusable
+           │     traversalParentIdentifier: _OverlayPortalState#3058f
+           │     tooltip: "Hide next-step tips"
+           │     textDirection: ltr
+           │
+           └─SemanticsNode#419
+             │ Rect.fromLTRB(0.0, 42.0, 1440.0, 274.2)
+             │ flags: hasImplicitScrolling
+             │ scrollExtentMin: 0.0
+             │ scrollPosition: 0.0
+             │ scrollExtentMax: 0.0
+             │
+             ├─SemanticsNode#420
+             │ │ Rect.fromLTRB(0.0, 38.0, 368.0, 96.0)
+             │ │ flags: isButton
+             │ │ traversalParentIdentifier: _OverlayPortalState#21c68
+             │ │ label:
+             │ │   "Video track V1, 1 clips, active, unlocked, not solo, position
+             │ │   1 of 2
+             │ │   V1
+             │ │   1
+             │ │   Solo track 1"
+             │ │ tooltip: "Delete clips before removing this track."
+             │ │ textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#421
+             │ │   Rect.fromLTRB(178.0, 8.5, 218.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#38525
+             │ │   tooltip: "Hide track"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#422
+             │ │   Rect.fromLTRB(218.0, 12.0, 247.0, 45.0)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, isFocusable, hasExpandedState
+             │ │   traversalParentIdentifier: _OverlayPortalState#146bd
+             │ │   label: "Move track V1"
+             │ │   tooltip: "Move track V1"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#423
+             │ │   Rect.fromLTRB(247.0, 8.5, 287.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#f3999
+             │ │   tooltip: "Lock track"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#424
+             │ │   Rect.fromLTRB(287.0, 8.5, 327.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#95702
+             │ │   tooltip: "Solo track"
+             │ │   textDirection: ltr
+             │ │
+             │ └─SemanticsNode#425
+             │     Rect.fromLTRB(327.0, 8.5, 367.0, 48.5)
+             │     flags: isButton, hasEnabledState
+             │     traversalParentIdentifier: _OverlayPortalState#edc7c
+             │     tooltip: "Delete clips before removing this track."
+             │     textDirection: ltr
+             │
+             ├─SemanticsNode#426
+             │ │ Rect.fromLTRB(0.0, 96.0, 368.0, 154.0)
+             │ │ flags: isButton
+             │ │ traversalParentIdentifier: _OverlayPortalState#83610
+             │ │ label:
+             │ │   "Text track T1, 1 clips, active, unlocked, not solo, position 2
+             │ │   of 2
+             │ │   T1
+             │ │   1
+             │ │   Solo track 2"
+             │ │ tooltip: "Delete clips before removing this track."
+             │ │ textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#427
+             │ │   Rect.fromLTRB(178.0, 8.5, 218.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#0770e
+             │ │   tooltip: "Hide track"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#428
+             │ │   Rect.fromLTRB(218.0, 12.0, 247.0, 45.0)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, isFocusable, hasExpandedState
+             │ │   traversalParentIdentifier: _OverlayPortalState#fc6f7
+             │ │   label: "Move track T1"
+             │ │   tooltip: "Move track T1"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#429
+             │ │   Rect.fromLTRB(247.0, 8.5, 287.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#21d49
+             │ │   tooltip: "Lock track"
+             │ │   textDirection: ltr
+             │ │
+             │ ├─SemanticsNode#430
+             │ │   Rect.fromLTRB(287.0, 8.5, 327.0, 48.5)
+             │ │   actions: focus, tap
+             │ │   flags: isButton, hasEnabledState, isEnabled, isFocusable
+             │ │   traversalParentIdentifier: _OverlayPortalState#40429
+             │ │   tooltip: "Solo track"
+             │ │   textDirection: ltr
+             │ │
+             │ └─SemanticsNode#431
+             │     Rect.fromLTRB(327.0, 8.5, 367.0, 48.5)
+             │     flags: isButton, hasEnabledState
+             │     traversalParentIdentifier: _OverlayPortalState#98785
+             │     tooltip: "Delete clips before removing this track."
+             │     textDirection: ltr
+             │
+             └─SemanticsNode#432
+               │ Rect.fromLTRB(368.0, 0.0, 1440.0, 154.0)
+               │ actions: scrollLeft, scrollToOffset
+               │ flags: hasImplicitScrolling
+               │ scrollExtentMin: 0.0
+               │ scrollPosition: 0.0
+               │ scrollExtentMax: 208.0
+               │
+               ├─SemanticsNode#433
+               │   Rect.fromLTRB(0.0, 0.0, 1072.0, 38.0)
+               │   actions: scrollLeft, scrollRight, tap
+               │   label: "Timeline ruler"
+               │   hint: "Press or drag to move the playhead"
+               │   textDirection: ltr
+               │
+               ├─SemanticsNode#435
+               │   Rect.fromLTRB(0.0, 38.0, 12.0, 95.0)
+               │   actions: scrollLeft, scrollRight, tap
+               │
+               ├─SemanticsNode#436
+               │ │ Rect.fromLTRB(0.0, 43.0, 25.6, 91.0)
+               │ │ actions: tap
+               │ │ flags: isButton, hasSelectedState
+               │ │ traversalParentIdentifier: _OverlayPortalState#284ab
+               │ │ label:
+               │ │   "tiny_h264_aac.mp4, starts 0/1, duration 2/5, spans 0/1 to 2/5,
+               │ │   source 0/1
+               │ │   tiny_h264_aac.mp4"
+               │ │ hint: "Drag to move. Right-click or use Clip actions for more."
+               │ │ tooltip:
+               │ │   "Clip ID: 0f20de2b-56b3-4d63-8981-14c0c71771fc
+               │ │   Media ID: 88344e0e-f9e0-4d76-b9be-fa1999e0a042
+               │ │   Source range: 0/1 + 2/5
+               │ │   Timeline start: 0/1
+               │ │   Timeline duration: 2/5"
+               │ │ textDirection: ltr
+               │ │
+               │ ├─SemanticsNode#437
+               │ │   Rect.fromLTRB(0.0, -1.0, 5.3, 49.0)
+               │ │   actions: tap
+               │ │   flags: isButton
+               │ │   label: "Trim start of tiny_h264_aac.mp4"
+               │ │   hint: "Drag to adjust the timeline edge. Activate for exact trim
+               │ │     actions."
+               │ │   textDirection: ltr
+               │ │
+               │ └─SemanticsNode#438
+               │     Rect.fromLTRB(20.3, -1.0, 28.9, 49.0)
+               │     actions: tap
+               │     flags: isButton
+               │     label: "Trim end of tiny_h264_aac.mp4"
+               │     hint: "Drag to adjust the timeline edge. Activate for exact trim
+               │       actions."
+               │     textDirection: ltr
+               │
+               ├─SemanticsNode#434
+               │   Rect.fromLTRB(0.0, 38.0, 1072.0, 95.0)
+               │   actions: scrollLeft, scrollRight, tap
+               │
+               ├─SemanticsNode#440
+               │   Rect.fromLTRB(0.0, 96.0, 12.0, 153.0)
+               │   actions: scrollLeft, scrollRight, tap
+               │
+               ├─SemanticsNode#441
+               │   Rect.fromLTRB(0.0, 101.0, 192.0, 149.0)
+               │   actions: tap
+               │   flags: isButton, hasSelectedState
+               │   traversalParentIdentifier: _OverlayPortalState#c5338
+               │   label:
+               │     "Text: Planned by the assistant, starts 0/1, duration 3/1,
+               │     spans 0/1 to 3/1
+               │     Text: Planned by the assistant"
+               │   hint: "Drag to move. Right-click or use Clip actions for more."
+               │   tooltip:
+               │     "Clip ID: b46f914b-d330-40cf-95cf-bcc8c35db9c4
+               │     Title: Planned by the assistant
+               │     Timeline start: 0/1
+               │     Timeline duration: 3/1"
+               │   textDirection: ltr
+               │
+               └─SemanticsNode#439
+                   Rect.fromLTRB(0.0, 96.0, 1072.0, 153.0)
+                   actions: scrollLeft, scrollRight, tap
