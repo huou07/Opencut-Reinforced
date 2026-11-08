@@ -713,5 +713,16 @@ macOS GUI at 0.1.24 but only MP4 at 0.1.25.
 DEFERRED: the twenty-repository prototypes beyond the template work (composition
 reuse, vector/SVG, 3D and audio-graph ideas are recorded in
 `docs/reference/technology-review.md` with adoption verdicts, not shipped as
-features); the editor still has no in-place entry to the style cards (they are one
-⌘K hop away in Library); the FFV1 profile writes `bgra` from a `yuv420p` source.
+features); the FFV1 profile writes `bgra` from a `yuv420p` source.
+
+The editor gap closed after the first draft of this section: ⌘K → `Build a Cut in
+an Edit Style…` opens `EditStylePickerDialog` with the five styles and the same
+plan review the Library cards use (`apps/or_app/lib/screens/edit_style_plan_dialog.dart`,
+wired through `_chooseEditStyle`). Verified in the Release bundle: the palette
+lists the action, the picker lists all five styles, and choosing `Fast-paced
+educational` opened `Build a Fast-paced educational cut` with the Undo note.
+
+`apps/or_app/test/motion_library_test.dart` `an empty composition offers the
+bundled starters` failed once inside a full-suite run and passed alone and in the
+two full runs that followed; it is recorded here as an observed flake, not a
+fixed defect.

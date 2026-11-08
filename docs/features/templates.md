@@ -22,8 +22,15 @@ A fourth section, **My directions**, appears once a person keeps a copy.
 
 The Library is a top-level destination (`Home → Library`, `or` workspace sidebar,
 or ⌘K → `Go to a screen → Library`). The editor hides the sidebar, so from inside
-a project the palette is the route; the style and direction cards stay usable
-because they read the open project.
+a project the cards are one palette hop away; they stay usable because they read
+the open project.
+
+A cut is also one command away from the editor: ⌘K → `Build a Cut in an Edit
+Style…` opens `EditStylePickerDialog` (`apps/or_app/lib/screens/edit_style_plan_dialog.dart`),
+which lists the same five styles with their pacing line and the two facts that
+keep a style from being mistaken for a project format — it cuts media that is
+already there, and the plan is reviewed before anything is written. Choosing a
+style runs the same `_applyEditStyle` path the Library cards use.
 
 ## Project formats
 

@@ -1252,6 +1252,10 @@ class _AppShellState extends State<AppShell> {
               label: 'Show $tool Panel',
               onSelected: () => _editorKey.currentState?.selectTool(tool),
             ),
+          CommandPaletteAction(
+            label: 'Build a Cut in an Edit Style…',
+            onSelected: () => unawaited(_chooseEditStyle()),
+          ),
           if (widget.projectFilePicker.supportsExport)
             CommandPaletteAction(
               label: 'Export Video',
@@ -1728,6 +1732,20 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _createProjectFromTemplate(ProjectTemplate template) =>
       _createProject(template: template);
+
+  /// Picks a style from the editor and hands it to [_applyEditStyle].
+  ///
+  /// The Library shows the same styles as cards; this is the one hop the palette
+  /// and the editor offer, so a style is never something a person has to know
+  /// lives on another screen.
+  Future<void> _chooseEditStyle() async {
+    final style = await showDialog<EditStyle>(
+      context: context,
+      builder: (context) => EditStylePickerDialog(styles: bundledEditStyles),
+    );
+    if (style == null || !mounted) return;
+    await _applyEditStyle(style);
+  }
 
   /// Cuts the open project's media with a style's pacing rules.
   ///

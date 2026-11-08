@@ -249,3 +249,73 @@ class CreativeDirectionDialog extends StatelessWidget {
     );
   }
 }
+
+/// Picks the style a cut should follow, without leaving the editor.
+///
+/// The Library shows the same styles as cards with their descriptions; this is
+/// the short form the palette and the editor need, and it explains what happens
+/// next so a style is never mistaken for a project format.
+class EditStylePickerDialog extends StatelessWidget {
+  const EditStylePickerDialog({super.key, required this.styles});
+
+  final List<EditStyle> styles;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Build a cut in an edit style'),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'A style cuts the media already in this project into a first '
+                'assembly you can keep editing: it chooses shots, order and '
+                'length, and adds a title clip. You review the plan before '
+                'anything is written.',
+                key: ValueKey('edit-style-picker-copy'),
+                style: TextStyle(
+                  color: OrColors.textSecondary,
+                  fontSize: OrType.metadataSize,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: OrSpacing.x3),
+              for (final style in styles)
+                ListTile(
+                  key: ValueKey('edit-style-pick-${style.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text(
+                    style.name,
+                    style: const TextStyle(
+                      color: OrColors.text,
+                      fontSize: OrType.metadataSize,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${style.pacingLabel} · ${style.summary}',
+                    style: const TextStyle(
+                      color: OrColors.textMuted,
+                      fontSize: OrType.metadataCompactSize,
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(style),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          key: const ValueKey('edit-style-picker-cancel'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
