@@ -79,6 +79,9 @@ any other rule to this file.
 - **Templates** — project formats, edit styles and creative directions: the three kinds, the plan review and what it writes.
   When: changing a template, a style's pacing rules, a direction brief or the Library's template surface.
   Path: `docs/features/templates.md`
+- **External tools** — the companion catalog, probe states, Settings and CLI surfaces, and what a result must satisfy.
+  When: adding or changing a companion tool, its detection, install guidance or launch path.
+  Path: `docs/features/external-tools.md`
 
 ### Design
 
