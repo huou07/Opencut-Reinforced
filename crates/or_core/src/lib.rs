@@ -4,6 +4,7 @@ mod application;
 mod audio_cleanup;
 mod cache;
 mod external_tools;
+mod tool_provenance;
 mod hardware;
 mod jobs;
 mod media;
@@ -39,6 +40,7 @@ pub use audio_cleanup::{
     audio_cleanup_arguments, clean_audio, clean_audio_file, measure_noise_floor,
     measure_noise_floor_db, percentile, window_rms_dbfs,
 };
+pub use tool_provenance::{PROVENANCE_SCHEMA, ProvenanceError, ToolProvenance};
 pub use external_tools::{
     CommandOutput, CommandRunner, CommandSpec, InstallCommand, OutputKind, Platform, TOOLS,
     ToolCategory, ToolDescriptor, ToolState, ToolStatus, parse_version, probe_all, probe_tool, tool,

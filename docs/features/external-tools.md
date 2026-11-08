@@ -74,6 +74,14 @@ it is more than it is:
 - MotionScene → the native scene path;
 - an image sequence or a scene that only a companion can render → the rendered
   media plus the source project, manifest and the command that produced it.
+  `or tools provenance write --tool ID --output PATH [--source-project P]
+  [--manifest M] -- CMD...` writes `<PATH>.orprovenance.json` beside the media;
+  `or tools provenance read --file SIDECAR` prints it again. The record carries
+  the catalog id and name, the version, the exact argument vector, the source
+  project and manifest, and the output path. Re-rendering the tool to the same
+  output path replaces the bytes the timeline already points at, so clips,
+  undo history and project references stay valid; a new path is a new media
+  item, not a silent swap.
 
 A flat render is never described as an editable composition. The source stays
 beside the output so it can be reopened in the companion and re-rendered; the
