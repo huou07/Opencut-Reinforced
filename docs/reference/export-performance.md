@@ -861,3 +861,49 @@ diagnostic for a host whose decode is the bound, not a tuning win.
   unset.
 - Rows are taken against the prefix each host links, which the Linux and Windows
   hosts now rebuild from the repository scripts instead of a hand-made prefix.
+
+## 2026-11-08 rows — every profile's encoder, and the 4K stage split
+
+Same ignored benchmark, same machine (`Apple M5 (, Metal)`), `--release`, idle,
+`OR_BENCH_SOURCE=/tmp/or-bench/bench4k.mp4` where a row says 4K. The 4K fixture
+is `testsrc2` 3840×2160 at `30/1`, 8 s, H.264 `yuv420p`.
+
+Two rows did not exist before because `OR_BENCH_MODE=encode` always handed the
+writer an NV12 frame, and the VP9 and FFV1 writers reject NV12 (they encode the
+rendered RGBA frame). `FfmpegExportWriter::accepts_nv12()` now answers that
+question for the harness and the preview path, so `encode-only` covers every
+profile with the frame shape it really receives.
+
+Encoder ceiling at 1080p (`OR_BENCH_MODE=encode`, 300 frames for MP4, 120 for
+the software codecs, 64×48-free blank frame of the output size):
+
+| Profile | Encoder | fps |
+|---|---|---|
+| MP4 H.264 (Quality) | `h264_videotoolbox` | 283.5 / 283.6 |
+| WebM VP9/Opus | libvpx `libvpx-vp9` | 132.1 |
+| Matroska FFV1/PCM | `ffv1` | 81.3 |
+
+4K (3840×2160) stage split, 120 frames unless noted:
+
+| Row | fps |
+|---|---|
+| 4K full pipeline, MP4 | 65.0 / 65.5 |
+| 4K source into 1080p, full pipeline (200 frames) | 108.1 |
+| 4K render only | 385.1 |
+| 4K decode only (240 frames) | 112.1 |
+| 4K encode only, MP4 | 75.2 / 75.1 |
+
+### What the 4K rows show
+
+- **At 4K the hardware H.264 encoder is the ceiling, not the renderer.** The
+  pipeline reaches 65 fps against a 75 fps encoder and a 385 fps renderer, so
+  the renderer is never the reason a 4K export is slow on this host; cutting
+  render work cannot buy more than a few percent here.
+- **Decode is the second wall at 4K** (112 fps): a 4K clip with several layers
+  would hit decode before it hits composition. The decode path is already the
+  measured software decoder, which the Automatic plan chooses on macOS.
+- The same fixture into 1080p runs at 108.1 fps, so a 4K source does not make a
+  1080p export slow — the output size decides.
+- WebM is 2.1× and FFV1 3.5× more expensive to encode than the hardware H.264
+  path at 1080p, which is the measured reason the Automatic plan starts a file
+  on MP4 and leaves VP9/FFV1 to the intent tiles that ask for them.

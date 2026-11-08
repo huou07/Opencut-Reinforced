@@ -1,11 +1,11 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CURRENT_PROJECT_SCHEMA_VERSION, ClipContent, ClipId, ClipSettings, CommandEnvelope,
-    MAX_RECOVERY_FILE_BYTES, MarkerId, MediaId, OperationErrorCode, ProjectDocument,
-    ProjectFileSession, ProjectRecoveryError, ProjectRevision, ProjectSession, RationalRate,
-    RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection, TextFormatting,
-    TimeRange, TrackId, TrackKind, VisualSettings, apply_project_recovery, decode_project,
-    discard_project_recovery, encode_project, inspect_project_recovery, load_project_file,
-    save_project_file_atomic, write_recovery_checkpoint,
+    ApplicationRequest, ApplicationResponse, CURRENT_PROJECT_SCHEMA_VERSION, ClipContent, ClipId,
+    ClipSettings, CommandEnvelope, MAX_RECOVERY_FILE_BYTES, MarkerId, MediaId, OperationErrorCode,
+    ProjectDocument, ProjectFileSession, ProjectRecoveryError, ProjectRevision, ProjectSession,
+    RationalRate, RationalTime, RecoveryApplyOutcome, RecoveryConflictReason, RecoveryInspection,
+    TextFormatting, TimeRange, TrackId, TrackKind, VisualSettings, apply_project_recovery,
+    decode_project, discard_project_recovery, encode_project, inspect_project_recovery,
+    load_project_file, save_project_file_atomic, write_recovery_checkpoint,
 };
 use serde_json::{Value, json};
 use std::{
@@ -475,7 +475,8 @@ fn recovery_v1_sidecar_still_reads_nested_v2_projects_and_saves_at_the_current_s
 }
 
 #[test]
-fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_at_the_current_schema_without_revision_change() {
+fn recovery_v3_snapshot_inspects_applies_and_reloads_timeline_at_the_current_schema_without_revision_change()
+ {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let base = ProjectDocument::new("Saved base");

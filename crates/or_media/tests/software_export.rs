@@ -193,6 +193,50 @@ fn writer_publishes_webm_with_vp9_and_opus_streams() {
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 #[test]
+fn only_the_profile_whose_encoder_takes_nv12_accepts_nv12_frames() {
+    ffmpeg::init().unwrap();
+    let directory = TestDirectory::new();
+
+    let mp4 = FfmpegExportWriter::create_with_profile(
+        &directory.mp4_file(),
+        FfmpegExportProfile::Mp4H264Aac,
+        64,
+        48,
+        30,
+        1,
+    );
+    // The shipping packages always carry an encoder, so a missing one is a
+    // packaging fault on the platforms the product ships, and a skip elsewhere.
+    let mp4 = match mp4 {
+        Ok(writer) => writer,
+        Err(error) if cfg!(any(target_os = "macos", target_os = "windows")) => panic!(
+            "the {} FFmpeg build must carry an H.264 encoder: {error:?}",
+            std::env::consts::OS
+        ),
+        Err(_) => return,
+    };
+    assert!(
+        mp4.accepts_nv12(),
+        "the H.264 profile feeds the hardware encoder NV12 planes"
+    );
+
+    if let Ok(ffv1) = FfmpegExportWriter::create_with_profile(
+        &directory.file(),
+        FfmpegExportProfile::MatroskaFfv1PcmS16le,
+        64,
+        48,
+        30,
+        1,
+    ) {
+        assert!(
+            !ffv1.accepts_nv12(),
+            "the lossless profile encodes the rendered RGBA frame, not NV12"
+        );
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+#[test]
 fn writer_publishes_mp4_with_the_host_h264_encoder_and_aac_streams() {
     ffmpeg::init().unwrap();
     let directory = TestDirectory::new();

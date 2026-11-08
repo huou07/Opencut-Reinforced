@@ -53,7 +53,12 @@ fn measure(label: &str, mut run: impl FnMut() -> usize) {
     );
 }
 
-fn texture(device: &wgpu::Device, width: u32, height: u32, format: wgpu::TextureFormat) -> wgpu::Texture {
+fn texture(
+    device: &wgpu::Device,
+    width: u32,
+    height: u32,
+    format: wgpu::TextureFormat,
+) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("upload_probe"),
         size: wgpu::Extent3d {
@@ -88,9 +93,7 @@ fn nv12_upload_cost() {
     let info = adapter.get_info();
     println!(
         "UPLOAD_COST adapter name={:?} backend={:?} type={:?}",
-        info.name,
-        info.backend,
-        info.device_type,
+        info.name, info.backend, info.device_type,
     );
     let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("upload_probe"),
@@ -112,9 +115,19 @@ fn nv12_upload_cost() {
     }
 
     let tight_luma = texture(&device, WIDTH, HEIGHT, wgpu::TextureFormat::R8Unorm);
-    let tight_chroma = texture(&device, WIDTH / 2, HEIGHT / 2, wgpu::TextureFormat::Rg8Unorm);
+    let tight_chroma = texture(
+        &device,
+        WIDTH / 2,
+        HEIGHT / 2,
+        wgpu::TextureFormat::Rg8Unorm,
+    );
     let padded_luma = texture(&device, WIDTH, HEIGHT, wgpu::TextureFormat::R8Unorm);
-    let padded_chroma = texture(&device, WIDTH / 2, HEIGHT / 2, wgpu::TextureFormat::Rg8Unorm);
+    let padded_chroma = texture(
+        &device,
+        WIDTH / 2,
+        HEIGHT / 2,
+        wgpu::TextureFormat::Rg8Unorm,
+    );
 
     let mut memcpy_copy = vec![0_u8; luma.len() + chroma.len()];
     measure("memcpy_3_1mb", || {
@@ -123,12 +136,7 @@ fn nv12_upload_cost() {
         memcpy_copy.len()
     });
 
-    fn repack(
-        luma: &[u8],
-        chroma: &[u8],
-        luma_padded: &mut [u8],
-        chroma_padded: &mut [u8],
-    ) {
+    fn repack(luma: &[u8], chroma: &[u8], luma_padded: &mut [u8], chroma_padded: &mut [u8]) {
         for (target, source) in luma_padded
             .chunks_exact_mut(PAD as usize)
             .zip(luma.chunks_exact(WIDTH as usize))

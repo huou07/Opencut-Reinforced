@@ -2994,7 +2994,9 @@ mod desktop {
 
     impl ExportStageTrace {
         fn record(stage: &Mutex<Vec<f64>>, started: std::time::Instant) {
-            let mut samples = stage.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut samples = stage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             samples.push(started.elapsed().as_secs_f64() * 1_000.0);
         }
 
@@ -3006,7 +3008,9 @@ mod desktop {
                 ("resolve", &self.resolve),
                 ("encode", &self.encode),
             ] {
-                let samples = stage.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let samples = stage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if samples.is_empty() {
                     continue;
                 }
@@ -3042,7 +3046,10 @@ mod desktop {
             .then(std::time::Instant::now)
     }
 
-    fn trace_record(stage: fn(&ExportStageTrace) -> &Mutex<Vec<f64>>, started: Option<std::time::Instant>) {
+    fn trace_record(
+        stage: fn(&ExportStageTrace) -> &Mutex<Vec<f64>>,
+        started: Option<std::time::Instant>,
+    ) {
         if let Some(started) = started {
             ACTIVE_EXPORT_TRACE.with(|trace| {
                 if let Some(trace) = trace.borrow().as_ref() {
@@ -5069,8 +5076,7 @@ mod desktop {
                     // Without it the no-text render row measures a passthrough,
                     // not the composited stage, and comparing it with a text row
                     // overstates what text costs.
-                    transform: if std::env::var("OR_BENCH_SCALED").is_ok_and(|value| value == "1")
-                    {
+                    transform: if std::env::var("OR_BENCH_SCALED").is_ok_and(|value| value == "1") {
                         Transform {
                             scale_x_milli: 999,
                             scale_y_milli: 999,
@@ -5219,13 +5225,24 @@ mod desktop {
                     rate.denominator(),
                 )
                 .expect("writer opens");
+                let accepted_nv12 = writer.accepts_nv12();
                 let luma = vec![16_u8; width as usize * height as usize];
                 let chroma = vec![128_u8; width as usize * height as usize / 2];
+                // A profile whose encoder takes RGBA (VP9, FFV1) is measured
+                // with the frame shape it really receives; handing it NV12 would
+                // measure a path the product never takes.
+                let rgba = vec![0x80_u8; width as usize * height as usize * 4];
                 let started = Instant::now();
                 for frame_index in 0..frames {
-                    writer
-                        .write_video_frame_nv12(&luma, &chroma, width, height, frame_index)
-                        .expect("frame writes");
+                    if accepted_nv12 {
+                        writer
+                            .write_video_frame_nv12(&luma, &chroma, width, height, frame_index)
+                            .expect("frame writes");
+                    } else {
+                        writer
+                            .write_video_frame(&rgba, width, height, frame_index)
+                            .expect("frame writes");
+                    }
                 }
                 writer.finish().expect("writer finishes");
                 let elapsed = started.elapsed().as_secs_f64();

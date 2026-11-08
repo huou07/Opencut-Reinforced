@@ -1000,6 +1000,14 @@ impl FfmpegExportWriter {
     /// Only a profile whose encoder takes NV12 accepts this, and then no colour
     /// conversion runs on the CPU: the composited frame arrives as the luma and
     /// interleaved chroma planes the hardware encoder wants.
+    /// Whether this profile's encoder takes the GPU-produced NV12 planes.
+    ///
+    /// The benchmark harness and the preview path both ask before choosing a
+    /// frame shape, so the rule lives in one place instead of a profile list.
+    pub fn accepts_nv12(&self) -> bool {
+        self.pixel_format == format::Pixel::NV12
+    }
+
     pub fn write_video_frame_nv12(
         &mut self,
         luma: &[u8],

@@ -4568,12 +4568,7 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
             profile: value
                 .to_str()
                 .and_then(or_core::PerformanceProfile::parse)
-                .ok_or_else(|| {
-                    CliError::usage(
-                        json,
-                        "--performance must be automatic",
-                    )
-                })?,
+                .ok_or_else(|| CliError::usage(json, "--performance must be automatic"))?,
             preferred_h264_encoder: None,
         },
     };

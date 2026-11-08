@@ -40,8 +40,9 @@ impl PerformanceProfile {
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim() {
             "" => None,
-            "automatic" | "recommended" | "maximum_performance" | "balanced"
-            | "compatibility" => Some(Self::Automatic),
+            "automatic" | "recommended" | "maximum_performance" | "balanced" | "compatibility" => {
+                Some(Self::Automatic)
+            }
             _ => None,
         }
     }
