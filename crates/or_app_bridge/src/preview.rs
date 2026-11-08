@@ -5057,6 +5057,70 @@ mod desktop {
             let duration =
                 RationalTime::new(i64::try_from(frames).expect("frames"), 30).expect("duration");
 
+            if std::env::var("OR_BENCH_MODE").is_ok_and(|value| value == "encode") {
+                // This branch opens no fixture and builds no program, so it also
+                // builds its own destination: an encode row must be measurable
+                // on a host that has no benchmark media at all.
+                let extension = match profile.as_str() {
+                    "webm" => "webm",
+                    "mkv" => "mkv",
+                    _ => "mp4",
+                };
+                let destination = std::env::temp_dir()
+                    .join("or-export-bench")
+                    .join(format!("encode-row.{extension}"));
+                std::fs::create_dir_all(destination.parent().expect("parent")).expect("scratch");
+                let _ = std::fs::remove_file(&destination);
+                let export_profile = match profile.as_str() {
+                    "webm" => ExportProfile::WebmVp9Opus,
+                    "mkv" => ExportProfile::MatroskaFfv1PcmS16le,
+                    _ => ExportProfile::Mp4H264Aac,
+                };
+                let media_profile = match export_profile {
+                    ExportProfile::MatroskaFfv1PcmS16le => {
+                        or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le
+                    }
+                    ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
+                    ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
+                };
+                let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
+                    &destination,
+                    media_profile,
+                    quality,
+                    width,
+                    height,
+                    rate.numerator(),
+                    rate.denominator(),
+                )
+                .expect("writer opens");
+                let accepted_nv12 = writer.accepts_nv12();
+                let luma = vec![16_u8; width as usize * height as usize];
+                let chroma = vec![128_u8; width as usize * height as usize / 2];
+                // A profile whose encoder takes RGBA (VP9, FFV1) is measured
+                // with the frame shape it really receives; handing it NV12 would
+                // measure a path the product never takes.
+                let rgba = vec![0x80_u8; width as usize * height as usize * 4];
+                let started = Instant::now();
+                for frame_index in 0..frames {
+                    if accepted_nv12 {
+                        writer
+                            .write_video_frame_nv12(&luma, &chroma, width, height, frame_index)
+                            .expect("frame writes");
+                    } else {
+                        writer
+                            .write_video_frame(&rgba, width, height, frame_index)
+                            .expect("frame writes");
+                    }
+                }
+                writer.finish().expect("writer finishes");
+                let elapsed = started.elapsed().as_secs_f64();
+                println!(
+                    "OR_EXPORT_BENCH_ENCODE profile={profile} out={width}x{height} frames={frames} seconds={elapsed:.3} fps={:.1}",
+                    frames as f64 / elapsed.max(f64::EPSILON)
+                );
+                return;
+            }
+
             let project = or_core::ProjectDocument::new("export benchmark");
             let program = Arc::new(PreviewProgram {
                 canvas: None,
@@ -5207,52 +5271,6 @@ mod desktop {
                 let elapsed = started.elapsed().as_secs_f64();
                 println!(
                     "OR_EXPORT_BENCH_RENDER source={source} out={width}x{height} frames={frames} text={with_text} seconds={elapsed:.3} fps={:.1}",
-                    frames as f64 / elapsed.max(f64::EPSILON)
-                );
-                return;
-            }
-
-            if std::env::var("OR_BENCH_MODE").is_ok_and(|value| value == "encode") {
-                let media_profile = match export_profile {
-                    ExportProfile::MatroskaFfv1PcmS16le => {
-                        or_media::FfmpegExportProfile::MatroskaFfv1PcmS16le
-                    }
-                    ExportProfile::WebmVp9Opus => or_media::FfmpegExportProfile::WebmVp9Opus,
-                    ExportProfile::Mp4H264Aac => or_media::FfmpegExportProfile::Mp4H264Aac,
-                };
-                let mut writer = or_media::FfmpegExportWriter::create_with_profile_and_quality(
-                    &destination,
-                    media_profile,
-                    quality,
-                    width,
-                    height,
-                    rate.numerator(),
-                    rate.denominator(),
-                )
-                .expect("writer opens");
-                let accepted_nv12 = writer.accepts_nv12();
-                let luma = vec![16_u8; width as usize * height as usize];
-                let chroma = vec![128_u8; width as usize * height as usize / 2];
-                // A profile whose encoder takes RGBA (VP9, FFV1) is measured
-                // with the frame shape it really receives; handing it NV12 would
-                // measure a path the product never takes.
-                let rgba = vec![0x80_u8; width as usize * height as usize * 4];
-                let started = Instant::now();
-                for frame_index in 0..frames {
-                    if accepted_nv12 {
-                        writer
-                            .write_video_frame_nv12(&luma, &chroma, width, height, frame_index)
-                            .expect("frame writes");
-                    } else {
-                        writer
-                            .write_video_frame(&rgba, width, height, frame_index)
-                            .expect("frame writes");
-                    }
-                }
-                writer.finish().expect("writer finishes");
-                let elapsed = started.elapsed().as_secs_f64();
-                println!(
-                    "OR_EXPORT_BENCH_ENCODE profile={profile} out={width}x{height} frames={frames} seconds={elapsed:.3} fps={:.1}",
                     frames as f64 / elapsed.max(f64::EPSILON)
                 );
                 return;
