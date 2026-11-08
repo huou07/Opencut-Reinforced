@@ -105,6 +105,7 @@ Future<void> _pump(WidgetTester tester, TemplatePreviews previews) async {
           projectOpen: false,
           onUseTemplate: (_) {},
           onApplyEditStyle: (_) {},
+          onReviewAgentPlan: () {},
           onReadDirection: (_) {},
           onAddTextPreset: (_) {},
           onAddSoundEffect: (_) {},

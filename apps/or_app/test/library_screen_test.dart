@@ -27,6 +27,7 @@ Future<void> _pump(
   HostPlatform? host,
   Key? key,
   ValueChanged<EditStyle>? onApplyEditStyle,
+  VoidCallback? onReviewAgentPlan,
   ValueChanged<CreativeDirection>? onReadDirection,
   List<CreativeDirection> myDirections = const [],
 }) async {
@@ -46,6 +47,7 @@ Future<void> _pump(
           projectOpen: projectOpen,
           onUseTemplate: (_) {},
           onApplyEditStyle: onApplyEditStyle ?? (_) {},
+          onReviewAgentPlan: onReviewAgentPlan ?? () {},
           onReadDirection: onReadDirection ?? (_) {},
           myDirections: myDirections,
           onAddTextPreset: (_) {},
@@ -61,6 +63,32 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('the assistant plan entry is beside the styles, not hidden', (
+    tester,
+  ) async {
+    var opened = 0;
+    await _pump(tester, projectOpen: true, onReviewAgentPlan: () => opened++);
+    expect(find.text('From an assistant'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('library-agent-plan')));
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+  });
+
+  testWidgets('the assistant plan entry names the missing project', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.text('From an assistant'), findsOneWidget);
+    final button = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('library-agent-plan')),
+    );
+    expect(button.onPressed, isNull);
+    expect(
+      find.byKey(const ValueKey('library-agent-plan-need-project')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('the library keeps formats, edit styles and directions apart', (
     tester,
   ) async {
@@ -232,6 +260,7 @@ void main() {
             projectOpen: true,
             onUseTemplate: (_) {},
             onApplyEditStyle: (_) {},
+            onReviewAgentPlan: () {},
             onReadDirection: (_) {},
             onAddTextPreset: (_) => added++,
             onAddSoundEffect: (_) {},

@@ -61,7 +61,7 @@ required_files=(
   docs/features/assistant.md
   docs/features/templates.md
   docs/features/agent-workspace.md
-  docs/features/external-tools.md
+  docs/features/external-tools.md docs/features/assistant-plans.md
   docs/operations/workflow.md
   docs/operations/verification.md
   docs/operations/local-macos.md

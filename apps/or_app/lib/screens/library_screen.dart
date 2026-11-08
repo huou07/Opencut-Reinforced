@@ -33,6 +33,7 @@ class LibraryScreen extends StatefulWidget {
     required this.projectOpen,
     required this.onUseTemplate,
     required this.onApplyEditStyle,
+    required this.onReviewAgentPlan,
     required this.onReadDirection,
     required this.onAddTextPreset,
     required this.onAddSoundEffect,
@@ -49,6 +50,9 @@ class LibraryScreen extends StatefulWidget {
 
   /// Cuts the open project's media with a style's pacing rules.
   final ValueChanged<EditStyle> onApplyEditStyle;
+
+  /// Opens the review for a plan an assistant wrote.
+  final VoidCallback onReviewAgentPlan;
 
   /// Opens a creative direction as a brief.
   final ValueChanged<CreativeDirection> onReadDirection;
@@ -79,6 +83,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return OrPageLayout(
+      scrollKey: const ValueKey('library-scroll'),
       title: 'Library',
       subtitle:
           'Project formats, edit styles, creative directions, text looks, '
@@ -97,6 +102,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               projectOpen: widget.projectOpen,
               onUseTemplate: widget.onUseTemplate,
               onApplyEditStyle: widget.onApplyEditStyle,
+              onReviewAgentPlan: widget.onReviewAgentPlan,
               onReadDirection: widget.onReadDirection,
               onOpenEditor: widget.onOpenEditor,
               templatePreviews: widget.templatePreviews,
@@ -233,6 +239,7 @@ class _TemplatesAndStyles extends StatelessWidget {
     required this.projectOpen,
     required this.onUseTemplate,
     required this.onApplyEditStyle,
+    required this.onReviewAgentPlan,
     required this.onReadDirection,
     required this.onOpenEditor,
     this.templatePreviews,
@@ -243,6 +250,7 @@ class _TemplatesAndStyles extends StatelessWidget {
   final bool projectOpen;
   final ValueChanged<ProjectTemplate> onUseTemplate;
   final ValueChanged<EditStyle> onApplyEditStyle;
+  final VoidCallback onReviewAgentPlan;
   final ValueChanged<CreativeDirection> onReadDirection;
   final VoidCallback onOpenEditor;
   final TemplatePreviews? templatePreviews;
@@ -282,6 +290,11 @@ class _TemplatesAndStyles extends StatelessWidget {
                 onUse: () => onApplyEditStyle(style),
                 onOpenEditor: onOpenEditor,
               ),
+            _AgentPlanCard(
+              projectOpen: projectOpen,
+              onReview: onReviewAgentPlan,
+              onOpenEditor: onOpenEditor,
+            ),
           ],
         ),
         const SizedBox(height: OrSpacing.x6),
@@ -458,6 +471,69 @@ class _StyleCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The way a real model's plan enters: it is reviewed, then written as clips.
+class _AgentPlanCard extends StatelessWidget {
+  const _AgentPlanCard({
+    required this.projectOpen,
+    required this.onReview,
+    required this.onOpenEditor,
+  });
+
+  final bool projectOpen;
+  final VoidCallback onReview;
+  final VoidCallback onOpenEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrPanel(
+      title: 'From an assistant',
+      trailing: const OrBadge('AI plan'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'A style is a rule; a plan is a decision about your footage.',
+            style: TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          const Text(
+            'Copy the brief into the Assistant, ask for a cut, then paste the '
+            'JSON it returns. OR checks every shot against the project and '
+            'shows it before one clip is added. The plan is the model\'s; the '
+            'editing stays yours.',
+            style: TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          Wrap(
+            spacing: OrSpacing.x2,
+            runSpacing: OrSpacing.x2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.tonal(
+                key: const ValueKey('library-agent-plan'),
+                onPressed: projectOpen ? onReview : null,
+                child: const Text('Review a plan…'),
+              ),
+              if (!projectOpen)
+                TextButton(
+                  key: const ValueKey('library-agent-plan-need-project'),
+                  onPressed: onOpenEditor,
+                  child: const Text('Open a project first'),
+                ),
+            ],
+          ),
         ],
       ),
     );

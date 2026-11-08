@@ -15,6 +15,7 @@ import 'package:or_viewer_texture/or_viewer_texture.dart';
 import '../core_gateway.dart';
 import '../library/creative_direction_store.dart';
 import '../library/creative_directions.dart';
+import '../library/agent_edit_plan.dart';
 import '../library/edit_styles.dart';
 import '../library/project_templates.dart';
 import '../library/sound_library.dart';
@@ -53,6 +54,7 @@ import 'app_navigation.dart';
 import 'platform_menus.dart';
 import 'or_shortcuts.dart';
 import 'app_top_bar.dart';
+import '../screens/agent_plan_dialog.dart';
 import 'command_palette.dart';
 import 'shortcut_sheet.dart';
 import 'autosave_controller.dart';
@@ -899,6 +901,7 @@ class _AppShellState extends State<AppShell> {
       templatePreviews: _templatePreviews,
       onUseTemplate: _createProjectFromTemplate,
       onApplyEditStyle: _applyEditStyle,
+      onReviewAgentPlan: () => unawaited(_reviewAgentPlan()),
       onReadDirection: _readCreativeDirection,
       myDirections: _myDirections,
       onAddTextPreset: _addTextPresetFromLibrary,
@@ -1256,6 +1259,10 @@ class _AppShellState extends State<AppShell> {
           CommandPaletteAction(
             label: 'Build a Cut in an Edit Style…',
             onSelected: () => unawaited(_chooseEditStyle()),
+          ),
+          CommandPaletteAction(
+            label: 'Review an Assistant Plan…',
+            onSelected: () => unawaited(_reviewAgentPlan()),
           ),
           if (widget.projectFilePicker.supportsExport)
             CommandPaletteAction(
@@ -1837,67 +1844,311 @@ class _AppShellState extends State<AppShell> {
     );
     if (approved != true || !mounted) return;
 
+    await _insertPlanClips(
+      session: session,
+      tracks: tracks,
+      baseFrame: baseFrame,
+      fps: fps,
+      shots: [
+        for (final shot in plan.shots)
+          (
+            mediaId: shot.mediaId,
+            startFrame: shot.startFrame,
+            sourceStartFrame: shot.sourceStartFrame,
+            frameCount: shot.frameCount,
+          ),
+      ],
+      title: titleText,
+      notice:
+          '${style.name}: ${plan.shots.length} '
+          '${plan.shots.length == 1 ? 'clip' : 'clips'}'
+          '${titleText == null ? '' : ' and a title'} added to the timeline.',
+    );
+  }
+
+  /// Writes a reviewed plan through the ordinary clip commands.
+  ///
+  /// Every insert is its own history step, so Undo removes the cut one clip at
+  /// a time and each clip is editable like any other. Each command is sent
+  /// against the project revision the previous one returned, so a plan cannot
+  /// fail because the media import that preceded it advanced the revision. A
+  /// failure stops the run and reports why; it never leaves half a plan
+  /// silently applied.
+  Future<void> _insertPlanClips({
+    required ProjectSessionHandle session,
+    required ProjectTimelineTracks tracks,
+    required int baseFrame,
+    required int fps,
+    required List<
+      ({String mediaId, int startFrame, int sourceStartFrame, int frameCount})
+    >
+    shots,
+    required String? title,
+    required String notice,
+  }) async {
     try {
-      var track = _firstUnlockedVideoTrack(tracks.items);
+      await _refreshProjectState(session);
+      if (!mounted || !identical(session, _activeSession)) return;
+      var current = _activeProject;
+      if (current == null) return;
+      var knownTracks = await widget.projectGateway.listTimelineTracks(session);
+      var track = _firstUnlockedVideoTrack(knownTracks.items);
       if (track == null) {
-        final created = await widget.projectGateway.addTimelineTrack(
-          session,
-          await widget.projectGateway.summary(session),
-          ProjectTimelineTrackKind.video,
+        final updated = await _runProjectActionAtSnapshot(
+          current,
+          (session, current) => widget.projectGateway.addTimelineTrack(
+            session,
+            current,
+            ProjectTimelineTrackKind.video,
+          ),
         );
-        if (!created.succeeded) {
-          _showUnavailable(created.message);
-          return;
-        }
-        final relisted = await widget.projectGateway.listTimelineTracks(
-          session,
-        );
-        track = _firstUnlockedVideoTrack(relisted.items);
+        if (updated == null || !mounted) return;
+        current = updated;
+        knownTracks = await widget.projectGateway.listTimelineTracks(session);
+        track = _firstUnlockedVideoTrack(knownTracks.items);
       }
       if (track == null) {
         _showUnavailable('The timeline has no video track to build on.');
         return;
       }
       final trackId = track.trackId;
-      for (final shot in plan.shots) {
+      for (final shot in shots) {
         if (!mounted) return;
-        final expected = _activeProject;
-        if (expected == null) return;
-        final inserted = await widget.projectGateway.insertTimelineClip(
-          session,
-          expected,
-          trackId: trackId,
-          mediaId: shot.mediaId,
-          timelineStart: ProjectRationalTime(
-            BigInt.from(baseFrame + shot.startFrame),
-            fps,
+        final updated = await _runProjectActionAtSnapshot(
+          current!,
+          (session, current) => widget.projectGateway.insertTimelineClip(
+            session,
+            current,
+            trackId: trackId,
+            mediaId: shot.mediaId,
+            timelineStart: ProjectRationalTime(
+              BigInt.from(baseFrame + shot.startFrame),
+              fps,
+            ),
+            sourceStart: ProjectRationalTime(
+              BigInt.from(shot.sourceStartFrame),
+              fps,
+            ),
+            duration: ProjectRationalTime(BigInt.from(shot.frameCount), fps),
           ),
-          sourceStart: ProjectRationalTime(
-            BigInt.from(shot.sourceStartFrame),
-            fps,
-          ),
-          duration: ProjectRationalTime(BigInt.from(shot.frameCount), fps),
         );
-        if (!inserted.succeeded) {
-          _showUnavailable(inserted.message);
-          return;
-        }
+        if (updated == null) return;
+        current = updated;
         await _reloadAfterStyleEdit(session);
       }
-      if (titleText != null) {
-        await _insertStyleTitle(session, titleText, baseFrame, fps, tracks);
+      if (title != null) {
+        await _insertStyleTitle(session, title, baseFrame, fps, knownTracks);
       }
       if (!mounted) return;
-      setState(() {
-        _projectNotice =
-            '${style.name}: ${plan.shots.length} '
-            '${plan.shots.length == 1 ? 'clip' : 'clips'}'
-            '${titleText == null ? '' : ' and a title'} added to the timeline.';
-      });
+      setState(() => _projectNotice = notice);
       _openWorkspace();
     } on ProjectGatewayException catch (error) {
       _showUnavailable(error.message);
     }
+  }
+
+  /// Opens the assistant-plan review for the project that is open.
+  ///
+  /// The assistant is the planner; OR is the reviewer and the writer. Nothing
+  /// here calls a model: it parses the plan, checks it against the project's
+  /// media, shows every shot, and applies only what was approved.
+  Future<void> _reviewAgentPlan() async {
+    final session = _activeSession;
+    final current = _activeProject;
+    if (session == null || current == null) {
+      _showUnavailable(
+        'Open a project first. A plan is checked against its media.',
+      );
+      return;
+    }
+    final facts = await _collectPlanContext(session);
+    if (facts == null || !mounted) return;
+    final media = [
+      for (final item in facts.items)
+        if (item.firstVideoDuration != null || item.videoDetails != null)
+          AgentPlanMedia(
+            mediaId: item.mediaId,
+            label: facts.labels[item.mediaId] ?? item.mediaId,
+            seconds:
+                (item.firstVideoDuration ?? item.containerDuration)
+                    ?.secondsForDisplay ??
+                0,
+          ),
+    ];
+    final plan = await showDialog<AgentEditPlan>(
+      context: context,
+      builder: (context) => AgentPlanImportDialog(
+        media: media,
+        frameRate: facts.fps,
+        brief: buildAgentPlanBrief(
+          media: media,
+          frameRate: facts.fps,
+          style: 'The open project. Keep the pacing of its existing cut.',
+        ),
+      ),
+    );
+    if (plan == null || !mounted) return;
+    final byName = <String, List<String>>{};
+    for (final item in facts.items) {
+      final label = facts.labels[item.mediaId];
+      if (label == null) continue;
+      (byName[label.toLowerCase()] ??= []).add(item.mediaId);
+    }
+    final resolved = <String>[];
+    for (final (index, shot) in plan.shots.indexed) {
+      var mediaId = shot.mediaId;
+      if (mediaId.isEmpty) {
+        final matches = byName[shot.name!.toLowerCase()] ?? const <String>[];
+        if (matches.isEmpty) {
+          _showUnavailable(
+            'Shot ${index + 1} names "${shot.name}", which is not in this '
+            'project. Import it, or ask the assistant to use one of the names '
+            'in the brief.',
+          );
+          return;
+        }
+        if (matches.length > 1) {
+          _showUnavailable(
+            'Shot ${index + 1} names "${shot.name}", which matches '
+            '${matches.length} media items. Use the mediaId from the brief '
+            'instead.',
+          );
+          return;
+        }
+        mediaId = matches.single;
+      } else if (!facts.labels.containsKey(mediaId)) {
+        _showUnavailable(
+          'Shot ${index + 1} uses mediaId "$mediaId", which this project does '
+          'not have. Ask the assistant to plan again with the ids in the '
+          'brief.',
+        );
+        return;
+      }
+      resolved.add(mediaId);
+    }
+    final available = {
+      for (final item in facts.items)
+        item.mediaId:
+            (((item.firstVideoDuration ?? item.containerDuration)
+                            ?.secondsForDisplay ??
+                        0) *
+                    facts.fps)
+                .round(),
+    };
+    int scaled(int frames) => (frames * facts.fps / plan.frameRate).round();
+    for (final (index, shot) in plan.shots.indexed) {
+      final end = scaled(shot.sourceStartFrame + shot.frameCount);
+      final mediaId = resolved[index];
+      final limit = available[mediaId] ?? 0;
+      if (limit > 0 && end > limit) {
+        _showUnavailable(
+          'Shot ${index + 1} runs past the end of '
+          '${facts.labels[mediaId] ?? mediaId} '
+          '(${(end / facts.fps).toStringAsFixed(1)} s of '
+          '${(limit / facts.fps).toStringAsFixed(1)} s). '
+          'Ask the assistant for a shorter shot.',
+        );
+        return;
+      }
+    }
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AgentPlanReviewDialog(
+        plan: plan,
+        labels: facts.labels,
+        appendsAfter: facts.baseFrame > 0,
+      ),
+    );
+    if (approved != true || !mounted) return;
+    var start = 0;
+    final shots =
+        <
+          ({
+            String mediaId,
+            int startFrame,
+            int sourceStartFrame,
+            int frameCount,
+          })
+        >[];
+    for (final (index, shot) in plan.shots.indexed) {
+      final frameCount = scaled(shot.frameCount);
+      if (frameCount < 1) continue;
+      shots.add((
+        mediaId: resolved[index],
+        startFrame: start,
+        sourceStartFrame: scaled(shot.sourceStartFrame),
+        frameCount: frameCount,
+      ));
+      start += frameCount;
+    }
+    await _insertPlanClips(
+      session: session,
+      tracks: facts.tracks,
+      baseFrame: facts.baseFrame,
+      fps: facts.fps,
+      shots: shots,
+      title: plan.title,
+      notice:
+          'Assistant plan: ${shots.length} '
+          '${shots.length == 1 ? 'clip' : 'clips'}'
+          '${plan.title == null ? '' : ' and a title'} added to the timeline.',
+    );
+  }
+
+  /// The project facts a plan is checked against, gathered once.
+  Future<
+    ({
+      List<ProjectMediaItem> items,
+      int fps,
+      ProjectTimelineTracks tracks,
+      int baseFrame,
+      Map<String, String> labels,
+    })?
+  >
+  _collectPlanContext(ProjectSessionHandle session) async {
+    final List<ProjectMediaItem> items;
+    final ProjectTimelineSequenceSettings sequence;
+    final ProjectTimelineTracks tracks;
+    try {
+      final collected = <ProjectMediaItem>[];
+      var offset = 0;
+      while (true) {
+        final page = await widget.projectGateway.listMediaPage(
+          session,
+          offset: offset,
+          limit: _mediaPageSize,
+        );
+        collected.addAll(page.items);
+        final next = page.nextOffset;
+        if (next == null || next <= offset || collected.length >= 500) break;
+        offset = next;
+      }
+      items = collected;
+      sequence = await widget.projectGateway.timelineSequenceSettings(session);
+      tracks = await widget.projectGateway.listTimelineTracks(session);
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return null;
+    }
+    if (!mounted) return null;
+    final rate = sequence.sequenceFrameRate;
+    final fps = rate == null
+        ? 30
+        : (rate.numerator.toDouble() / rate.denominator).round().clamp(1, 240);
+    final labels = <String, String>{
+      for (final item in items) item.mediaId: _mediaLabel(item.sourceUri),
+    };
+    final baseFrame = _projectContentEndFromTracks(
+      tracks,
+      fps,
+    ).clamp(0, 1 << 40);
+    return (
+      items: items,
+      fps: fps,
+      tracks: tracks,
+      baseFrame: baseFrame,
+      labels: labels,
+    );
   }
 
   /// A short name for a media item, for the review list only.
@@ -1930,34 +2181,42 @@ class _AppShellState extends State<AppShell> {
     int fps,
     ProjectTimelineTracks tracks,
   ) async {
+    var current = _activeProject;
+    if (current == null) return;
     var textTrack = tracks.items
         .where((track) => track.kind == ProjectTimelineTrackKind.text)
         .firstOrNull;
     if (textTrack == null) {
-      final created = await widget.projectGateway.addTimelineTrack(
-        session,
-        await widget.projectGateway.summary(session),
-        ProjectTimelineTrackKind.text,
+      final updated = await _runProjectActionAtSnapshot(
+        current,
+        (session, current) => widget.projectGateway.addTimelineTrack(
+          session,
+          current,
+          ProjectTimelineTrackKind.text,
+        ),
       );
-      if (!created.succeeded) return;
+      if (updated == null || !mounted) return;
+      current = updated;
       final relisted = await widget.projectGateway.listTimelineTracks(session);
       textTrack = relisted.items
           .where((track) => track.kind == ProjectTimelineTrackKind.text)
           .firstOrNull;
       if (textTrack == null) return;
     }
-    final expected = _activeProject;
-    if (expected == null) return;
-    await widget.projectGateway.insertTimelineTextClip(
-      session,
-      expected,
-      trackId: textTrack.trackId,
-      timelineStart: ProjectRationalTime(BigInt.from(startFrame), fps),
-      timelineDuration: ProjectRationalTime(BigInt.from(3 * fps), fps),
-      content: ProjectTimelineTextContent(
-        kind: ProjectTimelineClipContentKind.text,
-        text: text,
-        formatting: ProjectTextFormatting.defaults,
+    final trackId = textTrack.trackId;
+    await _runProjectActionAtSnapshot(
+      current,
+      (session, current) => widget.projectGateway.insertTimelineTextClip(
+        session,
+        current,
+        trackId: trackId,
+        timelineStart: ProjectRationalTime(BigInt.from(startFrame), fps),
+        timelineDuration: ProjectRationalTime(BigInt.from(3 * fps), fps),
+        content: ProjectTimelineTextContent(
+          kind: ProjectTimelineClipContentKind.text,
+          text: text,
+          formatting: ProjectTextFormatting.defaults,
+        ),
       ),
     );
   }

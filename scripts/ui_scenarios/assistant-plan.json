@@ -1,0 +1,163 @@
+{
+ "name": "assistant-plan",
+ "harness": "or_ui",
+ "description": "An assistant's plan is a GUI workflow, not a CLI flag: the Library offers it beside the edit styles, the plan is parsed and checked against the project's media, every shot is shown with its reason, and only the approved plan becomes ordinary clips. The journey imports one clip, pastes a plan that names the file, reviews it, applies it, and checks the timeline received the cut.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Assistant plan journey"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "editor-tool-media"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "or-brand-home"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "New Project",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-library"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "From an assistant",
+   "budget_ms": 15000
+  },
+  {
+   "op": "scroll_until",
+   "key": "library-agent-plan",
+   "scroll": "library-scroll",
+   "dy": -400,
+   "steps": 10
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "library-agent-plan"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Review an assistant plan",
+   "budget_ms": 15000
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "agent-plan-json"
+   },
+   "value": "{\"schema\":\"or.edit-plan/1\",\"frameRate\":30,\"title\":\"Planned by the assistant\",\"notes\":[\"Only one clip was available\"],\"shots\":[{\"name\":\"tiny_h264_aac.mp4\",\"sourceStartFrame\":0,\"frameCount\":12,\"why\":\"Opens on the imported clip\"}]}"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "agent-plan-import-review"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Add this cut to the timeline",
+   "budget_ms": 15000
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Opens on the imported clip",
+   "budget_ms": 10000
+  },
+  {
+   "op": "shot",
+   "name": "assistant-plan-review"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "agent-plan-apply"
+   }
+  },
+  {
+   "op": "pump",
+   "ms": 2500
+  },
+  {
+   "op": "shot",
+   "name": "assistant-plan-after-apply"
+  },
+  {
+   "op": "tree",
+   "name": "assistant-plan-after-apply"
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Assistant plan:",
+   "budget_ms": 20000
+  },
+  {
+   "op": "shot",
+   "name": "assistant-plan-applied"
+  },
+  {
+   "op": "expect_text",
+   "text": "tiny_h264_aac.mp4"
+  }
+ ]
+}

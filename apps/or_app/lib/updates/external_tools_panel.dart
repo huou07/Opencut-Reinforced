@@ -215,9 +215,8 @@ class _ExternalToolsPanelState extends State<ExternalToolsPanel> {
   }
 
   void _notify(String message) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
+    if (!mounted) return;
+    OrSnackBar.show(context, message);
   }
 
   @override
