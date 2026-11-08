@@ -249,8 +249,12 @@ class CreativeDirectionDialog extends StatelessWidget {
           TextButton(
             key: const ValueKey('creative-direction-edit'),
             onPressed: () {
-              onEdit!();
+              // Close this brief first and hand control back on the next
+              // frame: opening the editor in the same frame as this route is
+              // popped drops the editor, which is what a tapped Edit did.
+              final edit = onEdit!;
               Navigator.of(context).pop();
+              WidgetsBinding.instance.addPostFrameCallback((_) => edit());
             },
             child: const Text('Edit'),
           ),
