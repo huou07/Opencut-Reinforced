@@ -893,6 +893,48 @@ the software codecs, 64×48-free blank frame of the output size):
 | 4K decode only (240 frames) | 112.1 |
 | 4K encode only, MP4 | 75.2 / 75.1 |
 
+The same rows on the other two hosts, same fixture and revision
+(`b5b25949`), same commands:
+
+Debian 13, Intel UHD 770 (`Intel(R) UHD Graphics 770 (ADL-S GT1)`, Intel
+open-source Mesa driver, Vulkan, `h264_vaapi`):
+
+| Row | fps |
+|---|---|
+| 4K full pipeline, MP4 | 66.0 / 67.0 |
+| 4K source into 1080p, full pipeline | 47.0 |
+| 4K render only | 130.6 |
+| 4K decode only | 65.8 |
+| 4K encode only, MP4 | 97.5 |
+| 1080p encode only, WebM | 58.3 |
+
+Windows 11, Intel Graphics (`Intel(R) Graphics (Intel Corporation, Vulkan)`,
+Media Foundation):
+
+| Row | fps |
+|---|---|
+| 4K full pipeline, MP4 | 29.0 / 30.2 |
+| 4K source into 1080p, full pipeline | 20.6 |
+| 4K render only | 50.0 |
+| 4K decode only | 18.8 |
+
+The Windows encode-only rows are missing from this table: the first run of the
+script did not set `OR_BENCH_SOURCE`, and the harness skipped the whole test
+whenever the fixture was absent — even for `encode`, which never opens it. The
+harness now asks only the modes that decode, so the row is one command away;
+until it is measured here it is not claimed.
+
+### The downscale row is slower on both Intel hosts
+
+4K into 1080p is **faster** than 4K into 4K on macOS (108.1 vs 65.3) and
+**slower** on both Intel hosts (Debian 47.0 vs 66.5, Windows 20.6 vs 29.6). The
+explanation the row supports: Debian's 4K decode ceiling is 65.8 fps and its 4K
+row reaches 66.0, so the 1:1 path is decode-bound and adds no scaling work,
+while the 1080p row pays a 4K→1080p scale that the 1:1 path never runs. That is
+consistent with the copy-free NV12 handoff documented above (no CPU colour
+conversion on the 1:1 path). It has not been profiled, so it stays a hypothesis;
+the measured fact is that a smaller output is not cheaper on these two hosts.
+
 ### What the 4K rows show
 
 - **At 4K the hardware H.264 encoder is the ceiling, not the renderer.** The

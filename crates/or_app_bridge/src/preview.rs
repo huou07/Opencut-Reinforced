@@ -5004,7 +5004,12 @@ mod desktop {
             }
             let source = std::env::var("OR_BENCH_SOURCE")
                 .unwrap_or_else(|_| "/tmp/or-bench/bench1080.mp4".to_owned());
-            if !std::path::Path::new(&source).exists() {
+            // `encode` feeds the writer a blank frame and never opens the
+            // fixture, so asking for one there only made a row look skipped.
+            let needs_source = std::env::var("OR_BENCH_MODE")
+                .map(|mode| mode != "encode")
+                .unwrap_or(true);
+            if needs_source && !std::path::Path::new(&source).exists() {
                 println!(
                     "OR_EXPORT_BENCH skipped: fixture {source} is missing (set OR_BENCH_SOURCE)"
                 );

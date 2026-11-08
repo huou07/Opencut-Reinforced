@@ -25,7 +25,12 @@ parses and renders identically), UUIDv4 `scene_id`, `name`, exact `duration`,
   custom curve (`easing_curve`, schema version 4, ADR 0014): a CSS-style cubic
   Bézier `[p1x, p1y, p2x, p2y]` whose x components must stay in `0..=1`. A
   malformed curve is refused with `MOTION_INVALID_EASING_CURVE`. When the field
-  is absent the named `easing` applies, so old scenes are unchanged.
+  is absent the named `easing` applies, so old scenes are unchanged. The named
+  set is `linear`, `ease_in`, `ease_out`, `ease_in_out`, `ease_out_back` and
+  `ease_out_bounce`; the last two were added so a composition and a clip
+  keyframe (which already offered `ease_out_back`/`ease_out_bounce`) can express
+  the same motion. Both are closed-form, so evaluation stays deterministic and
+  the overshoot never needs a simulation step.
 - Camera: optional `camera.keyframes` with `pan_x`, `pan_y`, `zoom` (0.25–4) and
   `rotation_degrees`, interpolated with the same easing set (and its own
   optional `easing_curve`) and applied to every

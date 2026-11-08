@@ -335,7 +335,14 @@ pub enum MotionProperty {
     Height,
 }
 
-/// The easing set. Small and locked, per ADR 0007.
+/// The easing set.
+///
+/// The four symmetric curves are the original locked set from ADR 0007. The two
+/// overshoot curves were added afterwards because a clip keyframe could already
+/// ask for them (`ProjectKeyframeEasing.easeOutBack`/`easeOutBounce`) while a
+/// composition could not, so the same motion expressed in a MotionScene and on
+/// a clip animated differently. Both are closed-form, so the evaluator stays
+/// stateless and deterministic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MotionEasing {
@@ -344,6 +351,8 @@ pub enum MotionEasing {
     EaseIn,
     EaseOut,
     EaseInOut,
+    EaseOutBack,
+    EaseOutBounce,
 }
 
 /// One keyframe: an exact time and a value.
@@ -1906,7 +1915,7 @@ mod tests {
     }
 
     #[test]
-    fn the_easing_set_is_locked_and_bounded() {
+    fn the_easing_set_is_closed_form_and_bounded() {
         assert_eq!(ease(MotionEasing::Linear, 0.25), 0.25);
         assert_eq!(ease(MotionEasing::EaseIn, 0.5), 0.25);
         assert_eq!(ease(MotionEasing::EaseOut, 0.5), 0.75);
@@ -1914,6 +1923,68 @@ mod tests {
         // Out-of-range progress is clamped rather than extrapolated.
         assert_eq!(ease(MotionEasing::Linear, -1.0), 0.0);
         assert_eq!(ease(MotionEasing::Linear, 2.0), 1.0);
+        for easing in [
+            MotionEasing::Linear,
+            MotionEasing::EaseIn,
+            MotionEasing::EaseOut,
+            MotionEasing::EaseInOut,
+            MotionEasing::EaseOutBack,
+            MotionEasing::EaseOutBounce,
+        ] {
+            assert!(ease(easing, 0.0).abs() < 1e-9, "{easing:?} starts at 0");
+            assert!(
+                (ease(easing, 1.0) - 1.0).abs() < 1e-9,
+                "{easing:?} ends at 1"
+            );
+        }
+    }
+
+    #[test]
+    fn the_overshoot_curves_overshoot_and_settle() {
+        // Back passes the target before it returns, which is the whole point of
+        // offering it: a clip keyframe could already ask for this shape.
+        let peak = (0..=100)
+            .map(|step| ease(MotionEasing::EaseOutBack, f64::from(step) / 100.0))
+            .fold(f64::MIN, f64::max);
+        assert!(peak > 1.02, "back overshoots the target, peaked at {peak}");
+        // Bounce stays inside the frame and touches the target at the end.
+        let top = (0..=100)
+            .map(|step| ease(MotionEasing::EaseOutBounce, f64::from(step) / 100.0))
+            .fold(f64::MIN, f64::max);
+        assert!(top <= 1.0 + 1e-9, "bounce never crosses the target: {top}");
+        assert!(ease(MotionEasing::EaseOutBounce, 0.5) > 0.7);
+    }
+
+    #[test]
+    fn both_new_easings_round_trip_through_scene_json() {
+        for (wire, easing) in [
+            ("ease_out_back", MotionEasing::EaseOutBack),
+            ("ease_out_bounce", MotionEasing::EaseOutBounce),
+        ] {
+            let encoded = serde_json::to_string(&easing).unwrap();
+            assert_eq!(encoded, format!("\"{wire}\""));
+            let decoded: MotionEasing = serde_json::from_str(&encoded).unwrap();
+            assert_eq!(decoded, easing);
+        }
+        // A scene written before the overshoot curves existed still parses and
+        // keeps its easing: the enum gained variants, it did not rename any.
+        let mut value = serde_json::to_value(scene()).unwrap();
+        value["animations"][0]["easing"] = serde_json::json!("ease_in_out");
+        let parsed = parse_motion_scene(&serde_json::to_vec(&value).unwrap())
+            .expect("an old scene still parses");
+        assert_eq!(parsed.animations[0].easing, MotionEasing::EaseInOut);
+
+        // And a scene may now ask for either overshoot curve by name.
+        for (wire, easing) in [
+            ("ease_out_back", MotionEasing::EaseOutBack),
+            ("ease_out_bounce", MotionEasing::EaseOutBounce),
+        ] {
+            let mut value = serde_json::to_value(scene()).unwrap();
+            value["animations"][0]["easing"] = serde_json::json!(wire);
+            let parsed = parse_motion_scene(&serde_json::to_vec(&value).unwrap())
+                .unwrap_or_else(|error| panic!("{wire} is a scene easing: {error:?}"));
+            assert_eq!(parsed.animations[0].easing, easing);
+        }
     }
 
     #[test]
@@ -2395,6 +2466,30 @@ pub fn ease(easing: MotionEasing, progress: f64) -> f64 {
                 2.0 * progress * progress
             } else {
                 1.0 - 2.0 * (1.0 - progress) * (1.0 - progress)
+            }
+        }
+        // Overshoot: the value passes the target and settles back.
+        MotionEasing::EaseOutBack => {
+            const C1: f64 = 1.701_58;
+            const C3: f64 = C1 + 1.0;
+            let shifted = progress - 1.0;
+            1.0 + C3 * shifted * shifted * shifted + C1 * shifted * shifted
+        }
+        // Bounce: three decaying arcs instead of one curve.
+        MotionEasing::EaseOutBounce => {
+            const N1: f64 = 7.5625;
+            const D1: f64 = 2.75;
+            if progress < 1.0 / D1 {
+                N1 * progress * progress
+            } else if progress < 2.0 / D1 {
+                let shifted = progress - 1.5 / D1;
+                N1 * shifted * shifted + 0.75
+            } else if progress < 2.5 / D1 {
+                let shifted = progress - 2.25 / D1;
+                N1 * shifted * shifted + 0.9375
+            } else {
+                let shifted = progress - 2.625 / D1;
+                N1 * shifted * shifted + 0.984_375
             }
         }
     }
