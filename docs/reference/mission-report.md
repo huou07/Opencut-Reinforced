@@ -736,6 +736,18 @@ lossless), SHA-256
 line read `Exported Journey 0125.mp4 • 12.9 MB` with
 `Encoding with h264_videotoolbox (hardware).` and the `Export complete` toast.
 
+The same project then went out as the other two containers through the same
+dialog, so all three formats are now verified from a project a person built:
+
+| Row | File | Bytes | Probe | SHA-256 |
+| --- | --- | --- | --- | --- |
+| WebM (`Smaller file`) | `/private/tmp/or-bench/Journey 0125 webm.webm` | 9,277,241 | `vp9` 1920×1080 `30/1` + `opus`, `matroska,webm`, 12.008000 | `edcadddde5aee1946086d10f266975a4c12ac9dfe08c2a52692a02d7a67ebd23` |
+| FFV1 (`Keep every pixel`) | `/private/tmp/or-bench/Journey 0125 ffv1.mkv` | 94,529,801 | `ffv1` `bgra` 1920×1080 `30/1` + `pcm_s16le`, 12.000000 | `69b92ce3a8f7e3517741474ad4aef6301577ab260e8086c38a51bddb5c46602a` |
+
+The dialog summary lines read `WebM video • 1080p • quicker export` and
+`Matroska lossless • project resolution • lossless`, and the status lines named
+the sizes (`8.8 MB`, `90.2 MB`).
+
 Two text-path facts came out of the same session: the `Text` panel is reachable
 by clicking the tab (its body reads `Titles and captions live on their own
 tracks.` with `Add text track`, `Add caption track`, `Import captions…`,
@@ -748,8 +760,9 @@ report the shortcuts as broken.
 
 ### Status
 
-PASS: macOS installed-app export for MP4, WebM and FFV1 through the GUI; the
-macOS save panel, frame-rate guard, autosave badge and recent-project labels;
+PASS: macOS installed-app export for MP4, WebM and FFV1 through the GUI, the last
+two from a project built by hand in the same session; the macOS save panel,
+frame-rate guard, autosave badge and recent-project labels;
 one-mode Performance on all three hosts; edit styles and creative directions in
 the Library; the three installers and their installed payloads; the Debian and
 Windows lanes; the macOS export UI scenario and benchmark rows.
@@ -757,8 +770,8 @@ Windows lanes; the macOS export UI scenario and benchmark rows.
 UNVERIFIED: real NVIDIA or AMD hardware (no device attached — detection, adapter
 selection, fallback and tests exist, throughput does not); the Windows and Debian
 installed GUIs were exercised by the packaged journeys and the UI scenarios, not
-by hand on a desktop session; WebM and FFV1 were re-exported through the installed
-macOS GUI at 0.1.24 but only MP4 at 0.1.25.
+by hand on a desktop session; 4K and long multi-track projects have no
+measurement row at this revision.
 
 DEFERRED: the twenty-repository prototypes beyond the template work (composition
 reuse, vector/SVG, 3D and audio-graph ideas are recorded in
