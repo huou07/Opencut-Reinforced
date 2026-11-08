@@ -2890,13 +2890,17 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Future<bool?> _autosaveAttempt() async {
+  Future<AutosaveOutcome?> _autosaveAttempt() async {
     final session = _activeSession;
     final project = _activeProject;
-    if (session == null || project == null || !project.dirty) return false;
+    // Nothing to checkpoint is not a failure: an idle project that matches the
+    // file on disk should not carry a warning chip.
+    if (session == null || project == null || !project.dirty) {
+      return AutosaveOutcome.skipped;
+    }
     final result = await widget.projectGateway.autosaveCheckpoint(session);
     if (!identical(session, _activeSession)) return null;
-    return result.succeeded;
+    return result.succeeded ? AutosaveOutcome.saved : AutosaveOutcome.failed;
   }
 
   Future<void> _undoProject() async {

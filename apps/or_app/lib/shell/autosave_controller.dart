@@ -1,5 +1,11 @@
 import 'dart:async';
 
+/// What one checkpoint attempt produced.
+///
+/// [skipped] is not a failure: a clean project has nothing to write, and a
+/// project that never became dirty should not show a warning chip for it.
+enum AutosaveOutcome { saved, failed, skipped }
+
 /// What the top bar can say about the recovery checkpoint.
 class AutosaveStatus {
   const AutosaveStatus({this.label, this.failed = false});
@@ -22,9 +28,9 @@ class AutosaveController {
     this.interval = const Duration(seconds: 30),
   });
 
-  /// Returns whether the checkpoint succeeded, or null when the attempt no
-  /// longer belongs to the active session and its result should be ignored.
-  final Future<bool?> Function() attempt;
+  /// Returns what the attempt produced, or null when the attempt no longer
+  /// belongs to the active session and its result should be ignored.
+  final Future<AutosaveOutcome?> Function() attempt;
   final void Function(AutosaveStatus status) onChanged;
   final Duration interval;
 
@@ -51,17 +57,21 @@ class AutosaveController {
     _inFlight = true;
     _set(const AutosaveStatus(label: 'Autosaving recovery'));
     try {
-      final succeeded = await attempt();
-      if (succeeded == null) return;
-      _set(
-        AutosaveStatus(
-          label: succeeded ? 'Recovery saved' : 'Autosave needs attention',
-          failed: !succeeded,
+      final outcome = await attempt();
+      if (outcome == null) return;
+      _set(switch (outcome) {
+        AutosaveOutcome.saved => const AutosaveStatus(label: 'Recovery saved'),
+        AutosaveOutcome.failed => const AutosaveStatus(
+          label: 'Recovery copy did not save',
+          failed: true,
         ),
-      );
+        // Nothing to write. Clear any earlier warning so a saved, idle project
+        // stops asking for attention it does not need.
+        AutosaveOutcome.skipped => AutosaveStatus.none,
+      });
     } catch (_) {
       _set(
-        const AutosaveStatus(label: 'Autosave needs attention', failed: true),
+        const AutosaveStatus(label: 'Recovery copy did not save', failed: true),
       );
     } finally {
       _inFlight = false;

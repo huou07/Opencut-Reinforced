@@ -8,7 +8,7 @@ void main() {
   test('a tick reports progress then the outcome', () async {
     final statuses = <AutosaveStatus>[];
     final controller = AutosaveController(
-      attempt: () async => true,
+      attempt: () async => AutosaveOutcome.saved,
       onChanged: statuses.add,
     );
 
@@ -23,14 +23,26 @@ void main() {
 
   test('a failed checkpoint marks the status as failed', () async {
     final controller = AutosaveController(
-      attempt: () async => false,
+      attempt: () async => AutosaveOutcome.failed,
       onChanged: (_) {},
     );
 
     await controller.tick();
 
-    expect(controller.status.label, 'Autosave needs attention');
+    expect(controller.status.label, 'Recovery copy did not save');
     expect(controller.status.failed, isTrue);
+  });
+
+  test('a project with nothing to save clears the attention label', () async {
+    final controller = AutosaveController(
+      attempt: () async => AutosaveOutcome.skipped,
+      onChanged: (_) {},
+    );
+
+    await controller.tick();
+
+    expect(controller.status.label, isNull);
+    expect(controller.status.failed, isFalse);
   });
 
   test('a status from a swapped session is ignored', () async {
@@ -56,13 +68,13 @@ void main() {
     await controller.tick();
 
     expect(controller.status.failed, isTrue);
-    expect(controller.status.label, 'Autosave needs attention');
+    expect(controller.status.label, 'Recovery copy did not save');
   });
 
   test('ticks do not overlap while an attempt is in flight', () {
     fakeAsync((async) {
       var calls = 0;
-      final pending = Completer<bool>();
+      final pending = Completer<AutosaveOutcome>();
       final controller = AutosaveController(
         interval: const Duration(seconds: 1),
         attempt: () {
@@ -76,7 +88,7 @@ void main() {
       async.elapse(const Duration(seconds: 3));
       expect(calls, 1, reason: 'the first attempt never resolved');
 
-      pending.complete(true);
+      pending.complete(AutosaveOutcome.saved);
       async.flushMicrotasks();
       async.elapse(const Duration(seconds: 1));
       expect(calls, 2);
@@ -86,7 +98,7 @@ void main() {
 
   test('clear forgets the last status', () async {
     final controller = AutosaveController(
-      attempt: () async => false,
+      attempt: () async => AutosaveOutcome.failed,
       onChanged: (_) {},
     );
     await controller.tick();
