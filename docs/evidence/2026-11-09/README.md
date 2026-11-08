@@ -21,7 +21,7 @@ The hosts were synced with a local git bundle (`git bundle create` +
 
 | Package | Size (bytes) | SHA-256 |
 | --- | --- | --- |
-| `dist/Opencut-Reinforced-0.1.27-arm64.dmg` | 37,443,727 | `d78bc3ec00897d3f31ac4a099af7fecc21941a89eb21cc5e8af39c44c5a1aca5` |
+| `dist/Opencut-Reinforced-0.1.27-arm64.dmg` | 37,512,539 | `60e8906a516cb050bdcdccf37c7a721e503c5d9fa90ae36b0691665b0b3b1c3d` |
 | `dist/opencut-reinforced_0.1.27_amd64.deb` (Debian) | 19,632,240 | `360d71b0fb3d61cc5009637a8c6b2e2675c0c7a1a601ac24240dccb531f8e408` |
 | `dist/opencut-reinforced-0.1.27-x86_64.flatpak` (Debian) | 19,073,968 | `53c0aa8461450dab79c70a37588972e6a49bceb9eac95e17a730d873cc720619` |
 | `apps/or_app/build/windows/Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,323,707 | `df4465670cbff7a0ff631f1005727fe01e14438673276b074d2d38b72ad56ca9` |
@@ -29,6 +29,12 @@ The hosts were synced with a local git bundle (`git bundle create` +
 
 The macOS DMG is ad-hoc signed (`codesign -dv` reports `flags=0x2(adhoc)`) and
 not notarised. `spctl` rejects it, as it does every ad-hoc local build.
+
+The bundled `whisper-cli` is now built by `scripts/build_macos_whisper_cli.sh`
+from whisper.cpp v1.9.4 with `CMAKE_OSX_DEPLOYMENT_TARGET=13.0` and a static
+build. An earlier attempt reused the debug bundle's helper, which carried
+`minos 26.0` and was rejected by the DMG script; the script is the fix, not a
+`vtool` patch. The shipped helper reports `minos 13.0` and runs `--help`.
 
 ## Installed runs
 
