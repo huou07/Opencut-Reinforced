@@ -76,7 +76,9 @@ it is more than it is:
   media plus the source project, manifest and the command that produced it.
   `or tools provenance write --tool ID --output PATH [--source-project P]
   [--manifest M] -- CMD...` writes `<PATH>.orprovenance.json` beside the media;
-  `or tools provenance read --file SIDECAR` prints it again. The record carries
+  `or tools provenance read --file SIDECAR` prints it again. The same two
+  operations are MCP tools (`tools_provenance_write`, `tools_provenance_read`)
+  so an agent records the origin as part of the job it just ran. The record carries
   the catalog id and name, the version, the exact argument vector, the source
   project and manifest, and the output path. Re-rendering the tool to the same
   output path replaces the bytes the timeline already points at, so clips,

@@ -226,6 +226,8 @@ impl Server {
             "export_cancel" => self.export_cancel(arguments),
             "tools_list" => self.tools_list(),
             "tools_check" => self.tools_check(arguments),
+            "tools_provenance_read" => self.tools_provenance_read(arguments),
+            "tools_provenance_write" => self.tools_provenance_write(arguments),
             other => Err(format!(
                 "unknown tool: {other}. Call tools/list to see the supported tools."
             )),
@@ -945,6 +947,53 @@ impl Server {
             .ok_or_else(|| format!("unknown companion tool: {id}"))?;
         pretty(serde_json::to_value(status)
             .map_err(|error| format!("cannot encode the tool status: {error}"))?)
+    }
+
+
+    /// Reads the provenance sidecar written beside a companion-tool result.
+    fn tools_provenance_read(&self, arguments: &Value) -> Result<String, String> {
+        let file = required_str(arguments, "file")?;
+        self.run_or(&["tools", "provenance", "read", "--file", &file])
+            .and_then(pretty)
+    }
+
+    /// Records which companion tool produced a file, so the media library can
+    /// show its origin and the user can reopen the source project.
+    fn tools_provenance_write(&self, arguments: &Value) -> Result<String, String> {
+        let tool = required_str(arguments, "tool")?;
+        let output = required_str(arguments, "output")?;
+        let command = arguments
+            .get("command")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "command must be an array of strings".to_owned())?;
+        let mut args: Vec<String> = vec![
+            "tools".into(),
+            "provenance".into(),
+            "write".into(),
+            "--tool".into(),
+            tool,
+            "--output".into(),
+            output,
+        ];
+        for (key, flag) in [
+            ("version", "--version"),
+            ("source_project", "--source-project"),
+            ("manifest", "--manifest"),
+        ] {
+            if let Some(value) = optional_str(arguments, key)? {
+                args.push(flag.into());
+                args.push(value);
+            }
+        }
+        args.push("--".into());
+        for part in command {
+            let part = part
+                .as_str()
+                .ok_or_else(|| "command must be an array of strings".to_owned())?;
+            args.push(part.to_owned());
+        }
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        self.run_or(&borrowed).and_then(pretty)
     }
 
     fn media_get(&self, arguments: &Value) -> Result<String, String> {
@@ -1712,6 +1761,25 @@ fn tool_definitions() -> Value {
             "inputSchema": object_schema(json!({
                 "id": {"type": "string", "description": "Catalog id, for example ffmpeg or blender."}
             }), &["id"]),
+        },
+        {
+            "name": "tools_provenance_write",
+            "description": "Record which companion tool produced a file and how. Writes <output>.orprovenance.json beside the result; the media library then shows its origin. Nothing is uploaded.",
+            "inputSchema": object_schema(json!({
+                "tool": {"type": "string", "description": "Catalog id, for example blender."},
+                "output": {"type": "string", "description": "Absolute path of the produced file."},
+                "command": {"type": "array", "items": {"type": "string"}, "description": "The command that produced it, as separate arguments."},
+                "version": {"type": "string", "description": "Tool version, when known."},
+                "source_project": {"type": "string", "description": "Source project the result came from."},
+                "manifest": {"type": "string", "description": "Source manifest or scene file."}
+            }), &["tool", "output", "command"]),
+        },
+        {
+            "name": "tools_provenance_read",
+            "description": "Read the provenance sidecar beside a file and return the tool, version, command, source project and output it records.",
+            "inputSchema": object_schema(json!({
+                "file": {"type": "string", "description": "Path of the sidecar or of the produced file."}
+            }), &["file"]),
         }
     ])
 }
@@ -1887,6 +1955,8 @@ mod tests {
             .collect();
         assert!(names.contains(&"tools_list"), "{names:?}");
         assert!(names.contains(&"tools_check"), "{names:?}");
+        assert!(names.contains(&"tools_provenance_write"), "{names:?}");
+        assert!(names.contains(&"tools_provenance_read"), "{names:?}");
         let check = tools
             .as_array()
             .unwrap()
