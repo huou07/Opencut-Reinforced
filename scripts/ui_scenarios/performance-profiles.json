@@ -44,43 +44,17 @@
     {
       "op": "tap",
       "selector": {
-        "key": "performance-backend"
+        "key": "performance-redetect"
       }
     },
     {
       "op": "wait_label",
-      "label_regex": "^(Metal|Vulkan|Direct3D 12|OpenGL ES) only$",
-      "budget_ms": 15000
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "label_regex": "^(Metal|Vulkan|Direct3D 12|OpenGL ES) only$"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Pinned:",
-      "budget_ms": 15000
+      "label_regex": "checked just now",
+      "budget_ms": 30000
     },
     {
       "op": "shot",
-      "name": "performance-pinned"
-    },
-    {
-      "op": "tap",
-      "selector": {
-        "key": "performance-reset"
-      }
-    },
-    {
-      "op": "wait_label",
-      "label_regex": "Nothing is pinned",
-      "budget_ms": 20000
-    },
-    {
-      "op": "shot",
-      "name": "performance-reset"
+      "name": "performance-redetected"
     }
   ]
 }

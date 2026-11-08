@@ -42,6 +42,10 @@ class _PerformancePanelState extends State<PerformancePanel> {
   /// machine in front of us; the panel says so instead of silently re-deciding.
   String? _machineChanged;
 
+  /// Set by Re-detect: the check ran again on request, so its timestamp has to
+  /// move even when the machine is unchanged.
+  bool _stampRequested = false;
+
   /// The fingerprint this panel instance has already handed to the store. A
   /// caller that keeps the old settings (a test double, a store that failed to
   /// save) must not make the panel offer the same fingerprint on every frame.
@@ -81,6 +85,7 @@ class _PerformancePanelState extends State<PerformancePanel> {
   void _refresh() {
     setState(() {
       _machineChanged = null;
+      _stampRequested = true;
       _measure();
     });
   }
@@ -89,16 +94,21 @@ class _PerformancePanelState extends State<PerformancePanel> {
   /// longer the one described there (a new GPU, driver or OS version).
   void _recordFingerprint(PerformanceReportView report) {
     final fingerprint = _fingerprintOf(report);
-    if (_recordedFingerprint == fingerprint) return;
+    // Re-detect has to move the timestamp even when nothing about the machine
+    // changed, otherwise the panel would answer a fresh check with the old time.
+    final stampOnly = _stampRequested;
+    if (_recordedFingerprint == fingerprint && !stampOnly) return;
     final settings = widget.settings;
-    if (settings.hardwareFingerprint == fingerprint) {
+    final unchanged = settings.hardwareFingerprint == fingerprint;
+    if (unchanged && !stampOnly) {
       _recordedFingerprint = fingerprint;
       return;
     }
     _recordedFingerprint = fingerprint;
-    final changed = settings.hardwareFingerprint != null;
+    final changed = settings.hardwareFingerprint != null && !unchanged;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _stampRequested = false;
       if (changed && _machineChanged == null) {
         setState(() {
           _machineChanged =

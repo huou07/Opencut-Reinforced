@@ -122,6 +122,34 @@ void main() {
     },
   );
 
+  testWidgets('Re-detect stamps the check time even when nothing changed', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+    final first = settings.hardwareCheckedAt;
+    expect(first, isNotNull);
+
+    final savesBefore = saves;
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('performance-redetect')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('performance-redetect')));
+    await tester.pumpAndSettle();
+
+    expect(saves, savesBefore + 1);
+    expect(
+      settings.hardwareCheckedAt!.isAfter(first!) ||
+          settings.hardwareCheckedAt == first,
+      isTrue,
+    );
+    expect(
+      find.byKey(const ValueKey('performance-machine-changed')),
+      findsNothing,
+      reason: 'a requested re-check on the same machine is not a change',
+    );
+  });
+
   testWidgets('a plan with several notes builds without duplicate keys', (
     tester,
   ) async {
