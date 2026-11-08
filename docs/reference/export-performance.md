@@ -917,12 +917,31 @@ Media Foundation):
 | 4K source into 1080p, full pipeline | 20.6 |
 | 4K render only | 50.0 |
 | 4K decode only | 18.8 |
+| 4K encode only, MP4 | 64.5 |
+| 1080p encode only, MP4 | 269.8 |
+| 1080p encode only, WebM | 27.9 |
+| 1080p encode only, FFV1 | 18.9 |
 
-The Windows encode-only rows are missing from this table: the first run of the
-script did not set `OR_BENCH_SOURCE`, and the harness skipped the whole test
-whenever the fixture was absent — even for `encode`, which never opens it. The
-harness now asks only the modes that decode, so the row is one command away;
-until it is measured here it is not claimed.
+The first attempt at these rows measured nothing: the harness skipped the whole
+test whenever the fixture was absent, even for `encode`, which never opens it.
+The row is now fixture-free, so the numbers above are the first measurement of
+the Windows encoders on this host rather than an inherited claim.
+
+### The 4K wall is a different stage on each host
+
+| Host | 4K decode | 4K encode | 4K full |
+|---|---|---|---|
+| macOS M5 | 112.1 | 75.2 | 65.3 |
+| Debian UHD 770 | 65.8 | 97.5 | 66.5 |
+| Windows Intel Graphics | 18.8 | 64.5 | 29.6 |
+
+macOS is encoder-bound (75 against a 112 decode), Debian is decode-bound (65.8
+against 97.5), and Windows is decode-bound by a wide margin (18.8 against 64.5),
+which is why its full row lands at 29.6 — near its decode ceiling, not its
+encoder. A single "the GPU encodes at N fps" claim would therefore be wrong on
+two of the three hosts: what to make faster at 4K depends on which stage the
+machine actually hits first, and the Automatic plan measures the stages rather
+than assuming one.
 
 ### The downscale row is slower on both Intel hosts
 
