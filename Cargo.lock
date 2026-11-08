@@ -1845,6 +1845,7 @@ dependencies = [
  "or_motion",
  "or_render",
  "or_runtime",
+ "or_tools",
  "serde_json",
  "sha2",
  "uuid",
@@ -1867,6 +1868,7 @@ dependencies = [
  "or_ipc",
  "or_motion",
  "or_render",
+ "or_tools",
  "serde_json",
 ]
 
@@ -1931,6 +1933,13 @@ dependencies = [
 
 [[package]]
 name = "or_runtime"
+version = "0.1.27"
+dependencies = [
+ "or_core",
+]
+
+[[package]]
+name = "or_tools"
 version = "0.1.27"
 dependencies = [
  "or_core",

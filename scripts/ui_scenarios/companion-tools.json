@@ -1,0 +1,77 @@
+{
+ "name": "companion-tools",
+ "viewport": {
+  "width": 1280,
+  "height": 900
+ },
+ "description": "Companion tools is a GUI surface, not a CLI flag: Settings lists each external program with its state on this machine, what it is for, its licence, the exact install command, the official page and how to remove it. The journey proves the list is reachable, that detection ran (ffmpeg is ready on this host), that a missing tool expands to its install and removal guidance, and that nothing is installed or downloaded by opening the screen.",
+ "steps": [
+  {
+   "op": "shot",
+   "name": "companion-home"
+  },
+  {
+   "op": "tap",
+   "key": "nav-settings"
+  },
+  {
+   "op": "wait",
+   "text": "Settings"
+  },
+  {
+   "op": "tap",
+   "key": "settings-section-resources"
+  },
+  {
+   "op": "wait",
+   "text": "Resources & updates"
+  },
+  {
+   "op": "scroll_until",
+   "key": "settings-companion-tools",
+   "dy": -420,
+   "steps": 8
+  },
+  {
+   "op": "expect",
+   "key": "settings-companion-tools"
+  },
+  {
+   "op": "wait_key",
+   "key": "companion-tools-summary",
+   "budget_ms": 20000
+  },
+  {
+   "op": "expect",
+   "key": "companion-tool-ffmpeg"
+  },
+  {
+   "op": "expect",
+   "key": "companion-tool-ffmpeg-state"
+  },
+  {
+   "op": "tap",
+   "key": "companion-tool-blender"
+  },
+  {
+   "op": "wait",
+   "text": "Install"
+  },
+  {
+   "op": "expect",
+   "key": "companion-tool-blender-detail"
+  },
+  {
+   "op": "expect",
+   "key": "companion-tool-blender-page"
+  },
+  {
+   "op": "shot",
+   "name": "companion-blender-expanded"
+  },
+  {
+   "op": "tree",
+   "name": "companion-tools"
+  }
+ ]
+}

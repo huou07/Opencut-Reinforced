@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 or_core = { path = "../or_core" }
+or_tools = { path = "../or_tools" }
 or_motion = { path = "../or_motion" }
 or_render = { path = "../or_render" }
 or_ipc = { path = "../or_ipc" }

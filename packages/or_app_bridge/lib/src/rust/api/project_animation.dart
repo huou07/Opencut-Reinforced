@@ -60,7 +60,8 @@ class ProjectKeyframeView {
   final RationalTimeView at;
   final int value;
 
-  /// `linear`, `ease_in`, `ease_out` or `ease_in_out`.
+  /// `linear`, `ease_in`, `ease_out`, `ease_in_out`, `ease_out_back` or
+  /// `ease_out_bounce`.
   final String easing;
 
   const ProjectKeyframeView({

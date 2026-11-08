@@ -18,10 +18,18 @@ import '../updates/export_capability_panel.dart';
 import '../updates/performance_panel.dart';
 import '../updates/system_check_panel.dart';
 import '../updates/resource_center_panel.dart';
+import '../updates/external_tools_panel.dart';
 import '../updates/runtime_setup_panel.dart';
 import '../widgets/or_widgets.dart';
 
-enum SettingsSection { resources, performance, assistant, appearance, general, advanced }
+enum SettingsSection {
+  resources,
+  performance,
+  assistant,
+  appearance,
+  general,
+  advanced,
+}
 
 typedef _Diagnostics = ({
   AppInfo appInfo,
@@ -256,6 +264,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SystemCheckPanel(),
             const SizedBox(height: OrSpacing.x3),
             const ExportCapabilityPanel(),
+            const SizedBox(height: OrSpacing.x3),
+            const ExternalToolsPanel(),
             const SizedBox(height: OrSpacing.x3),
             const RuntimeSetupPanel(),
           ],

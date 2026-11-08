@@ -4,6 +4,7 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/external_tools.dart';
 import 'api/motion.dart';
 import 'api/motion_library.dart';
 import 'api/performance.dart';
@@ -157,6 +158,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ExportCapabilityView dco_decode_export_capability_view(dynamic raw);
 
   @protected
+  ExternalToolLaunch dco_decode_external_tool_launch(dynamic raw);
+
+  @protected
+  ExternalToolView dco_decode_external_tool_view(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -191,6 +198,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EncodingPlanView> dco_decode_list_encoding_plan_view(dynamic raw);
+
+  @protected
+  List<ExternalToolView> dco_decode_list_external_tool_view(dynamic raw);
 
   @protected
   List<MotionAssetEntryView> dco_decode_list_motion_asset_entry_view(
@@ -710,6 +720,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  ExternalToolLaunch sse_decode_external_tool_launch(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ExternalToolView sse_decode_external_tool_view(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -748,6 +766,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<EncodingPlanView> sse_decode_list_encoding_plan_view(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ExternalToolView> sse_decode_list_external_tool_view(
     SseDeserializer deserializer,
   );
 
@@ -1395,6 +1418,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_external_tool_launch(
+    ExternalToolLaunch self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_external_tool_view(
+    ExternalToolView self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -1442,6 +1477,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_encoding_plan_view(
     List<EncodingPlanView> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_external_tool_view(
+    List<ExternalToolView> self,
     SseSerializer serializer,
   );
 

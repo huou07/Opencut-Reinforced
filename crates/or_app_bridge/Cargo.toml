@@ -11,6 +11,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 flutter_rust_bridge = "=2.13.0"
 or_core = { path = "../or_core" }
+or_tools = { path = "../or_tools" }
 or_ai = { path = "../or_ai" }
 or_ipc = { path = "../or_ipc" }
 or_runtime = { path = "../or_runtime" }

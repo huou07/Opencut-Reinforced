@@ -2,6 +2,7 @@
 members = [
     "crates/or_core",
     "crates/or_cli",
+    "crates/or_tools",
     "crates/or_app_bridge",
     "crates/or_ipc",
     "crates/or_runtime",

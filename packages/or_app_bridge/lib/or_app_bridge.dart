@@ -1,5 +1,13 @@
 export 'src/rust/api.dart'
     show AppInfo, Capability, HealthStatus, appInfo, capabilities, health;
+export 'src/rust/api/external_tools.dart'
+    show
+        ExternalToolLaunch,
+        ExternalToolView,
+        checkExternalTool,
+        launchExternalTool,
+        listExternalTools,
+        readyExternalTools;
 export 'src/rust/api/performance.dart'
     show
         DecoderProbeView,
