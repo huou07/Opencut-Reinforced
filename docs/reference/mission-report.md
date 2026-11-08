@@ -702,6 +702,50 @@ product journey and exported:
 - Windows `WINDOWS_LANE=PASS` at `35fb3bc9`, `5db52705` and `562e74c7`, each
   ending with `OK desktop ZIP install, replacement and removal`.
 
+### Hand-driven journey on the installed app (0.1.25)
+
+Rather than trusting the packaged journey alone, the installed macOS app was
+driven by hand from an empty session to a finished export. Every step below is
+the user's step, not a test hook.
+
+1. `⌘N` → `New Project`: typed `Audit Journey 0125`, left the frame rate at
+   `30 fps` (`Used for playback timecode and export.`), `Continue`, then the
+   folder chooser `Choose Folder` (the app asks where the `.orproj` goes; the
+   folder it shows wins when nothing is highlighted).
+2. `⌘I` → the native import panel → `⌘⇧G` → `/tmp/or-bench` → `bench1080.mp4`.
+   The library card read `bench1080.mp4 / mov, mp4, m4a, 3gp, 3g2, mj2 • 12 s •
+   1920×1080 h264` and the counter `1 item`.
+3. The empty timeline offered `Put your first clip on the timeline` with an
+   `Add first clip` button; one press put the clip on a video track and the
+   Inspector read `1 track • 1 clip`.
+4. Selected the clip (clicking the clip block), moved the playhead to `00:05`
+   and pressed `S`: `1 track • 2 clips`. `⌘Z` → `1 clip`, `⌘⇧Z` → `2 clips`.
+5. `⌘S` → title `Audit Journey 0125 • Saved`, Inspector `Saved to disk`. The
+   file landed at `/private/tmp/or-evidence/Audit Journey 0125.orproj`.
+6. `⌘Q`, relaunch, Home → `Recent Projects` row (subtitle
+   `/private/tmp/or-evidence/Audit Journey 0125.orproj • Last opened Sun, Nov 8`),
+   click → the editor reopened with `1 track • 2 clips` and `Saved to disk`.
+7. `⌘E` → `WHAT IS THIS FOR?` → `Share or upload` → `Continue` → the
+   `NSSavePanel` (`Choose where to save this export.`, `Save As: Journey 0125`,
+   `Where:` the last folder) → `Export`.
+
+Result: `/private/tmp/or-bench/Journey 0125.mp4`, 13,482,829 B, `h264`
+1920×1080 `30/1` + `aac`, duration 12.010000 (the 12 s source; the split is
+lossless), SHA-256
+`ed5bb37ffadb544dfc88999e1a756f3257679ccb897e3611c310b78fe504deff`. The status
+line read `Exported Journey 0125.mp4 • 12.9 MB` with
+`Encoding with h264_videotoolbox (hardware).` and the `Export complete` toast.
+
+Two text-path facts came out of the same session: the `Text` panel is reachable
+by clicking the tab (its body reads `Titles and captions live on their own
+tracks.` with `Add text track`, `Add caption track`, `Import captions…`,
+`Export captions…`), and `Add text track` added a second rail row without
+touching the video track. The `1`–`4` panel shortcuts do work, but only for real
+key codes: an AppleScript `keystroke "1"` (a unicode keystroke) never reached the
+`LogicalKeyboardKey.digit1` binding while `key code 18` did. That is a harness
+fact, not an app defect, and it was recorded here so a later session does not
+report the shortcuts as broken.
+
 ### Status
 
 PASS: macOS installed-app export for MP4, WebM and FFV1 through the GUI; the
