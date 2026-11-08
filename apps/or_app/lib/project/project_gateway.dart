@@ -344,6 +344,8 @@ class ProjectMediaItem {
     required this.duration,
     required this.videoDetails,
     required this.audioDetails,
+    this.provenanceTool,
+    this.provenanceVersion,
     this.containerDuration,
     this.firstVideoDuration,
     this.firstAudioDuration,
@@ -355,6 +357,10 @@ class ProjectMediaItem {
   final String? duration;
   final String? videoDetails;
   final String? audioDetails;
+
+  /// The companion tool that produced this file, when a sidecar records it.
+  final String? provenanceTool;
+  final String? provenanceVersion;
   final ProjectRationalTime? containerDuration;
   final ProjectRationalTime? firstVideoDuration;
   final ProjectRationalTime? firstAudioDuration;

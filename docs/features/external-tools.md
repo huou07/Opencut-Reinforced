@@ -81,7 +81,9 @@ it is more than it is:
   project and manifest, and the output path. Re-rendering the tool to the same
   output path replaces the bytes the timeline already points at, so clips,
   undo history and project references stay valid; a new path is a new media
-  item, not a silent swap.
+  item, not a silent swap. The media library reads the sidecar when it lists an
+  item and shows `From <tool> <version>` in the row, so a rendered result is
+  recognisable without opening anything else.
 
 A flat render is never described as an editable composition. The source stays
 beside the output so it can be reopened in the companion and re-rendered; the

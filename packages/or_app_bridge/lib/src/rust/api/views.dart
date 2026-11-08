@@ -441,6 +441,10 @@ class ProjectMediaItemView {
   final String? duration;
   final String? videoDetails;
   final String? audioDetails;
+
+  /// The companion tool recorded beside the media, when a sidecar exists.
+  final String? provenanceTool;
+  final String? provenanceVersion;
   final RationalTimeView? containerDuration;
   final RationalTimeView? firstVideoDuration;
   final RationalTimeView? firstAudioDuration;
@@ -452,6 +456,8 @@ class ProjectMediaItemView {
     this.duration,
     this.videoDetails,
     this.audioDetails,
+    this.provenanceTool,
+    this.provenanceVersion,
     this.containerDuration,
     this.firstVideoDuration,
     this.firstAudioDuration,
@@ -465,6 +471,8 @@ class ProjectMediaItemView {
       duration.hashCode ^
       videoDetails.hashCode ^
       audioDetails.hashCode ^
+      provenanceTool.hashCode ^
+      provenanceVersion.hashCode ^
       containerDuration.hashCode ^
       firstVideoDuration.hashCode ^
       firstAudioDuration.hashCode;
@@ -480,6 +488,8 @@ class ProjectMediaItemView {
           duration == other.duration &&
           videoDetails == other.videoDetails &&
           audioDetails == other.audioDetails &&
+          provenanceTool == other.provenanceTool &&
+          provenanceVersion == other.provenanceVersion &&
           containerDuration == other.containerDuration &&
           firstVideoDuration == other.firstVideoDuration &&
           firstAudioDuration == other.firstAudioDuration;

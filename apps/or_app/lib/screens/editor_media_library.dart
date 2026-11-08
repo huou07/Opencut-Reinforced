@@ -457,6 +457,9 @@ class EditorMediaLibraryItem extends StatelessWidget {
       if (item.duration != null) item.duration!,
       if (item.videoDetails != null) item.videoDetails!,
       if (item.audioDetails != null) 'Audio · ${item.audioDetails}',
+      if (item.provenanceTool != null)
+        'From ${item.provenanceTool}'
+            '${item.provenanceVersion == null ? '' : ' ${item.provenanceVersion}'}',
     ];
     Widget dragHandle() => Tooltip(
       message: 'Drag to Timeline',

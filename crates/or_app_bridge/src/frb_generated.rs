@@ -7599,6 +7599,8 @@ impl SseDecode for crate::api::views::ProjectMediaItemView {
         let mut var_duration = <Option<String>>::sse_decode(deserializer);
         let mut var_videoDetails = <Option<String>>::sse_decode(deserializer);
         let mut var_audioDetails = <Option<String>>::sse_decode(deserializer);
+        let mut var_provenanceTool = <Option<String>>::sse_decode(deserializer);
+        let mut var_provenanceVersion = <Option<String>>::sse_decode(deserializer);
         let mut var_containerDuration =
             <Option<crate::api::views::RationalTimeView>>::sse_decode(deserializer);
         let mut var_firstVideoDuration =
@@ -7612,6 +7614,8 @@ impl SseDecode for crate::api::views::ProjectMediaItemView {
             duration: var_duration,
             video_details: var_videoDetails,
             audio_details: var_audioDetails,
+            provenance_tool: var_provenanceTool,
+            provenance_version: var_provenanceVersion,
             container_duration: var_containerDuration,
             first_video_duration: var_firstVideoDuration,
             first_audio_duration: var_firstAudioDuration,
@@ -10105,6 +10109,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::views::ProjectMediaItemView {
             self.duration.into_into_dart().into_dart(),
             self.video_details.into_into_dart().into_dart(),
             self.audio_details.into_into_dart().into_dart(),
+            self.provenance_tool.into_into_dart().into_dart(),
+            self.provenance_version.into_into_dart().into_dart(),
             self.container_duration.into_into_dart().into_dart(),
             self.first_video_duration.into_into_dart().into_dart(),
             self.first_audio_duration.into_into_dart().into_dart(),
@@ -12085,6 +12091,8 @@ impl SseEncode for crate::api::views::ProjectMediaItemView {
         <Option<String>>::sse_encode(self.duration, serializer);
         <Option<String>>::sse_encode(self.video_details, serializer);
         <Option<String>>::sse_encode(self.audio_details, serializer);
+        <Option<String>>::sse_encode(self.provenance_tool, serializer);
+        <Option<String>>::sse_encode(self.provenance_version, serializer);
         <Option<crate::api::views::RationalTimeView>>::sse_encode(
             self.container_duration,
             serializer,

@@ -247,6 +247,9 @@ pub struct ProjectMediaItemView {
     pub duration: Option<String>,
     pub video_details: Option<String>,
     pub audio_details: Option<String>,
+    /// The companion tool recorded beside the media, when a sidecar exists.
+    pub provenance_tool: Option<String>,
+    pub provenance_version: Option<String>,
     pub container_duration: Option<RationalTimeView>,
     pub first_video_duration: Option<RationalTimeView>,
     pub first_audio_duration: Option<RationalTimeView>,

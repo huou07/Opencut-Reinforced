@@ -314,6 +314,8 @@ class RustProjectGateway implements ProjectGateway {
                 duration: item.duration,
                 videoDetails: item.videoDetails,
                 audioDetails: item.audioDetails,
+                provenanceTool: item.provenanceTool,
+                provenanceVersion: item.provenanceVersion,
                 containerDuration: item.containerDuration == null
                     ? null
                     : _projectRationalTime(item.containerDuration!),

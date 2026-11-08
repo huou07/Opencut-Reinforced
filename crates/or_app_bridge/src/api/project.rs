@@ -1695,6 +1695,14 @@ fn write_caption_file_atomically(path: &Path, bytes: &[u8]) -> Result<(), Projec
     Ok(())
 }
 
+/// Reads the provenance sidecar a companion tool wrote beside the media.
+fn media_provenance(item: &MediaItem) -> Option<or_core::ToolProvenance> {
+    let path = item.source().to_file_path().ok()?;
+    let sidecar = or_core::ToolProvenance::sidecar_path(&path);
+    let text = std::fs::read_to_string(sidecar).ok()?;
+    or_core::ToolProvenance::from_json(&text).ok()
+}
+
 fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
     let metadata = item.metadata();
     let video_details = metadata.streams().iter().find_map(|stream| match stream {
@@ -1730,6 +1738,7 @@ fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
         }
         _ => None,
     });
+    let provenance = media_provenance(item);
     ProjectMediaItemView {
         media_id: item.id().to_string(),
         source_uri: item.source().uri().to_owned(),
@@ -1745,6 +1754,8 @@ fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
         }),
         video_details,
         audio_details,
+        provenance_tool: provenance.as_ref().map(|record| record.tool_name.clone()),
+        provenance_version: provenance.as_ref().and_then(|record| record.tool_version.clone()),
         container_duration: metadata.duration().map(rational_time_view),
         first_video_duration: metadata
             .streams()
