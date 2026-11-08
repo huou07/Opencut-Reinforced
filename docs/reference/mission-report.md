@@ -573,10 +573,12 @@ tested locally; nothing was pushed.
 
 ### The revision all three machines ran
 
-`5db52705a4a73342b017146b552c8aa0a2393ddd` — branch
-`mission/product-completion-2026-11-08`, on the macOS checkout, on
-`~/or-mission` (Debian) and on `C:\Users\hp\src\or-mission` (Windows). The DMG,
-the DEB and the Windows setup/zip below were built from that revision.
+`35fb3bc97e` — branch `mission/product-completion-2026-11-08`, on the macOS
+checkout, on `~/or-mission` (Debian) and on `C:\Users\hp\src\or-mission`
+(Windows). The DMG, the DEB and the Windows setup/zip below were built from that
+revision and installed from the artifacts. The code revision the first pass of
+these rows was taken at is `5db52705`; `35fb3bc9` adds the palette entry to the
+edit styles and nothing that touches export.
 
 ### Fixed: export on the installed macOS app
 
@@ -608,7 +610,7 @@ separate defects, and each is now reproduced, root-caused and covered:
 Verified on the installed app: `Export` → `Share or upload` → `Continue` →
 `NSSavePanel` (`Save As:`, `Where:`, `Export`) → the panel's own replace confirm
 → `/tmp/or-evidence/Repro.mp4`, 11,267,668 B, `h264` 1920×1080 30/1 + `aac`,
-10.005 s, SHA-256 `49f7e901…d6d4a`, status `Exported Repro.mp4 • 10.7 MB`,
+10.005 s, SHA-256 `2f66d57c…1b90` at `35fb3bc9` (`49f7e901…d6d4a` at `5db52705`), status `Exported Repro.mp4 • 10.7 MB`,
 `Encoding with h264_videotoolbox (hardware).`, toast `Export complete`. MP4, WebM
 (vp9/opus) and FFV1 (ffv1/pcm_s16le) were each exported through the installed app's
 GUI at 0.1.24 and re-verified for MP4 at 0.1.25.
@@ -675,10 +677,14 @@ text row is faster, so the export changes did not cost throughput.
 
 | Host | Package | Bytes | SHA-256 |
 | --- | --- | --- | --- |
-| macOS | `dist/Opencut-Reinforced-0.1.25-arm64.dmg` | 36,111,317 | `65b60324041ef4bc907140e7bee47930f87990025d4fa204de420c4077ecc090` |
-| Debian | `apps/or_app/build/local-lanes/opencut-reinforced-linux-x64-release.deb` | 23,355,180 | `67fd5278607c516b60e94d3597b67841da3ee850725a301c61cd2ad4b2353dfa` |
-| Windows | `apps/or_app/build/windows/Opencut-Reinforced-0.1.25-windows-x64-setup.exe` | 25,248,726 | `29ec88a8e468914c3ef7e09125c970f152dec5a1ee65691e73ae25ff25dc721e` |
-| Windows | `apps/or_app/build/windows/or-windows-x64-release.zip` | 34,891,341 | `d66c077155bf78b7f4001c8be0be576d7534d547590b0d30c3250b6780457464` |
+| macOS | `dist/Opencut-Reinforced-0.1.25-arm64.dmg` | 36,112,708 | `6df2a3f7d5bb6223c5945d3ba734487d9e76593c02e275048dcc0a4575527ef7` |
+| Debian | `apps/or_app/build/local-lanes/opencut-reinforced-linux-x64-release.deb` | 23,349,696 | `f82e4b583027ecec7f421d5b301c983319e43462f4fcf6a08569541431d12a26` |
+| Windows | `apps/or_app/build/windows/Opencut-Reinforced-0.1.25-windows-x64-setup.exe` | 25,248,664 | `255aafd98e14475231e388dabeb6ec41908a53efb93f77a58bcccfc27026bde4` |
+| Windows | `apps/or_app/build/windows/or-windows-x64-release.zip` | 34,892,597 | `87f2388ec01542ec46d3ccf359166e914243f2fde742983a192dfb673189a2ce` |
+
+The earlier pass at `5db52705` produced the same DMG/DEB/setup/zip names with
+different bytes (DMG `65b60324…`, DEB `67fd5278…`, setup `29ec88a8…`, zip
+`d66c0771…`); those were the artifacts the first installed-app checks used.
 
 Every package was installed from the artifact, not from a build directory:
 `ditto` from the DMG into `/Applications` (`or version` → `Opencut Reinforced
@@ -691,10 +697,10 @@ revision 4), quit, reopened with `Frame rate 30 fps` / `Duration 10.00 s` /
 Windows lanes each installed their payload, launched it, ran the packaged
 product journey and exported:
 
-- Debian `RESULT: LOCAL_LANE=PASS` at `5db52705` — `deb PASS 101.46s`,
-  `journey PASS 392.56s`; the earlier `562e74c7` lane also passed.
-- Windows `WINDOWS_LANE=PASS` at `5db52705` and at `562e74c7`, ending with `OK
-  desktop ZIP install, replacement and removal`.
+- Debian `RESULT: LOCAL_LANE=PASS` at `35fb3bc9` — `deb PASS 86.72s`,
+  `journey PASS 392.71s` (`5db52705`: 101.46s/392.56s; `562e74c7`: also passed).
+- Windows `WINDOWS_LANE=PASS` at `35fb3bc9`, `5db52705` and `562e74c7`, each
+  ending with `OK desktop ZIP install, replacement and removal`.
 
 ### Status
 
