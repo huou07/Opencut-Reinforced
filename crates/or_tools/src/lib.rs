@@ -23,6 +23,12 @@ use or_core::{
 /// ignores the flag is the case this bounds; it is not a render timeout.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(4);
 
+/// How long a person-requested tool run may take before it is killed.
+///
+/// Renders and conversions legitimately take minutes, so this is a backstop
+/// against a hung process, not a probe bound.
+pub const RUN_TIMEOUT: Duration = Duration::from_secs(600);
+
 /// Runs one program with a bounded wait and captured output.
 pub struct SystemCommandRunner {
     timeout: Duration,
@@ -116,6 +122,29 @@ impl CommandRunner for SystemCommandRunner {
     }
 }
 
+/// Runs a ready catalog tool with the arguments a person supplied.
+///
+/// The catalog is the allow-list: an id outside it is rejected, and a tool that
+/// is missing or broken is reported before anything is spawned. Arguments are
+/// passed through untouched, never through a shell.
+pub fn run_tool(
+    id: &str,
+    arguments: &[String],
+    timeout: Duration,
+) -> Result<CommandOutput, String> {
+    let descriptor = tool(id).ok_or_else(|| format!("unknown companion tool: {id}"))?;
+    let status = probe(descriptor);
+    if status.state != ToolState::Ready {
+        return Err(format!(
+            "{} is not ready: {}",
+            descriptor.name, status.detail
+        ));
+    }
+    let runner = SystemCommandRunner::with_timeout(timeout);
+    let borrowed: Vec<&str> = arguments.iter().map(String::as_str).collect();
+    runner.run(&descriptor.probe.program, &borrowed)
+}
+
 /// Probes every catalog tool this platform supports.
 pub fn statuses(platform: Platform) -> Vec<ToolStatus> {
     probe_all(platform, &SystemCommandRunner::new())
@@ -203,5 +232,17 @@ mod tests {
     fn an_unknown_tool_is_none_not_a_panic() {
         assert!(status("no-such-tool").is_none());
         assert!(launch("no-such-tool").is_err());
+    }
+}
+
+#[cfg(test)]
+mod run_tests {
+    use super::*;
+
+    #[test]
+    fn an_unknown_id_is_rejected_without_spawning() {
+        let error = run_tool("not-a-tool", &["--version".to_owned()], PROBE_TIMEOUT)
+            .expect_err("unknown tools are rejected");
+        assert!(error.contains("unknown companion tool"), "{error}");
     }
 }

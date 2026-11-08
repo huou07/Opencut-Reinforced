@@ -52,11 +52,17 @@ window and dying.
   version, licence, size, runtime, outputs, the exact install command, the
   official page and the update/removal steps. Expanding a row is read-only;
   nothing downloads or installs from the screen. `Check all` re-probes.
-- **`or tools [list|check <id>|launch <id>] [--json]`** prints the same states.
-  `or tools check <id>` exits non-zero for an unknown id, not for a missing
-  tool.
+- **`or tools [list|check <id>|launch <id>|run <id> [-- args...]] [--json]`**
+  prints the same states, opens a companion window, or runs a ready tool's CLI
+  with the arguments given. `or tools check <id>` exits non-zero for an unknown
+  id, not for a missing tool; `or tools run` refuses an id outside the catalog
+  and a tool that is not ready, so a typo never spawns something else. Arguments
+  are passed to the process, never through a shell.
+- **`or mcp`** exposes `tools_list` and `tools_check`, so an agent can ask which
+  companion tools are installed before promising a workflow.
 - **`or_tools`** is the only crate that spawns a tool. Probes are bounded
-  (`PROBE_TIMEOUT`, 4 s); a probe that overruns is killed and reported.
+  (`PROBE_TIMEOUT`, 4 s); a run is bounded by `RUN_TIMEOUT` (600 s) and a tool
+  that overruns is killed and reported.
 
 ## What counts as a result
 
