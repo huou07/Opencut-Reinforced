@@ -748,15 +748,29 @@ The dialog summary lines read `WebM video • 1080p • quicker export` and
 `Matroska lossless • project resolution • lossless`, and the status lines named
 the sizes (`8.8 MB`, `90.2 MB`).
 
-Two text-path facts came out of the same session: the `Text` panel is reachable
-by clicking the tab (its body reads `Titles and captions live on their own
-tracks.` with `Add text track`, `Add caption track`, `Import captions…`,
-`Export captions…`), and `Add text track` added a second rail row without
-touching the video track. The `1`–`4` panel shortcuts do work, but only for real
-key codes: an AppleScript `keystroke "1"` (a unicode keystroke) never reached the
-`LogicalKeyboardKey.digit1` binding while `key code 18` did. That is a harness
-fact, not an app defect, and it was recorded here so a later session does not
-report the shortcuts as broken.
+The text path went through the same session. The `Text` panel is reachable by
+clicking the tab (its body reads `Titles and captions live on their own tracks.`
+with `Add text track`, `Add caption track`, `Import captions…`,
+`Export captions…`) and `Add text track` added a second rail row without touching
+the video track. A title clip is made from the timeline's `+` menu
+(`Add video track`, `Add audio track`, `Add text track`, `Add caption track`,
+`Add title`, `Add caption`, `Add marker at playhead`, `Import captions (SRT)…`,
+`Export captions (SRT)…`): `Add title` opened an `Add Title` dialog with a
+`Title text` field, a shadow/background box toggle and the note `New clips start
+at the preview playhead.`; typing `Journey Title` and pressing `Add` produced
+`2 tracks • 4 clips` with `Text: Journey Title` on the text rail.
+
+That project exported to `/private/tmp/or-bench/Journey 0125 text.mp4`,
+14,022,023 B, `h264` 1920×1080 + `aac`, duration 14.101000 (the 3 s title starts
+at the playhead past the 12 s picture, so the file is longer than the clip — the
+dialog says so in advance). A frame pulled at 12.6 s with `ffmpeg -ss 12.6 … -frames:v 1`
+OCR'd as `Journey Title`, so text really is composited into the delivered file
+rather than only drawn in the viewer.
+
+The `1`–`4` panel shortcuts do work, but only for real key codes: an AppleScript
+`keystroke "1"` (a unicode keystroke) never reached the `LogicalKeyboardKey.digit1`
+binding while `key code 18` did. That is a harness fact, not an app defect, and it
+is recorded here so a later session does not report the shortcuts as broken.
 
 ### Status
 
