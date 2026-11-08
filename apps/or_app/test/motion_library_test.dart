@@ -773,7 +773,11 @@ void main() {
 
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const ValueKey('motion-starter-end-card')));
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+      // The starter read is real filesystem work, and a busy full-suite run can
+      // take longer than any fixed delay; wait for the state change itself.
+      for (var attempt = 0; attempt < 200 && !controller.hasDraft; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
