@@ -120,6 +120,33 @@ fn composited_nv12_stage_cost() {
         planes.luma().len() + planes.chroma().len()
     });
 
+    measure("two_video_layers", || {
+        let first = Nv12VideoLayer::new(WIDTH, HEIGHT, &luma, &chroma).expect("a video layer");
+        let second = Nv12VideoLayer::new(WIDTH, HEIGHT, &luma, &chroma).expect("a video layer");
+        let planes = renderer
+            .composite_layers_nv12(
+                size,
+                &[CompositorLayer::Nv12(first), CompositorLayer::Nv12(second)],
+            )
+            .expect("a two-layer composite");
+        planes.luma().len() + planes.chroma().len()
+    });
+
+    measure("one_rgba_layer", || {
+        let text = RgbaVideoLayer::new(WIDTH, HEIGHT, &rgba).expect("a text layer");
+        let planes = renderer
+            .composite_layers_nv12(size, &[CompositorLayer::Rgba(text)])
+            .expect("an rgba composite");
+        planes.luma().len() + planes.chroma().len()
+    });
+
+    measure("empty_rgba_readback", || {
+        let rendered = renderer
+            .composite_layers(size, &[])
+            .expect("an empty rgba composite");
+        rendered.pixels().len()
+    });
+
     measure("video_rgba_readback", || {
         let nv12 = Nv12VideoLayer::new(WIDTH, HEIGHT, &luma, &chroma).expect("a video layer");
         let rendered = renderer

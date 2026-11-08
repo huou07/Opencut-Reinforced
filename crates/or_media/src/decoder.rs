@@ -53,9 +53,21 @@ fn open_video_decoder(
 ) -> Result<codec::decoder::Video, DecodeError> {
     context.set_threading(codec::threading::Config {
         kind: codec::threading::Type::Frame,
-        count: 0,
+        count: decode_thread_count(),
     });
     context.decoder().video().map_err(DecodeError::Ffmpeg)
+}
+
+/// Experiment knob over FFmpeg's automatic frame-threading count.
+///
+/// The automatic count is one thread per core, which is the right default for
+/// a decode-only reader. Inside an export the encoder wants cores too, so the
+/// count is worth measuring there instead of assuming the default is best.
+fn decode_thread_count() -> usize {
+    std::env::var("OR_DECODE_THREADS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0)
 }
 
 const MAX_AUDIO_INPUT_SAMPLES: usize = 1_048_576;

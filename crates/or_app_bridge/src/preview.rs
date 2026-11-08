@@ -1328,6 +1328,7 @@ mod desktop {
                     "preview request was superseded",
                 ));
             }
+            let trace_decode = trace_stage();
             let range = TimeRange::new(time, RationalTime::ZERO)
                 .map_err(|error| PreviewError::new("INVALID_PREVIEW_TIME", error.to_string()))?;
             let snapshot = RenderSnapshot::new(program.key.project_id, program.key.revision, range);
@@ -1653,6 +1654,8 @@ mod desktop {
                 })
                 .collect::<Result<Vec<_>, or_render::RenderError>>()
                 .map_err(|error| PreviewError::new("RENDER_FAILED", error.to_string()))?;
+            trace_record(|trace| &trace.decode, trace_decode);
+            let trace_compose = trace_stage();
             let mut active_text_clips = Vec::new();
             for clip in &program.text_clips {
                 let end = clip
@@ -1773,6 +1776,7 @@ mod desktop {
                     (Vec::new(), None, Some(pending))
                 }
             };
+            trace_record(|trace| &trace.compose, trace_compose);
             if cancellation.is_cancelled() {
                 return Err(PreviewError::new(
                     "PREVIEW_CANCELLED",
@@ -2973,6 +2977,81 @@ mod desktop {
         project_id == session.project_id() && project_instance_id == session.project_instance_id()
     }
 
+    /// Per-stage cost of one export frame, collected when `OR_EXPORT_TRACE=1`.
+    ///
+    /// The export overlaps decode, compositing, the NV12 readback and the
+    /// encoder, so a single frames-per-second number cannot say which of them
+    /// is the bound. This records each stage separately and reports median and
+    /// p95 when the job finishes, which is what a measurement run needs and
+    /// what a normal run must not pay for.
+    #[derive(Default)]
+    struct ExportStageTrace {
+        decode: Mutex<Vec<f64>>,
+        compose: Mutex<Vec<f64>>,
+        resolve: Mutex<Vec<f64>>,
+        encode: Mutex<Vec<f64>>,
+    }
+
+    impl ExportStageTrace {
+        fn record(stage: &Mutex<Vec<f64>>, started: std::time::Instant) {
+            let mut samples = stage.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+            samples.push(started.elapsed().as_secs_f64() * 1_000.0);
+        }
+
+        fn report(&self, label: &str) {
+            println!("OR_EXPORT_TRACE job={label}");
+            for (name, stage) in [
+                ("decode", &self.decode),
+                ("compose", &self.compose),
+                ("resolve", &self.resolve),
+                ("encode", &self.encode),
+            ] {
+                let samples = stage.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                if samples.is_empty() {
+                    continue;
+                }
+                let mut sorted = samples.clone();
+                sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let median = sorted[sorted.len() / 2];
+                let p95 = sorted[(sorted.len() * 95 / 100).min(sorted.len() - 1)];
+                println!(
+                    "OR_EXPORT_TRACE {name}_median_ms={median:.3} {name}_p95_ms={p95:.3} {name}_min_ms={:.3} n={}",
+                    sorted[0],
+                    sorted.len()
+                );
+            }
+        }
+    }
+
+    thread_local! {
+        /// Set on the export's render thread so `render_with_size` can time its
+        /// own decode and compose halves without changing its signature.
+        static ACTIVE_EXPORT_TRACE: std::cell::RefCell<Option<Arc<ExportStageTrace>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    fn export_trace() -> Option<Arc<ExportStageTrace>> {
+        matches!(std::env::var("OR_EXPORT_TRACE").as_deref(), Ok("1"))
+            .then(|| Arc::new(ExportStageTrace::default()))
+    }
+
+    /// Starts a stage clock when tracing is active on this thread.
+    fn trace_stage() -> Option<std::time::Instant> {
+        ACTIVE_EXPORT_TRACE
+            .with(|trace| trace.borrow().is_some())
+            .then(std::time::Instant::now)
+    }
+
+    fn trace_record(stage: fn(&ExportStageTrace) -> &Mutex<Vec<f64>>, started: Option<std::time::Instant>) {
+        if let Some(started) = started {
+            ACTIVE_EXPORT_TRACE.with(|trace| {
+                if let Some(trace) = trace.borrow().as_ref() {
+                    ExportStageTrace::record(stage(trace), started);
+                }
+            });
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn export_program(
         program: Arc<PreviewProgram>,
@@ -3049,6 +3128,7 @@ mod desktop {
         } else {
             RenderOutput::Packed
         };
+        let trace = export_trace();
         let written = std::thread::scope(|scope| -> Result<(), String> {
             let (sender, receiver) = std::sync::mpsc::sync_channel::<(
                 u64,
@@ -3056,7 +3136,9 @@ mod desktop {
             )>(export_render_ahead());
             let render_program = Arc::clone(&program);
             let render_resources_for_render = Arc::clone(&render_resources);
+            let trace_for_render = trace.clone();
             scope.spawn(move || {
+                ACTIVE_EXPORT_TRACE.with(|slot| *slot.borrow_mut() = trace_for_render);
                 for frame_index in 0..frame_count {
                     if job.is_cancelled() || cancellation.is_cancelled() {
                         return;
@@ -3098,10 +3180,15 @@ mod desktop {
                 let mut presentation = frame?;
                 // The conversion was queued a frame ago; waiting for it here
                 // keeps the render thread decoding instead of blocking on the GPU.
+                let resolve_started = std::time::Instant::now();
                 presentation
                     .resolve_planes()
                     .map_err(|error| error.to_string())?;
+                if let Some(trace) = &trace {
+                    ExportStageTrace::record(&trace.resolve, resolve_started);
+                }
                 let frame = ExportFrame::from(presentation);
+                let encode_started = std::time::Instant::now();
                 match &frame.planes {
                     Some(planes) => writer.write_video_frame_nv12(
                         planes.luma(),
@@ -3118,6 +3205,9 @@ mod desktop {
                     ),
                 }
                 .map_err(|error| error.to_string())?;
+                if let Some(trace) = &trace {
+                    ExportStageTrace::record(&trace.encode, encode_started);
+                }
                 let next_time = frame_rate
                     .frame_time(frame_index.saturating_add(1))
                     .map_err(|error| error.to_string())?;
@@ -3149,6 +3239,9 @@ mod desktop {
             Ok(())
         });
         written?;
+        if let Some(trace) = &trace {
+            trace.report("export");
+        }
         if job.is_cancelled() || cancellation.is_cancelled() {
             return Err("export was cancelled".to_owned());
         }

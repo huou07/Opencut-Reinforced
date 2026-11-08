@@ -401,6 +401,22 @@ One near-term delivery mission for the local macOS app, in this order:
     and the panel widget test "a rendered clip stays visible and can be rendered
     again".
 
+50. **The export pipeline's slow stage is named, and Debian exports ~8 % faster
+    (2026-11-08).** `OR_EXPORT_TRACE=1` times decode, compose, readback and the
+    encoder hand-off per frame, and the first run of it changed the diagnosis:
+    macOS and Debian are encoder-bound, while Windows is render-thread-bound
+    because its software decode costs 7.3 ms inside an export against 4.8 ms
+    standalone (`docs/reference/export-performance.md`). Both readback variants
+    that were supposed to fix a phantom writer stall — resolving on the render
+    thread and a dedicated resolver thread — measured worse or identical and
+    were reverted, and the NV12 upload path was exonerated by a wgpu probe at
+    0.39 ms. What shipped: VAAPI `async_depth=4` (+2.8 %) and the probe-guarded
+    low-power VDENC encoder (+9 %, app-level PSNR 25.39 → 25.30 dB), together
+    moving the composited MP4 row from 193.6 to 210.0 fps with the same
+    fixture. The Windows split decode/composite pipeline is the identified next
+    step and is explicitly not implemented; the decode further is still the
+    render thread's serial work there.
+
 All three desktop platforms — macOS, Windows and Linux — are acceptance targets.
 One codebase serves them: shared Dart presentation over the Rust core, with
 platform differences confined to the platform seam. Cross-platform parity is

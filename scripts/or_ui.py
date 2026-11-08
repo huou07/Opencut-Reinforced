@@ -117,8 +117,22 @@ def load_scenario(path: Path) -> dict:
 
 
 # -- host preparation ------------------------------------------------------
+def linux_wayland_display() -> str:
+    """The Weston socket this run should attach to, when there is one.
+
+    A headless Weston session renders through Mesa GL on the real GPU, which is
+    what the Debian host is measured on; Xvfb with software GL is the fallback
+    for a host without one. The runbook in docs/development/local-lab-runbook.md
+    starts the compositor and exports this variable.
+    """
+    return os.environ.get("OR_UI_WAYLAND_DISPLAY", "").strip()
+
+
 def require_linux_tools() -> None:
-    missing = [tool for tool in ("flutter", "xvfb-run") if not shutil.which(tool)]
+    tools = ["flutter"]
+    if not linux_wayland_display():
+        tools.append("xvfb-run")
+    missing = [tool for tool in tools if not shutil.which(tool)]
     if missing:
         raise Blocked(
             "missing required tool(s) on PATH: " + ", ".join(missing),
@@ -231,17 +245,25 @@ def run_linux(payload: dict, report_dir: Path) -> int:
         # A scenario that types a file path names it as $OR_UI_ROOT/..., which the
         # runner expands from this value; the path then holds on every host.
         GITHUB_WORKSPACE=str(ROOT),
-        LIBGL_ALWAYS_SOFTWARE="1",
-        GDK_BACKEND="x11",
     )
+    wayland = linux_wayland_display()
+    if wayland:
+        # Mesa GL on the real device, not llvmpipe: software rendering makes a
+        # GPU measurement meaningless and is not what the host was verified on.
+        environment["WAYLAND_DISPLAY"] = wayland
+        environment["GDK_BACKEND"] = "wayland"
+        environment.pop("LIBGL_ALWAYS_SOFTWARE", None)
+    else:
+        environment["LIBGL_ALWAYS_SOFTWARE"] = "1"
+        environment["GDK_BACKEND"] = "x11"
     # The preflight entry point is reused, not reimplemented: it stages the
     # project-local Cargo/pub caches, mirrors a writable Flutter SDK, scopes the
     # bridge's Rust toolchain manifest to this host and restores it byte for
     # byte, and holds the one shared native lock.
+    runner = f"flutter --no-version-check test --no-pub -d linux {SCENARIO_RUNNER}"
     inner = (
         "flutter --no-version-check pub get --offline --enforce-lockfile && "
-        "xvfb-run -a -s '-screen 0 1440x900x24' "
-        f"flutter --no-version-check test --no-pub -d linux {SCENARIO_RUNNER}"
+        + (runner if wayland else f"xvfb-run -a -s '-screen 0 1440x900x24' {runner}")
     )
     command = [sys.executable, str(ROOT / "scripts/run_linux_ui_preflight.py"),
                "--exec", "--", "bash", "-c", inner]
@@ -571,8 +593,8 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
             "native": "NOT ESTABLISHED — a debug app built for this run is not "
                       "an installed or packaged build"
                       if target == "macos" else
-                      "NOT ESTABLISHED — a debug app under Xvfb or an emulator "
-                      "is not an installed package or a physical device",
+                      "NOT ESTABLISHED — a debug app under Xvfb, Weston or an "
+                      "emulator is not an installed package or a physical device",
         },
         "limits": [
             "The macOS lane runs the real desktop app through the Flutter test "
@@ -581,7 +603,11 @@ def finish(report_dir: Path, artifacts: Path, payload: dict, target: str) -> int
             if target == "macos" else
             "Linux runs under Xvfb with LIBGL_ALWAYS_SOFTWARE; Android runs on a "
             "SwiftShader x86_64 emulator. Timing here is software-path evidence "
-            "on this host, never a GPU or physical-device performance claim.",
+            "on this host, never a GPU or physical-device performance claim."
+            if not linux_wayland_display() else
+            "Linux ran on a headless Weston compositor with Mesa GL on the host's "
+            "real GPU, so a rendering claim here is about that device; timing is "
+            "still debug-mode evidence, never a packaged-build performance claim.",
             "The OS file picker is the one substituted host integration: the "
             "runner supplies synthetic fixtures, so the journey is real up to "
             "and beyond the picker but not a native file-dialog claim.",

@@ -74,6 +74,24 @@ carries no H.264 encoder, and the panel correctly says so
 (`no H.264 encoder opened on this machine`) rather than offering a profile that
 cannot produce a file.
 
+## Encoder settings chosen per host (2026-11-08)
+
+The plan picks an encoder; these are the settings the picked encoder is opened
+with, and each one is either a measured win or a probe-guarded default:
+
+| Setting | Hosts | Rule |
+| --- | --- | --- |
+| VAAPI `async_depth` | Debian | 4. The wrapper default of 2 idles the GPU between frames; 8 and 16 re-measured no better. `OR_VAAPI_ASYNC_DEPTH` overrides. |
+| VAAPI `low_power` | Debian | 1 when `vaapi_low_power_available()` opens a 64×64 `h264_vaapi` with the option and sends a frame (cached probe). VDENC is +9 % on the UHD 770 at equal app-level quality. A driver without VDENC never sees the flag. |
+| `h264_vaapi` quality | Debian | `quality=7` for a Speed export, `quality=2` for Quality; without it the driver uses its default for both. |
+| VideoToolbox | macOS | No tuning knob is set; the encoder is not the pipeline's limit on the M5 (3.1 ms/frame against 1.5 ms decode). |
+| Media Foundation | Windows | No tuning knob is set. This host is render-thread-bound, not encoder-bound: decode costs 7.3 ms inside the export against 4.8 ms standalone, so the encoder settings are not where its missing throughput is. |
+| Decoder threads | all | FFmpeg's automatic frame threading (`OR_DECODE_THREADS=0`). Forcing 2 threads costs ~10 %; 4 is inside the run-to-run spread. |
+
+`OR_VAAPI_OPTIONS=key=value,...` overrides any VAAPI driver option for an
+experiment without a rebuild; `OR_EXPORT_TRACE=1` prints the per-stage medians
+that justify the table above.
+
 ## What is not available in the packaged runtimes
 
 The runtimes this mission measured link no oneVPL, so Quick Sync is not an

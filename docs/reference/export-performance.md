@@ -727,6 +727,112 @@ memory:
 | 4 | 235.8 | 196.0 |
 | 6 | 239.8 | — |
 
+## 2026-11-08 rows — where the pipeline actually waits
+
+The 0.1.24 rows were taken with a per-stage trace so the slow stage could be
+named instead of inferred. `OR_EXPORT_TRACE=1` times decode, compose, the NV12
+readback and the encode hand-off inside the export job and prints one line per
+stage when the job finishes; the medians below are from two traced runs of the
+composited MP4+text row, 1920×1080, 300 frames, fixture SHA-256
+`877f78da1fe16775ee2c11cf745a3ff6ffb78b4687fea3944b307a060c45ea52`, with the
+full-pipeline FPS that the same build produces:
+
+| Stage (median ms) | macOS M5 | Debian UHD 770 | Windows 120U |
+| --- | --- | --- | --- |
+| decode | 1.49–1.77 | 3.19–3.89 | 7.26–7.33 |
+| compose | 1.62–2.21 | 0.97–1.19 | 0.99 |
+| resolve (NV12 readback) | 0.46–1.52 | 0.85–0.86 | 2.23–2.24 |
+| encode hand-off | 2.01–3.10 | 4.74–6.04 | 3.66–3.68 |
+| full pipeline FPS | 223.5 | 210.0 | 104.6 |
+
+Read the table as "which stage a faster machine would have to fix":
+
+- **macOS and Debian are encoder-bound.** Both finish a frame faster than the
+  encoder drains it, which is why the pipeline sits near the encoder ceiling
+  (`OR_BENCH_MODE=encode`: 276.2 fps on macOS, 440.8 on Debian before the
+  encoder work below). The readback is 0.5–1.5 ms and is not worth another
+  thread — see the rejected experiments.
+- **Windows is render-thread-bound, and the render thread is decoding.** The
+  in-pipeline decode costs 7.3 ms against 4.8 ms for `OR_BENCH_MODE=decode`
+  alone, i.e. the software decoder is contending with the Media Foundation
+  encoder on a 2P+8E part. Splitting decode from composite into two threads is
+  the next change that can move that host; it is not implemented, so the Windows
+  row stays where it is.
+
+### Readback experiments, measured and rejected
+
+Both variants keep the queued conversion that shipped in the 2026-11-07 rows;
+the question was whether the writer should still pay for it.
+
+| Variant | macOS | Debian |
+| --- | --- | --- |
+| shipped (queued readback, resolve on the writer thread) | 219.9 / 223.8 / 212.4 | 190.8 / 204.7 / 198.4 |
+| resolve on the render thread | 213.2 / 219.4 / 210.2 | 111.2 / 109.5 / 99.3 |
+| dedicated resolver thread between render and writer | 214.1 / 223.5 / 216.1 / 217.4 | 195.9 / 198.2 / 203.8 / 198.4 |
+
+The first is clearly wrong: blocking the render thread on the GPU stalls the
+next frame's submission, and Debian loses half its throughput. The second is
+free on paper — the writer should have been spending resolve+encode serially —
+but measures identical to the shipped path, so the readback and the encode are
+already overlapping somewhere the stage timers do not show. Both variants were
+reverted rather than kept for their looks.
+
+The other half of that hypothesis was upload cost. A wgpu probe
+(`crates/or_render/tests/nv12_upload_cost.rs`, 1080p NV12) measured
+`write_texture` with the tight 1920-byte row pitch at 0.39 ms on Debian and
+0.55 ms on macOS, against 0.45 ms with 2048-byte padded rows and 3.18 ms for a
+persistent buffer plus `copy_buffer_to_texture`. The row-chunked path is not the
+Debian bottleneck, so no padded-upload change was made.
+
+### Encoder work that shipped
+
+Debian's encoder was leaving performance on the table on both counts below,
+and both are guarded by a probe rather than a host check:
+
+- **Submission depth.** `async_depth` defaults to 2 in the VAAPI wrapper, which
+  lets the GPU idle between frames. Depth 4 raises the composited row from
+  193.6 to ~198.4 fps; 8 and 16 add nothing back. The encoder now ships depth 4
+  and `OR_VAAPI_ASYNC_DEPTH` re-measures another driver.
+- **The low-power encoder.** Gen 12 and newer have a fixed-function VDENC path
+  behind `low_power=1`. With it the same row runs 219.0–222.0 fps against
+  200.8–203.7 without it. `vaapi_low_power_available()` opens a 64×64
+  `h264_vaapi` encoder with the option and sends one frame, cached in a
+  `OnceLock`, so a driver without VDENC never sees the option.
+  `OR_VAAPI_OPTIONS=key=value,...` overrides any driver option for
+  experiments.
+
+Quality was checked before shipping it, because VDENC is a different encoder:
+
+| Check (Debian, default profile) | `low_power=0` | `low_power=1` |
+| --- | --- | --- |
+| MP4 size, 120 frames with text | 4,906,719 B | 4,701,431 B |
+| frame at 2.0 s vs source, PSNR / MAE | 25.39 dB / 7.462 | 25.30 dB / 7.565 |
+| direct PSNR between the two encodes | — | 42.21 dB |
+
+The app's own rate control keeps the two encodes perceptually identical; the
+CLI at a fixed bitrate is less kind to VDENC (49.87 vs 45.72 dB), which is why
+this ships as the encoder the app opens rather than as a general-purpose
+recommendation.
+
+### Before and after, same fixture and revision
+
+| Row (300 frames, 3 reps, median FPS) | 552cd16b | 0.1.24 tree |
+| --- | --- | --- |
+| Debian, MP4 video-only | 256.3 | 274.8 (+7.2 %) |
+| Debian, MP4 + text | 193.6 | 210.0 (+8.5 %) |
+| macOS, MP4 video-only | 230.4 | 229.5 (flat) |
+| macOS, MP4 + text | ~220 | 223.5 (flat) |
+| Windows, MP4 video-only | 131.2 | 131.7 (flat) |
+| Windows, MP4 + text | 104.2 | 104.6 (flat) |
+
+### Decode-thread count
+
+`OR_DECODE_THREADS` sets the decoder's frame-thread count instead of letting
+FFmpeg pick; 0, the default, means auto. Forcing 2 costs about 10 % everywhere
+(macOS 202.9, Debian 185.9, Windows 92.8) and 4 is inside the run-to-run spread
+(macOS 223.5, Debian 202.9, Windows 105.1), so no default changed: the knob is a
+diagnostic for a host whose decode is the bound, not a tuning win.
+
 ## Known limits
 
 - The project rows below `97f4f25e` used `/tmp/or-bench/opaque.orproj`, a copy of
