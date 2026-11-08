@@ -883,6 +883,33 @@ from the tiny fixture, `h264_mf` fails `EXPORT_FAILED … the encoder did not
 open`; a 1280×720 canvas succeeds. The message names no cause, which is a UX
 gap rather than an encoder bug.
 
+### Installed-package export throughput, 2026-11-08
+
+Measured on the installed 0.1.27 packages, three runs each, same command shape
+(`or export start --attach <live pointer> --destination … --profile mp4 --json`);
+the CLI returns when the job reaches a terminal state, so the wall time below is
+the whole decode → composite → encode → mux job. No build was running on the
+hosts while these ran (Debian load average 0.14/0.58; macOS 1.9; the Windows
+host is shared).
+
+| Host | Workload | Frames | Runs (ms) | Median | Steady-state |
+|---|---|---|---|---|---|
+| macOS M5, 10 cores, 16 GB | 3840×2160, text over clip, 64 s | 1,920 | 26,777 / 26,756 / 26,742 | 26,756 ms | ≈71.7 fps (h264_videotoolbox) |
+| Debian i5-13500T, 20 threads, Intel UHD 770 | 1920×1080, 14 s clip + 3 s title | 420 | 2,013 / 2,014 / 2,015 | 2,014 ms | ≈208.5 fps (h264_vaapi) |
+| Windows 11, Core 5 120U, 10 cores | 1920×1080, 14 s clip + 3 s title | 420 | 4,054 / 3,538 / 4,070 | 4,054 ms | ≈103.6 fps (h264_mf) |
+
+Two rules apply to this table: the macOS row is a 4K project and the other two
+are 1080p, so it says what the macOS host does on its own workload and **must
+not** be used to rank machines; and the Windows row has a 13 % spread (a shared
+host and a per-job Media Foundation start-up), so its median is the number to
+quote. These are export-job wall times at revision `f78de83d`, not the
+per-frame stage breakdowns that `OR_EXPORT_TRACE=1` prints.
+
+The same files are probed in `dist/release-0.1.27/evidence/ffprobe.txt`; the
+three JPEG-free smoke outputs are byte-identical in size between 0.1.23 and
+0.1.27 on Windows (26,821 / 20,528 / 409,435 B), which is consistent with a
+packaging-only change between those builds.
+
 ## Final-revision GUI journeys, 2026-11-08
 
 At `e9b24ece` (code identical to `e6c03077`; only a harness scenario and a doc
@@ -912,3 +939,37 @@ recognising: a lock holder is not the same fault as a dead compositor.
 composition offers the bundled starters" waited a fixed 20 ms for real
 filesystem work, which a busy full-suite run can miss; it now polls
 `controller.hasDraft` for up to two seconds (`41c86d04`). Full suite: 585 pass.
+
+## A 4K multi-track project through the installed app, 2026-11-08
+
+The benchmark rows above are single-source stage measurements. This is the other
+end: a real project with tracks and clips, exported from the installed 0.1.27
+app by hand.
+
+Built with the bundled CLI at `/tmp/or-bench/4K Multi.orproj`: canvas
+3840×2160, `sequence_frame_rate` 30/1, revision 19 — three tracks and thirteen
+clips: `V1` eight 8 s clips (64 s of picture), `V2` four 4 s overlay clips, and a
+text track with one 5 s title (`4K Multi Track`). Source media
+`/tmp/or-bench/bench4k.mp4` (3840×2160, 8 s, 19,888,977 B).
+
+| Export | Wall time | Output | Frames | Bytes |
+|---|---|---|---|---|
+| `Highest quality` (project resolution) | **32 s** | `h264` 3840×2160 30/1, 64.000 s | 1,920 | 96,375,559 |
+| `Share or upload` (1080p) | completed, not timed | `h264` 1920×1080 30/1, 64.000 s | 1,920 | 61,484,959 |
+
+`/tmp/or-bench/4K Multi native.mp4` SHA-256
+`b995b5a418687e5ecb427ca6dd590d949033cca9ce671d629c77b04dbe66b0e8`, status line
+`Exported 4K Multi native mp4 • 91.9 MB`, detail
+`Encoding with h264_videotoolbox (hardware).` The 1080p file is
+`0039957f06269efecfc740c087ee85d28310aa19349cb4957a136e6801864c19`.
+
+So 64 s of 4K across three tracks leaves at **2.0× realtime (~60 fps)** on the
+M5, consistent with the 65 fps single-clip 4K row — the extra tracks and the
+title do not move the ceiling, because the encoder does.
+
+**The installed bundle disappeared again** between sessions (`/Applications/Opencut
+Reinforced.app` was gone while `dist/Opencut-Reinforced-0.1.27-arm64.dmg` still
+verified). Reinstalled from that DMG with `hdiutil attach -nobrowse -readonly` +
+`ditto` and confirmed `or version` = 0.1.27 before the run. Nothing in
+`scripts/build_macos_dmg.sh` removes the installed copy, so the cause is outside
+this repository; treat the DMG as the source of truth when the app is missing.
