@@ -6,15 +6,15 @@ This directory records what the 2026-11-09 local release run actually produced o
 the three mission hosts. Revision `b8feb51f` is the packaging commit; the app
 code it ships is `5a2bef94` plus documentation and the Flatpak packaging files.
 The DMG was rebuilt at `5967969c` with a properly targeted `whisper-cli`, and the
-hosts later moved to `740438cc` (companion-tool MCP surface and `or tools run`).
+hosts later moved to `f32479b2` (companion-tool MCP surface and `or tools run`).
 
 ## Revision per host
 
 | Host | Path | Revision | Working tree |
 | --- | --- | --- | --- |
-| macOS M5 | this checkout | `740438cc` | clean |
-| Debian (`ssh debian`) | `/home/huou07/or-mission` | `740438cc` | clean |
-| Windows 11 (`ssh win11`) | `C:\Users\hp\src\or-mission` | `740438cc` | clean except untracked `.cargo/` |
+| macOS M5 | this checkout | `f32479b2` | clean |
+| Debian (`ssh debian`) | `/home/huou07/or-mission` | `f32479b2` | clean |
+| Windows 11 (`ssh win11`) | `C:\Users\hp\src\or-mission` | `f32479b2` | clean except untracked `.cargo/` |
 
 The hosts were synced with a local git bundle (`git bundle create` +
 `git fetch` + `git merge --ff-only`); nothing was pushed.
