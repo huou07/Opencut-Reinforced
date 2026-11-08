@@ -76,6 +76,9 @@ any other rule to this file.
 - **Agent workspace** — the app-installed workspace, its AGENTS.md routing, guides, skills and tools.
   When: changing what the assistant reads or runs by default, or updating a workspace guide, skill or tool.
   Path: `docs/features/agent-workspace.md`
+- **Templates** — project formats, edit styles and creative directions: the three kinds, the plan review and what it writes.
+  When: changing a template, a style's pacing rules, a direction brief or the Library's template surface.
+  Path: `docs/features/templates.md`
 
 ### Design
 

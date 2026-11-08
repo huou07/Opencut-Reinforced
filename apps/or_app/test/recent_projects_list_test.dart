@@ -24,7 +24,7 @@ Widget _list(List<RecentProject> projects) => MaterialApp(
 );
 
 void main() {
-  testWidgets('two projects with one name stay distinguishable by folder', (
+  testWidgets('two projects with one name stay distinguishable by path', (
     tester,
   ) async {
     final home = Platform.environment['HOME'] ?? '/home/tester';
@@ -40,9 +40,12 @@ void main() {
         .widgetList<Text>(find.byType(Text))
         .map((text) => text.data ?? '')
         .toList();
-    expect(subtitles.any((line) => line.startsWith('~/Movies · ')), isTrue);
     expect(
-      subtitles.any((line) => line.startsWith('/tmp/or-repro · ')),
+      subtitles.any((line) => line.startsWith('~/Movies/repro.orproj · ')),
+      isTrue,
+    );
+    expect(
+      subtitles.any((line) => line.startsWith('/tmp/or-repro/repro.orproj · ')),
       isTrue,
     );
   });

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:or_app/design/or_theme.dart';
+import 'package:or_app/library/creative_directions.dart';
+import 'package:or_app/library/edit_styles.dart';
 import 'package:or_app/library/project_templates.dart';
 import 'package:or_app/library/sound_library.dart';
 import 'package:or_app/library/text_presets.dart';
@@ -24,8 +26,14 @@ Future<void> _pump(
   LibraryTab initialTab = LibraryTab.templates,
   HostPlatform? host,
   Key? key,
+  ValueChanged<EditStyle>? onApplyEditStyle,
+  ValueChanged<CreativeDirection>? onReadDirection,
+  List<CreativeDirection> myDirections = const [],
 }) async {
-  tester.view.physicalSize = const Size(1600, 1400);
+  // The library is a long page; a short test window would put the style and
+  // direction cards outside the reachable area and the taps would silently
+  // miss.
+  tester.view.physicalSize = const Size(1600, 6000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
@@ -37,6 +45,9 @@ Future<void> _pump(
           canPickProjects: canPickProjects,
           projectOpen: projectOpen,
           onUseTemplate: (_) {},
+          onApplyEditStyle: onApplyEditStyle ?? (_) {},
+          onReadDirection: onReadDirection ?? (_) {},
+          myDirections: myDirections,
           onAddTextPreset: (_) {},
           onAddSoundEffect: (_) {},
           onOpenEditor: () {},
@@ -50,6 +61,66 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('the library keeps formats, edit styles and directions apart', (
+    tester,
+  ) async {
+    await _pump(tester);
+
+    expect(find.text('Project formats'), findsOneWidget);
+    expect(find.text('Edit styles'), findsOneWidget);
+    expect(find.text('Creative directions'), findsOneWidget);
+    expect(
+      find.textContaining('No media is added'),
+      findsOneWidget,
+      reason: 'a project format is a starter layout, not a style',
+    );
+  });
+
+  testWidgets('a style only builds a cut when a project is open', (
+    tester,
+  ) async {
+    EditStyle? applied;
+    await _pump(
+      tester,
+      projectOpen: true,
+      onApplyEditStyle: (style) => applied = style,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('edit-style-use-personal-vlog')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(applied?.id, 'personal-vlog');
+  });
+
+  testWidgets('with no project the style card says what to do instead', (
+    tester,
+  ) async {
+    await _pump(tester, projectOpen: false);
+
+    final button = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('edit-style-use-personal-vlog')),
+    );
+    expect(button.onPressed, isNull);
+    expect(
+      find.byKey(const ValueKey('edit-style-need-project-personal-vlog')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a creative direction opens as a brief', (tester) async {
+    CreativeDirection? read;
+    await _pump(tester, onReadDirection: (direction) => read = direction);
+
+    await tester.tap(
+      find.byKey(const ValueKey('creative-direction-read-energetic-social')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(read?.id, 'energetic-social');
+  });
+
   testWidgets('the guide tab says where every shortcut lives', (tester) async {
     await _pump(tester, initialTab: LibraryTab.guide);
     final hint = find.byKey(const ValueKey('library-shortcut-hint'));
@@ -107,7 +178,11 @@ void main() {
     for (final template in projectTemplates) {
       final id = template.motionStarterId;
       if (id == null) continue;
-      expect(ids, contains(id), reason: '${template.id} names a missing starter');
+      expect(
+        ids,
+        contains(id),
+        reason: '${template.id} names a missing starter',
+      );
     }
   });
 
@@ -156,6 +231,8 @@ void main() {
             canPickProjects: true,
             projectOpen: true,
             onUseTemplate: (_) {},
+            onApplyEditStyle: (_) {},
+            onReadDirection: (_) {},
             onAddTextPreset: (_) => added++,
             onAddSoundEffect: (_) {},
             onOpenEditor: () {},

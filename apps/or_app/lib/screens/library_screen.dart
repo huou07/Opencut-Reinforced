@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
+import '../library/creative_directions.dart';
+import '../library/edit_styles.dart';
 import '../library/project_templates.dart';
 import '../library/template_previews.dart';
 import '../motion/motion_starters.dart';
@@ -30,17 +32,26 @@ class LibraryScreen extends StatefulWidget {
     required this.canPickProjects,
     required this.projectOpen,
     required this.onUseTemplate,
+    required this.onApplyEditStyle,
+    required this.onReadDirection,
     required this.onAddTextPreset,
     required this.onAddSoundEffect,
     required this.onOpenEditor,
     this.initialTab = LibraryTab.templates,
     this.hostPlatform,
     this.templatePreviews,
+    this.myDirections = const [],
   });
 
   final bool canPickProjects;
   final bool projectOpen;
   final ValueChanged<ProjectTemplate> onUseTemplate;
+
+  /// Cuts the open project's media with a style's pacing rules.
+  final ValueChanged<EditStyle> onApplyEditStyle;
+
+  /// Opens a creative direction as a brief.
+  final ValueChanged<CreativeDirection> onReadDirection;
   final ValueChanged<TextPreset> onAddTextPreset;
   final ValueChanged<SoundEffect> onAddSoundEffect;
 
@@ -54,6 +65,9 @@ class LibraryScreen extends StatefulWidget {
   /// Renders the opening still of each template; null keeps the text-only card.
   final TemplatePreviews? templatePreviews;
 
+  /// Directions the person kept themselves, shown with the bundled ones.
+  final List<CreativeDirection> myDirections;
+
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
@@ -66,7 +80,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget build(BuildContext context) {
     return OrPageLayout(
       title: 'Library',
-      subtitle: 'Templates, text looks, generated sound and the guide',
+      subtitle:
+          'Project formats, edit styles, creative directions, text looks, '
+          'sound and the guide',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -76,10 +92,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
           const SizedBox(height: OrSpacing.x6),
           switch (_tab) {
-            LibraryTab.templates => _TemplateGrid(
+            LibraryTab.templates => _TemplatesAndStyles(
               canPickProjects: widget.canPickProjects,
+              projectOpen: widget.projectOpen,
               onUseTemplate: widget.onUseTemplate,
+              onApplyEditStyle: widget.onApplyEditStyle,
+              onReadDirection: widget.onReadDirection,
+              onOpenEditor: widget.onOpenEditor,
               templatePreviews: widget.templatePreviews,
+              myDirections: widget.myDirections,
             ),
             LibraryTab.text => _TextPresetList(
               projectOpen: widget.projectOpen,
@@ -200,6 +221,290 @@ class _LibraryTabs extends StatelessWidget {
 
 /// Two columns on a wide window, one on a narrow one, without a breakpoint
 /// guess: the layout asks the width it was given.
+/// The three kinds of template, in one place, each saying what it is for.
+///
+/// A project format is a starter layout; an edit style decides how a cut is
+/// paced; a creative direction is the brief an agent works from. They are kept
+/// apart because they answer different questions and are used at different
+/// moments.
+class _TemplatesAndStyles extends StatelessWidget {
+  const _TemplatesAndStyles({
+    required this.canPickProjects,
+    required this.projectOpen,
+    required this.onUseTemplate,
+    required this.onApplyEditStyle,
+    required this.onReadDirection,
+    required this.onOpenEditor,
+    this.templatePreviews,
+    this.myDirections = const [],
+  });
+
+  final bool canPickProjects;
+  final bool projectOpen;
+  final ValueChanged<ProjectTemplate> onUseTemplate;
+  final ValueChanged<EditStyle> onApplyEditStyle;
+  final ValueChanged<CreativeDirection> onReadDirection;
+  final VoidCallback onOpenEditor;
+  final TemplatePreviews? templatePreviews;
+  final List<CreativeDirection> myDirections;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _LibrarySectionHeader(
+          title: 'Project formats',
+          detail:
+              'Canvas and frame rate, with starter titles you can retype. No '
+              'media is added and nothing is pre-cut.',
+        ),
+        const SizedBox(height: OrSpacing.x3),
+        _TemplateGrid(
+          canPickProjects: canPickProjects,
+          onUseTemplate: onUseTemplate,
+          templatePreviews: templatePreviews,
+        ),
+        const SizedBox(height: OrSpacing.x6),
+        const _LibrarySectionHeader(
+          title: 'Edit styles',
+          detail:
+              'Not a project: a way of cutting. Pick one and OR turns the media '
+              'already in your project into a first cut you can keep editing.',
+        ),
+        const SizedBox(height: OrSpacing.x3),
+        _CardGrid(
+          children: [
+            for (final style in bundledEditStyles)
+              _StyleCard(
+                style: style,
+                projectOpen: projectOpen,
+                onUse: () => onApplyEditStyle(style),
+                onOpenEditor: onOpenEditor,
+              ),
+          ],
+        ),
+        const SizedBox(height: OrSpacing.x6),
+        const _LibrarySectionHeader(
+          title: 'Creative directions',
+          detail:
+              'A brief, not a script: voice, story, graphics, captions, editing '
+              'and sound described as a method. Copy it for an agent or keep '
+              'your own version.',
+        ),
+        const SizedBox(height: OrSpacing.x3),
+        _CardGrid(
+          children: [
+            for (final direction in bundledCreativeDirections)
+              _DirectionCard(
+                direction: direction,
+                onRead: () => onReadDirection(direction),
+              ),
+          ],
+        ),
+        if (myDirections.isNotEmpty) ...[
+          const SizedBox(height: OrSpacing.x6),
+          const _LibrarySectionHeader(
+            title: 'My directions',
+            detail: 'Copies you kept and can edit.',
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          _CardGrid(
+            children: [
+              for (final direction in myDirections)
+                _DirectionCard(
+                  direction: direction,
+                  onRead: () => onReadDirection(direction),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _LibrarySectionHeader extends StatelessWidget {
+  const _LibrarySectionHeader({required this.title, required this.detail});
+
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: OrColors.text,
+            fontSize: OrType.bodySize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        Text(
+          detail,
+          style: const TextStyle(
+            color: OrColors.textSecondary,
+            fontSize: OrType.metadataSize,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Two columns when there is room, one when there is not.
+class _CardGrid extends StatelessWidget {
+  const _CardGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 980 ? 2 : 1;
+        const spacing = OrSpacing.x4;
+        final width =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StyleCard extends StatelessWidget {
+  const _StyleCard({
+    required this.style,
+    required this.projectOpen,
+    required this.onUse,
+    required this.onOpenEditor,
+  });
+
+  final EditStyle style;
+  final bool projectOpen;
+  final VoidCallback onUse;
+  final VoidCallback onOpenEditor;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrPanel(
+      title: style.name,
+      trailing: OrBadge(style.pacingLabel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            style.summary,
+            style: const TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          Text(
+            style.description,
+            style: const TextStyle(
+              color: OrColors.textSecondary,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          Text(
+            'Shots · ${style.maxShots} at most, ${style.shotSeconds.toStringAsFixed(1)} s each'
+            '${style.captions ? ' · captions on' : ''}'
+            '${style.title ? ' · a title clip' : ''}',
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          Wrap(
+            spacing: OrSpacing.x2,
+            runSpacing: OrSpacing.x2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              FilledButton.tonal(
+                key: ValueKey('edit-style-use-${style.id}'),
+                onPressed: projectOpen ? onUse : null,
+                child: const Text('Build the cut'),
+              ),
+              if (!projectOpen)
+                TextButton(
+                  key: ValueKey('edit-style-need-project-${style.id}'),
+                  onPressed: onOpenEditor,
+                  child: const Text('Open a project first'),
+                ),
+            ],
+          ),
+          if (!projectOpen) ...[
+            const SizedBox(height: OrSpacing.x1),
+            const Text(
+              'A style cuts the media already in an open project. Create or '
+              'open one, import your footage, then come back.',
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.metadataSize,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DirectionCard extends StatelessWidget {
+  const _DirectionCard({required this.direction, required this.onRead});
+
+  final CreativeDirection direction;
+  final VoidCallback onRead;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrPanel(
+      title: direction.name,
+      trailing: direction.isMine ? const OrBadge('Mine') : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            direction.summary,
+            style: const TextStyle(
+              color: OrColors.text,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x2),
+          Text(
+            'Fits ${direction.bestFor.join(', ')}',
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          FilledButton.tonal(
+            key: ValueKey('creative-direction-read-${direction.id}'),
+            onPressed: onRead,
+            child: const Text('Read the brief'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TemplateGrid extends StatelessWidget {
   const _TemplateGrid({
     required this.canPickProjects,
@@ -379,8 +684,7 @@ class _TemplateStill extends StatelessWidget {
               // A still that cannot decode (a rasterizer that has no GPU
               // context, a truncated render) must cost the card its picture,
               // never the whole grid: the text card is the fallback state.
-              errorBuilder: (context, error, stack) =>
-                  const SizedBox.shrink(),
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
             ),
           ),
         );

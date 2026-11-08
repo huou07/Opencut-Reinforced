@@ -61,7 +61,7 @@ class RecentProjectsList extends StatelessWidget {
               subtitle: Tooltip(
                 message: project.path,
                 child: Text(
-                  '${_folderLabel(project.path)} · Last opened '
+                  '${recentProjectPathLabel(project.path)} · Last opened '
                   '${MaterialLocalizations.of(context).formatMediumDate(project.lastOpened.toLocal())}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -76,18 +76,17 @@ class RecentProjectsList extends StatelessWidget {
   }
 }
 
-/// The folder a recent project lives in, with the home directory shortened so
-/// two projects that share a name can still be told apart.
-String _folderLabel(String path) {
-  final separator = path.contains(r'\') && !path.contains('/') ? r'\' : '/';
-  final index = path.lastIndexOf(separator);
-  final folder = index > 0 ? path.substring(0, index) : path;
-  if (folder.isEmpty) return path;
+/// Where a recent project lives, with the home directory shortened.
+///
+/// The file name is part of the label on purpose: two projects called "Repro"
+/// in the same folder differ only by their file, and a folder-only subtitle
+/// made them look like a duplicate row.
+String recentProjectPathLabel(String path) {
   final home =
       Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-  if (home != null && home.isNotEmpty && folder.startsWith(home)) {
-    final rest = folder.substring(home.length);
+  if (home != null && home.isNotEmpty && path.startsWith(home)) {
+    final rest = path.substring(home.length);
     return rest.isEmpty ? '~' : '~$rest';
   }
-  return folder;
+  return path;
 }

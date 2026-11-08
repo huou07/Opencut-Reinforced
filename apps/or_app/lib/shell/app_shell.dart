@@ -13,6 +13,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:or_viewer_texture/or_viewer_texture.dart';
 
 import '../core_gateway.dart';
+import '../library/creative_direction_store.dart';
+import '../library/creative_directions.dart';
+import '../library/edit_styles.dart';
 import '../library/project_templates.dart';
 import '../library/sound_library.dart';
 import '../library/text_presets.dart';
@@ -36,6 +39,7 @@ import '../production/media_preview_queue.dart';
 import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
 import '../production/welcome_store.dart';
+import '../screens/edit_style_plan_dialog.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../library/template_previews.dart';
 import '../screens/library_screen.dart';
@@ -252,6 +256,8 @@ class _AppShellState extends State<AppShell> {
   AppDestination _destination = AppDestination.home;
   SettingsSection _settingsInitialSection = SettingsSection.appearance;
   LibraryTab _libraryInitialTab = LibraryTab.templates;
+  CreativeDirectionStore? _directionStore;
+  List<CreativeDirection> _myDirections = const [];
   bool _welcomeLoaded = false;
   bool _welcomeDismissed = false;
   Timer? _welcomeDeadline;
@@ -375,8 +381,25 @@ class _AppShellState extends State<AppShell> {
       onExitRequested: _onExitRequested,
     );
     unawaited(_loadRecentProjects());
+    unawaited(_loadDirections());
     unawaited(_loadWelcome());
     unawaited(_loadFirstRunCheck());
+  }
+
+  /// Loads the person's own creative directions beside the bundled ones.
+  Future<void> _loadDirections() async {
+    try {
+      final directory = await getApplicationSupportDirectory();
+      final store = CreativeDirectionStore.inDirectory(directory);
+      final items = await store.load();
+      if (!mounted) return;
+      setState(() {
+        _directionStore = store;
+        _myDirections = items;
+      });
+    } catch (_) {
+      // The library still works with the bundled directions alone.
+    }
   }
 
   /// The last motion clip the Motion panel put on the timeline. Owned here so
@@ -874,6 +897,9 @@ class _AppShellState extends State<AppShell> {
       projectOpen: _activeSession != null,
       templatePreviews: _templatePreviews,
       onUseTemplate: _createProjectFromTemplate,
+      onApplyEditStyle: _applyEditStyle,
+      onReadDirection: _readCreativeDirection,
+      myDirections: _myDirections,
       onAddTextPreset: _addTextPresetFromLibrary,
       onAddSoundEffect: _addSoundEffectFromLibrary,
       onOpenEditor: _openWorkspace,
@@ -1702,6 +1728,275 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _createProjectFromTemplate(ProjectTemplate template) =>
       _createProject(template: template);
+
+  /// Cuts the open project's media with a style's pacing rules.
+  ///
+  /// The plan is computed from what the project actually holds, shown as a
+  /// review, and only then written through the ordinary clip commands. The
+  /// result is a normal timeline: a title clip, media clips that can be
+  /// trimmed or moved, and one history step per insert.
+  Future<void> _applyEditStyle(EditStyle style) async {
+    final session = _activeSession;
+    final current = _activeProject;
+    if (session == null || current == null) {
+      _showUnavailable(
+        'Open a project first. ${style.name} cuts the media already in it.',
+      );
+      return;
+    }
+    final List<ProjectMediaItem> items;
+    final ProjectTimelineSequenceSettings sequence;
+    final ProjectTimelineTracks tracks;
+    try {
+      final collected = <ProjectMediaItem>[];
+      var offset = 0;
+      while (true) {
+        final page = await widget.projectGateway.listMediaPage(
+          session,
+          offset: offset,
+          limit: _mediaPageSize,
+        );
+        collected.addAll(page.items);
+        final next = page.nextOffset;
+        if (next == null || next <= offset || collected.length >= 500) break;
+        offset = next;
+      }
+      items = collected;
+      sequence = await widget.projectGateway.timelineSequenceSettings(session);
+      tracks = await widget.projectGateway.listTimelineTracks(session);
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+      return;
+    }
+    if (!mounted) return;
+
+    final rate = sequence.sequenceFrameRate;
+    final fps = rate == null
+        ? 30
+        : (rate.numerator.toDouble() / rate.denominator).round().clamp(1, 240);
+    final sources = <EditStyleSource>[];
+    final labels = <String, String>{};
+    for (final item in items) {
+      final duration = item.firstVideoDuration ?? item.containerDuration;
+      if (duration == null) continue;
+      final label = _mediaLabel(item.sourceUri);
+      labels[item.mediaId] = label;
+      sources.add(
+        EditStyleSource(
+          mediaId: item.mediaId,
+          frames: (duration.secondsForDisplay * fps).round(),
+          hasVideo:
+              item.firstVideoDuration != null || item.videoDetails != null,
+          label: label,
+        ),
+      );
+    }
+    final plan = planEditStyleCut(
+      style: style,
+      sources: sources,
+      frameRate: fps,
+    );
+    if (plan.isEmpty) {
+      _showUnavailable(plan.notes.first);
+      return;
+    }
+    final baseFrame = (_projectContentEndFromTracks(
+      tracks,
+      fps,
+    )).clamp(0, 1 << 40);
+    final titleText = style.title
+        ? editStyleTitle(style, projectName: current.name)
+        : null;
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => EditStylePlanDialog(
+        plan: plan,
+        title: titleText,
+        labels: labels,
+        appendsAfter: baseFrame > 0,
+      ),
+    );
+    if (approved != true || !mounted) return;
+
+    try {
+      var track = _firstUnlockedVideoTrack(tracks.items);
+      if (track == null) {
+        final created = await widget.projectGateway.addTimelineTrack(
+          session,
+          await widget.projectGateway.summary(session),
+          ProjectTimelineTrackKind.video,
+        );
+        if (!created.succeeded) {
+          _showUnavailable(created.message);
+          return;
+        }
+        final relisted = await widget.projectGateway.listTimelineTracks(
+          session,
+        );
+        track = _firstUnlockedVideoTrack(relisted.items);
+      }
+      if (track == null) {
+        _showUnavailable('The timeline has no video track to build on.');
+        return;
+      }
+      final trackId = track.trackId;
+      for (final shot in plan.shots) {
+        if (!mounted) return;
+        final expected = _activeProject;
+        if (expected == null) return;
+        final inserted = await widget.projectGateway.insertTimelineClip(
+          session,
+          expected,
+          trackId: trackId,
+          mediaId: shot.mediaId,
+          timelineStart: ProjectRationalTime(
+            BigInt.from(baseFrame + shot.startFrame),
+            fps,
+          ),
+          sourceStart: ProjectRationalTime(
+            BigInt.from(shot.sourceStartFrame),
+            fps,
+          ),
+          duration: ProjectRationalTime(BigInt.from(shot.frameCount), fps),
+        );
+        if (!inserted.succeeded) {
+          _showUnavailable(inserted.message);
+          return;
+        }
+        await _reloadAfterStyleEdit(session);
+      }
+      if (titleText != null) {
+        await _insertStyleTitle(session, titleText, baseFrame, fps, tracks);
+      }
+      if (!mounted) return;
+      setState(() {
+        _projectNotice =
+            '${style.name}: ${plan.shots.length} '
+            '${plan.shots.length == 1 ? 'clip' : 'clips'}'
+            '${titleText == null ? '' : ' and a title'} added to the timeline.';
+      });
+      _openWorkspace();
+    } on ProjectGatewayException catch (error) {
+      _showUnavailable(error.message);
+    }
+  }
+
+  /// A short name for a media item, for the review list only.
+  String _mediaLabel(String sourceUri) {
+    final path = Uri.tryParse(sourceUri)?.path ?? sourceUri;
+    final segments = path.split(RegExp(r'[\\/]'));
+    final name = segments.isEmpty ? path : segments.last;
+    return name.isEmpty ? sourceUri : name;
+  }
+
+  /// Where the existing clips end, in frames, so a style cut appends.
+  int _projectContentEndFromTracks(ProjectTimelineTracks tracks, int fps) {
+    var end = 0;
+    for (final track in tracks.items) {
+      if (track.kind != ProjectTimelineTrackKind.video) continue;
+      final page = _timelineClipPages[track.trackId];
+      if (page == null || page.items.isEmpty) continue;
+      final frames = (page.items.last.timelineEnd.secondsForDisplay * fps)
+          .round();
+      if (frames > end) end = frames;
+    }
+    return end;
+  }
+
+  /// Puts the style's title on a text track above the first shot.
+  Future<void> _insertStyleTitle(
+    ProjectSessionHandle session,
+    String text,
+    int startFrame,
+    int fps,
+    ProjectTimelineTracks tracks,
+  ) async {
+    var textTrack = tracks.items
+        .where((track) => track.kind == ProjectTimelineTrackKind.text)
+        .firstOrNull;
+    if (textTrack == null) {
+      final created = await widget.projectGateway.addTimelineTrack(
+        session,
+        await widget.projectGateway.summary(session),
+        ProjectTimelineTrackKind.text,
+      );
+      if (!created.succeeded) return;
+      final relisted = await widget.projectGateway.listTimelineTracks(session);
+      textTrack = relisted.items
+          .where((track) => track.kind == ProjectTimelineTrackKind.text)
+          .firstOrNull;
+      if (textTrack == null) return;
+    }
+    final expected = _activeProject;
+    if (expected == null) return;
+    await widget.projectGateway.insertTimelineTextClip(
+      session,
+      expected,
+      trackId: textTrack.trackId,
+      timelineStart: ProjectRationalTime(BigInt.from(startFrame), fps),
+      timelineDuration: ProjectRationalTime(BigInt.from(3 * fps), fps),
+      content: ProjectTimelineTextContent(
+        kind: ProjectTimelineClipContentKind.text,
+        text: text,
+        formatting: ProjectTextFormatting.defaults,
+      ),
+    );
+  }
+
+  /// Re-reads the timeline after a style insert so the next insert and the
+  /// editor both see the new revision.
+  Future<void> _reloadAfterStyleEdit(ProjectSessionHandle session) async {
+    final tracks = await widget.projectGateway.listTimelineTracks(session);
+    if (!mounted) return;
+    setState(() => _timelineTracks = tracks);
+  }
+
+  /// Copies a creative direction as a brief, and keeps a copy when asked.
+  Future<void> _readCreativeDirection(CreativeDirection direction) async {
+    final store = _directionStore;
+    const nextStep =
+        'Paste it into the assistant, or keep it as a starting point for '
+        'your own.';
+    await showDialog<void>(
+      context: context,
+      builder: (context) => CreativeDirectionDialog(
+        direction: direction,
+        onCopy: () {
+          Clipboard.setData(ClipboardData(text: direction.toBrief()));
+          _showNotice('Brief copied. $nextStep');
+        },
+        onAddPinned: () => _keepDirectionCopy(direction, store),
+      ),
+    );
+  }
+
+  Future<void> _keepDirectionCopy(
+    CreativeDirection direction,
+    CreativeDirectionStore? store,
+  ) async {
+    if (store == null) {
+      _showNotice('A copy cannot be kept on this build.');
+      return;
+    }
+    final existing = await store.load();
+    final copy = direction.copyWith(
+      id: copiedDirectionId(direction.id, [
+        ...existing.map((item) => item.id),
+        direction.id,
+      ]),
+      name: '${direction.name} (mine)',
+      isMine: true,
+    );
+    final items = await store.upsert(copy);
+    if (!mounted) return;
+    setState(() => _myDirections = items);
+    _showNotice('Kept "${copy.name}" in your directions.');
+  }
+
+  void _showNotice(String message) {
+    if (!mounted) return;
+    OrSnackBar.show(context, message);
+  }
 
   /// Applies the template's canvas through the same validated command the
   /// Viewer uses, so a project's canvas is set exactly once, before the
