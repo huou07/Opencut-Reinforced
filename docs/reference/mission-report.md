@@ -4,7 +4,8 @@ Last reviewed: 2026-11-08
 
 Scope: what the 2026-11-07 mission (hardware profiles, export job detail, CLI
 parity, clip keyframes, motion presets and agent animation verbs) shipped, what was verified on each
-host, and what remains unverified. Branch `mission/hardware-profiles-and-polish`.
+host, and what remains unverified. Branch `mission/product-completion-2026-11-08` (the 2026-11-07 mission ran on
+`mission/hardware-profiles-and-polish`).
 
 Three revisions appear in this report and they are not interchangeable:
 
@@ -846,6 +847,41 @@ status `Exported Journey 0127.mp4 • 13.4 MB` and
 `BLOCKED … pinned FFmpeg 8 prefix` is missing `OR_LANE_FFMPEG_PREFIX` /
 `OR_LANE_CODEC_PREFIX`; a lane that starts at the wrong revision is a checkout
 blocked by a modified `Cargo.lock` — `git reset --hard bundle/pc` first.
+
+### Installed packages: three-host export parity, 2026-11-08
+
+The three installed 0.1.27 packages were then asked to export the same three
+profiles from their own UI hosts, using only the `or` binary that ships inside
+the package (`or export start --attach <live pointer> --profile mp4|webm|ffv1`).
+Every row below is an actual file produced by the installed app, probed with the
+packaged `ffprobe`; the files and `ffprobe` text live in
+`dist/release-0.1.27/evidence/{macos,windows,linux}/`.
+
+| Host | Project on the installed app | MP4 (hardware path) | WebM (vp9/opus) | Lossless (ffv1/pcm_s16le) |
+|---|---|---|---|---|
+| macOS 0.1.27 | `Audit Journey 0125`, 2 tracks, 1920×1080, 14.1 s | 14,022,260 B, `h264_videotoolbox` | 9,554,249 B | 100,064,125 B |
+| Windows 0.1.27 | `Windows 0123 Release`, 2 tracks, 1280×720, 0.5 s | 26,821 B, `h264_mf` | 20,528 B | 409,435 B |
+| Debian 0.1.27 | `Debian 0127 Release`, 2 tracks, 1920×1080, 14 s | 17,421,813 B, `h264_vaapi` | 6,730,697 B | 489,643,126 B |
+
+All nine outputs probe as the expected codec pairs at 30 fps (h264/aac,
+vp9/opus, ffv1/pcm_s16le, 48 kHz audio). The Windows project is a 0.5 s smoke
+clip, so its byte sizes are not comparable with the 14 s rows — this table is
+evidence that MP4/WebM/lossless export works from the installed package on each
+host, not a cross-host performance comparison.
+
+Debian detail: the deb rebuilt at `f78de83d` is 23,355,356 B,
+SHA-256 `5edeaa33d1e3360736cd93222b63cf408a63a5be9053b939c53e5c09d2fd8180`;
+`LOCAL_LANE=PASS` (`deb` 86.36 s, `journey` 392.99 s). The GUI was driven on
+`Xvfb :99`, so the viewer panel still says `Viewer texture unavailable`; the
+hardware evidence for that host is `vainfo` (Intel iHD 25.2.3) plus the
+`h264_vaapi` detail on the MP4 job, not the Xvfb GL path.
+
+Windows detail: packaged FFmpeg exposes `h264_mf`, `h264_nvenc` and `mpeg4` but
+no libx264, and the MP4 job names `h264_mf` with the `h264_nvenc` fallback line
+("the device this encoder needs did not open"). With the 32×24 canvas inherited
+from the tiny fixture, `h264_mf` fails `EXPORT_FAILED … the encoder did not
+open`; a 1280×720 canvas succeeds. The message names no cause, which is a UX
+gap rather than an encoder bug.
 
 ## Final-revision GUI journeys, 2026-11-08
 
