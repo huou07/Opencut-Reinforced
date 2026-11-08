@@ -370,6 +370,18 @@ class _PerformancePanelState extends State<PerformancePanel> {
         const SizedBox(height: OrSpacing.x2),
         _backendRow(report, settings),
         const SizedBox(height: OrSpacing.x2),
+        Text(
+          overridden
+              ? 'Pinned: ${settings.preferredH264Encoder ?? 'the encoder is measured'}, '
+                    'graphics ${settings.graphicsBackend == 'auto' ? 'automatic' : settings.graphicsBackend}.'
+              : 'Nothing is pinned; this machine decides every time.',
+          key: const ValueKey('performance-override-state'),
+          style: const TextStyle(
+            color: OrColors.textSecondary,
+            fontSize: OrType.metadataSize,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x2),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton(

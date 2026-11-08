@@ -1,16 +1,86 @@
 {
- "name": "performance-profiles-linux",
- "viewport": {"width": 1440, "height": 900},
- "steps": [
-  {"op": "tap", "selector": {"key": "nav-settings"}},
-  {"op": "wait_label", "label_regex": "Resources & updates", "budget_ms": 15000},
-  {"op": "tap", "selector": {"key": "settings-section-performance"}},
-  {"op": "wait_label", "label_regex": "This machine will encode with h264_vaapi \\(hardware\\)", "budget_ms": 30000},
-  {"op": "shot", "name": "performance-recommended"},
-  {"op": "tap", "selector": {"key": "performance-profile-compatibility"}},
-  {"op": "wait_label", "label_regex": "This machine will encode with libx264 \\(software\\)", "budget_ms": 20000},
-  {"op": "shot", "name": "performance-compatibility"},
-  {"op": "tap", "selector": {"key": "performance-reset"}},
-  {"op": "wait_label", "label_regex": "h264_vaapi \\(hardware\\)", "budget_ms": 20000}
- ]
+  "name": "performance-profiles-linux",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-settings"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Resources & updates",
+      "budget_ms": 20000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "settings-section-performance"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Best for this machine",
+      "budget_ms": 30000
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "h264_vaapi \\(hardware\\)",
+      "budget_ms": 60000
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Nothing is pinned",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "performance-automatic"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "performance-backend"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "^(Metal|Vulkan|Direct3D 12|OpenGL ES) only$",
+      "budget_ms": 15000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label_regex": "^(Metal|Vulkan|Direct3D 12|OpenGL ES) only$"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Pinned:",
+      "budget_ms": 15000
+    },
+    {
+      "op": "shot",
+      "name": "performance-pinned"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "performance-reset"
+      }
+    },
+    {
+      "op": "wait_label",
+      "label_regex": "Nothing is pinned",
+      "budget_ms": 20000
+    },
+    {
+      "op": "shot",
+      "name": "performance-reset"
+    }
+  ]
 }
