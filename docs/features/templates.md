@@ -137,3 +137,12 @@ edited as one semicolon-separated line and stored as the list the brief prints.
   removal, a corrupt file and id collisions.
 - `apps/or_app/test/library_screen_test.dart` — the three sections stay apart, a
   style builds only with a project open, and a direction opens as a brief.
+
+## The harness scenario
+
+`scripts/ui_scenarios/templates-edit-style.json` drives the whole edit-style
+path in the running app: it makes a project, imports one clip, inserts it,
+opens the palette, chooses a style from the picker, reads the plan and cancels
+it. It is the check that the palette entry, the picker copy, the plan review
+and the Cancel path stay reachable; the unit tests cover the plan arithmetic
+and the dialogs in isolation.
