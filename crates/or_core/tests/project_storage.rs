@@ -1,5 +1,6 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, ClipId, CommandEnvelope, MAX_PROJECT_FILE_BYTES,
+    ApplicationRequest, ApplicationResponse, CURRENT_PROJECT_SCHEMA_VERSION, ClipId, CommandEnvelope,
+    MAX_PROJECT_FILE_BYTES,
     MarkerId, MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession,
     ProjectFileSessionErrorCode, ProjectRevision, ProjectSession, ProjectStorageError,
     RationalTime, TimeRange, TrackId, TrackKind, decode_project, encode_project, load_project_file,
@@ -310,7 +311,7 @@ fn application_timeline_commands_save_reopen_exactly_and_do_not_persist_history(
 }
 
 #[test]
-fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v8() {
+fn advanced_timeline_commands_save_reopen_exactly_as_the_current_schema() {
     let directory = TestDirectory::new();
     let path = directory.project_path();
     let seeded = project_with_timeline_media();
@@ -397,7 +398,10 @@ fn advanced_timeline_commands_save_reopen_exactly_as_project_schema_v8() {
 
     session.save().unwrap();
     let encoded = serde_json::from_slice::<serde_json::Value>(&fs::read(&path).unwrap()).unwrap();
-    assert_eq!(encoded["schema_version"], 9);
+    assert_eq!(
+        encoded["schema_version"],
+        serde_json::json!(CURRENT_PROJECT_SCHEMA_VERSION)
+    );
     for runtime_state in ["instance_id", "history", "undo", "redo", "change_set"] {
         assert!(!encoded.to_string().contains(runtime_state));
     }
@@ -582,7 +586,9 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert!(
         std::str::from_utf8(&fs::read(&path).unwrap())
             .unwrap()
-            .contains("\"schema_version\": 9")
+            .contains(&format!(
+                "\"schema_version\": {CURRENT_PROJECT_SCHEMA_VERSION}"
+            ))
     );
 
     let undo = session.handle_application_request(ApplicationRequest::Command(CommandEnvelope {
