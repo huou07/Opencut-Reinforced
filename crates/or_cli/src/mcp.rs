@@ -224,6 +224,8 @@ impl Server {
             "export_start" => self.export_start(arguments),
             "export_status" => self.export_status(arguments),
             "export_cancel" => self.export_cancel(arguments),
+            "tools_list" => self.tools_list(),
+            "tools_check" => self.tools_check(arguments),
             other => Err(format!(
                 "unknown tool: {other}. Call tools/list to see the supported tools."
             )),
@@ -922,6 +924,27 @@ impl Server {
             args.push(text.to_owned());
         }
         self.run_or_owned(&args).and_then(pretty)
+    }
+
+    /// Lists the curated companion tools with their probe state on this host.
+    fn tools_list(&self) -> Result<String, String> {
+        let platform = or_core::Platform::current();
+        let statuses = or_tools::statuses(platform);
+        pretty(json!({
+            "platform": platform.label(),
+            "tools": serde_json::to_value(statuses)
+                .map_err(|error| format!("cannot encode tool statuses: {error}"))?,
+        }))
+    }
+
+    /// Probes one curated companion tool and reports its state, version and path.
+    fn tools_check(&self, arguments: &Value) -> Result<String, String> {
+        let id = required_str(arguments, "id")?;
+        let platform = or_core::Platform::current();
+        let status = or_tools::status(&id)
+            .ok_or_else(|| format!("unknown companion tool: {id}"))?;
+        pretty(serde_json::to_value(status)
+            .map_err(|error| format!("cannot encode the tool status: {error}"))?)
     }
 
     fn media_get(&self, arguments: &Value) -> Result<String, String> {
@@ -1677,6 +1700,18 @@ fn tool_definitions() -> Value {
             "inputSchema": object_schema(json!({
                 "job_id": {"type": "string"}
             }), &["job_id"]),
+        },
+        {
+            "name": "tools_list",
+            "description": "List the curated companion tools (ffmpeg, node, svgo, Inkscape, Blender, Audacity, Remotion, Motion Canvas) with their probe state, version, executable path and detail on this host. Use it before telling a user a tool is available.",
+            "inputSchema": empty_schema(),
+        },
+        {
+            "name": "tools_check",
+            "description": "Probe one curated companion tool again and return its current state, version, executable path and detail. This runs the tool's version command; it does not install or launch anything.",
+            "inputSchema": object_schema(json!({
+                "id": {"type": "string", "description": "Catalog id, for example ffmpeg or blender."}
+            }), &["id"]),
         }
     ])
 }
@@ -1835,4 +1870,29 @@ fn absolute_path(path: String) -> Result<String, String> {
 fn pretty(value: Value) -> Result<String, String> {
     serde_json::to_string_pretty(&value)
         .map_err(|error| format!("could not encode the tool result: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn companion_tools_are_advertised_to_agents() {
+        let tools = tool_definitions();
+        let names: Vec<&str> = tools
+            .as_array()
+            .expect("tool definitions are a list")
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(names.contains(&"tools_list"), "{names:?}");
+        assert!(names.contains(&"tools_check"), "{names:?}");
+        let check = tools
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "tools_check")
+            .expect("tools_check is defined");
+        assert_eq!(check["inputSchema"]["required"], json!(["id"]));
+    }
 }

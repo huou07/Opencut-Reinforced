@@ -61,6 +61,11 @@ Shot frames are scaled from the plan's rate to the project's sequence rate, so a
   script shape, graphics, captions, editing and audio guidance together with the
   media list. The action is offered only while a project is open, because a plan
   is checked against its media.
+- **An edit style's plan preview → "Plan with an assistant…"**: the style's
+  name, description, pacing and shot cap become the brief's style text, so an
+  assistant cuts to the same style rules the rule-based planner uses. The button
+  appears only while a project is open and the assistant is configured; the
+  style preview closes and the plan import opens with that brief.
 - **Command palette → "Review an Assistant Plan…"** in the editor.
 - The import dialog offers **Copy the brief**, a ready-to-paste prompt containing
   the schema, the rules and the project's media ids, names and durations.
@@ -86,9 +91,9 @@ a silently partial one.
 - The plan is a first cut, not a complete edit: it does not add transitions,
   effects, music or captions. Those remain manual (or another assistant call)
   after the cut exists.
-- A creative direction reaches the assistant as text in the brief. OR does not
-  call a provider itself, so a direction produces nothing until the configured
-  assistant runs with that brief.
+- A creative direction or an edit style reaches the assistant as text in the
+  brief. OR does not call a provider itself, so neither produces anything until
+  the configured assistant runs with that brief.
 - The assistant must be given the brief (or the media ids) to write a plan that
   resolves; OR never guesses a media id.
 - The workflow needs a configured assistant harness for the agent to run at all.

@@ -18,6 +18,7 @@ class EditStylePlanDialog extends StatelessWidget {
     required this.title,
     required this.labels,
     required this.appendsAfter,
+    this.onPlanWithAssistant,
   });
 
   final EditStylePlan plan;
@@ -30,6 +31,9 @@ class EditStylePlanDialog extends StatelessWidget {
 
   /// True when the cut lands after the clips already on the timeline.
   final bool appendsAfter;
+
+  /// Opens the assistant-plan import with this style as the brief.
+  final VoidCallback? onPlanWithAssistant;
 
   static const _applyKey = ValueKey('edit-style-apply');
 
@@ -141,6 +145,16 @@ class EditStylePlanDialog extends StatelessWidget {
         ),
       ),
       actions: [
+        if (onPlanWithAssistant != null)
+          TextButton(
+            key: const ValueKey('edit-style-plan-with-assistant'),
+            onPressed: () {
+              final plan = onPlanWithAssistant!;
+              Navigator.of(context).pop(false);
+              WidgetsBinding.instance.addPostFrameCallback((_) => plan());
+            },
+            child: const Text('Plan with an assistant…'),
+          ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),

@@ -162,4 +162,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(copied, isTrue);
   });
+
+  testWidgets('a style offers an assistant plan only when one can run', (
+    tester,
+  ) async {
+    final style = _style('cinematic-documentary');
+    final plan = planEditStyleCut(
+      style: style,
+      sources: const [
+        EditStyleSource(mediaId: 'a', frames: 360, hasVideo: true, label: 'a'),
+        EditStyleSource(mediaId: 'b', frames: 240, hasVideo: true, label: 'b'),
+      ],
+      frameRate: 30,
+    );
+    var asked = false;
+    bool? answer;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async {
+                answer = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => EditStylePlanDialog(
+                    plan: plan,
+                    title: null,
+                    labels: const {'a': 'a.mp4', 'b': 'b.mp4'},
+                    appendsAfter: false,
+                    onPlanWithAssistant: () => asked = true,
+                  ),
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('edit-style-plan-with-assistant')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(asked, isTrue);
+    expect(answer, isFalse);
+  });
+
+  testWidgets('a style without an assistant hides the plan button', (
+    tester,
+  ) async {
+    final plan = planEditStyleCut(
+      style: _style('cinematic-documentary'),
+      sources: const [
+        EditStyleSource(mediaId: 'a', frames: 360, hasVideo: true, label: 'a'),
+      ],
+      frameRate: 30,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EditStylePlanDialog(
+          plan: plan,
+          title: null,
+          labels: const {'a': 'a.mp4'},
+          appendsAfter: false,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('edit-style-plan-with-assistant')),
+      findsNothing,
+    );
+  });
 }

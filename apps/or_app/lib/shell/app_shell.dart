@@ -1840,6 +1840,9 @@ class _AppShellState extends State<AppShell> {
         title: titleText,
         labels: labels,
         appendsAfter: baseFrame > 0,
+        onPlanWithAssistant: _activeSession == null
+            ? null
+            : () => unawaited(_reviewAgentPlan(style: plan.style)),
       ),
     );
     if (approved != true || !mounted) return;
@@ -1952,7 +1955,7 @@ class _AppShellState extends State<AppShell> {
   /// The assistant is the planner; OR is the reviewer and the writer. Nothing
   /// here calls a model: it parses the plan, checks it against the project's
   /// media, shows every shot, and applies only what was approved.
-  Future<void> _reviewAgentPlan({String? direction}) async {
+  Future<void> _reviewAgentPlan({String? direction, EditStyle? style}) async {
     final session = _activeSession;
     final current = _activeProject;
     if (session == null || current == null) {
@@ -1984,11 +1987,15 @@ class _AppShellState extends State<AppShell> {
           media: media,
           frameRate: facts.fps,
           direction: direction,
-          style: direction == null
-              ? 'The open project. Keep the pacing of its existing cut.'
-              : 'Follow the creative direction in the brief. It is a method, '
+          style: direction != null
+              ? 'Follow the creative direction in the brief. It is a method, '
                     'not a script: write the script, shot plan and pacing this '
-                    'footage can carry.',
+                    'footage can carry.'
+              : style != null
+              ? 'Cut in the ${style.name} style: ${style.description} '
+                    '${style.pacing} Keep the cut to about '
+                    '${style.maxShots} shots.'
+              : 'The open project. Keep the pacing of its existing cut.',
         ),
       ),
     );
