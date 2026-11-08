@@ -4571,8 +4571,7 @@ fn run_export_start(args: &[OsString], json: bool) -> Result<String, CliError> {
                 .ok_or_else(|| {
                     CliError::usage(
                         json,
-                        "--performance must be recommended, maximum_performance, balanced, \
-                         or compatibility",
+                        "--performance must be automatic",
                     )
                 })?,
             preferred_h264_encoder: None,

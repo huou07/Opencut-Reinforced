@@ -1110,7 +1110,7 @@ impl ProjectHostHandle {
                 None => {
                     return export_job_view(ExportResponse::failure(
                         "INVALID_EXPORT_PERFORMANCE",
-                        "unknown performance profile; use recommended, maximum_performance,                          balanced, or compatibility",
+                        "unknown performance profile; use automatic",
                     ));
                 }
             },

@@ -16,18 +16,22 @@ void main() {
     saves = 0;
   });
 
+  /// Mirrors the Settings screen: the owner of the settings rebuilds the panel
+  /// with the value it saved, which is what makes an override appear at once.
   Future<void> pumpPanel(WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(
-            child: PerformancePanel(
-              gateway: gateway,
-              settings: settings,
-              onSettingsChanged: (next) {
-                saves += 1;
-                settings = next;
-              },
+          body: StatefulBuilder(
+            builder: (context, setHostState) => SingleChildScrollView(
+              child: PerformancePanel(
+                gateway: gateway,
+                settings: settings,
+                onSettingsChanged: (next) {
+                  saves += 1;
+                  setHostState(() => settings = next);
+                },
+              ),
             ),
           ),
         ),
@@ -36,51 +40,87 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the panel names the machine and the planned encoder', (
-    tester,
-  ) async {
+  testWidgets(
+    'the panel names the machine, the plan, and no performance tiers',
+    (tester) async {
+      await pumpPanel(tester);
+
+      expect(
+        find.byKey(const ValueKey('settings-performance')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Fixture GPU'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('performance-automatic-copy')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('h264_videotoolbox'), findsWidgets);
+      for (final retired in [
+        'recommended',
+        'maximum_performance',
+        'balanced',
+        'compatibility',
+      ]) {
+        expect(
+          find.byKey(ValueKey('performance-profile-$retired')),
+          findsNothing,
+          reason: 'the retired tier $retired must not be offered',
+        );
+      }
+      expect(find.text('Maximum performance'), findsNothing);
+      expect(find.text('Compatibility'), findsNothing);
+    },
+  );
+
+  testWidgets('each part of the job says who does it and why', (tester) async {
     await pumpPanel(tester);
 
-    expect(
-      find.byKey(const ValueKey('settings-performance')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Fixture GPU'), findsOneWidget);
-    expect(find.textContaining('Metal'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('performance-plan-summary')),
-      findsOneWidget,
-    );
-    expect(find.textContaining('h264_videotoolbox'), findsOneWidget);
-    for (final wire in [
-      'recommended',
-      'maximum_performance',
-      'balanced',
-      'compatibility',
-    ]) {
+    for (final part in ['render', 'composite', 'decode', 'encode']) {
       expect(
-        find.byKey(ValueKey('performance-profile-$wire')),
+        find.byKey(ValueKey('performance-workload-$part')),
         findsOneWidget,
       );
     }
+    expect(find.textContaining('software (h264, aac)'), findsOneWidget);
+    expect(
+      find.textContaining('costs more than it saves'),
+      findsOneWidget,
+      reason: 'the decode row must say why hardware is not used',
+    );
   });
 
-  testWidgets('choosing a profile saves it and asks for the new plan', (
+  testWidgets('the first look records what the plan was decided from', (
     tester,
   ) async {
     await pumpPanel(tester);
 
-    await tester.tap(
-      find.byKey(const ValueKey('performance-profile-compatibility')),
-    );
-    await tester.pumpAndSettle();
-
     expect(saves, 1);
-    expect(settings.performanceProfile, 'compatibility');
-    expect(gateway.planCalls, greaterThanOrEqualTo(2));
-    expect(gateway.lastProfile, 'compatibility');
-    expect(find.textContaining('libx264'), findsWidgets);
+    expect(settings.hardwareFingerprint, isNotNull);
+    expect(settings.hardwareFingerprint, contains('Fixture GPU'));
+    expect(settings.hardwareCheckedAt, isNotNull);
+    expect(
+      find.byKey(const ValueKey('performance-machine-changed')),
+      findsNothing,
+      reason: 'a first look is not a change',
+    );
+    expect(find.byKey(const ValueKey('performance-checked')), findsOneWidget);
   });
+
+  testWidgets(
+    'a machine that no longer matches is reported and decided again',
+    (tester) async {
+      settings = const EditorSettings(
+        hardwareFingerprint: 'a-different-machine',
+      );
+      await pumpPanel(tester);
+
+      expect(
+        find.byKey(const ValueKey('performance-machine-changed')),
+        findsOneWidget,
+      );
+      expect(settings.hardwareFingerprint, contains('Fixture GPU'));
+    },
+  );
 
   testWidgets('a plan with several notes builds without duplicate keys', (
     tester,
@@ -106,6 +146,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an encoder the person pins wins and Reset clears it', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+
+    final dropdown = find.byKey(const ValueKey('performance-encoder'));
+    await tester.ensureVisible(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('libx264').last);
+    await tester.pumpAndSettle();
+
+    expect(saves, greaterThanOrEqualTo(1));
+    expect(settings.preferredH264Encoder, 'libx264');
+    expect(gateway.lastEncoder, 'libx264');
+    expect(find.textContaining('libx264'), findsWidgets);
+
+    final reset = find.byKey(const ValueKey('performance-reset'));
+    await tester.ensureVisible(reset);
+    await tester.pumpAndSettle();
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+
+    expect(settings.preferredH264Encoder, isNull);
+    expect(settings.graphicsBackend, 'auto');
+    expect(settings.performanceProfile, 'automatic');
+  });
+
+  testWidgets('Reset is unavailable until something is overridden', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+
+    final reset = tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey('performance-reset')),
+    );
+    expect(reset.onPressed, isNull);
+  });
+
   testWidgets('choosing a graphics backend stores it for the next start', (
     tester,
   ) async {
@@ -116,35 +196,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(dropdown);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Vulkan').last);
+    await tester.tap(find.text('Vulkan only').last);
     await tester.pumpAndSettle();
 
-    expect(saves, 1);
     expect(settings.graphicsBackend, 'vulkan');
     expect(gateway.graphicsCalls, 1);
     expect(gateway.lastGraphicsBackend, 'vulkan');
-  });
-
-  testWidgets('reset clears the encoder override and returns to recommended', (
-    tester,
-  ) async {
-    settings = const EditorSettings(
-      performanceProfile: 'balanced',
-      preferredH264Encoder: 'h264_videotoolbox',
-    );
-    await pumpPanel(tester);
-
-    final reset = find.byKey(const ValueKey('performance-reset'));
-    await tester.ensureVisible(reset);
-    await tester.pumpAndSettle();
-    await tester.tap(reset);
-    await tester.pumpAndSettle();
-
-    expect(saves, 1);
-    expect(settings.performanceProfile, 'recommended');
-    expect(settings.preferredH264Encoder, isNull);
-    expect(gateway.lastProfile, 'recommended');
-    expect(gateway.lastEncoder, isNull);
   });
 }
 
@@ -222,18 +279,16 @@ class _FakeGateway implements CoreGateway {
     lastProfile = profile;
     lastEncoder = preferredH264Encoder;
     final hardware =
-        preferredH264Encoder == 'h264_videotoolbox' ||
-        (preferredH264Encoder == null && profile != 'compatibility');
+        preferredH264Encoder == null ||
+        preferredH264Encoder == 'h264_videotoolbox';
     return EncodingPlanView(
       profile: profile,
-      quality: profile == 'maximum_performance' ? 'speed' : 'quality',
+      quality: 'quality',
       h264Encoder: hardware ? 'h264_videotoolbox' : 'libx264',
       hardware: hardware,
       software: !hardware,
       notes: planNotes,
-      summary: hardware
-          ? 'h264_videotoolbox (hardware)'
-          : 'libx264 (software)',
+      summary: hardware ? 'h264_videotoolbox (hardware)' : 'libx264 (software)',
     );
   }
 }

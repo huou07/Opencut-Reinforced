@@ -40,22 +40,22 @@ lists MP4/WebM/lossless as Ready or Unavailable with the encoder name. A build
 whose only working encoder is FFV1 says so rather than offering an MP4 export
 that would fail.
 
-### Performance profiles
+### Encoder, not a performance profile
 
-The candidate walk above is the default, not the only path. Settings →
-Performance offers four profiles, and the export dialog can change the profile
-for one file:
+Performance has one mode: Automatic. The export dialog names the encoder the
+machine will open instead of offering tiers to pick, and the line says whether
+an override pinned it:
 
-- `recommended` — the first candidate that opened, hardware first.
-- `maximum_performance` — the same order, and new exports start on the `speed`
-  quality preset so the choice is visible in the file too.
-- `balanced` — the operating-system encoder (VideoToolbox, Media Foundation or
-  VAAPI) before vendor drivers, because vendor encoders vary more between driver
-  versions.
-- `compatibility` — software only, for a driver that crashes or writes files
-  that will not play. It uses the first software encoder; when no software
-  H.264 encoder opened at all it takes the only encoder that did and records
-  that as a note rather than refusing to export.
+- The plan is the first encoder that answered a probe on this boot, with the
+  operating-system encoder (VideoToolbox, Media Foundation, VAAPI) ahead of a
+  vendor one. Settings → Performance shows the same plan with a reason for each
+  part of the job (render, composite, decode, encode).
+- Quality, resolution and codec stay in this dialog: they choose the file, not
+  the machine. The retired `recommended`, `maximum_performance`, `balanced` and
+  `compatibility` names still parse and all resolve to the one mode, so an old
+  script or settings file keeps working.
+- When this build cannot measure the machine, the dialog says so and the export
+  still starts with the default encoder.
 
 An advanced encoder override wins over the profile. If the named encoder did not
 open, the job falls back to one that did and records the reason; it does not fail
@@ -163,10 +163,10 @@ with a real Intel GPU, and Windows in an interactive session.
   bridge takes it as an optional argument so an old caller keeps compiling.
 - The chosen resolution is applied once to the output frame size; the project
   canvas and clip transforms are not rewritten by an export.
-- The performance profile and an optional encoder name are optional fields on
-  `ExportRequest::Start`. An older client that omits them gets `recommended`
-  and the candidate walk; a name that cannot open is a recorded fallback, not a
-  failed request. Settings persists the choice in `editor-settings.json`.
+- The performance mode and an optional encoder name are optional fields on
+  `ExportRequest::Start`. A client that omits them gets the candidate walk; a
+  name that cannot open is a recorded fallback, not a failed request. Settings
+  persists it in `editor-settings.json`.
 - A directory destination is rejected before encoding starts.
 - Export never mutates canonical project state or increments the revision.
 - The export receipt names the produced file and offers Show in Finder.

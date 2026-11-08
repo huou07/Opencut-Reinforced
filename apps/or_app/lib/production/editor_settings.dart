@@ -13,9 +13,11 @@ class EditorSettings {
     this.simpleMode = true,
     this.showGuides = false,
     this.tipsDismissed = false,
-    this.performanceProfile = 'recommended',
+    this.performanceProfile = 'automatic',
     this.preferredH264Encoder,
     this.graphicsBackend = 'auto',
+    this.hardwareFingerprint,
+    this.hardwareCheckedAt,
   });
 
   /// The inspector is an advanced surface. The toolbar and clip dialogs carry
@@ -36,10 +38,9 @@ class EditorSettings {
   /// of guided mode. Settings owns the switch that brings it back.
   final bool tipsDismissed;
 
-  /// How exports should use this machine, by wire name: `recommended`,
-  /// `maximum_performance`, `balanced`, or `compatibility`. The engine still
-  /// refuses an encoder that does not open here; the profile is a preference,
-  /// not a promise.
+  /// How exports should use this machine. There is one mode, `automatic`: the
+  /// plan is resolved from what opened on this boot. The field survives so an
+  /// older file, script or agent that names a retired tier still parses.
   final String performanceProfile;
 
   /// An H.264 encoder the person chose by name, or null to let the profile
@@ -51,6 +52,14 @@ class EditorSettings {
   /// process, so a change is stored and applied next launch.
   final String graphicsBackend;
 
+  /// What this machine looked like when the plan was last decided: processor,
+  /// graphics device, driver, compiled backends, decoders. A machine that no
+  /// longer matches it is reported in Settings and decided again.
+  final String? hardwareFingerprint;
+
+  /// When that comparison last ran, in UTC.
+  final DateTime? hardwareCheckedAt;
+
   EditorSettings copyWith({
     bool? showInspector,
     bool? simpleMode,
@@ -58,6 +67,8 @@ class EditorSettings {
     bool? tipsDismissed,
     String? performanceProfile,
     String? graphicsBackend,
+    String? hardwareFingerprint,
+    DateTime? hardwareCheckedAt,
   }) => EditorSettings(
     showInspector: showInspector ?? this.showInspector,
     simpleMode: simpleMode ?? this.simpleMode,
@@ -66,6 +77,8 @@ class EditorSettings {
     performanceProfile: performanceProfile ?? this.performanceProfile,
     preferredH264Encoder: preferredH264Encoder,
     graphicsBackend: graphicsBackend ?? this.graphicsBackend,
+    hardwareFingerprint: hardwareFingerprint ?? this.hardwareFingerprint,
+    hardwareCheckedAt: hardwareCheckedAt ?? this.hardwareCheckedAt,
   );
 
   /// Sets or clears the encoder override without touching the other fields.
@@ -77,10 +90,12 @@ class EditorSettings {
     performanceProfile: performanceProfile,
     preferredH264Encoder: encoder,
     graphicsBackend: graphicsBackend,
+    hardwareFingerprint: hardwareFingerprint,
+    hardwareCheckedAt: hardwareCheckedAt,
   );
 
   Map<String, Object?> toJson() => {
-    'version': 4,
+    'version': 5,
     'show_inspector': showInspector,
     'simple_mode': simpleMode,
     'show_guides': showGuides,
@@ -88,6 +103,8 @@ class EditorSettings {
     'performance_profile': performanceProfile,
     'preferred_h264_encoder': preferredH264Encoder,
     'graphics_backend': graphicsBackend,
+    'hardware_fingerprint': hardwareFingerprint,
+    'hardware_checked_at': hardwareCheckedAt?.toIso8601String(),
   };
 
   /// A version-1 file predates guided mode and guides. Guided mode is on by
@@ -100,21 +117,25 @@ class EditorSettings {
       simpleMode: value['simple_mode'] != false,
       showGuides: value['show_guides'] == true,
       tipsDismissed: value['tips_dismissed'] == true,
-      performanceProfile:
-          value['performance_profile'] ==
-              'maximum_performance' ||
-          value['performance_profile'] == 'balanced' ||
-          value['performance_profile'] == 'compatibility'
-      ? value['performance_profile'] as String
-      : 'recommended',
+      // Every retired tier meant the same probe, so any stored value is the
+      // one mode now.
+      performanceProfile: 'automatic',
       preferredH264Encoder: value['preferred_h264_encoder'] is String
           ? value['preferred_h264_encoder'] as String
           : null,
       graphicsBackend: switch (value['graphics_backend']) {
-        'metal' || 'vulkan' || 'dx12' || 'gles' =>
-          value['graphics_backend'] as String,
+        'metal' ||
+        'vulkan' ||
+        'dx12' ||
+        'gles' => value['graphics_backend'] as String,
         _ => 'auto',
       },
+      hardwareFingerprint: value['hardware_fingerprint'] is String
+          ? value['hardware_fingerprint'] as String
+          : null,
+      hardwareCheckedAt: DateTime.tryParse(
+        (value['hardware_checked_at'] as String?) ?? '',
+      )?.toUtc(),
     );
   }
 }

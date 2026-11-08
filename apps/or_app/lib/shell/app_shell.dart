@@ -18,7 +18,6 @@ import '../library/sound_library.dart';
 import '../library/text_presets.dart';
 import '../design/or_spacing.dart';
 import '../production/editor_settings.dart';
-import '../updates/performance_options.dart';
 import '../updates/system_check.dart';
 import '../project/export_capability.dart';
 import '../project/export_profile.dart';
@@ -3560,6 +3559,22 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  /// Names the encoder this export will open, and whether the person pinned
+  /// it, so the dialog answers "what will write this file?" without offering a
+  /// performance tier to pick.
+  static String _exportEncoderLine(
+    EditorSettings settings,
+    EncodingPlanView? plan,
+  ) {
+    final pinned = settings.preferredH264Encoder;
+    if (pinned != null) return 'Pinned to $pinned.';
+    if (plan == null) {
+      return 'This machine could not be measured; the export uses the '
+          'default encoder.';
+    }
+    return 'This export encodes with ${plan.summary}.';
+  }
+
   Future<ExportOptions?> _chooseExportOptions() async {
     // The preference is read at open time: the dialog is an occasional surface
     // and a second copy of the setting in the shell would be one more thing to
@@ -3595,7 +3610,6 @@ class _AppShellState extends State<AppShell> {
         var quality = defaultChoice.quality;
         int? shortSide = defaultChoice.shortSide;
         var advanced = !simple;
-        var performanceProfile = settings.performanceProfile;
         _ExportIntent? intent = simple
             ? _intentFor(selected, quality, shortSide, platformDefault)
             : null;
@@ -3673,45 +3687,26 @@ class _AppShellState extends State<AppShell> {
                   }),
                 ),
                 if (performance != null) ...[
-                  const ExportDialogSection('Performance'),
-                  for (final option in performanceProfileOptions)
-                    ExportChoiceTile(
-                      key: ValueKey('export-performance-${option.wire}'),
-                      title: option.title,
-                      subtitle: option.description,
-                      selected: performanceProfile == option.wire,
-                      onTap: () {
-                        setDialogState(() => performanceProfile = option.wire);
-                        unawaited(
-                          _editorSettingsStore.save(
-                            settings.copyWith(performanceProfile: option.wire),
-                          ),
-                        );
-                      },
+                  const ExportDialogSection('Encoder'),
+                  Text(
+                    _exportEncoderLine(settings, planFor('automatic')),
+                    key: const ValueKey('export-encoder-line'),
+                    style: const TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: OrType.metadataSize,
                     ),
-                  if (settings.preferredH264Encoder != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: OrSpacing.x1),
-                      child: Text(
-                        'Encoder override: ${settings.preferredH264Encoder}. '
-                        'Change it in Settings → Performance.',
-                        key: const ValueKey('export-performance-override'),
-                        style: const TextStyle(
-                          color: OrColors.textMuted,
-                          fontSize: OrType.metadataSize,
-                        ),
-                      ),
-                    )
-                  else if (planFor(performanceProfile) != null)
-                    Text(
-                      'This export encodes with '
-                      '${planFor(performanceProfile)!.summary}.',
-                      key: const ValueKey('export-performance-summary'),
-                      style: const TextStyle(
-                        color: OrColors.textSecondary,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Text(
+                      'OR chose this from what opened on this machine. '
+                      'Settings → Performance changes it.',
+                      style: TextStyle(
+                        color: OrColors.textMuted,
                         fontSize: OrType.metadataSize,
                       ),
                     ),
+                  ),
                 ],
                 if (capability.caveat.isNotEmpty) ...[
                   const SizedBox(height: OrSpacing.x2),
@@ -3805,7 +3800,7 @@ class _AppShellState extends State<AppShell> {
                     profile: selected,
                     quality: quality,
                     shortSide: shortSide,
-                    performanceProfile: performanceProfile,
+                    performanceProfile: settings.performanceProfile,
                     preferredH264Encoder: settings.preferredH264Encoder,
                   )),
                   child: const Text('Continue'),
@@ -6067,7 +6062,9 @@ String _exportSummary(
 ) {
   final size = shortSide == null ? 'project resolution' : '${shortSide}p';
   final rate = profile.hasQualityChoice
-      ? (quality == ExportQuality.quality ? 'cleaner picture' : 'quicker export')
+      ? (quality == ExportQuality.quality
+            ? 'cleaner picture'
+            : 'quicker export')
       : 'lossless';
   return '${profile.label} · $size · $rate';
 }

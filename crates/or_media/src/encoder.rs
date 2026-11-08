@@ -611,7 +611,7 @@ impl FfmpegExportWriter {
             ExportWriterOptions {
                 profile,
                 quality,
-                performance: or_core::PerformanceProfile::Recommended,
+                performance: or_core::PerformanceProfile::Automatic,
                 preferred_h264_encoder: None,
                 width,
                 height,

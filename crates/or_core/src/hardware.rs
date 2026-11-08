@@ -10,64 +10,48 @@ use serde::{Deserialize, Serialize};
 
 use crate::ExportQuality;
 
-/// How much hardware acceleration an export should use.
+/// How an export should use this machine.
 ///
-/// The profile is a preference, not a switch: every profile still requires an
-/// encoder that opened on this machine, and every profile records why it moved
-/// to a different one. `Compatibility` is the only one that refuses hardware on
-/// purpose, so a machine with a driver that misbehaves has a way out that does
-/// not depend on the person knowing encoder names.
+/// There is one answer: the plan is resolved from what this machine actually
+/// opened on this boot. The setting keeps a wire name because an export request
+/// records it and older settings files carry one, but the tiers that name once
+/// had (`recommended`, `maximum_performance`, `balanced`, `compatibility`) are
+/// gone — each of them asked a person to answer a question the machine can
+/// answer itself, and every one of them still ended in the same probe.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PerformanceProfile {
-    /// Use whatever this machine does best, with a measured fallback.
+    /// The fastest path that opened here, with the reason recorded.
     #[default]
-    Recommended,
-    /// Spend the machine's encode hardware even when a safer path exists.
-    /// The dialog starts on `Speed` so the choice is visible in the file too.
-    MaximumPerformance,
-    /// Prefer the operating system's own hardware encoder over vendor ones.
-    /// Vendor encoders are faster but vary more between driver versions.
-    Balanced,
-    /// Software encoders only, for a driver that crashes or produces
-    /// unplayable files.
-    Compatibility,
+    Automatic,
 }
 
 impl PerformanceProfile {
-    pub const ALL: [Self; 4] = [
-        Self::Recommended,
-        Self::MaximumPerformance,
-        Self::Balanced,
-        Self::Compatibility,
-    ];
+    pub const ALL: [Self; 1] = [Self::Automatic];
 
     pub const fn wire_name(self) -> &'static str {
-        match self {
-            Self::Recommended => "recommended",
-            Self::MaximumPerformance => "maximum_performance",
-            Self::Balanced => "balanced",
-            Self::Compatibility => "compatibility",
-        }
+        "automatic"
     }
 
     /// Parses the wire name the settings file and the export request carry.
+    ///
+    /// The names of the retired tiers still parse, because a settings file, a
+    /// script or an agent may carry one; they all mean the same thing now.
     pub fn parse(value: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|profile| profile.wire_name() == value.trim())
+        match value.trim() {
+            "" => None,
+            "automatic" | "recommended" | "maximum_performance" | "balanced"
+            | "compatibility" => Some(Self::Automatic),
+            _ => None,
+        }
     }
 
-    /// The quality an export dialog should start on for this profile.
+    /// The quality an export dialog should start on.
     ///
-    /// `MaximumPerformance` means "make the fastest file this machine can",
-    /// so the dialog starts on `Speed`; the lossless profile ignores quality
-    /// and the dialog hides the choice there anyway.
+    /// Quality is an output choice, so it stays in the export dialog and is
+    /// never inferred from a machine preference.
     pub const fn default_quality(self) -> ExportQuality {
-        match self {
-            Self::MaximumPerformance => ExportQuality::Speed,
-            _ => ExportQuality::Quality,
-        }
+        ExportQuality::Quality
     }
 }
 
@@ -127,7 +111,8 @@ impl ExportEncodingPlan {
 ///
 /// VideoToolbox, Media Foundation and VAAPI are the platform's own path;
 /// NVENC, AMF and OpenH264 come from a vendor or a bundled library and can
-/// change behaviour with a driver update, which is the trade `Balanced` avoids.
+/// change behaviour with a driver update, so they are a second choice when the
+/// platform path also opened.
 fn is_platform_encoder(name: &str) -> bool {
     matches!(name, "h264_videotoolbox" | "h264_mf" | "h264_vaapi")
 }
@@ -135,10 +120,10 @@ fn is_platform_encoder(name: &str) -> bool {
 /// Resolves the H.264 encoder an export job should open.
 ///
 /// An explicit `requested` name wins whenever it is present and opened: a
-/// person who chose an encoder should get that encoder, and a profile is a
-/// default rather than a veto. When the request cannot be honoured the plan
-/// says why and falls back to the profile's automatic choice, so an export
-/// still produces a file instead of failing on a preference.
+/// person who chose an encoder should get that encoder. When the request
+/// cannot be honoured the plan says why and falls back to the automatic
+/// choice, so an export still produces a file instead of failing on a
+/// preference.
 pub fn plan_h264_encoding(
     profile: PerformanceProfile,
     requested: Option<&str>,
@@ -155,13 +140,6 @@ pub fn plan_h264_encoding(
                 ));
             }
             Some(candidate) if candidate.present && candidate.opens => {
-                if profile == PerformanceProfile::Compatibility && candidate.hardware {
-                    notes.push(
-                        "You chose a hardware encoder while the Compatibility profile is on; \
-                         the explicit choice is kept."
-                            .to_owned(),
-                    );
-                }
                 return ExportEncodingPlan {
                     profile,
                     h264_encoder: Some(candidate.name.clone()),
@@ -183,21 +161,12 @@ pub fn plan_h264_encoding(
         .iter()
         .filter(|candidate| candidate.present && candidate.opens)
         .collect();
-    let chosen = match profile {
-        PerformanceProfile::Compatibility => usable
-            .iter()
-            .copied()
-            .find(|candidate| !candidate.hardware)
-            .or_else(|| usable.first().copied()),
-        PerformanceProfile::Balanced => usable
-            .iter()
-            .copied()
-            .find(|candidate| candidate.hardware && is_platform_encoder(&candidate.name))
-            .or_else(|| usable.iter().copied().find(|candidate| !candidate.hardware)),
-        PerformanceProfile::Recommended | PerformanceProfile::MaximumPerformance => {
-            usable.first().copied()
-        }
-    };
+    let chosen = usable
+        .iter()
+        .copied()
+        .find(|candidate| candidate.hardware && is_platform_encoder(&candidate.name))
+        .or_else(|| usable.iter().copied().find(|candidate| candidate.hardware))
+        .or_else(|| usable.first().copied());
 
     let Some(chosen) = chosen else {
         let reason = "no H.264 encoder opened on this machine".to_owned();
@@ -212,12 +181,6 @@ pub fn plan_h264_encoding(
         };
     };
 
-    if profile == PerformanceProfile::Compatibility && chosen.hardware {
-        notes.push(
-            "No software H.264 encoder opened, so this export uses the only encoder that did."
-                .to_owned(),
-        );
-    }
     for candidate in candidates {
         if candidate.present
             && !candidate.opens
@@ -260,56 +223,71 @@ mod tests {
     }
 
     #[test]
-    fn profiles_round_trip_their_wire_names() {
+    fn the_one_profile_round_trips_and_old_names_still_parse() {
         for profile in PerformanceProfile::ALL {
             assert_eq!(
                 PerformanceProfile::parse(profile.wire_name()),
                 Some(profile)
             );
         }
+        for retired in [
+            "recommended",
+            "maximum_performance",
+            "balanced",
+            "compatibility",
+        ] {
+            assert_eq!(
+                PerformanceProfile::parse(retired),
+                Some(PerformanceProfile::Automatic),
+                "{retired} is a settings file from an older build"
+            );
+        }
         assert_eq!(PerformanceProfile::parse(" turbo "), None);
     }
 
     #[test]
-    fn only_maximum_performance_starts_on_speed() {
+    fn quality_is_never_inferred_from_the_machine() {
         use crate::ExportQuality;
         assert_eq!(
-            PerformanceProfile::MaximumPerformance.default_quality(),
-            ExportQuality::Speed
+            PerformanceProfile::Automatic.default_quality(),
+            ExportQuality::Quality
         );
-        for profile in PerformanceProfile::ALL
-            .into_iter()
-            .filter(|profile| *profile != PerformanceProfile::MaximumPerformance)
-        {
-            assert_eq!(profile.default_quality(), ExportQuality::Quality);
-        }
     }
 
     #[test]
-    fn recommended_takes_the_first_open_encoder() {
-        let plan = plan_h264_encoding(PerformanceProfile::Recommended, None, &machine());
-        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_nvenc"));
+    fn automatic_prefers_the_platform_encoder_over_a_vendor_one() {
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &machine());
+        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_mf"));
         assert!(plan.hardware);
         assert_eq!(plan.fallback, None);
     }
 
     #[test]
-    fn balanced_prefers_the_platform_encoder_over_a_vendor_one() {
-        let plan = plan_h264_encoding(PerformanceProfile::Balanced, None, &machine());
-        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_mf"));
+    fn automatic_takes_the_first_open_encoder_when_no_platform_one_opened() {
+        let candidates = vec![
+            candidate("h264_nvenc", true, true),
+            candidate("libx264", true, false),
+        ];
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
+        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_nvenc"));
+        assert!(plan.hardware);
     }
 
     #[test]
-    fn compatibility_refuses_hardware() {
-        let plan = plan_h264_encoding(PerformanceProfile::Compatibility, None, &machine());
+    fn automatic_falls_back_to_software_when_no_hardware_opened() {
+        let candidates = vec![
+            candidate("h264_nvenc", false, true),
+            candidate("libx264", true, false),
+        ];
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
         assert_eq!(plan.h264_encoder.as_deref(), Some("libx264"));
         assert!(plan.software);
     }
 
     #[test]
-    fn an_explicit_encoder_wins_over_the_profile() {
+    fn an_explicit_encoder_wins_over_the_automatic_choice() {
         let plan = plan_h264_encoding(
-            PerformanceProfile::Compatibility,
+            PerformanceProfile::Automatic,
             Some("h264_nvenc"),
             &machine(),
         );
@@ -320,11 +298,11 @@ mod tests {
     #[test]
     fn an_unavailable_request_falls_back_with_a_reason() {
         let plan = plan_h264_encoding(
-            PerformanceProfile::Recommended,
+            PerformanceProfile::Automatic,
             Some("h264_videotoolbox"),
             &machine(),
         );
-        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_nvenc"));
+        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_mf"));
         assert!(
             plan.fallback
                 .as_deref()
@@ -344,7 +322,7 @@ mod tests {
             },
             candidate("libx264", true, false),
         ];
-        let plan = plan_h264_encoding(PerformanceProfile::Recommended, None, &candidates);
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
         assert_eq!(plan.h264_encoder.as_deref(), Some("libx264"));
         assert!(
             plan.notes
@@ -356,29 +334,21 @@ mod tests {
     #[test]
     fn no_usable_encoder_is_a_plan_not_a_panic() {
         let candidates = vec![candidate("h264_mf", false, true)];
-        let plan = plan_h264_encoding(PerformanceProfile::Recommended, None, &candidates);
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
         assert_eq!(plan.h264_encoder, None);
         assert!(!plan.hardware && !plan.software);
         assert!(!plan.notes.is_empty());
     }
 
     #[test]
-    fn compatibility_with_only_hardware_available_says_so() {
-        let candidates = vec![candidate("h264_mf", true, true)];
-        let plan = plan_h264_encoding(PerformanceProfile::Compatibility, None, &candidates);
-        assert_eq!(plan.h264_encoder.as_deref(), Some("h264_mf"));
-        assert!(
-            plan.notes
-                .iter()
-                .any(|note| note.contains("only encoder that did"))
-        );
-    }
-
-    #[test]
     fn the_summary_names_the_path() {
-        let plan = plan_h264_encoding(PerformanceProfile::Recommended, None, &machine());
-        assert_eq!(plan.summary(), "h264_nvenc (hardware)");
-        let software = plan_h264_encoding(PerformanceProfile::Compatibility, None, &machine());
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &machine());
+        assert_eq!(plan.summary(), "h264_mf (hardware)");
+        let software = plan_h264_encoding(
+            PerformanceProfile::Automatic,
+            None,
+            &[candidate("libx264", true, false)],
+        );
         assert_eq!(software.summary(), "libx264 (software)");
     }
 }

@@ -10,14 +10,14 @@ import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../production/editor_settings.dart';
 import '../widgets/or_widgets.dart';
-import 'performance_options.dart';
 
-/// How this machine will encode, and the one setting that changes it.
+/// What this machine will do for each part of a job, and why.
 ///
-/// The panel reads measured facts from Rust — an adapter the device actually
-/// opened, encoders that answered a probe on this boot — instead of guessing
-/// from the platform name. A profile is a preference: the engine still refuses
-/// an encoder that does not open and says which one it used instead.
+/// There is one mode. The panel reads measured facts from Rust — an adapter the
+/// device actually opened, encoders that answered a probe on this boot — and
+/// shows the plan those facts produced: the render device, the decoder, the
+/// composite path and the encoder, each with its reason. A person who knows
+/// better can pin an encoder or a graphics API; nothing else is asked of them.
 class PerformancePanel extends StatefulWidget {
   const PerformancePanel({
     super.key,
@@ -38,6 +38,15 @@ class _PerformancePanelState extends State<PerformancePanel> {
   late Future<PerformanceReportView> _report;
   late Future<EncodingPlanView> _plan;
 
+  /// Set when the machine described by the stored fingerprint is not the
+  /// machine in front of us; the panel says so instead of silently re-deciding.
+  String? _machineChanged;
+
+  /// The fingerprint this panel instance has already handed to the store. A
+  /// caller that keeps the old settings (a test double, a store that failed to
+  /// save) must not make the panel offer the same fingerprint on every frame.
+  String? _recordedFingerprint;
+
   @override
   void initState() {
     super.initState();
@@ -56,7 +65,7 @@ class _PerformancePanelState extends State<PerformancePanel> {
       );
 
   /// Saves first and resolves the plan from the value that was saved, so the
-  /// panel never shows a plan for a profile the other screen already replaced.
+  /// panel never shows a plan for an override another screen already replaced.
   void _save(EditorSettings next, {String? backend}) {
     widget.onSettingsChanged(next);
     if (backend != null) {
@@ -70,7 +79,40 @@ class _PerformancePanelState extends State<PerformancePanel> {
   }
 
   void _refresh() {
-    setState(_measure);
+    setState(() {
+      _machineChanged = null;
+      _measure();
+    });
+  }
+
+  /// Records what the plan was decided from, and notices a machine that is no
+  /// longer the one described there (a new GPU, driver or OS version).
+  void _recordFingerprint(PerformanceReportView report) {
+    final fingerprint = _fingerprintOf(report);
+    if (_recordedFingerprint == fingerprint) return;
+    final settings = widget.settings;
+    if (settings.hardwareFingerprint == fingerprint) {
+      _recordedFingerprint = fingerprint;
+      return;
+    }
+    _recordedFingerprint = fingerprint;
+    final changed = settings.hardwareFingerprint != null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (changed && _machineChanged == null) {
+        setState(() {
+          _machineChanged =
+              'This machine changed since the last check, so the plan was '
+              'decided again.';
+        });
+      }
+      widget.onSettingsChanged(
+        settings.copyWith(
+          hardwareFingerprint: fingerprint,
+          hardwareCheckedAt: DateTime.now().toUtc(),
+        ),
+      );
+    });
   }
 
   @override
@@ -105,6 +147,7 @@ class _PerformancePanelState extends State<PerformancePanel> {
               ),
             );
           }
+          _recordFingerprint(report);
           return _body(report);
         },
       ),
@@ -113,14 +156,13 @@ class _PerformancePanelState extends State<PerformancePanel> {
 
   Widget _body(PerformanceReportView report) {
     final settings = widget.settings;
-    final profile = settings.performanceProfile;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _machineRows(report),
         const SizedBox(height: OrSpacing.x3),
         Text(
-          'Export profile',
+          'Automatic',
           style: TextStyle(
             color: OrColors.text,
             fontSize: OrType.metadataSize,
@@ -128,61 +170,219 @@ class _PerformancePanelState extends State<PerformancePanel> {
           ),
         ),
         const SizedBox(height: OrSpacing.x1),
-        for (final option in performanceProfileOptions)
-          _ProfileTile(
-            key: ValueKey('performance-profile-${option.wire}'),
-            title: option.title,
-            description: option.description,
-            selected: option.wire == profile,
-            onTap: () => _save(settings.copyWith(performanceProfile: option.wire)),
+        Text(
+          'Best for this machine. OR opens what it can here, picks a path for '
+          'each part of the job, and records why. Nothing is benchmarked on '
+          'launch or on export, so the first file is not slowed down by a '
+          'measurement.',
+          key: const ValueKey('performance-automatic-copy'),
+          style: const TextStyle(
+            color: OrColors.textSecondary,
+            fontSize: OrType.metadataSize,
           ),
+        ),
         const SizedBox(height: OrSpacing.x2),
+        _workloadRows(report),
+        if (_machineChanged != null) ...[
+          const SizedBox(height: OrSpacing.x2),
+          Text(
+            _machineChanged!,
+            key: const ValueKey('performance-machine-changed'),
+            style: const TextStyle(
+              color: OrColors.warning,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+        ],
+        const SizedBox(height: OrSpacing.x2),
+        Wrap(
+          spacing: OrSpacing.x2,
+          runSpacing: OrSpacing.x2,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton(
+              key: const ValueKey('performance-redetect'),
+              onPressed: _refresh,
+              child: const Text('Re-detect'),
+            ),
+            Text(
+              _checkedLabel(settings),
+              key: const ValueKey('performance-checked'),
+              style: const TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.metadataSize,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: OrSpacing.x3),
+        _overrides(report, settings),
+        if (_unopenedEncoders(report).isNotEmpty) ...[
+          const SizedBox(height: OrSpacing.x2),
+          Text(
+            _unopenedEncoders(report)
+                .map(
+                  (encoder) =>
+                      '${encoder.name}: ${encoder.note ?? 'did not open'}',
+                )
+                .join('\n'),
+            key: const ValueKey('performance-unavailable'),
+            style: const TextStyle(
+              color: OrColors.textMuted,
+              fontSize: OrType.metadataSize,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// One row per part of the job: who does it, on what, and why.
+  Widget _workloadRows(PerformanceReportView report) {
+    final gpuError = report.gpuError ?? '';
+    final backend = report.gpuBackend.isEmpty
+        ? 'no graphics device'
+        : _backendLabel(report.gpuBackend);
+    final device = report.gpuName.isEmpty
+        ? 'the default device'
+        : report.gpuName;
+    final decoders = report.decoders
+        .where((decoder) => decoder.present)
+        .map((decoder) => decoder.name)
+        .join(', ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _WorkloadRow(
+          key: const ValueKey('performance-workload-render'),
+          workload: 'Preview and render',
+          choice: gpuError.isEmpty ? '$backend · $device' : 'software',
+          reason: gpuError.isEmpty
+              ? 'the device and backend this app opened for the viewer'
+              : 'the preview device did not open ($gpuError), so frames are '
+                    'composited on the CPU',
+        ),
+        _WorkloadRow(
+          key: const ValueKey('performance-workload-composite'),
+          workload: 'Composite',
+          choice: gpuError.isEmpty ? backend : 'software (CPU)',
+          reason: gpuError.isEmpty
+              ? 'same device as the viewer, so a frame is not copied between '
+                    'devices to be drawn'
+              : 'no device to composite on',
+        ),
+        _WorkloadRow(
+          key: const ValueKey('performance-workload-decode'),
+          workload: 'Decode',
+          choice: decoders.isEmpty ? 'software' : 'software ($decoders)',
+          reason:
+              'this build decodes on the CPU: a hardware decoder here '
+              'hands frames back through host memory, which costs more than '
+              'it saves',
+        ),
         FutureBuilder<EncodingPlanView>(
           future: _plan,
           builder: (context, snapshot) {
             final plan = snapshot.data;
-            if (plan == null) {
-              return Text(
-                snapshot.hasError
-                    ? 'The encoder plan could not be resolved.'
-                    : 'Resolving the encoder plan…',
-                style: const TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.metadataSize,
-                ),
-              );
-            }
-            return _planBlock(plan);
+            return _WorkloadRow(
+              key: const ValueKey('performance-workload-encode'),
+              workload: 'Encode',
+              choice: plan == null
+                  ? (snapshot.hasError ? 'unavailable' : 'measuring…')
+                  : plan.summary,
+              reason: plan != null
+                  ? 'the first encoder that answered a probe on this boot; '
+                        'starts the file on Quality, which the export dialog '
+                        'can change'
+                  : snapshot.hasError
+                  ? 'the plan could not be resolved: ${snapshot.error}'
+                  : 'waiting for the encoder probe',
+            );
           },
         ),
-        const SizedBox(height: OrSpacing.x3),
+        FutureBuilder<EncodingPlanView>(
+          future: _plan,
+          builder: (context, snapshot) {
+            final plan = snapshot.data;
+            if (plan == null) return const SizedBox.shrink();
+            return Column(
+              key: const ValueKey('performance-plan-notes'),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (plan.fallback != null) ...[
+                  const SizedBox(height: OrSpacing.x1),
+                  Text(
+                    'Fell back: ${plan.fallback}.',
+                    key: const ValueKey('performance-plan-fallback'),
+                    style: const TextStyle(
+                      color: OrColors.warning,
+                      fontSize: OrType.metadataSize,
+                    ),
+                  ),
+                ],
+                for (final (index, note) in plan.notes.indexed) ...[
+                  const SizedBox(height: OrSpacing.x1),
+                  Text(
+                    note,
+                    key: ValueKey('performance-plan-note-$index'),
+                    style: const TextStyle(
+                      color: OrColors.textSecondary,
+                      fontSize: OrType.metadataSize,
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Only the overrides this machine can honour, and the one button that
+  /// returns every choice to the measured default.
+  Widget _overrides(PerformanceReportView report, EditorSettings settings) {
+    final overridden =
+        settings.preferredH264Encoder != null ||
+        settings.graphicsBackend != 'auto';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Overrides',
+          style: TextStyle(
+            color: OrColors.text,
+            fontSize: OrType.metadataSize,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x1),
+        Text(
+          'Only the options this machine offers. Automatic is the measured '
+          'choice; something pinned here wins until it is reset.',
+          style: const TextStyle(
+            color: OrColors.textSecondary,
+            fontSize: OrType.metadataSize,
+          ),
+        ),
+        const SizedBox(height: OrSpacing.x2),
         _encoderRow(report, settings),
         const SizedBox(height: OrSpacing.x2),
         _backendRow(report, settings),
         const SizedBox(height: OrSpacing.x2),
         Align(
           alignment: Alignment.centerLeft,
-          child: Wrap(
-            spacing: OrSpacing.x2,
-            runSpacing: OrSpacing.x2,
-            children: [
-              OutlinedButton(
-                key: const ValueKey('performance-reset'),
-                onPressed: () => _save(
-                  settings
-                      .copyWith(performanceProfile: 'recommended')
-                      .withPreferredH264Encoder(null)
-                  .copyWith(graphicsBackend: 'auto'),
-                  backend: 'auto',
-                ),
-                child: const Text('Reset to recommended'),
-              ),
-              TextButton(
-                key: const ValueKey('performance-refresh'),
-                onPressed: _refresh,
-                child: const Text('Measure again'),
-              ),
-            ],
+          child: OutlinedButton(
+            key: const ValueKey('performance-reset'),
+            onPressed: overridden
+                ? () => _save(
+                    settings
+                        .withPreferredH264Encoder(null)
+                        .copyWith(graphicsBackend: 'auto'),
+                    backend: 'auto',
+                  )
+                : null,
+            child: const Text('Reset to Automatic'),
           ),
         ),
       ],
@@ -198,16 +398,20 @@ class _PerformancePanelState extends State<PerformancePanel> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _Row(
-          label: 'Graphics backend',
-          value: current == 'auto'
-              ? 'Automatic'
-              : _backendLabel(current),
+          label: 'Graphics API',
+          value: current == 'auto' ? 'Automatic' : _backendLabel(current),
         ),
         const SizedBox(height: OrSpacing.x1),
         DropdownButton<String>(
           key: const ValueKey('performance-backend'),
           value: current,
           isExpanded: true,
+          dropdownColor: OrColors.surface,
+          style: const TextStyle(
+            color: OrColors.text,
+            fontSize: OrType.metadataSize,
+          ),
+          underline: const SizedBox.shrink(),
           onChanged: (value) {
             if (value == null || value == current) return;
             _save(settings.copyWith(graphicsBackend: value), backend: value);
@@ -218,14 +422,14 @@ class _PerformancePanelState extends State<PerformancePanel> {
                 value: backend,
                 child: Text(
                   backend == 'auto'
-                      ? 'Automatic (all compiled backends)'
-                      : _backendLabel(backend),
+                      ? 'Automatic (the backend that opened)'
+                      : '${_backendLabel(backend)} only',
                 ),
               ),
           ],
         ),
         Text(
-          'Changes apply the next time the app starts.',
+          'A backend change applies the next time the app starts.',
           style: const TextStyle(
             color: OrColors.textMuted,
             fontSize: OrType.metadataSize,
@@ -292,80 +496,11 @@ class _PerformancePanelState extends State<PerformancePanel> {
             ),
           ),
         ],
-        if (_unopenedEncoders(report).isNotEmpty) ...[
-          const SizedBox(height: OrSpacing.x2),
-          Text(
-            _unopenedEncoders(report)
-                .map(
-                  (encoder) =>
-                      '${encoder.name}: ${encoder.note ?? 'did not open'}',
-                )
-                .join('\n'),
-            key: const ValueKey('performance-unavailable'),
-            style: const TextStyle(
-              color: OrColors.textMuted,
-              fontSize: OrType.metadataSize,
-            ),
-          ),
-        ],
       ],
     );
   }
 
-  Widget _planBlock(EncodingPlanView plan) {
-    return Container(
-      padding: const EdgeInsets.all(OrSpacing.x3),
-      decoration: BoxDecoration(
-        color: OrColors.surface,
-        borderRadius: BorderRadius.circular(OrRadii.small),
-      ),
-      child: Column(
-        key: const ValueKey('performance-plan-notes'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'This machine will encode with ${plan.summary}.',
-            key: const ValueKey('performance-plan-summary'),
-            style: const TextStyle(color: OrColors.text, fontSize: OrType.metadataSize),
-          ),
-          Text(
-            'Starts the file on ${plan.quality == 'speed' ? 'Speed' : 'Quality'}.',
-            style: const TextStyle(
-              color: OrColors.textSecondary,
-              fontSize: OrType.metadataSize,
-            ),
-          ),
-          if (plan.fallback != null) ...[
-            const SizedBox(height: OrSpacing.x1),
-            Text(
-              'Fell back: ${plan.fallback}.',
-              key: const ValueKey('performance-plan-fallback'),
-              style: const TextStyle(
-                color: OrColors.warning,
-                fontSize: OrType.metadataSize,
-              ),
-            ),
-          ],
-          for (final (index, note) in plan.notes.indexed) ...[
-            const SizedBox(height: OrSpacing.x1),
-            Text(
-              note,
-              key: ValueKey('performance-plan-note-$index'),
-              style: const TextStyle(
-                color: OrColors.textSecondary,
-                fontSize: OrType.metadataSize,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _encoderRow(
-    PerformanceReportView report,
-    EditorSettings settings,
-  ) {
+  Widget _encoderRow(PerformanceReportView report, EditorSettings settings) {
     final usable = report.h264Encoders
         .where((encoder) => encoder.present && encoder.opens)
         .toList(growable: false);
@@ -374,38 +509,25 @@ class _PerformancePanelState extends State<PerformancePanel> {
         !values.contains(settings.preferredH264Encoder)) {
       values.add(settings.preferredH264Encoder);
     }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Encoder',
-                style: TextStyle(
-                  color: OrColors.text,
-                  fontSize: OrType.metadataSize,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                'Automatic lets the profile decide. A named encoder that '
-                'cannot open falls back and says why.',
-                style: const TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.metadataSize,
-                ),
-              ),
-            ],
-          ),
+        _Row(
+          label: 'Encoder',
+          value: settings.preferredH264Encoder == null
+              ? 'Automatic'
+              : _encoderLabel(report, settings.preferredH264Encoder!),
         ),
-        const SizedBox(width: OrSpacing.x3),
+        const SizedBox(height: OrSpacing.x1),
         DropdownButton<String?>(
           key: const ValueKey('performance-encoder'),
           value: settings.preferredH264Encoder,
+          isExpanded: true,
           dropdownColor: OrColors.surface,
-          style: const TextStyle(color: OrColors.text, fontSize: OrType.metadataSize),
+          style: const TextStyle(
+            color: OrColors.text,
+            fontSize: OrType.metadataSize,
+          ),
           underline: const SizedBox.shrink(),
           items: [
             for (final value in values)
@@ -417,6 +539,13 @@ class _PerformancePanelState extends State<PerformancePanel> {
               ),
           ],
           onChanged: (value) => _save(settings.withPreferredH264Encoder(value)),
+        ),
+        Text(
+          'A named encoder that cannot open here falls back and says why.',
+          style: const TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.metadataSize,
+          ),
         ),
       ],
     );
@@ -430,7 +559,37 @@ class _PerformancePanelState extends State<PerformancePanel> {
 
   static Iterable<EncoderProbeView> _unopenedEncoders(
     PerformanceReportView report,
-  ) => report.h264Encoders.where((encoder) => encoder.present && !encoder.opens);
+  ) =>
+      report.h264Encoders.where((encoder) => encoder.present && !encoder.opens);
+
+  /// "Checked 4 minutes ago", so a stale measurement is visible without
+  /// repeating the machine rows.
+  static String _checkedLabel(EditorSettings settings) {
+    final checked = settings.hardwareCheckedAt;
+    if (checked == null) return 'not checked yet';
+    final elapsed = DateTime.now().toUtc().difference(checked);
+    if (elapsed.inSeconds < 90) return 'checked just now';
+    if (elapsed.inMinutes < 60) return 'checked ${elapsed.inMinutes} min ago';
+    if (elapsed.inHours < 24) return 'checked ${elapsed.inHours} h ago';
+    final days = elapsed.inDays;
+    return 'checked $days ${days == 1 ? 'day' : 'days'} ago';
+  }
+
+  /// Describes the machine, not the preferences: pinning an encoder changes the
+  /// plan, not the hardware, and must not read as a new machine.
+  static String _fingerprintOf(PerformanceReportView report) => [
+    report.cpuArch,
+    report.logicalCores,
+    report.gpuName,
+    report.gpuBackend,
+    report.gpuDriver,
+    report.gpuDriverInfo,
+    report.gpuCompiledBackends.join(','),
+    report.decoders
+        .where((decoder) => decoder.present)
+        .map((decoder) => decoder.name)
+        .join(','),
+  ].join('|');
 
   static String _backendLabel(String backend) => switch (backend) {
     'metal' => 'Metal',
@@ -442,64 +601,59 @@ class _PerformancePanelState extends State<PerformancePanel> {
   };
 }
 
-
-class _ProfileTile extends StatelessWidget {
-  const _ProfileTile({
+/// One part of the job: who does it, on what, and why.
+class _WorkloadRow extends StatelessWidget {
+  const _WorkloadRow({
     super.key,
-    required this.title,
-    required this.description,
-    required this.selected,
-    required this.onTap,
+    required this.workload,
+    required this.choice,
+    required this.reason,
   });
 
-  final String title;
-  final String description;
-  final bool selected;
-  final VoidCallback onTap;
+  final String workload;
+  final String choice;
+  final String reason;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(OrRadii.small),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: OrSpacing.x1),
-          padding: const EdgeInsets.symmetric(
-            horizontal: OrSpacing.x3,
-            vertical: OrSpacing.x2,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? OrColors.surfaceSelected : Colors.transparent,
-            border: Border.all(
-              color: selected ? OrColors.borderStrong : OrColors.border,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: OrSpacing.x1),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              workload,
+              style: const TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.metadataSize,
+              ),
             ),
-            borderRadius: BorderRadius.circular(OrRadii.small),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: OrColors.text,
-                  fontSize: OrType.metadataSize,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  choice,
+                  style: const TextStyle(
+                    color: OrColors.text,
+                    fontSize: OrType.metadataSize,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                description,
-                style: const TextStyle(
-                  color: OrColors.textSecondary,
-                  fontSize: OrType.metadataSize,
+                Text(
+                  reason,
+                  style: const TextStyle(
+                    color: OrColors.textSecondary,
+                    fontSize: OrType.metadataSize,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

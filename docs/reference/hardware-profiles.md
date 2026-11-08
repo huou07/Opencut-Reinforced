@@ -22,26 +22,54 @@ the measured codec/container matrix lives in
   compiled backends.
 
 `PerformanceReportView` (bridge `performance_report()`) bundles those facts and
-the plan for all four profiles. `encoding_plan(profile, preferred_encoder)`
-returns one plan, so a dialog can name the encoder before a file is written.
+the plan. `encoding_plan(profile, preferred_encoder)` returns one plan, so a
+dialog can name the encoder before a file is written.
 The app shows the same data in **Settings → Performance** and in the export
 dialog. The decision is made once per job when `ExportRequest::Start` is
 handled; nothing in the frame loop probes hardware.
 
-## Profiles
+## The one mode
 
-| Profile | Encoder order | Quality default |
+There is no performance tier to pick. **Automatic — best for this machine** is
+the only mode, and it is what the product means by "performance":
+
+| Part of the job | The plan | Why |
 |---|---|---|
-| Recommended | First encoder that opened, hardware candidates first | Quality |
-| Maximum performance | Same order, vendor hardware preferred | Speed |
-| Balanced | Platform encoder (`videotoolbox`/`mf`/`vaapi`) first, then software | Quality |
-| Compatibility | Software only; when none opened, the only encoder that did, with the reason recorded | Quality |
+| Preview and render | The adapter and backend the preview device opened | It is the device frames are already on |
+| Composite | The same device | A second device would copy every frame between them |
+| Decode | Software (the decoders this build carries) | See the decode rule below |
+| Encode | The first encoder that answered a probe on this boot, platform encoder (`videotoolbox`/`mf`/`vaapi`) before a vendor one | Encoding on the device is the whole point of the hardware path |
 
-An explicit encoder choice in Settings wins over the order above, even under
-Compatibility, and the plan notes it. When the chosen encoder cannot open, the
-plan records `fallback` and uses the next encoder that did, instead of failing
-the job. The resolved encoder is written into the job snapshot (`detail`, e.g.
-`Encoding with h264_videotoolbox (hardware).`) and shown in the export receipt.
+Quality is not part of the mode. The export dialog keeps quality, bitrate,
+codec and compression speed because those choose the file, not the machine.
+
+**Encode choice.** An explicit encoder chosen in Settings → Performance wins
+when it opened; a name that cannot open records `fallback` and the next encoder
+that did, instead of failing the job. The resolved encoder is written into the
+job snapshot (`detail`, e.g. `Encoding with h264_videotoolbox (hardware).`) and
+shown in the export receipt.
+
+**Decode rule.** A hardware decoder that hands frames back through host memory
+(copy-back) costs more than it saves: the frame is decoded on the device, copied
+to the CPU, then uploaded again for compositing. This build therefore decodes on
+the CPU and the panel says so. The rule is measured, not assumed — a decode path
+that keeps frames device-resident would be selected instead; nothing selects a
+hardware decoder by name alone.
+
+**Retired names.** `recommended`, `maximum_performance`, `balanced` and
+`compatibility` still parse, so a settings file, script or agent that carries one
+keeps working; they all resolve to the one mode. The app never writes them.
+
+**When the plan is decided.** Once per export request and once when Settings →
+Performance is opened. Nothing probes hardware on launch, in the frame loop, or
+per frame. The plan costs a probe-cached encoder open, not a benchmark run.
+
+**Hardware fingerprint.** The panel stores what the plan was decided from
+(processor, graphics device, driver, compiled backends, decoders) as
+`hardware_fingerprint` with `hardware_checked_at` in `editor-settings.json`. A
+machine that no longer matches it — a new GPU, a driver update, an OS upgrade —
+is reported in the panel and decided again. **Re-detect** repeats the
+measurement on demand, and **Reset to Automatic** clears every override.
 
 ## Choosing a graphics backend
 
@@ -62,11 +90,15 @@ an internal pipeline constant rather than a user preference.
 
 ## Verified rows
 
-| Host | GPU / backend | Recommended plan | Compatibility plan | Evidence |
-|---|---|---|---|---|
-| MacBook Air M5, macOS 15 | Apple M5, Metal, integrated | `h264_videotoolbox` (hardware) | no software encoder in the build; falls back to VideoToolbox with the recorded note | `scripts/ui_scenarios/performance-profiles.json` PASS, receipt scenario PASS |
-| Debian 13, Intel UHD 770 | Intel UHD Graphics 770, Vulkan (Mesa), integrated | `h264_vaapi` (hardware) | `libx264` (software) | `scripts/ui_scenarios/performance-profiles-linux.json` PASS on Weston headless with `--renderer=gl`; shots `shot-performance-recommended-4.png`, `shot-performance-compatibility-7.png` |
-| Windows 11, Core 5 120U | Direct3D 12, integrated | `h264_mf` (hardware) | no software encoder in the build; falls back to Media Foundation with the recorded note | `scripts/ui_scenarios/performance-profiles-windows.json` PASS in an interactive session; desktop shots `shot-3..7.png` |
+| Host | GPU / backend | Automatic plan | Evidence |
+|---|---|---|---|
+| MacBook Air M5, macOS 15 | Apple M5, Metal, integrated | `h264_videotoolbox` (hardware) | `scripts/ui_scenarios/performance-profiles.json` PASS, receipt scenario PASS |
+| Debian 13, Intel UHD 770 | Intel UHD Graphics 770, Vulkan (Mesa), integrated | `h264_vaapi` (hardware) | `scripts/ui_scenarios/performance-profiles-linux.json` PASS on Weston headless with `--renderer=gl` |
+| Windows 11, Core 5 120U | Direct3D 12, integrated | `h264_mf` (hardware) | `scripts/ui_scenarios/performance-profiles-windows.json` PASS in an interactive session; desktop shots `shot-3..7.png` |
+
+The tier scenarios above ran while the four profiles still existed; the same
+scenario files now drive the one mode, and their shots are re-recorded with the
+redesigned panel (the rows keep their measurements, the labels changed).
 
 The Debian row needs the GPL-capable prefix (`~/or-build/ffmpeg-8.1.3-install`)
 on `LD_LIBRARY_PATH`; the minimal LGPL prefix linked by default on that host
