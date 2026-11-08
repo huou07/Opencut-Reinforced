@@ -132,7 +132,9 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
       panel.canChooseFiles = false
       panel.allowsMultipleSelection = false
       panel.prompt = "Choose Folder"
-      panel.message = "Choose where to save \(suggestedName)."
+      // Neutral on purpose: the name field starts with the suggested file name
+    // and the owner may change it, so the hint must not repeat the old one.
+    panel.message = "Choose where to save this export."
       present(panel) { [weak self] response in
         guard let self else { return }
         guard response != .abort else {
@@ -168,7 +170,7 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
         ))
         return
       }
-      chooseExportFolder(suggestedName: suggestedName, result: result)
+      chooseExportDestination(suggestedName: suggestedName, result: result)
     case "restoreBookmarks":
       do {
         result(try bookmarks.restore())
@@ -184,93 +186,69 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func chooseExportFolder(
+  /// Picks the export file itself.
+  ///
+  /// A save panel, not a folder chooser: the owner can rename the file, sees
+  /// the extension the chosen profile produces, and OK always yields a path. A
+  /// directory panel could return OK with nothing selected, which the app could
+  /// only answer with a silent no-op.
+  private func chooseExportDestination(
     suggestedName: String,
     result: @escaping FlutterResult
   ) {
-    let panel = NSOpenPanel()
-    panel.canChooseDirectories = true
-    panel.canChooseFiles = false
-    panel.allowsMultipleSelection = false
-    panel.prompt = "Export Here"
-    panel.message = "Save \(suggestedName) in the selected folder."
+    let panel = NSSavePanel()
+    panel.canCreateDirectories = true
+    panel.nameFieldStringValue = suggestedName
+    panel.prompt = "Export"
+    // Neutral on purpose: the name field starts with the suggested file name
+    // and the owner may change it, so the hint must not repeat the old one.
+    panel.message = "Choose where to save this export."
+    let ext = (suggestedName as NSString).pathExtension
+    if !ext.isEmpty, let type = UTType(filenameExtension: ext) {
+      panel.allowedContentTypes = [type]
+    }
     present(panel) { [weak self] response in
       guard let self else { return }
       guard response != .abort else {
         result(self.filePanelBusyError())
         return
       }
-      guard response == .OK, let folder = panel.url else {
+      guard response == .OK, let chosen = panel.url else {
+        // Cancel: the flow stays where it was, with nothing written.
         result(nil)
         return
       }
-      let destination = folder.appendingPathComponent(suggestedName)
-      var isDirectory = ObjCBool(false)
-      if FileManager.default.fileExists(atPath: destination.path, isDirectory: &isDirectory) {
-        guard !isDirectory.boolValue else {
-          result(FlutterError(
-            code: "EXPORT_DESTINATION_INVALID",
-            message: "The export file name is already used by a folder.",
-            details: nil
-          ))
-          return
-        }
-        self.confirmReplacingExistingExport(
-          suggestedName: suggestedName,
-          destination: destination,
-          folder: folder,
-          result: result
-        )
-        return
-      }
-      self.finishExportFolder(destination: destination, folder: folder, result: result)
+      let destination = Self.enforceExtension(chosen, ext: ext)
+      self.finishExportDestination(destination: destination, result: result)
     }
   }
 
-  private func confirmReplacingExistingExport(
-    suggestedName: String,
-    destination: URL,
-    folder: URL,
-    result: @escaping FlutterResult
-  ) {
-    let alert = NSAlert()
-    alert.messageText = "Replace existing export?"
-    alert.informativeText = "\(suggestedName) already exists in this folder."
-    alert.addButton(withTitle: "Replace")
-    alert.addButton(withTitle: "Cancel")
-    // A sheet keeps the replacement question attached to the editor instead of
-    // starting a second application-modal loop on top of the picker sheet.
-    if let window = window ?? NSApp.keyWindow ?? NSApp.mainWindow {
-      alert.beginSheetModal(for: window) { [weak self] response in
-        guard let self else { return }
-        guard response == .alertFirstButtonReturn else {
-          result(nil)
-          return
-        }
-        self.finishExportFolder(destination: destination, folder: folder, result: result)
-      }
-    } else if alert.runModal() == .alertFirstButtonReturn {
-      finishExportFolder(destination: destination, folder: folder, result: result)
-    } else {
-      result(nil)
-    }
+  /// Keeps the container the chosen profile writes even when the typed name
+  /// says otherwise, because the flow already reported that format.
+  private static func enforceExtension(_ url: URL, ext: String) -> URL {
+    guard !ext.isEmpty else { return url }
+    if url.pathExtension.lowercased() == ext.lowercased() { return url }
+    let stem = url.pathExtension.isEmpty
+      ? url.lastPathComponent
+      : url.deletingPathExtension().lastPathComponent
+    return url.deletingLastPathComponent()
+      .appendingPathComponent(stem, isDirectory: false)
+      .appendingPathExtension(ext)
   }
 
-  private func finishExportFolder(
+  private func finishExportDestination(
     destination: URL,
-    folder: URL,
     result: @escaping FlutterResult
   ) {
     do {
-      try bookmarks.store(urls: [folder])
-      result(destination.path)
+      try bookmarks.store(urls: [destination.deletingLastPathComponent()])
     } catch {
-      result(FlutterError(
-        code: "BOOKMARK_STORE_FAILED",
-        message: "macOS could not retain access to the selected export folder.",
-        details: nil
-      ))
+      // Reopening the folder next launch is a convenience; the save panel has
+      // already granted this process the right to write here, so a bookmark
+      // that cannot be stored must not cancel the export the owner confirmed.
+      _ = error
     }
+    result(destination.path)
   }
 
   /// Presents one panel as a sheet on the editor window.
@@ -445,10 +423,12 @@ private final class PersistentScopedBookmarks {
           relativeTo: nil
         )
         entries[key] = data.base64EncodedString()
-        guard url.startAccessingSecurityScopedResource() else {
-          throw BookmarkError.accessUnavailable
+        // An unsandboxed build writes to plain folders such as /tmp without a
+        // security scope, and that returns false. Only remember the ones that
+        // did open, so the rest are still bookmarked for the next launch.
+        if url.startAccessingSecurityScopedResource() {
+          startedURLs[key] = url
         }
-        startedURLs[key] = url
       }
       try saveEntries(entries)
     } catch {
@@ -561,7 +541,6 @@ private final class PersistentScopedBookmarks {
   private enum BookmarkError: Error {
     case tooManyPaths
     case missingPath
-    case accessUnavailable
     case storageUnavailable
     case invalidStore
   }

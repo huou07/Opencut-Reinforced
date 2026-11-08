@@ -351,6 +351,7 @@ class _AppShellState extends State<AppShell> {
       gateway: widget.projectGateway,
       picker: widget.projectFilePicker,
       chooseOptions: _chooseExportOptions,
+      chooseFrameRate: _chooseExportFrameRate,
       onProjectSummary: (current) {
         if (mounted) setState(() => _activeProject = current);
       },
@@ -2529,6 +2530,18 @@ class _AppShellState extends State<AppShell> {
     final session = _activeSession;
     if (session == null) return;
     await _export.start(session);
+  }
+
+  /// Asks for the sequence rate a project needs before it can be exported.
+  ///
+  /// [ExportFlow] only calls this when the project has no rate yet, which is
+  /// the state every project saved before the rate existed comes back in.
+  Future<ProjectRationalRate?> _chooseExportFrameRate() {
+    if (!mounted) return Future<ProjectRationalRate?>.value(null);
+    return showDialog<ProjectRationalRate>(
+      context: context,
+      builder: (context) => const _ExportFrameRateDialog(),
+    );
   }
 
   void _handleExportChanged() {
@@ -5703,6 +5716,70 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
+/// Asks for the sequence frame rate an export needs, before the export dialog.
+///
+/// The rate is a project setting, not an export option: it decides timecode,
+/// playback and the encoder's frame timing, so it is stored on the sequence and
+/// every later export reuses it. Defaulting to 30 fps matches the create dialog.
+class _ExportFrameRateDialog extends StatefulWidget {
+  const _ExportFrameRateDialog();
+
+  @override
+  State<_ExportFrameRateDialog> createState() => _ExportFrameRateDialogState();
+}
+
+class _ExportFrameRateDialogState extends State<_ExportFrameRateDialog> {
+  String _choice = '30';
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Set a frame rate to export'),
+    content: SizedBox(
+      width: 380,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This project has no sequence frame rate yet, so its frames have '
+            'no timing to encode. Pick the rate to use for playback and export; '
+            'it is saved with the project.',
+            style: const TextStyle(color: OrColors.textSecondary),
+          ),
+          const SizedBox(height: OrSpacing.x3),
+          Wrap(
+            spacing: OrSpacing.x2,
+            runSpacing: OrSpacing.x1,
+            children: [
+              for (final entry in _newProjectRateChoices.entries)
+                ChoiceChip(
+                  key: ValueKey('export-frame-rate-${entry.key}'),
+                  label: Text('${entry.key} fps'),
+                  selected: _choice == entry.key,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _choice = entry.key);
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const ValueKey('export-frame-rate-set'),
+        onPressed: () =>
+            Navigator.of(context).pop(_newProjectRateChoices[_choice]),
+        child: const Text('Set rate and continue'),
+      ),
+    ],
+  );
+}
+
 /// Result of the create-project dialog. A frame rate is optional so the
 /// rename flow can keep returning just a name.
 class _NewProjectRequest {
@@ -5990,7 +6067,7 @@ String _exportSummary(
 ) {
   final size = shortSide == null ? 'project resolution' : '${shortSide}p';
   final rate = profile.hasQualityChoice
-      ? (quality == ExportQuality.quality ? 'cleaner picture' : 'faster encode')
+      ? (quality == ExportQuality.quality ? 'cleaner picture' : 'quicker export')
       : 'lossless';
   return '${profile.label} · $size · $rate';
 }

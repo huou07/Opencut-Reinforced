@@ -38,6 +38,9 @@ class _FakeGateway implements ProjectGateway {
   String? lastPreferredH264Encoder;
   ProjectExportJob status = _job('succeeded');
   int statusFailuresRemaining = 0;
+  ProjectRationalRate? sequenceFrameRate = const ProjectRationalRate(30, 1);
+  int frameRateSetCalls = 0;
+  ProjectRationalRate? lastFrameRateSet;
 
   @override
   Future<ProjectReadModel> summary(ProjectSessionHandle session) async {
@@ -88,7 +91,30 @@ class _FakeGateway implements ProjectGateway {
   @override
   Future<ProjectTimelineSequenceSettings> timelineSequenceSettings(
     ProjectSessionHandle session,
-  ) async => const ProjectTimelineSequenceSettings();
+  ) async =>
+      ProjectTimelineSequenceSettings(sequenceFrameRate: sequenceFrameRate);
+
+  @override
+  Future<ProjectActionResult> setTimelineSequenceFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+    ProjectRationalRate? rate,
+  ) async {
+    frameRateSetCalls += 1;
+    lastFrameRateSet = rate;
+    sequenceFrameRate = rate;
+    return ProjectActionResult(
+      succeeded: true,
+      view: ProjectReadModel(
+        projectId: current.projectId,
+        projectInstanceId: current.projectInstanceId,
+        revision: current.revision + BigInt.one,
+        name: current.name,
+        dirty: true,
+        descriptorPath: current.descriptorPath,
+      ),
+    );
+  }
 
   @override
   Future<ProjectActionResult> setTimelineSequenceCanvas(
@@ -162,6 +188,7 @@ ExportFlow _flow({
   required _FakeGateway gateway,
   required _FakePicker picker,
   ExportOptions? choice,
+  Future<ProjectRationalRate?> Function()? chooseFrameRate,
   void Function(ProjectReadModel)? onProjectSummary,
   void Function(String, String?)? onExported,
 }) => ExportFlow(
@@ -176,6 +203,8 @@ ExportFlow _flow({
         performanceProfile: null,
         preferredH264Encoder: null,
       ),
+  chooseFrameRate:
+      chooseFrameRate ?? () async => const ProjectRationalRate(30, 1),
   onProjectSummary: onProjectSummary ?? (_) {},
   onExported: onExported ?? (_, _) {},
 );
@@ -327,5 +356,51 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 900));
 
     expect(details, ['Encoding with h264_videotoolbox (hardware).']);
+  });
+
+  test(
+    'a project without a frame rate gets one before the options dialog',
+    () async {
+      final gateway = _FakeGateway()..sequenceFrameRate = null;
+      final picker = _FakePicker();
+      var asked = 0;
+      final flow = _flow(
+        gateway: gateway,
+        picker: picker,
+        chooseFrameRate: () async {
+          asked += 1;
+          return const ProjectRationalRate(24, 1);
+        },
+      );
+
+      await flow.start(_Session());
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+
+      expect(asked, 1);
+      expect(gateway.frameRateSetCalls, 1);
+      expect(gateway.lastFrameRateSet?.canonical, '24/1');
+      // The export still runs after the rate is stored, at the new rate.
+      expect(gateway.startCalls, 1);
+      expect(flow.failed, isFalse);
+      flow.dispose();
+    },
+  );
+
+  test('declining the frame rate writes nothing', () async {
+    final gateway = _FakeGateway()..sequenceFrameRate = null;
+    final picker = _FakePicker();
+    final flow = _flow(
+      gateway: gateway,
+      picker: picker,
+      chooseFrameRate: () async => null,
+    );
+
+    await flow.start(_Session());
+
+    expect(gateway.frameRateSetCalls, 0);
+    expect(picker.saveCalls, 0);
+    expect(gateway.startCalls, 0);
+    expect(flow.failed, isFalse);
+    flow.dispose();
   });
 }

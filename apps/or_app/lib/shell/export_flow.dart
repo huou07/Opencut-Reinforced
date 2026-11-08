@@ -27,6 +27,7 @@ class ExportFlow extends ChangeNotifier {
     required this.gateway,
     required this.picker,
     required this.chooseOptions,
+    required this.chooseFrameRate,
     required this.onProjectSummary,
     required this.onExported,
   });
@@ -34,7 +35,14 @@ class ExportFlow extends ChangeNotifier {
   final ProjectGateway gateway;
   final ProjectFilePicker picker;
   final Future<ExportOptions?> Function() chooseOptions;
+
+  /// Asks for the sequence frame rate when the project has none. Exports are
+  /// encoded at that rate, so a project that never had one cannot encode at
+  /// all; asking here means the owner learns it before picking a format and a
+  /// destination instead of after.
+  final Future<ProjectRationalRate?> Function() chooseFrameRate;
   final void Function(ProjectReadModel current) onProjectSummary;
+
   /// Called with the published file and the engine detail of the job, such as
   /// the encoder it opened, when the job reported one.
   final void Function(String destination, String? detail) onExported;
@@ -72,8 +80,10 @@ class ExportFlow extends ChangeNotifier {
     _statusFailures = 0;
     String? destination;
     try {
-      final current = await gateway.summary(session);
+      var current = await gateway.summary(session);
       if (!_isCurrent(session)) return;
+      if (!await _ensureFrameRate(session, current)) return;
+      current = await gateway.summary(session);
       final choice = await chooseOptions();
       if (choice == null || !_isCurrent(session)) return;
       destination = await picker.saveExportPath(
@@ -196,6 +206,58 @@ class ExportFlow extends ChangeNotifier {
   }
 
   ProjectReadModel? _projectView;
+
+  /// Makes sure the sequence has a frame rate before the export dialog opens.
+  ///
+  /// Returns true when a rate is set and the session is still current. A
+  /// cancel, a failed command or a replaced session returns false, and the
+  /// caller stops without writing anything.
+  Future<bool> _ensureFrameRate(
+    ProjectSessionHandle session,
+    ProjectReadModel current,
+  ) async {
+    final ProjectTimelineSequenceSettings settings;
+    try {
+      settings = await gateway.timelineSequenceSettings(session);
+    } on ProjectGatewayException catch (error) {
+      if (_isCurrent(session)) {
+        _status = error.message;
+        _failed = true;
+        notifyListeners();
+      }
+      return false;
+    }
+    if (!_isCurrent(session)) return false;
+    if (settings.sequenceFrameRate != null) return true;
+    final rate = await chooseFrameRate();
+    if (rate == null || !_isCurrent(session)) return false;
+    try {
+      final result = await gateway.setTimelineSequenceFrameRate(
+        session,
+        current,
+        rate,
+      );
+      if (!_isCurrent(session)) return false;
+      if (!result.succeeded) {
+        _status = result.message.isNotEmpty
+            ? result.message
+            : 'The frame rate could not be set.';
+        _failed = true;
+        notifyListeners();
+        return false;
+      }
+      final view = result.view;
+      if (view != null) onProjectSummary(view);
+      return true;
+    } on ProjectGatewayException catch (error) {
+      if (_isCurrent(session)) {
+        _status = error.message;
+        _failed = true;
+        notifyListeners();
+      }
+      return false;
+    }
+  }
 
   bool _isCurrent(ProjectSessionHandle session) => identical(session, _session);
 

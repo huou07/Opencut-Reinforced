@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../design/or_colors.dart';
@@ -56,10 +58,14 @@ class RecentProjectsList extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              subtitle: Text(
-                'Last opened ${MaterialLocalizations.of(context).formatMediumDate(project.lastOpened.toLocal())}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              subtitle: Tooltip(
+                message: project.path,
+                child: Text(
+                  '${_folderLabel(project.path)} · Last opened '
+                  '${MaterialLocalizations.of(context).formatMediumDate(project.lastOpened.toLocal())}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => onOpen(project),
@@ -68,4 +74,20 @@ class RecentProjectsList extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The folder a recent project lives in, with the home directory shortened so
+/// two projects that share a name can still be told apart.
+String _folderLabel(String path) {
+  final separator = path.contains(r'\') && !path.contains('/') ? r'\' : '/';
+  final index = path.lastIndexOf(separator);
+  final folder = index > 0 ? path.substring(0, index) : path;
+  if (folder.isEmpty) return path;
+  final home =
+      Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
+  if (home != null && home.isNotEmpty && folder.startsWith(home)) {
+    final rest = folder.substring(home.length);
+    return rest.isEmpty ? '~' : '~$rest';
+  }
+  return folder;
 }
