@@ -846,3 +846,33 @@ status `Exported Journey 0127.mp4 • 13.4 MB` and
 `BLOCKED … pinned FFmpeg 8 prefix` is missing `OR_LANE_FFMPEG_PREFIX` /
 `OR_LANE_CODEC_PREFIX`; a lane that starts at the wrong revision is a checkout
 blocked by a modified `Cargo.lock` — `git reset --hard bundle/pc` first.
+
+## Final-revision GUI journeys, 2026-11-08
+
+At `e9b24ece` (code identical to `e6c03077`; only a harness scenario and a doc
+follow), the same two semantic journeys were driven on every host:
+
+| Scenario | macOS (native) | Debian (Weston headless) | Windows (desktop session) |
+|---|---|---|---|
+| `editor-journey` | PASS (earlier, same code) | `RESULT: OR_UI=PASS` | `RESULT: OR_UI=PASS` |
+| `templates-edit-style` (new) | `RESULT: OR_UI=PASS` | `RESULT: OR_UI=PASS` | `RESULT: OR_UI=PASS` |
+
+`templates-edit-style` is the check that the template work is a workflow and not
+a set of cards: it makes a project, imports a clip, inserts it on the timeline,
+opens the command palette, chooses `Build a Cut in an Edit Style…`, picks
+`Cinematic documentary` from the picker, reads the plan (including the Undo
+note) and cancels — on all three hosts.
+
+**Blocked run, then a real one (Debian).** The first attempt returned
+`RESULT: OR_UI=BLOCKED` because a stale `or session serve` from an earlier lane
+still held `/tmp/aeh-native-ui-1000.lock`; after killing it the second attempt
+failed with `Unable to start the app on the device`, because Weston had exited
+while its socket file stayed behind. Restarting the compositor
+(`weston --backend=headless-backend.so --socket=or-wayland --width=1440
+--height=900`) and rerunning produced the PASS above. Both states are worth
+recognising: a lock holder is not the same fault as a dead compositor.
+
+**Flake closed.** `apps/or_app/test/motion_library_test.dart` "an empty
+composition offers the bundled starters" waited a fixed 20 ms for real
+filesystem work, which a busy full-suite run can miss; it now polls
+`controller.hasDraft` for up to two seconds (`41c86d04`). Full suite: 585 pass.
