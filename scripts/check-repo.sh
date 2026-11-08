@@ -63,6 +63,7 @@ required_files=(
   docs/operations/workflow.md
   docs/operations/verification.md
   docs/operations/local-macos.md
+  docs/operations/local-lab.md
   docs/operations/ui-harness.md
   docs/operations/git.md
   docs/operations/permissions.md

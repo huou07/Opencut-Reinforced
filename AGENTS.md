@@ -8,12 +8,9 @@ shared by the Flutter UI, the `or` CLI and agents.
 ## Rule
 
 Use this routing table to pick what to read for the current task, and do not read
-material the task does not need. Before building, benchmarking, driving the GUI,
-packaging or installing on any host — and before declaring a host workflow
-BLOCKED — read the Local lab runbook and the evidence receipts it points at.
-When editing docs or this file, follow the routing template in
-`docs/operations/docs-maintenance.md` exactly and do not add any other rule to
-this file.
+material the task does not need. When editing docs or this file, follow the
+routing template in `docs/operations/docs-maintenance.md` exactly and do not add
+any other rule to this file.
 
 ## Routing
 
@@ -89,12 +86,6 @@ this file.
   When: changing an implemented interaction, or checking a UI claim.
   Path: `docs/design/ux-invariants.md`
 
-### Development
-
-- **Local lab runbook** — per-machine access, GPU GUI sessions, benchmark, build, package and install commands.
-  When: building, measuring, driving the GUI, packaging or installing on macOS, Debian or Windows, or when a host workflow appears broken.
-  Path: `docs/development/local-lab-runbook.md`
-
 ### Operations
 
 - **Change workflow** — the work loop from request to verified local increment.
@@ -106,6 +97,9 @@ this file.
 - **Local macOS** — build, run, check, measure commands and host traps.
   When: building or running the app on this machine, or measuring performance.
   Path: `docs/operations/local-macos.md`
+- **Local lab** — per-host access, GPU GUI sessions, benchmark, build, package and install commands for the three machines.
+  When: working on Debian or Windows, or repeating a host workflow a receipt already records.
+  Path: `docs/operations/local-lab.md`
 - **UI harness** — driving the real app by semantics and reading artifacts.
   When: proving a user-visible behaviour or debugging an interaction.
   Path: `docs/operations/ui-harness.md`

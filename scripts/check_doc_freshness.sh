@@ -48,6 +48,7 @@ in_scope=(
   docs/operations/workflow.md
   docs/operations/verification.md
   docs/operations/local-macos.md
+  docs/operations/local-lab.md
   docs/operations/ui-harness.md
   docs/operations/git.md
   docs/operations/permissions.md
@@ -61,7 +62,9 @@ in_scope=(
   docs/reference/tooling.md
   docs/reference/security-licensing.md
   docs/reference/technology-review.md
+  docs/reference/hardware-profiles.md
   docs/reference/media-capability-matrix.md
+  docs/reference/mission-report.md
   docs/reference/release.md
   docs/reference/developer-preview-install.md
   docs/evidence/claims/README.md

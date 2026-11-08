@@ -464,7 +464,7 @@ run or public release happened; `scripts/check-repo.sh` passes at `a84642fd`.
   opens a 64x64 `h264_vaapi` session with that option and encodes one NV12 frame,
   cached in a `OnceLock`; `OR_VAAPI_OPTIONS`/`OR_VAAPI_ASYNC_DEPTH` stay as
   explicit overrides.
-- **`docs/development/local-lab-runbook.md`** with the per-host SSH, GUI, GPU,
+- **`docs/operations/local-lab.md`** with the per-host SSH, GUI, GPU,
   UI-journey, benchmark, packaging and install recipes, and a new
   `### Development` route in `AGENTS.md` whose single Rule now requires reading
   it before a host task or a BLOCKED verdict.
@@ -501,7 +501,7 @@ variants, the wgpu upload probe and the decode-thread matrix are in
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Local lab runbook + AGENTS routing | PASS | `docs/development/local-lab-runbook.md`, `AGENTS.md` at `a84642fd`; `check-repo.sh` passes |
+| Local lab runbook + AGENTS routing | PASS | `docs/operations/local-lab.md`, `AGENTS.md` at `a84642fd`; `check-repo.sh` passes |
 | Debian GUI on Weston + Mesa, real GPU | PASS | `performance-profiles-linux.json` and `export-text.json` journeys PASS under `weston --backend=headless-backend.so`, app reports `h264_vaapi (hardware)`; screenshots in `dist/release-0.1.24/evidence/debian/` |
 | Windows GUI in an interactive desktop session | PASS | scheduled-task journeys (not session 0): motion-starter 14 steps PASS, export-text 30 steps PASS with `Export complete` |
 | Synchronous NV12 readback handled | PASS | queued readback already shipped; both synchronous/dedicated-resolver variants measured and rejected (Debian 111/109/99 fps vs 190-204) |

@@ -122,7 +122,7 @@ def linux_wayland_display() -> str:
 
     A headless Weston session renders through Mesa GL on the real GPU, which is
     what the Debian host is measured on; Xvfb with software GL is the fallback
-    for a host without one. The runbook in docs/development/local-lab-runbook.md
+    for a host without one. The runbook in docs/operations/local-lab.md
     starts the compositor and exports this variable.
     """
     return os.environ.get("OR_UI_WAYLAND_DISPLAY", "").strip()
