@@ -443,3 +443,123 @@ profiles once more.
   without a Developer ID, and this is not notarized.
 - NVENC/AMF remain UNVERIFIED for real performance: no such device is attached
   to any of the three hosts.
+
+## 2026-11-08 corrective session — the slow stage is named, the local lab is written down
+
+Three revisions matter here. `552cd16b350fc2549408d4d051ee1483d289e7c6` is
+the baseline every "before" row was taken at. `a84642fd72` ("perf(export): name
+the slow stage, speed up VAAPI encode, record the local lab") is the revision the
+code, the docs and all three installers below were built from. No push, tag, CI
+run or public release happened; `scripts/check-repo.sh` passes at `a84642fd`.
+
+### What shipped
+
+- **`OR_EXPORT_TRACE=1`** in `crates/or_app_bridge/src/preview.rs` times
+  `decode`, `compose`, `resolve` and `encode` per exported frame and prints
+  median/p95/min on completion. This is the diagnostic the earlier sessions were
+  missing: it turned "the compositor is slow on Debian" into a measured claim.
+- **VAAPI `async_depth=4`** (was the library default of 2) and **low-power VDENC**
+  (`low_power=1`, Gen12 fixed-function encoder) in
+  `crates/or_media/src/encoder.rs`. Low-power is applied only when a real probe
+  opens a 64x64 `h264_vaapi` session with that option and encodes one NV12 frame,
+  cached in a `OnceLock`; `OR_VAAPI_OPTIONS`/`OR_VAAPI_ASYNC_DEPTH` stay as
+  explicit overrides.
+- **`docs/development/local-lab-runbook.md`** with the per-host SSH, GUI, GPU,
+  UI-journey, benchmark, packaging and install recipes, and a new
+  `### Development` route in `AGENTS.md` whose single Rule now requires reading
+  it before a host task or a BLOCKED verdict.
+- **Working-tree honesty**: the two readback re-architectures that were tried
+  (resolve on the render thread, a dedicated resolver thread) are **not** in the
+  tree; both measured worse or identical and were reverted. The NV12 upload
+  hypothesis was retired by measurement, not by argument.
+
+### Benchmarks (canonical fixture, 300 frames, 3 reps, medians)
+
+Fixture on all three hosts: `bench1080.mp4`, 11,341,971 bytes, SHA-256
+`877f78da1fe16775ee2c11cf745a3ff6ffb78b4687fea3944b307a060c45ea52`.
+
+| Host | Row | Before (`552cd16b`) | After (`a84642fd`) | Change |
+| --- | --- | --- | --- | --- |
+| Debian UHD 770 | MP4 video-only | 256.3 fps | 274.8 fps | +7.2 % |
+| Debian UHD 770 | MP4 + text | 193.6 fps | 210.0 fps | +8.5 % |
+| macOS M5 | MP4 video-only | 230.4 fps | 229.5 fps | flat |
+| macOS M5 | MP4 + text | 219.5 fps (b1347dfa, not re-run at 552cd16b) | 223.5 fps | flat |
+| Windows Intel | MP4 video-only | 131.2 fps | 131.7 fps | flat |
+| Windows Intel | MP4 + text | 104.2 fps | 104.6 fps | flat |
+
+Stage medians at the same revision: Debian decode 3.19 ms / compose 0.97 ms /
+resolve 0.85 ms / encode 4.74 ms; macOS decode 1.49 ms / compose 1.62 ms /
+resolve 0.46 ms / encode 2.01 ms; Windows decode 7.33 ms / compose 0.99 ms /
+resolve 2.24 ms / encode 3.68 ms. So macOS and Debian wait on the encoder, and
+**Windows waits on its render thread** — its software decode costs 7.3 ms inside
+an export against 4.8 ms standalone. The full tables, the rejected readback
+variants, the wgpu upload probe and the decode-thread matrix are in
+`docs/reference/export-performance.md`; the per-host encoder choice is in
+`docs/reference/hardware-profiles.md`.
+
+### Per-item status
+
+| Item | Status | Evidence |
+| --- | --- | --- |
+| Local lab runbook + AGENTS routing | PASS | `docs/development/local-lab-runbook.md`, `AGENTS.md` at `a84642fd`; `check-repo.sh` passes |
+| Debian GUI on Weston + Mesa, real GPU | PASS | `performance-profiles-linux.json` and `export-text.json` journeys PASS under `weston --backend=headless-backend.so`, app reports `h264_vaapi (hardware)`; screenshots in `dist/release-0.1.24/evidence/debian/` |
+| Windows GUI in an interactive desktop session | PASS | scheduled-task journeys (not session 0): motion-starter 14 steps PASS, export-text 30 steps PASS with `Export complete` |
+| Synchronous NV12 readback handled | PASS | queued readback already shipped; both synchronous/dedicated-resolver variants measured and rejected (Debian 111/109/99 fps vs 190-204) |
+| Async / double-buffered readback | PASS as a measurement | resolver-thread pipeline: macOS 214.1/223.5/216.1/217.4, Debian 195.9/198.2/203.8/198.4 — indistinguishable, reverted |
+| GPU-resident encoder input | UNVERIFIED | VAAPI already consumes its own surfaces (`HardwareFrames::vaapi`); wgpu exposes no VAAPI/D3D11VA import, so an NV12 texture never enters the encoder directly on any host |
+| Hardware decode (VAAPI/D3D11VA/VideoToolbox) | FAIL as an opt-in | measured slower with copy-back: Debian 610 vs 743 fps, Windows 253 vs 264, macOS 4K 150 vs 1176; not integrated |
+| Intel Quick Sync / oneVPL | BLOCKED (with evidence) | packaged FFmpeg is built without `--enable-libvpl` (no `h264_qsv` encoder); a oneVPL build on the Debian host failed `Error creating a MFX session: -9` on the UHD 770 |
+| Concurrency / render-ahead depth | PASS | depth 1/2/3/4/8 sweep: no gain beyond the shipped 2 (190-204 fps across all depths) |
+| Decode thread scheduling | PASS as a measurement | `OR_DECODE_THREADS`: 2 costs ~10 %, 4 is within ±2 %; no default change |
+| P-core / E-core pinning | UNVERIFIED | nothing pinned or scheduled per core this session; no per-core counters were recorded |
+| Text / subtitle cost | PASS | cached text layer adds 0.7 % (macOS), ~1.3 % (Debian), 0.2 % (Windows) — not the Debian bottleneck (compose 0.97 ms) |
+| NVENC / AMF adapters | UNVERIFIED | no such device on any host; capability detection lists the encoder but no performance claim is made |
+| Discrete GPU fallback | DEFERRED | adapter and capability detection exist in `hardware-profiles`; untested against real hardware, so no fallback path was claimed |
+| 20-repository re-read → features | PARTIAL | `docs/reference/technology-review.md` re-checked against this revision; the one adoptable idea (spring/overshoot easing) is already shipped as the `ease_out_back` preset and `easing_curve` Bézier; no new prototype was built this session |
+| Whole-app UX audit | PARTIAL | audited surfaces and findings recorded below; no new UI shipped this session |
+| Three installers built and installed | PASS | macOS DMG, Windows setup + zip, Debian deb at `a84642fd`, all three installed and version-checked (table below) |
+| Installed-app edit/export on macOS and Debian | UNVERIFIED | macOS: the installed bundle launches (screenshot) but the CLI cannot export through it and the window has no driveable seat this session; Debian: no seat under Weston, so synthetic input cannot reach the installed GUI. Both are covered by the packaged-bundle journeys at the same revision, which do export |
+| Installed-app edit/export on Windows | PASS | export journey against the installed-era build: 30 steps, `Export complete`, screenshot |
+
+### UX audit findings (no code changed this session)
+
+- The export dialog already names the encoder it opened (`h264_vaapi
+  (hardware)` / `libx264 (software)`), which is the surface that made the
+  Weston verification possible; the performance-controls panel exposes the same
+  plan, so a user can see the fallback without opening logs.
+- The motion inspector shows the easing preset and duration/overshoot inline
+  (`0.00s · 50.0% · Overshoot`), so the Bézier capability is discoverable rather
+  than hidden behind a schema field.
+- Remaining gaps: the Windows export failure for a 32×24 canvas still does not
+  name the canvas size; the new `OR_EXPORT_TRACE` diagnostic is environment-only
+  and has no in-app counterpart; and there is no in-app surface that reports
+  which readback path was taken. Each of these is a small, concrete follow-up and
+  none was implemented here.
+
+### Installers (local only; `dist/` is gitignored)
+
+| Platform | File | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| macOS 13+ arm64 | `dist/release-0.1.24/macos/Opencut-Reinforced-0.1.24-arm64.dmg` | 36,065,265 | `b083b92b6bf96699a1b6fc6660d863a41b97b8a9ed1df9248f728dcc2e9118e5` |
+| Windows 11 x64 | `dist/release-0.1.24/windows/Opencut-Reinforced-0.1.24-windows-x64-setup.exe` | 25,226,598 | `934998e6ff5ca95bf2c6ee4407476f84813110dc5905035057c65a3d215c64c6` |
+| Windows portable | `dist/release-0.1.24/windows/or-windows-x64-release.zip` | 34,857,067 | `74570d944b4b9b249cf49e416cf0ec6449cf687ac69d8959371f8af6a4de64ed` |
+| Debian amd64 | `dist/release-0.1.24/linux/opencut-reinforced-linux-x64-release.deb` | 23,326,716 | `b5ea3c68422782416b49ddef329087dec153823906ea27425a54c6a6795af720` |
+
+Installed and version-checked at `a84642fd`: macOS `codesign --verify --deep
+--strict` OK and `or version` → `Opencut Reinforced 0.1.24`; Debian
+`dpkg -s opencut-reinforced` → `Version: 0.1.24+a84642fd7294`; Windows
+`or.exe version` → `Opencut Reinforced 0.1.24` and `or_app.exe` ProductVersion
+`0.1.24+25`.
+
+### What this session did not do
+
+- No split decode/composite pipeline on Windows, which the trace says is the next
+  real win there (decode is the render thread's serial work).
+- No hardware-decode integration, no Quick Sync path, no NVENC/AMF performance
+  claim — the hardware to test it is not attached, and the software path is
+  faster with copy-back on all three hosts.
+- No P-core/E-core scheduling or per-core counters.
+- No new UI feature, no new prototype out of the twenty repositories, and the UX
+  findings above are recorded rather than implemented.
+- No installed-app export on macOS or Debian (reasons above); the export path is
+  covered by the packaged journeys at the same revision.
