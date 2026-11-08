@@ -803,3 +803,46 @@ educational` opened `Build a Fast-paced educational cut` with the Undo note.
 bundled starters` failed once inside a full-suite run and passed alone and in the
 two full runs that followed; it is recorded here as an observed flake, not a
 fixed defect.
+
+## 0.1.27 row, 2026-11-08
+
+Built and installed from the artifacts at `e6c03077 chore(release): 0.1.27`
+(lane revision for both hosts' lanes is the same commit):
+
+| Artifact | Bytes | SHA-256 |
+|---|---|---|
+| macOS `dist/Opencut-Reinforced-0.1.27-arm64.dmg` | 36,115,495 | `14b008a69f070569c90f7eb1888dd8366eb34da7661aed8946848edbf629c24d` |
+| Debian `opencut-reinforced-linux-x64-release.deb` | 23,360,880 | `cc539f4eb92c5a97522a64521e8696362d802a88713bc93f400a0738b15f2f80` |
+| Windows setup `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,250,268 | `976f85d3a1362188f553f91faf7d7b383bf69bfefe2360611d3f8abaa5a8df87` |
+| Windows portable `or-windows-x64-release.zip` | 34,897,501 | `0b9287e452ce21331cfc09a5de5874c7b650eb7e74b40e624b891b9bfd04bfdb` |
+
+Each was installed on its own host and reported the new version
+(`or version` → `Opencut Reinforced 0.1.27` on macOS and Debian;
+`or.exe version` → the same on Windows from
+`%LOCALAPPDATA%\Programs\Opencut Reinforced`).
+
+**What the installed macOS app was driven through by hand:** Library →
+Creative directions → `Read the brief` on a bundled direction → `Keep a copy`
+(`Kept "Modern tech explainer (mine)" in your directions.`), then `Edit` on that
+copy, rename to `Modern tech explainer v2`, `Save` → `Direction saved: Modern
+tech explainer v2.`, and after quit/relaunch the Library still showed the new
+name (the store file is `creative-directions.v1.json`). This is the first build
+where `Edit` opens the editor at all: `886af845` pushed the editor in the same
+frame the brief was popped, so the pop removed the editor and the button looked
+dead; `e8f49f97` closes the brief first and opens the editor on the next frame,
+guarded by `apps/or_app/test/creative_direction_edit_handoff_test.dart`.
+
+**Export from the installed app:** opened `Audit Journey 0125` (2 tracks, 4
+clips, 14.1 s with a 3 s title), `Export` → `Share or upload` → `Continue` →
+NSSavePanel named `Journey 0127` → `/private/tmp/or-evidence/Journey 0127.mp4`,
+14,022,260 B, `h264` 1920×1080 + `aac`, 14.101 s,
+SHA-256 `5415b953d3c4ca947f23b1176c722de83ab3cea89477671e648a8f07e1e0c82c`,
+status `Exported Journey 0127.mp4 • 13.4 MB` and
+`Encoding with h264_videotoolbox (hardware).`
+
+**Lanes at `e6c03077`:** Debian `RESULT: LOCAL_LANE=PASS` (`deb` 101 s,
+`journey`), Windows `WINDOWS_LANE=PASS` (build, stage, journey, zip, installer,
+`=== OK desktop ZIP install, replacement and removal`). A lane that reports
+`BLOCKED … pinned FFmpeg 8 prefix` is missing `OR_LANE_FFMPEG_PREFIX` /
+`OR_LANE_CODEC_PREFIX`; a lane that starts at the wrong revision is a checkout
+blocked by a modified `Cargo.lock` — `git reset --hard bundle/pc` first.
