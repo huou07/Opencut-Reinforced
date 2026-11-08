@@ -563,3 +563,155 @@ Installed and version-checked at `a84642fd`: macOS `codesign --verify --deep
   findings above are recorded rather than implemented.
 - No installed-app export on macOS or Debian (reasons above); the export path is
   covered by the packaged journeys at the same revision.
+
+## 2026-11-08 product completion
+
+Scope: the follow-up mission that finished the export path on the installed macOS
+app, collapsed the performance presets into one automatic mode, added the two
+template kinds, and re-checked the three hosts. Everything here was built and
+tested locally; nothing was pushed.
+
+### The revision all three machines ran
+
+`5db52705a4a73342b017146b552c8aa0a2393ddd` — branch
+`mission/product-completion-2026-11-08`, on the macOS checkout, on
+`~/or-mission` (Debian) and on `C:\Users\hp\src\or-mission` (Windows). The DMG,
+the DEB and the Windows setup/zip below were built from that revision.
+
+### Fixed: export on the installed macOS app
+
+The report's "export on the installed macOS app no longer works" was three
+separate defects, and each is now reproduced, root-caused and covered:
+
+1. **A project without a sequence frame rate failed inside the export.** The
+   bridge answers `SEQUENCE_FRAME_RATE_REQUIRED` / `set the sequence frame rate
+   before exporting`, and the app surfaced that raw string in the top bar with
+   nothing to act on. `ExportFlow.start` now asks for a rate first
+   (`_ensureFrameRate` → `timelineSequenceSettings` → `setTimelineSequenceFrameRate`)
+   and shows `Set a frame rate to export` with the same 23.976–60 choices the New
+   Project dialog offers. Exporting uses the post-set revision.
+2. **The destination was a folder chooser whose OK could carry no URL.**
+   `NSOpenPanel` in directory mode returns `.OK` with a nil `panel.url` when no
+   row is highlighted, `chooseExportFolder` answered `result(nil)`, and
+   `ExportFlow.start` returned on a null destination with no status and no
+   error — an export that silently did nothing. The macOS side is now an
+   `NSSavePanel` (`Choose where to save this export.`, editable `Save As:`,
+   `allowedContentTypes` from the profile, an `enforceExtension` guard that keeps
+   the profile's container, and a bookmark stored for the parent folder), and a
+   bookmark that cannot be stored no longer fails the export.
+3. **Two pieces of copy described the wrong thing.** The save panel named the
+   original suggested file even after a rename (`Choose where to save
+   Repro.mp4.`), and the export summary mixed an encode-speed axis into an
+   output-quality line (`WebM video · 1080p · faster encode`). They are now
+   `Choose where to save this export.` and `… · quicker export`.
+
+Verified on the installed app: `Export` → `Share or upload` → `Continue` →
+`NSSavePanel` (`Save As:`, `Where:`, `Export`) → the panel's own replace confirm
+→ `/tmp/or-evidence/Repro.mp4`, 11,267,668 B, `h264` 1920×1080 30/1 + `aac`,
+10.005 s, SHA-256 `49f7e901…d6d4a`, status `Exported Repro.mp4 • 10.7 MB`,
+`Encoding with h264_videotoolbox (hardware).`, toast `Export complete`. MP4, WebM
+(vp9/opus) and FFV1 (ffv1/pcm_s16le) were each exported through the installed app's
+GUI at 0.1.24 and re-verified for MP4 at 0.1.25.
+
+### Fixed: the autosave badge on an idle project
+
+An idle, saved project showed `Autosave needs attention`. `_autosaveAttempt`
+answered `false` for "no session", "no project" and "project not dirty", and the
+controller read `false` as a failed checkpoint. `AutosaveOutcome {saved, failed,
+skipped}` now distinguishes them: `skipped` clears the label, `failed` says
+`Recovery copy did not save`. After 35 s idle on the installed 0.1.25 build there
+is no warning; the regression test is `a project with nothing to save clears the
+attention label`.
+
+### Changed: one performance mode
+
+`PerformanceProfile` has a single `Automatic` variant; the retired names still
+parse so old settings and scripts keep working. The choice is a per-workload
+plan (preview/render, composite, decode, encode) resolved once per job from the
+probed capabilities, preferring the platform encoder (`h264_videotoolbox`,
+`h264_vaapi`, `h264_mf`) and recording why it fell back. Settings → Performance
+shows the machine, the four workload rows with their reasons, `Re-detect`, the
+encoder and graphics-backend overrides, and `Reset to Automatic`; the export
+dialog names the encoder instead of offering performance tiles. Export quality,
+resolution and codec stay in the export dialog because they are output choices.
+Verified in the UI on all three hosts (`scripts/ui_scenarios/performance-profiles*.json`
+→ `RESULT: OR_UI=PASS`), and the macOS panel reads `Preview and render Metal •
+Apple M5`, `Composite Metal`, `Decode software`, `Encode h264_videotoolbox
+(hardware)`.
+
+### Added: edit styles and creative directions
+
+`Project formats` stay the project starters (Landscape 1080p, Vertical short,
+Square, Tutorial). Two new kinds sit beside them in Library → Templates:
+
+- **Edit styles** (cinematic documentary, fast-paced educational, personal vlog,
+  product showcase, interview/storytelling) cut the media already in the project
+  into a first assembly: shot selection, order, hook length and per-shot length
+  are style rules, and the plan is reviewed before it is applied. The result is
+  real clips, a title clip and ordinary history entries — not a render.
+- **Creative directions** (the five briefs) describe method, not a story: voice,
+  script structure, storytelling, graphics, captions, editing and audio. `Read the
+  brief` shows it, `Copy brief` puts Markdown on the clipboard for an agent, and
+  `Keep a copy` edits a personal version stored in
+  `creative-directions.v1.json`.
+
+Neither kind needs a provider: the cut is planned locally and deterministically,
+nothing is uploaded, and a project without media is told why it cannot build yet.
+`docs/features/templates.md` records the rules and what each apply writes.
+
+### Measured
+
+macOS M5, `OR_BENCH_FRAMES=300`, `OR_BENCH_SOURCE=/tmp/or-bench/bench1080.mp4`:
+
+| Row | This revision | Report baseline |
+| --- | --- | --- |
+| MP4 quality, one clip | 245.3 fps / 11,267,668 B | 241.8–244.4 fps |
+| MP4 quality + text | 236.7 and 237.4 fps / 11,732,698 B | 223.6 fps |
+
+Adjusting the report baseline: the MP4 rows are unchanged within noise and the
+text row is faster, so the export changes did not cost throughput.
+
+### Packages, installed and checked
+
+| Host | Package | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| macOS | `dist/Opencut-Reinforced-0.1.25-arm64.dmg` | 36,111,317 | `65b60324041ef4bc907140e7bee47930f87990025d4fa204de420c4077ecc090` |
+| Debian | `apps/or_app/build/local-lanes/opencut-reinforced-linux-x64-release.deb` | 23,355,180 | `67fd5278607c516b60e94d3597b67841da3ee850725a301c61cd2ad4b2353dfa` |
+| Windows | `apps/or_app/build/windows/Opencut-Reinforced-0.1.25-windows-x64-setup.exe` | 25,248,726 | `29ec88a8e468914c3ef7e09125c970f152dec5a1ee65691e73ae25ff25dc721e` |
+| Windows | `apps/or_app/build/windows/or-windows-x64-release.zip` | 34,891,341 | `d66c077155bf78b7f4001c8be0be576d7534d547590b0d30c3250b6780457464` |
+
+Every package was installed from the artifact, not from a build directory:
+`ditto` from the DMG into `/Applications` (`or version` → `Opencut Reinforced
+0.1.25`), `dpkg -i` on Debian (`/opt/opencut-reinforced/or version` → 0.1.25),
+and the Inno setup into `%LOCALAPPDATA%\Programs\Opencut Reinforced`
+(`or.exe version` → 0.1.25). The installed macOS app opened a project, took a
+frame-rate edit, saved it (the file moved to `sequence_frame_rate {30,1}` at
+revision 4), quit, reopened with `Frame rate 30 fps` / `Duration 10.00 s` /
+`1 track • 1 clip` / `Saved to disk`, and exported the MP4 above. The Debian and
+Windows lanes each installed their payload, launched it, ran the packaged
+product journey and exported:
+
+- Debian `RESULT: LOCAL_LANE=PASS` at `5db52705` — `deb PASS 101.46s`,
+  `journey PASS 392.56s`; the earlier `562e74c7` lane also passed.
+- Windows `WINDOWS_LANE=PASS` at `5db52705` and at `562e74c7`, ending with `OK
+  desktop ZIP install, replacement and removal`.
+
+### Status
+
+PASS: macOS installed-app export for MP4, WebM and FFV1 through the GUI; the
+macOS save panel, frame-rate guard, autosave badge and recent-project labels;
+one-mode Performance on all three hosts; edit styles and creative directions in
+the Library; the three installers and their installed payloads; the Debian and
+Windows lanes; the macOS export UI scenario and benchmark rows.
+
+UNVERIFIED: real NVIDIA or AMD hardware (no device attached — detection, adapter
+selection, fallback and tests exist, throughput does not); the Windows and Debian
+installed GUIs were exercised by the packaged journeys and the UI scenarios, not
+by hand on a desktop session; WebM and FFV1 were re-exported through the installed
+macOS GUI at 0.1.24 but only MP4 at 0.1.25.
+
+DEFERRED: the twenty-repository prototypes beyond the template work (composition
+reuse, vector/SVG, 3D and audio-graph ideas are recorded in
+`docs/reference/technology-review.md` with adoption verdicts, not shipped as
+features); the editor still has no in-place entry to the style cards (they are one
+⌘K hop away in Library); the FFV1 profile writes `bgra` from a `yuv420p` source.
