@@ -113,8 +113,21 @@ failing the Library. Ids are made unique with `copiedDirectionId`, which appends
 `-mine`, `-mine-2`, and so on. A stored copy loads with `isMine: true` and shows a
 `Mine` badge.
 
+**Edit** appears only on a kept copy, because a bundled direction is the
+product's own description of a method; editing it in place would make the
+Library's five samples drift with each person's taste. The editor
+(`apps/or_app/lib/screens/creative_direction_editor_dialog.dart`) is one field
+per section, prefilled from the copy, and its Save stays disabled while any
+section is blank — a brief missing a section is worse than the bundled one it
+came from. Saving calls `CreativeDirectionStore.upsert`, so the copy keeps its
+id and the Library re-renders from the store's returned list. `Best for` is
+edited as one semicolon-separated line and stored as the list the brief prints.
+
 ## Tests
 
+- `apps/or_app/test/creative_direction_editor_test.dart` — the editor prefills
+  every section, refuses to save a blanked one, returns the edited copy with
+  untouched sections intact, and Cancel returns nothing.
 - `apps/or_app/test/edit_styles_test.dart` — planner rules, ordering per style,
   frame alignment, the shot cap and its note, skipped material, a zero frame rate,
   the title rule, and that every bundled brief answers all seven questions.

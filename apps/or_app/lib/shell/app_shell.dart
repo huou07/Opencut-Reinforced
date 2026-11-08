@@ -39,6 +39,7 @@ import '../production/media_preview_queue.dart';
 import '../production/media_preview_reader.dart';
 import '../production/media_preview_kinds.dart';
 import '../production/welcome_store.dart';
+import '../screens/creative_direction_editor_dialog.dart';
 import '../screens/edit_style_plan_dialog.dart';
 import '../screens/editor_shell_preview_screen.dart';
 import '../library/template_previews.dart';
@@ -1984,8 +1985,28 @@ class _AppShellState extends State<AppShell> {
           _showNotice('Brief copied. $nextStep');
         },
         onAddPinned: () => _keepDirectionCopy(direction, store),
+        onEdit: direction.isMine && store != null
+            ? () => _editDirectionCopy(direction, store)
+            : null,
       ),
     );
+  }
+
+  /// Edits a direction the person kept. The bundled directions are the
+  /// product's own copy of a method, so only a kept copy is editable here.
+  Future<void> _editDirectionCopy(
+    CreativeDirection direction,
+    CreativeDirectionStore store,
+  ) async {
+    final edited = await showDialog<CreativeDirection>(
+      context: context,
+      builder: (context) => CreativeDirectionEditorDialog(direction: direction),
+    );
+    if (edited == null || !mounted) return;
+    final items = await store.upsert(edited);
+    if (!mounted) return;
+    setState(() => _myDirections = items);
+    _showNotice('Direction saved: ${edited.name}.');
   }
 
   Future<void> _keepDirectionCopy(

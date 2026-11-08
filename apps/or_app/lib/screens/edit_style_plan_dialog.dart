@@ -162,6 +162,7 @@ class CreativeDirectionDialog extends StatelessWidget {
     required this.direction,
     required this.onCopy,
     required this.onAddPinned,
+    this.onEdit,
   });
 
   final CreativeDirection direction;
@@ -169,6 +170,10 @@ class CreativeDirectionDialog extends StatelessWidget {
 
   /// Keeps the direction in the library as one of the person's own.
   final VoidCallback? onAddPinned;
+
+  /// Opens the editor for a direction the person already kept. Null for a
+  /// bundled direction, which is the product's copy of the method.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +244,15 @@ class CreativeDirectionDialog extends StatelessWidget {
               Navigator.of(context).pop();
             },
             child: const Text('Keep a copy'),
+          ),
+        if (onEdit != null)
+          TextButton(
+            key: const ValueKey('creative-direction-edit'),
+            onPressed: () {
+              onEdit!();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Edit'),
           ),
         TextButton(
           key: const ValueKey('creative-direction-close'),

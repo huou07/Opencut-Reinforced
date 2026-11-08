@@ -53,21 +53,33 @@ class CreativeDirection {
   /// True for a direction the person saved themselves.
   final bool isMine;
 
-  CreativeDirection copyWith({String? id, String? name, bool? isMine}) =>
-      CreativeDirection(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        summary: summary,
-        bestFor: bestFor,
-        voice: voice,
-        script: script,
-        storytelling: storytelling,
-        graphics: graphics,
-        captions: captions,
-        editing: editing,
-        audio: audio,
-        isMine: isMine ?? this.isMine,
-      );
+  CreativeDirection copyWith({
+    String? id,
+    String? name,
+    String? summary,
+    List<String>? bestFor,
+    String? voice,
+    String? script,
+    String? storytelling,
+    String? graphics,
+    String? captions,
+    String? editing,
+    String? audio,
+    bool? isMine,
+  }) => CreativeDirection(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    summary: summary ?? this.summary,
+    bestFor: bestFor ?? this.bestFor,
+    voice: voice ?? this.voice,
+    script: script ?? this.script,
+    storytelling: storytelling ?? this.storytelling,
+    graphics: graphics ?? this.graphics,
+    captions: captions ?? this.captions,
+    editing: editing ?? this.editing,
+    audio: audio ?? this.audio,
+    isMine: isMine ?? this.isMine,
+  );
 
   /// The brief handed to an agent, in the order a video is decided.
   String toBrief() =>
