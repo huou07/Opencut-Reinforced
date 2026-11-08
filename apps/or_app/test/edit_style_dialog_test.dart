@@ -8,8 +8,12 @@ import 'package:or_app/screens/edit_style_plan_dialog.dart';
 EditStyle _style(String id) =>
     bundledEditStyles.firstWhere((style) => style.id == id);
 
-Future<bool?> _showPlan(WidgetTester tester, EditStylePlan plan,
-    {String? title, bool appendsAfter = false}) async {
+Future<bool?> _showPlan(
+  WidgetTester tester,
+  EditStylePlan plan, {
+  String? title,
+  bool appendsAfter = false,
+}) async {
   bool? answer;
   await tester.pumpWidget(
     MaterialApp(
@@ -23,7 +27,8 @@ Future<bool?> _showPlan(WidgetTester tester, EditStylePlan plan,
                   plan: plan,
                   title: title,
                   labels: {
-                    for (final shot in plan.shots) shot.mediaId: '${shot.mediaId}.mp4',
+                    for (final shot in plan.shots)
+                      shot.mediaId: '${shot.mediaId}.mp4',
                   },
                   appendsAfter: appendsAfter,
                 ),
@@ -62,10 +67,7 @@ void main() {
     expect(find.text('Build a Cinematic documentary cut'), findsOneWidget);
     expect(find.text('1 shot · 8.0 s'), findsOneWidget);
     expect(find.byKey(const ValueKey('edit-style-shot-why-0')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('edit-style-effect')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('edit-style-effect')), findsOneWidget);
   });
 
   testWidgets('a plan with a cap explains what it left out', (tester) async {

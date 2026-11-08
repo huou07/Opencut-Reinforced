@@ -86,7 +86,11 @@ void main() {
     test('a clip too short to see is skipped instead of cut', () {
       final plan = planEditStyleCut(
         style: _styleOf('fast-paced-educational'),
-        sources: [_source('blink', 0.2), _source('audio-only', 10, video: false), _source('real', 6)],
+        sources: [
+          _source('blink', 0.2),
+          _source('audio-only', 10, video: false),
+          _source('real', 6),
+        ],
         frameRate: 30,
       );
 
@@ -104,16 +108,19 @@ void main() {
       expect(plan.notes.single, contains('import a clip first'));
     });
 
-    test('a frame rate of zero falls back to thirty instead of dividing by it', () {
-      final plan = planEditStyleCut(
-        style: _styleOf('personal-vlog'),
-        sources: [_source('a', 6)],
-        frameRate: 0,
-      );
+    test(
+      'a frame rate of zero falls back to thirty instead of dividing by it',
+      () {
+        final plan = planEditStyleCut(
+          style: _styleOf('personal-vlog'),
+          sources: [_source('a', 6)],
+          frameRate: 0,
+        );
 
-      expect(plan.frameRate, 30);
-      expect(plan.shots.single.frameCount, 3 * 30);
-    });
+        expect(plan.frameRate, 30);
+        expect(plan.shots.single.frameCount, 3 * 30);
+      },
+    );
 
     test('the title clip carries the project name when there is one', () {
       final style = _styleOf('interview-storytelling');
@@ -137,7 +144,10 @@ void main() {
         expect(direction.audio, isNotEmpty, reason: direction.id);
       }
       expect(
-        bundledCreativeDirections.map((direction) => direction.id).toSet().length,
+        bundledCreativeDirections
+            .map((direction) => direction.id)
+            .toSet()
+            .length,
         bundledCreativeDirections.length,
       );
     });

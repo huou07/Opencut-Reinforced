@@ -8,7 +8,8 @@ CreativeDirection _direction() => const CreativeDirection(
   name: 'Cinematic documentary (mine)',
   summary: 'Slow, observational, patient.',
   bestFor: ['a long story', 'a place', 'a person at work'],
-  voice: 'Unhurried narration, second person, no adjectives for their own sake.',
+  voice:
+      'Unhurried narration, second person, no adjectives for their own sake.',
   script: 'Hook on one concrete image, develop the cost, turn on the decision.',
   storytelling: 'Camera stays put and lets the scene finish.',
   graphics: 'Serif titles, one accent, no lower thirds.',
@@ -134,9 +135,8 @@ void main() {
                 onPressed: () async {
                   result = await showDialog<CreativeDirection>(
                     context: context,
-                    builder: (context) => CreativeDirectionEditorDialog(
-                      direction: _direction(),
-                    ),
+                    builder: (context) =>
+                        CreativeDirectionEditorDialog(direction: _direction()),
                   );
                 },
                 child: const Text('open'),
@@ -191,9 +191,8 @@ void main() {
                 onPressed: () async {
                   result = await showDialog<CreativeDirection>(
                     context: context,
-                    builder: (context) => CreativeDirectionEditorDialog(
-                      direction: _direction(),
-                    ),
+                    builder: (context) =>
+                        CreativeDirectionEditorDialog(direction: _direction()),
                   );
                   closed = true;
                 },

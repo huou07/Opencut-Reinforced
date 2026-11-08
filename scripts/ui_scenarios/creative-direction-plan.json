@@ -1,0 +1,132 @@
+{
+ "name": "creative-direction-plan",
+ "harness": "or_ui",
+ "description": "A creative direction opens as a brief and turns into an assistant plan against the open project.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Assistant plan journey"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 20000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "editor-tool-media"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "or-brand-home"
+   }
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 15000,
+   "label_regex": "New Project"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-library"
+   }
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 15000,
+   "label_regex": "From an assistant"
+  },
+  {
+   "op": "scroll_until",
+   "selector": {
+    "key": "creative-direction-read-cinematic-documentary"
+   },
+   "scroll": {
+    "key": "library-scroll"
+   },
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "creative-direction-read-cinematic-documentary"
+   }
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 15000,
+   "label_regex": "Cinematic documentary"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "creative-direction-plan"
+   }
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 15000,
+   "label_regex": "Review an assistant plan"
+  },
+  {
+   "op": "wait_label",
+   "budget_ms": 15000,
+   "label_regex": "Cinematic documentary"
+  },
+  {
+   "op": "shot",
+   "name": "creative-direction-plan"
+  },
+  {
+   "op": "tree",
+   "name": "creative-direction-plan"
+  }
+ ]
+}

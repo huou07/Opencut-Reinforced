@@ -7781,7 +7781,10 @@ void main() {
 
     expect(gateway.updateAnimationCalls, 1);
     expect(gateway.lastAnimation.isEmpty, isTrue);
-    expect(find.byKey(const ValueKey('animation-keyframe-opacity-0')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('animation-keyframe-opacity-0')),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -7792,10 +7795,7 @@ void main() {
     final gateway = _FakeProjectGateway()
       ..lastAnimation = ProjectClipAnimation(
         opacityBasisPoints: [
-          ProjectKeyframe(
-            at: ProjectRationalTime(BigInt.zero, 1),
-            value: 5000,
-          ),
+          ProjectKeyframe(at: ProjectRationalTime(BigInt.zero, 1), value: 5000),
         ],
       );
     final view = ProjectReadModel(

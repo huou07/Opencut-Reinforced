@@ -3695,7 +3695,9 @@ class _TimelineTrackLane extends StatelessWidget {
                       top: 3,
                       child: IgnorePointer(
                         child: Container(
-                          key: ValueKey('timeline-clip-animated-${clip.clipId}'),
+                          key: ValueKey(
+                            'timeline-clip-animated-${clip.clipId}',
+                          ),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 3,
                             vertical: 1,

@@ -63,7 +63,10 @@ void main() {
     // The editor must survive the brief's own route being popped.
     expect(find.text('Edit your creative direction'), findsOneWidget);
     expect(find.byKey(const ValueKey('direction-edit-voice')), findsOneWidget);
-    expect(find.byKey(const ValueKey('creative-direction-brief')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('creative-direction-brief')),
+      findsNothing,
+    );
   });
 
   testWidgets('a bundled direction offers no Edit action', (tester) async {
@@ -82,6 +85,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('creative-direction-edit')), findsNothing);
-    expect(find.byKey(const ValueKey('creative-direction-pin')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('creative-direction-pin')),
+      findsOneWidget,
+    );
   });
 }

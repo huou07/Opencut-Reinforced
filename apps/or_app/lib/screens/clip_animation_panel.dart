@@ -233,7 +233,10 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
                     'Add another at a different playhead position to animate.'
               : 'Add a keyframe at the playhead to start animating this clip. '
                     'Move the playhead, change the value above, then add again.',
-          style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+          ),
         ),
         const SizedBox(height: OrSpacing.x1),
         Row(
@@ -293,7 +296,10 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
         ),
         Text(
           'A preset replaces the keyframes on the channels it animates.',
-          style: TextStyle(color: OrColors.textMuted, fontSize: OrType.tinySize),
+          style: TextStyle(
+            color: OrColors.textMuted,
+            fontSize: OrType.tinySize,
+          ),
         ),
         if (_error != null) ...[
           const SizedBox(height: OrSpacing.x1),
@@ -389,10 +395,13 @@ class _ClipAnimationPanelState extends State<ClipAnimationPanel> {
       value: result.value,
       easing: result.easing,
     );
-    final next = channel.write(_animation, [
-      for (final candidate in channel.read(_animation))
-        if (identical(candidate, keyframe)) edited else candidate,
-    ]..sort((a, b) => a.at.compareTo(b.at)));
+    final next = channel.write(
+      _animation,
+      [
+        for (final candidate in channel.read(_animation))
+          if (identical(candidate, keyframe)) edited else candidate,
+      ]..sort((a, b) => a.at.compareTo(b.at)),
+    );
     unawaited(_save(next));
   }
 }
@@ -481,7 +490,9 @@ class _KeyframeDialogState extends State<_KeyframeDialog> {
         TextField(
           key: const ValueKey('animation-dialog-time'),
           controller: _time,
-          decoration: const InputDecoration(labelText: 'Seconds from clip start'),
+          decoration: const InputDecoration(
+            labelText: 'Seconds from clip start',
+          ),
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
         ),
         const SizedBox(height: OrSpacing.x1),

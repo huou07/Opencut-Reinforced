@@ -1332,7 +1332,10 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                   onPressed: controller.busy
                       ? null
                       : () => unawaited(showAddAssetSheet(context, controller)),
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                  icon: const Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 16,
+                  ),
                   label: const Text('Add asset'),
                 ),
               ),

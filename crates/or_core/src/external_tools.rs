@@ -600,9 +600,13 @@ pub fn parse_version(output: &str) -> Option<String> {
         character.is_whitespace() || matches!(character, ',' | ';' | '(' | ')' | '[' | ']')
     }) {
         let token = token.trim_start_matches('v');
-        let token = token.trim_matches(|character: char| {
-            !character.is_ascii_digit() && character != '.'
-        });
+        // Take the leading version-shaped run, then stop at a distributor
+        // suffix: Debian's `7.1.5-0+deb13u1` must report 7.1.5, not 7.1.
+        let token: String = token
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == '.')
+            .collect();
+        let token = token.trim_end_matches('.');
         let mut parts = token.split('.');
         let major = parts.next()?;
         if major.is_empty() || !major.chars().all(|character| character.is_ascii_digit()) {
@@ -787,6 +791,10 @@ mod tests {
         assert_eq!(
             parse_version("Inkscape 1.4 (e7c3feb100, 2024-10-09)"),
             Some("1.4".to_owned())
+        );
+        assert_eq!(
+            parse_version("ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026"),
+            Some("7.1.5".to_owned())
         );
         assert_eq!(parse_version("no digits here"), None);
         assert_eq!(parse_version(""), None);

@@ -400,8 +400,8 @@ class _EditorInspectorPanelState extends State<EditorInspectorPanel> {
         .toStringAsFixed(2);
     _audioFields['fade_in']!.text = _secondsLabel(settings.fadeIn);
     _audioFields['fade_out']!.text = _secondsLabel(settings.fadeOut);
-    _audioFields['noise_reduction_db']!.text =
-        settings.noiseReductionDecibels.toString();
+    _audioFields['noise_reduction_db']!.text = settings.noiseReductionDecibels
+        .toString();
   }
 
   ProjectTimelineVisualSettings? _readSettings() {

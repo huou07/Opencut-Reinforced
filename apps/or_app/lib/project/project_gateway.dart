@@ -719,6 +719,7 @@ class ProjectTimelineVisualSettings {
   final int contrastAmountMilli;
   final int saturationAmountMilli;
   final int gaussianBlurRadiusMilli;
+
   /// The clip's own sound, present on a video clip that carries audio. A
   /// visual update that leaves this null does not rewrite the clip's sound.
   final ProjectTimelineAudioSettings? audio;
@@ -825,27 +826,24 @@ class ProjectClipAnimation {
   static ProjectClipAnimation? copied;
 
   /// Replaces only the channels that have keyframes in `source`.
-  ProjectClipAnimation pasteChannelsFrom(ProjectClipAnimation source) =>
-      copyWith(
-        opacityBasisPoints: source.opacityBasisPoints.isEmpty
-            ? opacityBasisPoints
-            : source.opacityBasisPoints,
-        xMilliCanvas: source.xMilliCanvas.isEmpty
-            ? xMilliCanvas
-            : source.xMilliCanvas,
-        yMilliCanvas: source.yMilliCanvas.isEmpty
-            ? yMilliCanvas
-            : source.yMilliCanvas,
-        scaleXMilli: source.scaleXMilli.isEmpty
-            ? scaleXMilli
-            : source.scaleXMilli,
-        scaleYMilli: source.scaleYMilli.isEmpty
-            ? scaleYMilli
-            : source.scaleYMilli,
-        rotationMilliDegrees: source.rotationMilliDegrees.isEmpty
-            ? rotationMilliDegrees
-            : source.rotationMilliDegrees,
-      );
+  ProjectClipAnimation pasteChannelsFrom(
+    ProjectClipAnimation source,
+  ) => copyWith(
+    opacityBasisPoints: source.opacityBasisPoints.isEmpty
+        ? opacityBasisPoints
+        : source.opacityBasisPoints,
+    xMilliCanvas: source.xMilliCanvas.isEmpty
+        ? xMilliCanvas
+        : source.xMilliCanvas,
+    yMilliCanvas: source.yMilliCanvas.isEmpty
+        ? yMilliCanvas
+        : source.yMilliCanvas,
+    scaleXMilli: source.scaleXMilli.isEmpty ? scaleXMilli : source.scaleXMilli,
+    scaleYMilli: source.scaleYMilli.isEmpty ? scaleYMilli : source.scaleYMilli,
+    rotationMilliDegrees: source.rotationMilliDegrees.isEmpty
+        ? rotationMilliDegrees
+        : source.rotationMilliDegrees,
+  );
 
   ProjectClipAnimation copyWith({
     List<ProjectKeyframe>? opacityBasisPoints,

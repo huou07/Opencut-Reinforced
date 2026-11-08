@@ -66,7 +66,10 @@ const List<MotionStarter> motionStarters = <MotionStarter>[
 /// three kilobytes, so the rewrite is cheaper than tracking versions.
 Future<String> installMotionStarter(MotionStarter starter, String root) async {
   final bundle = await rootBundle.load(starter.assetPath);
-  final bytes = bundle.buffer.asUint8List(bundle.offsetInBytes, bundle.lengthInBytes);
+  final bytes = bundle.buffer.asUint8List(
+    bundle.offsetInBytes,
+    bundle.lengthInBytes,
+  );
   final directory = Directory(
     '${root.replaceAll(RegExp(r'[\\/]+$'), '')}${Platform.pathSeparator}starters',
   );

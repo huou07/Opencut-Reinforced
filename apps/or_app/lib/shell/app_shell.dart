@@ -1952,7 +1952,7 @@ class _AppShellState extends State<AppShell> {
   /// The assistant is the planner; OR is the reviewer and the writer. Nothing
   /// here calls a model: it parses the plan, checks it against the project's
   /// media, shows every shot, and applies only what was approved.
-  Future<void> _reviewAgentPlan() async {
+  Future<void> _reviewAgentPlan({String? direction}) async {
     final session = _activeSession;
     final current = _activeProject;
     if (session == null || current == null) {
@@ -1983,7 +1983,12 @@ class _AppShellState extends State<AppShell> {
         brief: buildAgentPlanBrief(
           media: media,
           frameRate: facts.fps,
-          style: 'The open project. Keep the pacing of its existing cut.',
+          direction: direction,
+          style: direction == null
+              ? 'The open project. Keep the pacing of its existing cut.'
+              : 'Follow the creative direction in the brief. It is a method, '
+                    'not a script: write the script, shot plan and pacing this '
+                    'footage can carry.',
         ),
       ),
     );
@@ -2247,6 +2252,9 @@ class _AppShellState extends State<AppShell> {
         onEdit: direction.isMine && store != null
             ? () => _editDirectionCopy(direction, store)
             : null,
+        onPlanWithAssistant: _activeSession == null
+            ? null
+            : () => unawaited(_reviewAgentPlan(direction: direction.toBrief())),
       ),
     );
   }

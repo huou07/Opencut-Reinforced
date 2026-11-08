@@ -140,7 +140,10 @@ class HomeScreen extends StatelessWidget {
               'Sets the frame rate and canvas, places starter titles you can '
               'retype, and loads a motion composition when the template has '
               'one. No media is added.',
-              style: TextStyle(color: OrColors.textMuted, fontSize: OrType.bodySize),
+              style: TextStyle(
+                color: OrColors.textMuted,
+                fontSize: OrType.bodySize,
+              ),
             ),
             const SizedBox(height: OrSpacing.x2),
             Wrap(

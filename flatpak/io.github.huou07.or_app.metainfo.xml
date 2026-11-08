@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.huou07.or_app</id>
+  <name>Opencut Reinforced</name>
+  <summary>Edit video locally, with one shared project core</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Opencut Reinforced is a local-first video editor. It imports media,
+      arranges clips on a timeline, edits titles and captions, applies motion
+      and effects, and exports MP4, WebM or lossless video with the FFmpeg
+      runtime bundled in this package.
+    </p>
+    <p>
+      The project file is owned by a Rust core that the desktop app, the
+      command-line interface and an agent use through the same commands. The
+      app does not upload media anywhere on its own; cloud assistance is opt-in
+      and configured by the user.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.huou07.or_app.desktop</launchable>
+  <url type="homepage">https://github.com/huou07/Opencut-Reinforced</url>
+  <developer_name>Opencut Reinforced contributors</developer_name>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.27" date="2026-11-08">
+      <description>
+        <p>Developer Preview with the companion-tool catalog and assistant plans.</p>
+      </description>
+    </release>
+  </releases>
+</component>

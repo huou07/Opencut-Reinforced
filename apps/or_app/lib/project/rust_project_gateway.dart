@@ -471,8 +471,7 @@ class RustProjectGateway implements ProjectGateway {
                 panBasisPoints: settings.audio!.panBasisPoints,
                 fadeIn: _projectRationalTime(settings.audio!.fadeIn),
                 fadeOut: _projectRationalTime(settings.audio!.fadeOut),
-                noiseReductionDecibels:
-                    settings.audio!.noiseReductionDecibels,
+                noiseReductionDecibels: settings.audio!.noiseReductionDecibels,
               ),
       );
     } on rust.ProjectBridgeError catch (error) {
@@ -540,8 +539,7 @@ class RustProjectGateway implements ProjectGateway {
                 panBasisPoints: settings.audio!.panBasisPoints,
                 fadeIn: _rustTime(settings.audio!.fadeIn),
                 fadeOut: _rustTime(settings.audio!.fadeOut),
-                noiseReductionDecibels:
-                    settings.audio!.noiseReductionDecibels,
+                noiseReductionDecibels: settings.audio!.noiseReductionDecibels,
               ),
       ),
     ),

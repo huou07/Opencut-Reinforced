@@ -163,6 +163,7 @@ class CreativeDirectionDialog extends StatelessWidget {
     required this.onCopy,
     required this.onAddPinned,
     this.onEdit,
+    this.onPlanWithAssistant,
   });
 
   final CreativeDirection direction;
@@ -174,6 +175,10 @@ class CreativeDirectionDialog extends StatelessWidget {
   /// Opens the editor for a direction the person already kept. Null for a
   /// bundled direction, which is the product's copy of the method.
   final VoidCallback? onEdit;
+
+  /// Turns the brief into an assistant plan against the open project. Null
+  /// when no project is open: a plan is checked against media, not prose.
+  final VoidCallback? onPlanWithAssistant;
 
   @override
   Widget build(BuildContext context) {
@@ -257,6 +262,16 @@ class CreativeDirectionDialog extends StatelessWidget {
               WidgetsBinding.instance.addPostFrameCallback((_) => edit());
             },
             child: const Text('Edit'),
+          ),
+        if (onPlanWithAssistant != null)
+          FilledButton(
+            key: const ValueKey('creative-direction-plan'),
+            onPressed: () {
+              final plan = onPlanWithAssistant!;
+              Navigator.of(context).pop();
+              WidgetsBinding.instance.addPostFrameCallback((_) => plan());
+            },
+            child: const Text('Plan a video…'),
           ),
         TextButton(
           key: const ValueKey('creative-direction-close'),

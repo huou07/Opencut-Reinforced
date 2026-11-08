@@ -56,6 +56,11 @@ Shot frames are scaled from the plan's rate to the project's sequence rate, so a
 - **Library → Edit styles → "From an assistant"** (`library-agent-plan`): enabled
   when a project is open; opens the paste-and-review flow. The card is beside the
   styles because both produce a first cut, and both need an open project.
+- **Library → Creative directions → a brief → "Plan a video…"**: the brief
+  becomes the plan's creative direction, so the assistant receives the voice,
+  script shape, graphics, captions, editing and audio guidance together with the
+  media list. The action is offered only while a project is open, because a plan
+  is checked against its media.
 - **Command palette → "Review an Assistant Plan…"** in the editor.
 - The import dialog offers **Copy the brief**, a ready-to-paste prompt containing
   the schema, the rules and the project's media ids, names and durations.
@@ -81,6 +86,9 @@ a silently partial one.
 - The plan is a first cut, not a complete edit: it does not add transitions,
   effects, music or captions. Those remain manual (or another assistant call)
   after the cut exists.
+- A creative direction reaches the assistant as text in the brief. OR does not
+  call a provider itself, so a direction produces nothing until the configured
+  assistant runs with that brief.
 - The assistant must be given the brief (or the media ids) to write a plan that
   resolves; OR never guesses a media id.
 - The workflow needs a configured assistant harness for the agent to run at all.

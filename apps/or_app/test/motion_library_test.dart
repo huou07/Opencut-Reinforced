@@ -617,17 +617,17 @@ class _FakeMotionGateway implements MotionLibraryGateway {
   }) async {
     lastReadPath = path;
     return MotionSceneView(
-    ok: true,
-    code: 'OK',
-    message: '',
-    sceneJson: jsonEncode(scene),
-    sceneId: '7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d',
-    name: 'Imported demo',
-    width: 1920,
-    height: 1080,
-    durationMilliseconds: 5000,
-    previewPng: _png,
-    nodes: _fakeNodes(scene),
+      ok: true,
+      code: 'OK',
+      message: '',
+      sceneJson: jsonEncode(scene),
+      sceneId: '7a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d',
+      name: 'Imported demo',
+      width: 1920,
+      height: 1080,
+      durationMilliseconds: 5000,
+      previewPng: _png,
+      nodes: _fakeNodes(scene),
     );
   }
 
@@ -701,41 +701,52 @@ void main() {
     },
   );
 
-  test('a starter is copied into the library and opened as the draft', () async {
-    final (controller, gateway, support) = await buildController();
-    final starter = motionStarters.first;
-    expect(controller.hasDraft, isFalse);
+  test(
+    'a starter is copied into the library and opened as the draft',
+    () async {
+      final (controller, gateway, support) = await buildController();
+      final starter = motionStarters.first;
+      expect(controller.hasDraft, isFalse);
 
-    final view = await controller.loadStarter(starter);
+      final view = await controller.loadStarter(starter);
 
-    expect(view, isNotNull);
-    expect(controller.hasDraft, isTrue);
-    // The separator is platform-dependent: the app writes a real path.
-    expect(
-      gateway.lastReadPath!.replaceAll(r'\', '/'),
-      endsWith('starters/title-card.ormotion.json'),
-    );
-    final installed = File(gateway.lastReadPath!);
-    expect(installed.existsSync(), isTrue);
-    expect(installed.lengthSync(), greaterThan(500));
-    expect(installed.readAsStringSync(), contains('opencut-reinforced-motion-scene'));
-    expect(installed.path, startsWith(support.path));
-    expect(controller.notice, contains('Title card'));
+      expect(view, isNotNull);
+      expect(controller.hasDraft, isTrue);
+      // The separator is platform-dependent: the app writes a real path.
+      expect(
+        gateway.lastReadPath!.replaceAll(r'\', '/'),
+        endsWith('starters/title-card.ormotion.json'),
+      );
+      final installed = File(gateway.lastReadPath!);
+      expect(installed.existsSync(), isTrue);
+      expect(installed.lengthSync(), greaterThan(500));
+      expect(
+        installed.readAsStringSync(),
+        contains('opencut-reinforced-motion-scene'),
+      );
+      expect(installed.path, startsWith(support.path));
+      expect(controller.notice, contains('Title card'));
 
-    // Loading the same starter twice keeps one file and still seeds a draft.
-    final again = await controller.loadStarter(starter);
-    expect(again, isNotNull);
-    final installedFiles = Directory('${support.path}/motion-library/starters')
-        .listSync()
-        .whereType<File>()
-        .where((file) => file.path.endsWith('.ormotion.json'));
-    expect(
-      installedFiles.where((file) => file.path.endsWith('title-card.ormotion.json')),
-      hasLength(1),
-    );
-  });
+      // Loading the same starter twice keeps one file and still seeds a draft.
+      final again = await controller.loadStarter(starter);
+      expect(again, isNotNull);
+      final installedFiles =
+          Directory('${support.path}/motion-library/starters')
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.ormotion.json'));
+      expect(
+        installedFiles.where(
+          (file) => file.path.endsWith('title-card.ormotion.json'),
+        ),
+        hasLength(1),
+      );
+    },
+  );
 
-  testWidgets('an empty composition offers the bundled starters', (tester) async {
+  testWidgets('an empty composition offers the bundled starters', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(900, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -767,7 +778,10 @@ void main() {
 
     expect(controller.hasDraft, isFalse);
     for (final starter in motionStarters) {
-      expect(find.byKey(ValueKey('motion-starter-${starter.id}')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('motion-starter-${starter.id}')),
+        findsOneWidget,
+      );
     }
     expect(find.text('Start from a starter'), findsOneWidget);
 

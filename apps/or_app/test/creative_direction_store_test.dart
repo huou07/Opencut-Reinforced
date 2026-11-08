@@ -29,9 +29,7 @@ void main() {
     );
 
     await store.upsert(copy);
-    final reloaded = await CreativeDirectionStore.inDirectory(
-      directory,
-    ).load();
+    final reloaded = await CreativeDirectionStore.inDirectory(directory).load();
 
     expect(reloaded.single.name, 'My documentary');
     expect(reloaded.single.isMine, isTrue);
@@ -59,12 +57,15 @@ void main() {
     expect((await store.load()).map((item) => item.id), ['b']);
   });
 
-  test('a hand-edited file is ignored rather than crashing the library', () async {
-    await File('${directory.path}/creative-directions.v1.json')
-        .writeAsString('{not json');
+  test(
+    'a hand-edited file is ignored rather than crashing the library',
+    () async {
+      await File('${directory.path}/creative-directions.v1.json')
+          .writeAsString('{not json');
 
-    expect(await store.load(), isEmpty);
-  });
+      expect(await store.load(), isEmpty);
+    },
+  );
 
   test('copy ids do not collide when a direction is kept twice', () {
     expect(copiedDirectionId('brief', ['brief']), 'brief-mine');

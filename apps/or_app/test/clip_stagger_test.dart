@@ -25,10 +25,7 @@ class _Session implements ProjectSessionHandle {}
 
 /// Answers only the two animation calls; anything else is a test bug.
 class _FakeAnimationGateway implements ProjectGateway {
-  _FakeAnimationGateway({
-    this.failOnClipId,
-    this.failWithResult = false,
-  });
+  _FakeAnimationGateway({this.failOnClipId, this.failWithResult = false});
 
   final String? failOnClipId;
   final bool failWithResult;
@@ -82,18 +79,14 @@ void main() {
       durationsSeconds: const [2.0, 2.0, 2.0, 2.0],
       delaySeconds: 0.2,
     );
-    expect([for (final step in plan.steps) step.delaySeconds], [
-      0,
-      closeTo(0.2, 1e-9),
-      closeTo(0.4, 1e-9),
-      closeTo(0.6, 1e-9),
-    ]);
-    expect([for (final step in plan.steps) step.spanSeconds], [
-      0.7,
-      closeTo(0.7, 1e-9),
-      closeTo(0.7, 1e-9),
-      closeTo(0.7, 1e-9),
-    ]);
+    expect(
+      [for (final step in plan.steps) step.delaySeconds],
+      [0, closeTo(0.2, 1e-9), closeTo(0.4, 1e-9), closeTo(0.6, 1e-9)],
+    );
+    expect(
+      [for (final step in plan.steps) step.spanSeconds],
+      [0.7, closeTo(0.7, 1e-9), closeTo(0.7, 1e-9), closeTo(0.7, 1e-9)],
+    );
     expect(plan.skippedClipIds, isEmpty);
     expect(plan.clipCount, 4);
   });
@@ -168,10 +161,7 @@ void main() {
   });
 
   test('a refused result carries its own message', () async {
-    final fake = _FakeAnimationGateway(
-      failOnClipId: 'a',
-      failWithResult: true,
-    );
+    final fake = _FakeAnimationGateway(failOnClipId: 'a', failWithResult: true);
     final outcome = await applyStagger(
       gateway: fake,
       session: _Session(),

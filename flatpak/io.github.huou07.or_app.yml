@@ -1,0 +1,34 @@
+app-id: io.github.huou07.or_app
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: or_app
+
+# The sandbox is deliberately narrow. Documents, videos and downloads are the
+# folders a project and its media live in; the document portal grants access to
+# a file chosen through the file chooser even outside them. Network is required
+# because the assistant talks to the provider the user configured and to a local
+# TTS server on loopback; without it those integrations fail with a clear error.
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-download
+
+modules:
+  - name: opencut-reinforced
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/opencut-reinforced
+      - cp -a bundle/. /app/opencut-reinforced/
+      - install -Dm755 launcher.sh /app/bin/or_app
+      - install -Dm644 io.github.huou07.or_app.desktop /app/share/applications/io.github.huou07.or_app.desktop
+      - install -Dm644 io.github.huou07.or_app.metainfo.xml /app/share/metainfo/io.github.huou07.or_app.metainfo.xml
+      - install -Dm644 icon.png /app/share/icons/hicolor/256x256/apps/io.github.huou07.or_app.png
+    sources:
+      - type: dir
+        path: .

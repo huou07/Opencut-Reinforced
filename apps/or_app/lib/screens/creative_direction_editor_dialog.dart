@@ -68,8 +68,7 @@ class _CreativeDirectionEditorDialogState
   CreativeDirection _edited() => widget.direction.copyWith(
     name: _fields['name']!.text.trim(),
     summary: _fields['summary']!.text.trim(),
-    bestFor: _fields['best-for']!
-        .text
+    bestFor: _fields['best-for']!.text
         .split(';')
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
