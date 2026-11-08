@@ -482,7 +482,7 @@ Fixture on all three hosts: `bench1080.mp4`, 11,341,971 bytes, SHA-256
 | --- | --- | --- | --- | --- |
 | Debian UHD 770 | MP4 video-only | 256.3 fps | 274.8 fps | +7.2 % |
 | Debian UHD 770 | MP4 + text | 193.6 fps | 210.0 fps | +8.5 % |
-| macOS M5 | MP4 video-only | 230.4 fps | 229.5 fps | flat |
+| macOS M5 | MP4 video-only | 230.5 fps | 229.5 fps | flat |
 | macOS M5 | MP4 + text | 219.5 fps (b1347dfa, not re-run at 552cd16b) | 223.5 fps | flat |
 | Windows Intel | MP4 video-only | 131.2 fps | 131.7 fps | flat |
 | Windows Intel | MP4 + text | 104.2 fps | 104.6 fps | flat |
