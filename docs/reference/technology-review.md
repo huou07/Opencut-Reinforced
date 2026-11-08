@@ -151,3 +151,25 @@ settings (gain, pan, fades, noise reduction) as an audio clip, so "reduce noise
 on the audio of a video clip" is answered by an in-house path rather than a
 dependency. Per-stream selection for a file with several audio streams stays
 deferred.
+
+## What the twenty produced, 2026-11-08
+
+The review asked for a verdict per repository; this asks what each verdict
+actually changed in the product. A "do not use" that never touches a feature is
+a decision, not an outcome, so every row below names code that exists or the
+concrete route a deferred idea would take.
+
+| Idea taken from | What shipped | Where |
+|---|---|---|
+| GSAP, Anime.js and Motion agree that a curve vocabulary is most of what makes motion feel authored, not the library runtime | MotionScene can now ask for `ease_out_back` and `ease_out_bounce`, the two overshoot curves a clip keyframe already had, so the same motion on a clip and in a composition finally matches. Both are closed-form, so a scene stays deterministic and seekable. | `crates/or_motion/src/lib.rs` (`MotionEasing`, `ease`), commit `9135beba` |
+| Remotion and Motion Canvas both treat a cut as data built from a composition, never as a baked file | An edit style turns the project's own media into a reviewed plan and then into real clips: one timeline insert per shot plus a title, each its own undo step, with the plan shown — shot order, lengths and why — before anything is written. Nothing is rendered and source media is never touched. | `apps/or_app/lib/library/edit_styles.dart`, `apps/or_app/lib/screens/edit_style_plan_dialog.dart`, `apps/or_app/lib/shell/app_shell.dart`, commit `562e74c7` |
+| Satori's core insight is that a style is structured data (type, colour, layout, captions) rather than an image | Creative directions carry exactly those axes as separate fields and print them as a brief an agent can consume; the renderer stays cosmic-text and wgpu instead of a second rasteriser. A kept copy can be edited section by section. | `apps/or_app/lib/library/creative_directions.dart`, `apps/or_app/lib/screens/creative_direction_editor_dialog.dart`, commit `886af845` |
+| The agent-skill repositories show that the reusable artifact is instructions, not code | OR's own skills live in the assistant workspace (`tooling/dsh-or-skills`), and the assistant reads the same creative directions the Library shows. GSAP's MIT skill text remains the only text from that group an OR skill could build on; ai-kit is unusable because its repository carries no licence file, and Remotion's skill text is licensed material. | `tooling/dsh-or-skills/skills`, `AGENTS.md` routing |
+| Three.js, Rive and dotLottie describe animated scenes richer than a keyframe graph | Deferred, with the route recorded: Three.js only as a pinned, offline sidecar that materialises into MotionScene or a clip; Rive only through the C++ runtime; Lottie only through the MIT Rust `dotlottie-rs` core if import becomes scope. No code from any of them is in the product. | decisions 2–4 above |
+| SVGO and resvg describe vector work OR cannot do yet | Deferred with the licence-clean route named: `resvg` (Apache-2.0 OR MIT) if SVG import lands, with `svgtypes`-style normalisation owned in Rust rather than a Node optimiser. | "Alternatives checked" above |
+| Mediabunny and Howler.js describe muxing and playback outside Rust | Not adopted; FFmpeg muxes and `cpal` plays. Nothing in the media path moved. | `crates/or_media`, `crates/or_audio` |
+
+What this does **not** claim: no third-party animation, 3D, vector or Lottie
+runtime entered the product, and none of the deferred routes has a prototype. The
+first four rows are the product changes; the last three are the honest state of
+the deferrals, with the evidence for each still in the tables above.
