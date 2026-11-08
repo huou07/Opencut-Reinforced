@@ -85,3 +85,15 @@ Xvfb is not an installed-package result.
 - **macOS**: the same scenario passes on the debug build (see
   `docs/features/assistant-plans.md`); the installed DMG cannot be driven by the
   harness, which only launches the Flutter test host.
+
+## Verification after the provenance work
+
+- `flutter test` (apps/or_app): 618 tests, all pass.
+- `cargo test -p or_core -p or_tools -p or_app_bridge`: pass, except two
+  pre-existing `project_storage` tests that asserted a literal
+  `schema_version: 9` while the schema is 11; fixed to use
+  `CURRENT_PROJECT_SCHEMA_VERSION`, after which `project_storage` is 11/11.
+- `or tools provenance write/read` verified on macOS (Blender record) and
+  Debian (`FFmpeg produced /tmp/x.mp4`).
+- Media library shows `From <tool> <version>` for a media file with a sidecar
+  (`apps/or_app/test/media_provenance_row_test.dart`, 2 tests).
