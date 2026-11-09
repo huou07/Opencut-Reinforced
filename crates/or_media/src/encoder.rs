@@ -1496,7 +1496,6 @@ impl Drop for StagingDirectoryGuard {
     }
 }
 
-#[cfg(unix)]
 /// Names the folder that refused the write and says what the owner can do
 /// about it, because the bare OS text ("Operation not permitted (os error 1)")
 /// leaves someone with no way to tell a full disk from a protected folder.
@@ -1508,10 +1507,18 @@ impl Drop for StagingDirectoryGuard {
 fn describe_staging_failure(parent: &Path, error: &std::io::Error) -> String {
     let folder = parent.display();
     if error.kind() == ErrorKind::PermissionDenied {
-        return format!(
-            "the system did not allow this app to write in {folder} ({error}). \
-             Choose a folder inside your home folder, such as Movies, or allow this app to \
+        // macOS holds Desktop, Documents, Downloads and external volumes back
+        // until the owner allows the app, and an ad-hoc signed build can look
+        // like a new app to that decision after an update. The other platforms
+        // have no equivalent switch, so the advice stops at picking a folder.
+        let remedy = if cfg!(target_os = "macos") {
+            "Choose a folder inside your home folder, such as Movies, or allow this app to \
              write there in System Settings, then export again."
+        } else {
+            "Choose a folder inside your home folder, such as Videos, then export again."
+        };
+        return format!(
+            "the system did not allow this app to write in {folder} ({error}). {remedy}"
         );
     }
     if error.kind() == ErrorKind::NotFound {
@@ -1576,6 +1583,7 @@ pub fn check_export_destination(destination: &Path) -> Result<(), ExportEncodeEr
     }
 }
 
+#[cfg(unix)]
 fn create_private_directory(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
 

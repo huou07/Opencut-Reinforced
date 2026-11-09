@@ -121,7 +121,7 @@
   },
   {
    "op": "wait_label",
-   "label_regex": "Choose a folder inside your home folder",
+   "label_regex": "Choose a folder inside your home folder, such as",
    "budget_ms": 10000
   },
   {
