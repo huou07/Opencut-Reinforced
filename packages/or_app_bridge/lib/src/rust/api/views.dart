@@ -445,6 +445,21 @@ class ProjectMediaItemView {
   /// The companion tool recorded beside the media, when a sidecar exists.
   final String? provenanceTool;
   final String? provenanceVersion;
+
+  /// The tool's own project file, so the source can be reopened.
+  final String? provenanceSourceProject;
+
+  /// The exact argument vector, joined for display.
+  final String? provenanceCommand;
+
+  /// A manifest or scene file that describes the result.
+  final String? provenanceManifest;
+
+  /// The file the record describes, as the tool wrote it.
+  final String? provenanceOutput;
+
+  /// The sidecar that carries the record, so a person can find it again.
+  final String? provenanceRecord;
   final RationalTimeView? containerDuration;
   final RationalTimeView? firstVideoDuration;
   final RationalTimeView? firstAudioDuration;
@@ -458,6 +473,11 @@ class ProjectMediaItemView {
     this.audioDetails,
     this.provenanceTool,
     this.provenanceVersion,
+    this.provenanceSourceProject,
+    this.provenanceCommand,
+    this.provenanceManifest,
+    this.provenanceOutput,
+    this.provenanceRecord,
     this.containerDuration,
     this.firstVideoDuration,
     this.firstAudioDuration,
@@ -473,6 +493,11 @@ class ProjectMediaItemView {
       audioDetails.hashCode ^
       provenanceTool.hashCode ^
       provenanceVersion.hashCode ^
+      provenanceSourceProject.hashCode ^
+      provenanceCommand.hashCode ^
+      provenanceManifest.hashCode ^
+      provenanceOutput.hashCode ^
+      provenanceRecord.hashCode ^
       containerDuration.hashCode ^
       firstVideoDuration.hashCode ^
       firstAudioDuration.hashCode;
@@ -490,6 +515,11 @@ class ProjectMediaItemView {
           audioDetails == other.audioDetails &&
           provenanceTool == other.provenanceTool &&
           provenanceVersion == other.provenanceVersion &&
+          provenanceSourceProject == other.provenanceSourceProject &&
+          provenanceCommand == other.provenanceCommand &&
+          provenanceManifest == other.provenanceManifest &&
+          provenanceOutput == other.provenanceOutput &&
+          provenanceRecord == other.provenanceRecord &&
           containerDuration == other.containerDuration &&
           firstVideoDuration == other.firstVideoDuration &&
           firstAudioDuration == other.firstAudioDuration;

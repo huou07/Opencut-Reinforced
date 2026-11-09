@@ -218,12 +218,19 @@ mod tests {
     #[test]
     fn every_catalog_entry_answers_with_a_state() {
         let statuses = statuses(Platform::current());
-        assert_eq!(statuses.len(), or_core::tools_for(Platform::current()).count());
+        assert_eq!(
+            statuses.len(),
+            or_core::tools_for(Platform::current()).count()
+        );
         for status in &statuses {
             assert!(!status.id.is_empty());
             assert!(!status.detail.is_empty());
             if status.state == ToolState::Ready {
-                assert!(status.version.is_some(), "{} was ready without a version", status.id);
+                assert!(
+                    status.version.is_some(),
+                    "{} was ready without a version",
+                    status.id
+                );
             }
         }
     }

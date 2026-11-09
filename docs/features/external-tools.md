@@ -76,8 +76,10 @@ it is more than it is:
   media plus the source project, manifest and the command that produced it.
   `or tools provenance write --tool ID --output PATH [--source-project P]
   [--manifest M] -- CMD...` writes `<PATH>.orprovenance.json` beside the media;
-  `or tools provenance read --file SIDECAR` prints it again. The same two
-  operations are MCP tools (`tools_provenance_write`, `tools_provenance_read`)
+  `or tools provenance read --file SIDECAR` prints it again. Both verbs answer
+  `--json`; `write` returns `{"file": SIDECAR, "record": …}` so a caller learns
+  what it recorded without re-reading the sidecar. The same two operations are
+  MCP tools (`tools_provenance_write`, `tools_provenance_read`)
   so an agent records the origin as part of the job it just ran. The record carries
   the catalog id and name, the version, the exact argument vector, the source
   project and manifest, and the output path. Re-rendering the tool to the same
@@ -85,7 +87,10 @@ it is more than it is:
   undo history and project references stay valid; a new path is a new media
   item, not a silent swap. The media library reads the sidecar when it lists an
   item and shows `From <tool> <version>` in the row, so a rendered result is
-  recognisable without opening anything else.
+  recognisable without opening anything else; `Where This Came From…` in the
+  item's menu opens the whole record — source project, manifest, result file,
+  command and the sidecar's path — and `Copy command` puts the argument vector
+  on the clipboard so the render can be repeated.
 
 A flat render is never described as an editable composition. The source stays
 beside the output so it can be reopened in the companion and re-rendered; the

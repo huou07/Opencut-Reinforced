@@ -942,13 +942,15 @@ impl Server {
     /// Probes one curated companion tool and reports its state, version and path.
     fn tools_check(&self, arguments: &Value) -> Result<String, String> {
         let id = required_str(arguments, "id")?;
-        let platform = or_core::Platform::current();
-        let status = or_tools::status(&id)
-            .ok_or_else(|| format!("unknown companion tool: {id}"))?;
-        pretty(serde_json::to_value(status)
-            .map_err(|error| format!("cannot encode the tool status: {error}"))?)
+        // `or_tools::status` probes against the current platform itself, so the
+        // platform is not read here a second time.
+        let status =
+            or_tools::status(&id).ok_or_else(|| format!("unknown companion tool: {id}"))?;
+        pretty(
+            serde_json::to_value(status)
+                .map_err(|error| format!("cannot encode the tool status: {error}"))?,
+        )
     }
-
 
     /// Reads the provenance sidecar written beside a companion-tool result.
     fn tools_provenance_read(&self, arguments: &Value) -> Result<String, String> {

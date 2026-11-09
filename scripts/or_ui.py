@@ -219,6 +219,14 @@ def stage_fixtures(payload: dict, report_dir: Path) -> None:
             if source.is_file():
                 target = staged_dir / source.name
                 shutil.copyfile(source, target)
+                # A companion tool's record describes the file it sits beside,
+                # so staging the fixture stages its provenance too. Copying the
+                # media alone would turn a rendered result into a plain import.
+                record = source.with_name(source.name + ".orprovenance.json")
+                if record.is_file():
+                    shutil.copyfile(
+                        record, target.with_name(target.name + ".orprovenance.json")
+                    )
                 staged.append(f"copy:{target}")
                 continue
             print(f"or_ui: fixture not found, passing through: {source}", file=sys.stderr)

@@ -250,6 +250,16 @@ pub struct ProjectMediaItemView {
     /// The companion tool recorded beside the media, when a sidecar exists.
     pub provenance_tool: Option<String>,
     pub provenance_version: Option<String>,
+    /// The tool's own project file, so the source can be reopened.
+    pub provenance_source_project: Option<String>,
+    /// The exact argument vector, joined for display.
+    pub provenance_command: Option<String>,
+    /// A manifest or scene file that describes the result.
+    pub provenance_manifest: Option<String>,
+    /// The file the record describes, as the tool wrote it.
+    pub provenance_output: Option<String>,
+    /// The sidecar that carries the record, so a person can find it again.
+    pub provenance_record: Option<String>,
     pub container_duration: Option<RationalTimeView>,
     pub first_video_duration: Option<RationalTimeView>,
     pub first_audio_duration: Option<RationalTimeView>,

@@ -4,7 +4,6 @@ mod application;
 mod audio_cleanup;
 mod cache;
 mod external_tools;
-mod tool_provenance;
 mod hardware;
 mod jobs;
 mod media;
@@ -20,6 +19,7 @@ mod project_storage;
 mod subtitle_io;
 mod time;
 mod timeline;
+mod tool_provenance;
 
 pub use application::{
     ApplicationRequest, ApplicationResponse, CURRENT_TRANSACTION_SCHEMA_VERSION, ChangeSet,
@@ -40,16 +40,15 @@ pub use audio_cleanup::{
     audio_cleanup_arguments, clean_audio, clean_audio_file, measure_noise_floor,
     measure_noise_floor_db, percentile, window_rms_dbfs,
 };
-pub use tool_provenance::{PROVENANCE_SCHEMA, ProvenanceError, ToolProvenance};
-pub use external_tools::{
-    CommandOutput, CommandRunner, CommandSpec, InstallCommand, OutputKind, Platform, TOOLS,
-    ToolCategory, ToolDescriptor, ToolState, ToolStatus, parse_version, probe_all, probe_tool, tool,
-    tools_for,
-};
 pub use cache::{
     CACHE_INDEX_SCHEMA_VERSION, CACHE_SCHEMA_VERSION, CacheArtifactKind, CacheError, CacheKey,
     CacheKeyParseError, CacheStore, CacheStoreConfig, CacheStoreConfigError, ParametersFingerprint,
     SourceFingerprint,
+};
+pub use external_tools::{
+    CommandOutput, CommandRunner, CommandSpec, InstallCommand, OutputKind, Platform, TOOLS,
+    ToolCategory, ToolDescriptor, ToolState, ToolStatus, parse_version, probe_all, probe_tool,
+    tool, tools_for,
 };
 pub use hardware::{
     DecoderCandidate, EncoderCandidate, ExportEncodingPlan, PerformanceProfile, plan_h264_encoding,
@@ -129,6 +128,7 @@ pub use timeline::{
     TimelineTrack, TrackId, TrackKind, TrackState, Transform, TransitionKind, TransitionReference,
     VisualSettings,
 };
+pub use tool_provenance::{PROVENANCE_SCHEMA, ProvenanceError, ToolProvenance};
 
 const APP_NAME: &str = "Opencut Reinforced";
 const CORE_API_VERSION: u32 = 1;

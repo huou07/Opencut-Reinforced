@@ -1,10 +1,9 @@
 use or_core::{
-    ApplicationRequest, ApplicationResponse, CURRENT_PROJECT_SCHEMA_VERSION, ClipId, CommandEnvelope,
-    MAX_PROJECT_FILE_BYTES,
-    MarkerId, MediaId, OperationErrorCode, ProjectDocument, ProjectFileSession,
-    ProjectFileSessionErrorCode, ProjectRevision, ProjectSession, ProjectStorageError,
-    RationalTime, TimeRange, TrackId, TrackKind, decode_project, encode_project, load_project_file,
-    save_project_file_atomic,
+    ApplicationRequest, ApplicationResponse, CURRENT_PROJECT_SCHEMA_VERSION, ClipId,
+    CommandEnvelope, MAX_PROJECT_FILE_BYTES, MarkerId, MediaId, OperationErrorCode,
+    ProjectDocument, ProjectFileSession, ProjectFileSessionErrorCode, ProjectRevision,
+    ProjectSession, ProjectStorageError, RationalTime, TimeRange, TrackId, TrackKind,
+    decode_project, encode_project, load_project_file, save_project_file_atomic,
 };
 use serde_json::json;
 use std::{
@@ -609,4 +608,127 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
     assert_eq!(error.code(), ProjectFileSessionErrorCode::DestinationExists);
     assert_eq!(fs::read(&path).unwrap(), original_bytes);
     assert_eq!(load_project_file(path).unwrap(), original);
+}
+
+/// A companion tool that re-renders to the same output path replaces bytes the
+/// timeline already points at. The project names the media by id and the
+/// library names it by path, so neither a re-render nor a new record beside it
+/// may cost the clip its place.
+#[test]
+fn rerendering_a_companion_output_keeps_its_library_entry_and_clip() {
+    let directory = TestDirectory::new();
+    let path = directory.project_path();
+    let media_path = directory.0.join("companion-shot.mp4");
+    fs::write(&media_path, b"first render").unwrap();
+
+    let mut project = ProjectDocument::new("Companion re-render");
+    let mut wire: serde_json::Value =
+        serde_json::from_str(&encode_project(&project).unwrap()).unwrap();
+    wire["project"]["media"] = serde_json::json!([{
+        "id": "44444444-4444-4444-8444-444444444444",
+        "source": {
+            "kind": "local_file",
+            "uri": format!("file://{}", media_path.display()),
+        },
+        "metadata": {
+            "format_names": ["mp4"],
+            "duration": {"numerator": 2, "denominator": 1},
+            "file_size_bytes": 12,
+            "streams": [{
+                "kind": "video",
+                "metadata": {
+                    "index": 0,
+                    "codec_name": "h264",
+                    "width": 320,
+                    "height": 180,
+                    "pixel_format": "yuv420p",
+                    "average_frame_rate": {"numerator": 30, "denominator": 1},
+                    "duration": {"numerator": 2, "denominator": 1}
+                }
+            }]
+        }
+    }]);
+    project = decode_project(&wire.to_string()).unwrap();
+    save_project_file_atomic(&path, &project).unwrap();
+
+    let track_id = TrackId::from_str("22222222-2222-4222-8222-222222222222").unwrap();
+    let clip_id = ClipId::from_str("33333333-3333-4333-8333-333333333333").unwrap();
+    let media_id = MediaId::from_str("44444444-4444-4444-8444-444444444444").unwrap();
+    let mut session = ProjectFileSession::open(&path).unwrap();
+    timeline_command(
+        &mut session,
+        "timeline.track.add",
+        serde_json::json!({"track_id": track_id, "kind": TrackKind::Video}),
+    );
+    timeline_command(
+        &mut session,
+        "timeline.clip.insert",
+        serde_json::json!({
+            "clip_id": clip_id,
+            "track_id": track_id,
+            "media_id": media_id,
+            "timeline_start": rational(0, 1),
+            "source_range": {"start": rational(0, 1), "duration": rational(2, 1)},
+        }),
+    );
+    session.save().unwrap();
+
+    let before = load_project_file(&path).unwrap();
+    let clip_before = before
+        .timeline()
+        .tracks()
+        .iter()
+        .flat_map(|track| track.clips())
+        .find(|clip| clip.id() == clip_id)
+        .expect("the inserted clip is in the saved project")
+        .clone();
+
+    // The record beside the file follows the bytes: a second render writes new
+    // content and a new version, without moving the file.
+    let record = or_core::ToolProvenance::new(
+        "ffmpeg",
+        vec!["ffmpeg".to_owned(), "-i".to_owned(), "in.mov".to_owned()],
+        &media_path.to_string_lossy(),
+    )
+    .unwrap()
+    .with_version("9.0.1");
+    fs::write(
+        format!("{}.orprovenance.json", media_path.display()),
+        or_core::ToolProvenance::to_json(&record).unwrap(),
+    )
+    .unwrap();
+    fs::write(&media_path, b"second render, longer than the first").unwrap();
+
+    let reopened = load_project_file(&path).unwrap();
+    let media = reopened
+        .media_items()
+        .iter()
+        .find(|item| item.id() == media_id)
+        .expect("the library entry survives a re-render");
+    assert_eq!(
+        media.source().uri(),
+        format!("file://{}", media_path.display())
+    );
+    let clip_after = reopened
+        .timeline()
+        .tracks()
+        .iter()
+        .flat_map(|track| track.clips())
+        .find(|clip| clip.id() == clip_id)
+        .expect("the clip survives a re-render");
+    assert_eq!(clip_after.id(), clip_before.id());
+    assert_eq!(clip_after.media_id(), Some(media_id));
+    assert_eq!(clip_after.timeline_start(), clip_before.timeline_start());
+    assert_eq!(
+        clip_after.timeline_duration(),
+        clip_before.timeline_duration()
+    );
+
+    let reread = or_core::ToolProvenance::from_json(
+        &fs::read_to_string(format!("{}.orprovenance.json", media_path.display())).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(reread.tool_name, "FFmpeg");
+    assert_eq!(reread.tool_version.as_deref(), Some("9.0.1"));
+    assert_eq!(reread.output, media_path.to_string_lossy());
 }

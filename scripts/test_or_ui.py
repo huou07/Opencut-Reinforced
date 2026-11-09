@@ -50,6 +50,10 @@ class ScenarioContractCase(unittest.TestCase):
 
     def shipped_scenarios(self):
         for path in sorted(SCENARIOS.glob("*.json")):
+            # A provenance record sits beside the media it describes, so the
+            # fixture directory also holds JSON that is data, not a scenario.
+            if path.name.endswith(".orprovenance.json"):
+                continue
             yield path, json.loads(path.read_text(encoding="utf-8"))
 
     def test_the_shipped_scenarios_are_present_and_valid(self) -> None:

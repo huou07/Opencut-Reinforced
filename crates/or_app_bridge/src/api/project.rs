@@ -1755,7 +1755,26 @@ fn media_item_view(item: &MediaItem) -> ProjectMediaItemView {
         video_details,
         audio_details,
         provenance_tool: provenance.as_ref().map(|record| record.tool_name.clone()),
-        provenance_version: provenance.as_ref().and_then(|record| record.tool_version.clone()),
+        provenance_version: provenance
+            .as_ref()
+            .and_then(|record| record.tool_version.clone()),
+        provenance_source_project: provenance
+            .as_ref()
+            .and_then(|record| record.source_project.clone()),
+        provenance_manifest: provenance
+            .as_ref()
+            .and_then(|record| record.source_manifest.clone()),
+        provenance_command: provenance.as_ref().map(|record| record.command.join(" ")),
+        provenance_output: provenance.as_ref().map(|record| record.output.clone()),
+        // Only a media file that actually carries a record names its sidecar;
+        // a plain import must not look as though it has one.
+        provenance_record: provenance.as_ref().and_then(|_| {
+            item.source().to_file_path().ok().map(|path| {
+                or_core::ToolProvenance::sidecar_path(&path)
+                    .to_string_lossy()
+                    .to_string()
+            })
+        }),
         container_duration: metadata.duration().map(rational_time_view),
         first_video_duration: metadata
             .streams()

@@ -1,0 +1,2 @@
+color=c=#3FC7FF:s=320x180:r=30:d=2[bg];
+[bg]drawtext=text='Rendered by FFmpeg':fontcolor=black:fontsize=20:x=(w-tw)/2:y=(h-th)/2[out]

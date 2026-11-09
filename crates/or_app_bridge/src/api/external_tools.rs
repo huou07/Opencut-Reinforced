@@ -160,7 +160,11 @@ mod tests {
                 tool.state
             );
             if tool.state != "ready" {
-                assert!(!tool.detail.is_empty(), "{} was not ready and had no detail", tool.id);
+                assert!(
+                    !tool.detail.is_empty(),
+                    "{} was not ready and had no detail",
+                    tool.id
+                );
             }
         }
     }

@@ -1,0 +1,136 @@
+{
+  "name": "companion-tools-catalog",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "description": "The companion catalog is readable and honest from the UI alone. Settings \u2192 Resources names how many of the catalog answer on this machine, each row states its own detection state and version, a ready tool can be re-checked, and a tool that is not installed shows its own install guidance and download page instead of pretending to be available. The journey does not install anything: the mission forbids changing this machine's toolchain, and the catalog's contract is that OR never downloads or installs from this screen.",
+  "fixtures": [],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-settings"
+      }
+    },
+    {
+      "op": "wait_key",
+      "key": "settings-section-resources",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "settings-section-resources"
+      }
+    },
+    {
+      "op": "wait_key",
+      "key": "companion-tools-summary",
+      "budget_ms": 90000
+    },
+    {
+      "op": "expect",
+      "key": "companion-tools-summary",
+      "detail": "the catalog reports how many tools answer, not that OR ships them"
+    },
+    {
+      "op": "expect",
+      "key": "companion-tool-ffmpeg-state"
+    },
+    {
+      "op": "expect",
+      "label_regex": "Ready \u00b7 ",
+      "detail": "a tool that answered is shown ready with the version it reported"
+    },
+    {
+      "op": "expect",
+      "key": "companion-tool-ffmpeg-check",
+      "detail": "a ready tool can be checked again without leaving the screen"
+    },
+    {
+      "op": "expect_absent",
+      "key": "companion-tool-ffmpeg-open",
+      "detail": "FFmpeg is headless, so OR does not offer to open it as a window"
+    },
+    {
+      "op": "shot",
+      "name": "catalog"
+    },
+    {
+      "op": "scroll_until",
+      "scroll": "settings-scroll",
+      "selector": {
+        "key": "companion-tool-blender"
+      },
+      "dy": -400,
+      "steps": 25
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "companion-tool-blender"
+      }
+    },
+    {
+      "op": "wait_key",
+      "key": "companion-tool-blender-detail",
+      "budget_ms": 15000
+    },
+    {
+      "op": "expect",
+      "key": "companion-tool-blender-install",
+      "detail": "a tool that is not installed offers guidance, not a launch"
+    },
+    {
+      "op": "expect_absent",
+      "key": "companion-tool-blender-open"
+    },
+    {
+      "op": "expect_text",
+      "text": "Install"
+    },
+    {
+      "op": "expect_text",
+      "text": "Official download page"
+    },
+    {
+      "op": "tree",
+      "name": "catalog-expanded"
+    },
+    {
+      "op": "shot",
+      "name": "catalog-expanded"
+    },
+    {
+      "op": "scroll_until",
+      "scroll": "settings-scroll",
+      "selector": {
+        "key": "companion-tool-ffmpeg-check"
+      },
+      "dy": 400,
+      "steps": 25
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "companion-tool-ffmpeg-check"
+      }
+    },
+    {
+      "op": "wait_key",
+      "key": "companion-tools-summary",
+      "budget_ms": 60000
+    },
+    {
+      "op": "expect_absent",
+      "key": "companion-tools-error",
+      "detail": "re-checking a ready tool leaves no failure behind"
+    },
+    {
+      "op": "shot",
+      "name": "catalog-rechecked"
+    }
+  ]
+}

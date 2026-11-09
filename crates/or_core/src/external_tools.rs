@@ -148,7 +148,8 @@ impl CommandSpec {
         for argument in self.args {
             text.push(' ');
             if !argument.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.' | '/' | ':' | '=')
+                character.is_ascii_alphanumeric()
+                    || matches!(character, '-' | '_' | '.' | '/' | ':' | '=')
             }) {
                 text.push('\'');
                 text.push_str(&argument.replace('\'', "'\\''"));
@@ -244,7 +245,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "brew install ffmpeg",
                 note: "Homebrew must already be installed.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "winget install Gyan.FFmpeg",
@@ -287,7 +288,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "brew install node",
                 note: "Homebrew must already be installed.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "winget install OpenJS.NodeJS.LTS",
@@ -325,7 +326,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "npm install -g svgo",
                 note: "Needs Node.js.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "npm install -g svgo",
@@ -363,7 +364,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "brew install --cask inkscape",
                 note: "Large download; the cask installs the app.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "winget install Inkscape.Inkscape",
@@ -401,7 +402,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "brew install --cask blender",
                 note: "Large download.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "winget install BlenderFoundation.Blender",
@@ -443,7 +444,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
                 platform: Platform::MacOs,
                 command: "brew install --cask audacity",
                 note: "Homebrew must already be installed.",
-        },
+            },
             InstallCommand {
                 platform: Platform::Windows,
                 command: "winget install Audacity.Audacity",
@@ -493,7 +494,7 @@ pub const TOOLS: &[ToolDescriptor] = &[
         platforms: ALL,
         remove_hint: "Delete the project folder; Remotion is installed per project and OR stores nothing else.",
         update_hint: "Run npm update inside the project.",
-        },
+    },
     ToolDescriptor {
         id: "motion-canvas",
         name: "Motion Canvas",
@@ -513,13 +514,17 @@ pub const TOOLS: &[ToolDescriptor] = &[
         runtime: "Node.js",
         gui_program: None,
         probe: CommandSpec::new("npx", &["--no-install", "motion-canvas", "--version"]),
-        outputs: &[OutputKind::Video, OutputKind::ImageSequence, OutputKind::ProjectManifest],
+        outputs: &[
+            OutputKind::Video,
+            OutputKind::ImageSequence,
+            OutputKind::ProjectManifest,
+        ],
         project_scoped: true,
         removable: true,
         platforms: ALL,
         remove_hint: "Delete the project folder; Motion Canvas is installed per project and OR stores nothing else.",
         update_hint: "Run npm update inside the project.",
-        },
+    },
 ];
 
 /// The catalog entry for an id, if the build carries one.
@@ -529,9 +534,7 @@ pub fn tool(id: &str) -> Option<&'static ToolDescriptor> {
 
 /// The tools that can run on a platform, in catalog order.
 pub fn tools_for(platform: Platform) -> impl Iterator<Item = &'static ToolDescriptor> {
-    TOOLS
-        .iter()
-        .filter(move |tool| tool.supports(platform))
+    TOOLS.iter().filter(move |tool| tool.supports(platform))
 }
 
 /// What a probe found.
@@ -653,7 +656,11 @@ pub fn probe_tool(
             state: ToolState::Unsupported,
             executable: None,
             version: None,
-            detail: format!("{} is not available on {}.", descriptor.name, platform.label()),
+            detail: format!(
+                "{} is not available on {}.",
+                descriptor.name,
+                platform.label()
+            ),
         };
     }
 
@@ -756,7 +763,11 @@ mod tests {
             assert!(!tool.summary.is_empty(), "{} has no summary", tool.id);
             assert!(!tool.benefit.is_empty(), "{} has no benefit", tool.id);
             assert!(!tool.license.is_empty(), "{} has no licence", tool.id);
-            assert!(tool.install_page.starts_with("https://"), "{} has no https install page", tool.id);
+            assert!(
+                tool.install_page.starts_with("https://"),
+                "{} has no https install page",
+                tool.id
+            );
             assert!(!tool.platforms.is_empty(), "{} has no platforms", tool.id);
             assert!(
                 !tool.project_scoped || tool.removable,

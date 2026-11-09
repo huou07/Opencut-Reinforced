@@ -1428,6 +1428,13 @@ class _FixturePicker extends FileSelectorProjectPicker {
       if (copied != null) continue;
       final target = '${directory.path}/${source.uri.pathSegments.last}';
       source.copySync(target);
+      // A companion tool's record belongs to the file it describes, so picking
+      // the file picks its provenance with it. Copying the media alone would
+      // make a rendered result look like a plain import in the library.
+      final sidecar = File('${source.path}.orprovenance.json');
+      if (sidecar.existsSync()) {
+        sidecar.copySync('$target.orprovenance.json');
+      }
       copied = target;
     }
     // A `noisy` fixture carries signal: the silent one cannot exercise anything

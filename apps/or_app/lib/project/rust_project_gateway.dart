@@ -316,6 +316,11 @@ class RustProjectGateway implements ProjectGateway {
                 audioDetails: item.audioDetails,
                 provenanceTool: item.provenanceTool,
                 provenanceVersion: item.provenanceVersion,
+                provenanceSourceProject: item.provenanceSourceProject,
+                provenanceManifest: item.provenanceManifest,
+                provenanceCommand: item.provenanceCommand,
+                provenanceOutput: item.provenanceOutput,
+                provenanceRecord: item.provenanceRecord,
                 containerDuration: item.containerDuration == null
                     ? null
                     : _projectRationalTime(item.containerDuration!),

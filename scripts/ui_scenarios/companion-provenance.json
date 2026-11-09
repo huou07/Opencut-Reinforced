@@ -1,0 +1,67 @@
+{
+  "name": "companion-provenance",
+  "harness": "or_ui",
+  "viewport": { "width": 1440, "height": 900 },
+  "description": "A companion tool's result keeps its origin all the way into the timeline. The fixture is not a sample file: scripts/make_provenance_fixture.sh renders it with the catalog's own FFmpeg through `or tools run`, and `or tools provenance write` records the exact argument vector, the manifest and the output path beside it. The journey proves the library recognises the origin, that the origin dialog still carries the source, the command and the path, and that inserting the clip does not lose the media item behind it. The record names the host that produced it, so a re-recorded fixture on another machine shows that machine's FFmpeg version and paths.",
+  "fixtures": ["copy:scripts/ui_scenarios/companion-ffmpeg-shot.mp4"],
+  "steps": [
+    { "op": "tap", "selector": { "key": "nav-projects" } },
+    { "op": "tap", "selector": { "key": "projects-new-project" } },
+    {
+      "op": "enter_text",
+      "selector": { "key": "new-project-name" },
+      "value": "Companion provenance journey"
+    },
+    { "op": "tap", "selector": { "key": "confirm-new-project" } },
+    { "op": "wait_label", "label_regex": "No timeline tracks", "budget_ms": 30000 },
+    { "op": "tap", "selector": { "key": "media-import" } },
+    { "op": "picker", "next": "media" },
+    {
+      "op": "wait_label",
+      "label_regex": "companion-ffmpeg-shot\\.mp4",
+      "budget_ms": 30000
+    },
+    {
+      "op": "expect",
+      "label_regex": "From FFmpeg",
+      "detail": "the library names the companion tool that produced the file"
+    },
+    { "op": "shot", "name": "library-origin" },
+    { "op": "tap", "selector": { "key_regex": "^media-actions-.*$" } },
+    { "op": "wait", "text": "Where This Came From…" },
+    { "op": "tap", "selector": { "text": "Where This Came From…" } },
+    { "op": "wait_key", "key": "media-provenance-dialog", "budget_ms": 15000 },
+    { "op": "expect", "label_regex": "^Made by FFmpeg" },
+    { "op": "expect", "key": "media-provenance-manifest" },
+    { "op": "expect", "key": "media-provenance-command" },
+    { "op": "expect", "key": "media-provenance-record" },
+    { "op": "expect_text", "text": "Scene or manifest" },
+    { "op": "expect_text", "text": "Result file" },
+    { "op": "expect_text", "text": "Command" },
+    { "op": "expect_text", "text": "Record" },
+    { "op": "tree", "name": "origin-dialog" },
+    { "op": "shot", "name": "origin-dialog" },
+    { "op": "tap", "selector": { "key": "media-provenance-close" } },
+    { "op": "expect_absent", "key": "media-provenance-dialog" },
+    { "op": "tap", "selector": { "key_regex": "^media-add-timeline-.*$" } },
+    { "op": "wait_label", "label_regex": "Insert Clip" },
+    { "op": "tap", "selector": { "key": "timeline-confirm-insert" } },
+    { "op": "wait_label", "label_regex": "spans 0/1", "budget_ms": 30000 },
+    {
+      "op": "expect",
+      "label_regex": "companion-ffmpeg-shot\\.mp4",
+      "detail": "the clip on the timeline still names the media it came from"
+    },
+    { "op": "tap", "selector": { "key_regex": "^media-actions-.*$" } },
+    { "op": "tap", "selector": { "text": "Where This Came From…" } },
+    { "op": "wait_key", "key": "media-provenance-dialog", "budget_ms": 15000 },
+    {
+      "op": "expect",
+      "key": "media-provenance-command",
+      "detail": "the origin survives the clip insertion unchanged"
+    },
+    { "op": "tap", "selector": { "key": "media-provenance-close" } },
+    { "op": "tree", "name": "clip-on-timeline" },
+    { "op": "shot", "name": "clip-on-timeline" }
+  ]
+}

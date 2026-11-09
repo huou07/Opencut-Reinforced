@@ -1,0 +1,26 @@
+{
+  "schema": "or.tool-provenance/1",
+  "tool_id": "ffmpeg",
+  "tool_name": "FFmpeg",
+  "tool_category": "media",
+  "tool_version": "9.0.1",
+  "command": [
+    "ffmpeg",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc2=size=320x180:rate=30",
+    "-t",
+    "2",
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    "-crf",
+    "30",
+    "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-ffmpeg-shot.mp4"
+  ],
+  "source_manifest": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-ffmpeg-shot.filtergraph",
+  "output": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-ffmpeg-shot.mp4"
+}

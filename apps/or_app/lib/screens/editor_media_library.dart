@@ -8,6 +8,7 @@ import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../project/project_gateway.dart';
 import 'editor_media_preview.dart';
+import 'media_provenance_dialog.dart';
 import 'editor_panel_header.dart';
 
 /// Number of `EditorMediaLibraryPanel` builds, for rebuild-cost tests.
@@ -516,7 +517,8 @@ class EditorMediaLibraryItem extends StatelessWidget {
                 onRemove == null &&
                 onGenerateCaptions == null &&
                 onManageSpeechModel == null &&
-                onCleanUpAudio == null
+                onCleanUpAudio == null &&
+                item.provenanceTool == null
             ? null
             : (action) {
                 if (action == 'relink') onRelink?.call();
@@ -524,8 +526,17 @@ class EditorMediaLibraryItem extends StatelessWidget {
                 if (action == 'transcribe') onGenerateCaptions?.call();
                 if (action == 'speech-model') onManageSpeechModel?.call();
                 if (action == 'cleanup') onCleanUpAudio?.call();
+                if (action == 'provenance') {
+                  showMediaProvenanceDialog(context, item);
+                }
               },
         itemBuilder: (context) => [
+          if (item.provenanceTool != null)
+            PopupMenuItem(
+              key: ValueKey('media-provenance-${item.mediaId}'),
+              value: 'provenance',
+              child: const Text('Where This Came From…'),
+            ),
           if (onRelink != null)
             PopupMenuItem(
               key: ValueKey('media-relink-${item.mediaId}'),

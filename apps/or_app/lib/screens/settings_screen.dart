@@ -147,6 +147,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return OrPageLayout(
+      // The resources section is taller than the viewport once the companion
+      // catalog is expanded, so the page names its scroll view.
+      scrollKey: const ValueKey('settings-scroll'),
       title: 'Settings',
       subtitle: 'Application preferences and developer information',
       child: LayoutBuilder(

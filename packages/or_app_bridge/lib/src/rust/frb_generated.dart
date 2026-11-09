@@ -7803,8 +7803,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProjectMediaItemView dco_decode_project_media_item_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 16)
+      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
     return ProjectMediaItemView(
       mediaId: dco_decode_String(arr[0]),
       sourceUri: dco_decode_String(arr[1]),
@@ -7814,10 +7814,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       audioDetails: dco_decode_opt_String(arr[5]),
       provenanceTool: dco_decode_opt_String(arr[6]),
       provenanceVersion: dco_decode_opt_String(arr[7]),
-      containerDuration: dco_decode_opt_box_autoadd_rational_time_view(arr[8]),
-      firstVideoDuration: dco_decode_opt_box_autoadd_rational_time_view(arr[9]),
+      provenanceSourceProject: dco_decode_opt_String(arr[8]),
+      provenanceCommand: dco_decode_opt_String(arr[9]),
+      provenanceManifest: dco_decode_opt_String(arr[10]),
+      provenanceOutput: dco_decode_opt_String(arr[11]),
+      provenanceRecord: dco_decode_opt_String(arr[12]),
+      containerDuration: dco_decode_opt_box_autoadd_rational_time_view(arr[13]),
+      firstVideoDuration: dco_decode_opt_box_autoadd_rational_time_view(
+        arr[14],
+      ),
       firstAudioDuration: dco_decode_opt_box_autoadd_rational_time_view(
-        arr[10],
+        arr[15],
       ),
     );
   }
@@ -9922,6 +9929,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_audioDetails = sse_decode_opt_String(deserializer);
     var var_provenanceTool = sse_decode_opt_String(deserializer);
     var var_provenanceVersion = sse_decode_opt_String(deserializer);
+    var var_provenanceSourceProject = sse_decode_opt_String(deserializer);
+    var var_provenanceCommand = sse_decode_opt_String(deserializer);
+    var var_provenanceManifest = sse_decode_opt_String(deserializer);
+    var var_provenanceOutput = sse_decode_opt_String(deserializer);
+    var var_provenanceRecord = sse_decode_opt_String(deserializer);
     var var_containerDuration = sse_decode_opt_box_autoadd_rational_time_view(
       deserializer,
     );
@@ -9940,6 +9952,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       audioDetails: var_audioDetails,
       provenanceTool: var_provenanceTool,
       provenanceVersion: var_provenanceVersion,
+      provenanceSourceProject: var_provenanceSourceProject,
+      provenanceCommand: var_provenanceCommand,
+      provenanceManifest: var_provenanceManifest,
+      provenanceOutput: var_provenanceOutput,
+      provenanceRecord: var_provenanceRecord,
       containerDuration: var_containerDuration,
       firstVideoDuration: var_firstVideoDuration,
       firstAudioDuration: var_firstAudioDuration,
@@ -11977,6 +11994,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.audioDetails, serializer);
     sse_encode_opt_String(self.provenanceTool, serializer);
     sse_encode_opt_String(self.provenanceVersion, serializer);
+    sse_encode_opt_String(self.provenanceSourceProject, serializer);
+    sse_encode_opt_String(self.provenanceCommand, serializer);
+    sse_encode_opt_String(self.provenanceManifest, serializer);
+    sse_encode_opt_String(self.provenanceOutput, serializer);
+    sse_encode_opt_String(self.provenanceRecord, serializer);
     sse_encode_opt_box_autoadd_rational_time_view(
       self.containerDuration,
       serializer,

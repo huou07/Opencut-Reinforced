@@ -544,3 +544,62 @@ fn mcp_captions_transcribe_returns_a_proposal_without_changing_the_project() {
     assert_eq!(host.describe().unwrap().summary.project_revision.value(), 0);
     drop(host);
 }
+
+/// An agent records a companion result through the same server it reads it
+/// from. `tools_provenance_write` shells out to `or tools provenance write`,
+/// which used to answer with a bare path even when asked for JSON, so the call
+/// failed as invalid JSON before the record was ever visible.
+#[test]
+fn mcp_records_and_reads_a_companion_result() {
+    let directory = TestDirectory::new();
+    let session = ProjectFileSession::create_new(directory.project_path().as_path(), "Provenance")
+        .expect("create project");
+    let host = LiveProjectHost::start(session, Some(directory.descriptor_path().as_path()))
+        .expect("start live host");
+    write_pointer(&directory);
+    let mut mcp = McpProcess::start(directory.pointer_path().as_path());
+    mcp.request(
+        "initialize",
+        json!({
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "or-test", "version": "0"},
+        }),
+    );
+
+    let output = directory.0.join("companion-shot.mp4");
+    let written: Value = serde_json::from_str(
+        &mcp.call(
+            "tools_provenance_write",
+            json!({
+                "tool": "ffmpeg",
+                "output": output.display().to_string(),
+                "version": "9.0.1",
+                "manifest": "shot.filtergraph",
+                "command": ["ffmpeg", "-i", "in.mov", output.display().to_string()],
+            }),
+        )
+        .expect("record the result"),
+    )
+    .unwrap();
+    let sidecar = PathBuf::from(format!("{}.orprovenance.json", output.display()));
+    assert_eq!(
+        written["file"].as_str(),
+        Some(sidecar.to_string_lossy().as_ref())
+    );
+    assert_eq!(written["record"]["schema"], "or.tool-provenance/1");
+
+    let read: Value = serde_json::from_str(
+        &mcp.call(
+            "tools_provenance_read",
+            json!({"file": sidecar.display().to_string()}),
+        )
+        .expect("read the record back"),
+    )
+    .unwrap();
+    assert_eq!(read["tool_name"], "FFmpeg");
+    assert_eq!(read["tool_version"], "9.0.1");
+    assert_eq!(read["source_manifest"], "shot.filtergraph");
+    assert_eq!(read["record"].is_null(), true);
+    drop(host);
+}

@@ -253,9 +253,17 @@ fn run_tools(args: &[OsString]) -> Result<String, String> {
                             .to_string_lossy()
                             .to_string()
                     });
-                    std::fs::write(&file, record.to_json()?)
+                    let encoded = record.to_json()?;
+                    std::fs::write(&file, &encoded)
                         .map_err(|error| format!("{file}: {error}"))?;
-                    Ok(file)
+                    if json {
+                        // A caller that asked for JSON gets the record it just
+                        // wrote and the path it landed at, so an agent never
+                        // has to re-read the sidecar to learn what it recorded.
+                        Ok(serde_json::json!({"file": file, "record": record}).to_string())
+                    } else {
+                        Ok(file)
+                    }
                 }
                 _ => Err("Usage: or tools provenance <read|write> ... [--json]".to_owned()),
             }

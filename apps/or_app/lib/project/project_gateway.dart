@@ -346,6 +346,11 @@ class ProjectMediaItem {
     required this.audioDetails,
     this.provenanceTool,
     this.provenanceVersion,
+    this.provenanceSourceProject,
+    this.provenanceManifest,
+    this.provenanceCommand,
+    this.provenanceOutput,
+    this.provenanceRecord,
     this.containerDuration,
     this.firstVideoDuration,
     this.firstAudioDuration,
@@ -361,6 +366,19 @@ class ProjectMediaItem {
   /// The companion tool that produced this file, when a sidecar records it.
   final String? provenanceTool;
   final String? provenanceVersion;
+
+  /// The tool's own project file, so the source can be reopened.
+  final String? provenanceSourceProject;
+
+  /// A manifest or scene file that describes the result.
+  final String? provenanceManifest;
+
+  /// The exact argument vector, joined for display.
+  final String? provenanceCommand;
+  final String? provenanceOutput;
+
+  /// The sidecar that carries the record.
+  final String? provenanceRecord;
   final ProjectRationalTime? containerDuration;
   final ProjectRationalTime? firstVideoDuration;
   final ProjectRationalTime? firstAudioDuration;
