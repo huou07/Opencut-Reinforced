@@ -26,9 +26,9 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.1.27" date="2026-11-08">
+    <release version="0.1.27" date="2026-11-09">
       <description>
-        <p>Developer Preview with the companion-tool catalog and assistant plans.</p>
+        <p>Companion tools with recorded provenance, AI edit plans with edit styles and creative directions, Lottie and glTF sidecars, and a three-host export benchmark.</p>
       </description>
     </release>
   </releases>
