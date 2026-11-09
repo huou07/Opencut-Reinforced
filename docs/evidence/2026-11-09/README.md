@@ -372,8 +372,11 @@ resampler for another and needs a frame-level comparison first.
 ### Open work
 
 - The 4K→1080p decode-time scale: recommendation recorded, not implemented.
-- The `ui-audit-inspector.json` sweep reaches the advanced clip sheet by label
-  because those buttons carry no keys, unlike the rest of the app.
+- ~~The `ui-audit-inspector.json` sweep reaches the advanced clip sheet by
+  label~~ — closed: every button in that sheet already had a key except
+  `Close`, which now carries `timeline-advanced-close`
+  (`apps/or_app/lib/screens/editor_timeline_actions.dart:230`), and both
+  `editor-journey.json` and `ui-audit-inspector.json` select it by key.
 - Flatpak sandbox and NVIDIA/AMD rates stay BLOCKED/UNVERIFIED until a host
   can run them; Windows GUI is closed (see above).
 
