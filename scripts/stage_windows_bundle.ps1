@@ -205,6 +205,74 @@ finally {
   $env:PATH = $originalPath
 }
 
+# Third-party licence texts. The package ships LGPL FFmpeg shared libraries,
+# ffmpeg.exe/ffprobe.exe (which carry libvpx and Opus), and the whisper.cpp
+# speech engine, so each of their licences has to travel with them: shipping the
+# binaries without the texts is a licence violation, and the Linux package has
+# staged the same layout for a while. The hosted job builds FFmpeg from a source
+# tree and the codec sources beside it, so those directories are searched by
+# name; a missing file fails the build here rather than in a published archive.
+function Resolve-LicenceSource {
+  param([string[]]$Candidates, [string]$Name, [string]$FileName)
+  foreach ($candidate in $Candidates) {
+    if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+    $direct = Join-Path $candidate $FileName
+    if (Test-Path $direct -PathType Leaf) { return $direct }
+    $found = @(Get-ChildItem -Path $candidate -Filter $FileName -Recurse -File -Depth 2 -ErrorAction SilentlyContinue) | Select-Object -First 1
+    if ($null -ne $found) { return $found.FullName }
+  }
+  throw "$Name licence text not found (looked for $FileName under: $(($Candidates | Where-Object { $_ }) -join ', '))"
+}
+
+$ffmpegSources = @($env:FFMPEG_SOURCE_DIR)
+$ffmpegSources += @(Join-Path (Split-Path -Parent $FfmpegPrefix) 'ffmpeg-8.1.3')
+if ($env:RUNNER_TEMP) { $ffmpegSources += @((Join-Path $env:RUNNER_TEMP 'ffmpeg-8.1.3'), $env:RUNNER_TEMP) }
+$codecSources = @($env:CODEC_NOTICES_DIR)
+$codecSources += @((Join-Path (Split-Path -Parent $FfmpegPrefix) 'desktop-export-codecs'))
+if ($env:RUNNER_TEMP) { $codecSources += @((Join-Path $env:RUNNER_TEMP 'desktop-export-codecs'), $env:RUNNER_TEMP) }
+
+$licenceFiles = @{
+  'licenses/FFmpeg/COPYING.LGPLv2.1' = (Resolve-LicenceSource -Candidates $ffmpegSources -Name 'FFmpeg' -FileName 'COPYING.LGPLv2.1')
+  'licenses/FFmpeg/FFmpeg-NOTICE.txt' = (Resolve-LicenceSource -Candidates $ffmpegSources -Name 'FFmpeg' -FileName 'NOTICE')
+  'licenses/libvpx/LICENSE' = (Resolve-LicenceSource -Candidates $codecSources -Name 'libvpx' -FileName 'LICENSE')
+  'licenses/libvpx/PATENTS' = (Resolve-LicenceSource -Candidates $codecSources -Name 'libvpx' -FileName 'PATENTS')
+  'licenses/Opus/COPYING' = (Resolve-LicenceSource -Candidates $codecSources -Name 'Opus' -FileName 'COPYING')
+}
+foreach ($entry in $licenceFiles.GetEnumerator()) {
+  $destination = Join-Path $Bundle $entry.Key
+  $directory = Split-Path -Parent $destination
+  if (-not (Test-Path $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
+  Copy-Item -Path $entry.Value -Destination $destination -Force
+}
+$whisperNoticeDir = Join-Path $Bundle 'licenses/whisper.cpp'
+if (-not (Test-Path $whisperNoticeDir)) { New-Item -ItemType Directory -Path $whisperNoticeDir -Force | Out-Null }
+Set-Content -Path (Join-Path $whisperNoticeDir 'LICENSE') -Encoding utf8 -Value @'
+MIT License
+
+Copyright (c) 2023-2024 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+'@
+foreach ($required in @('licenses/FFmpeg/COPYING.LGPLv2.1', 'licenses/FFmpeg/FFmpeg-NOTICE.txt', 'licenses/Opus/COPYING', 'licenses/libvpx/LICENSE', 'licenses/libvpx/PATENTS', 'licenses/whisper.cpp/LICENSE')) {
+  if (-not (Test-Path (Join-Path $Bundle $required) -PathType Leaf)) { throw "packaged licence tree is incomplete: $required" }
+}
+
 # The probe exists to prove the staged runtime links and runs; it is a build
 # diagnostic, not part of the shipped application. The Linux packager removes
 # its copy for the same reason.

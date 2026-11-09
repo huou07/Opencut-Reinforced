@@ -313,6 +313,10 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                     OrSpacing.x2,
                   ),
                   children: [
+                    if (!controller.hasDraft) ...[
+                      _starterList(),
+                      const SizedBox(height: OrSpacing.x2),
+                    ],
                     _searchRow(),
                     const SizedBox(height: OrSpacing.x2),
                     _categoryFilters(),
@@ -1308,42 +1312,35 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
 
   Widget _sceneActions() {
     if (!controller.hasDraft) {
-      // No composition yet: the first gesture starts one, so a user who wants a
-      // title does not have to add an asset first. The starters sit above the
-      // empty-canvas buttons because a finished composition is a better first
-      // step than a blank frame for most projects.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      // No composition yet: the first gesture starts one. The starters are
+      // content, so they scroll with the library above this pinned row: stacked
+      // here they made the panel taller than a 320x418.8 rail on Linux, where
+      // the starter descriptions wrap to two lines, and the column overflowed.
+      return Row(
         children: [
-          _starterList(),
-          const SizedBox(height: OrSpacing.x2),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const ValueKey('motion-add-text'),
-                  onPressed: controller.busy
-                      ? null
-                      : () => unawaited(controller.addTextNode()),
-                  icon: const Icon(Icons.title, size: 16),
-                  label: const Text('Add text'),
-                ),
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('motion-add-text'),
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(controller.addTextNode()),
+              icon: const Icon(Icons.title, size: 16),
+              label: const Text('Add text'),
+            ),
+          ),
+          const SizedBox(width: OrSpacing.x2),
+          Expanded(
+            child: OutlinedButton.icon(
+              key: const ValueKey('motion-add-asset'),
+              onPressed: controller.busy
+                  ? null
+                  : () => unawaited(showAddAssetSheet(context, controller)),
+              icon: const Icon(
+                Icons.add_photo_alternate_outlined,
+                size: 16,
               ),
-              const SizedBox(width: OrSpacing.x2),
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const ValueKey('motion-add-asset'),
-                  onPressed: controller.busy
-                      ? null
-                      : () => unawaited(showAddAssetSheet(context, controller)),
-                  icon: const Icon(
-                    Icons.add_photo_alternate_outlined,
-                    size: 16,
-                  ),
-                  label: const Text('Add asset'),
-                ),
-              ),
-            ],
+              label: const Text('Add asset'),
+            ),
           ),
         ],
       );
