@@ -278,13 +278,13 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
       color: OrColors.backgroundRaised,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // The scene editor sits between the list and the pinned actions. Its
-          // height is derived from the panel, so a short rail scrolls its controls
-          // instead of overflowing, and the insert action never scrolls away.
-          final available = math.max(0.0, constraints.maxHeight - 38 - 60);
-          final editing = math
-              .min(320.0, constraints.maxHeight * 0.55)
-              .clamp(0.0, available);
+          // The scene editor sits between the list and the pinned actions. It
+          // takes a share of the free height rather than a computed pixel size:
+          // a fixed height assumed 60 px for the pinned rows and overflowed by
+          // 16 px at the Windows test surface (320x418.8), where a message row
+          // makes those rows taller. Shares cannot overflow; the editor scrolls
+          // inside its share and the insert action never scrolls away.
+          final editing = math.min(320.0, constraints.maxHeight * 0.55);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -304,6 +304,7 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                   child: _messages(),
                 ),
               Expanded(
+                flex: 3,
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(
                     OrSpacing.x3,
@@ -333,13 +334,16 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
                 ),
               ),
               if (controller.hasDraft)
-                SizedBox(
-                  height: editing,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: OrSpacing.x3,
+                Flexible(
+                  flex: 2,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: editing),
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: OrSpacing.x3,
+                      ),
+                      child: _sceneEditor(),
                     ),
-                    child: _sceneEditor(),
                   ),
                 ),
               _renderRow(),
