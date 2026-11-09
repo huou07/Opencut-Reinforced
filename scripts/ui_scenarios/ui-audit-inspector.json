@@ -119,7 +119,7 @@
     {
       "op": "tap",
       "selector": {
-        "label": "Advanced clip actions\u2026"
+        "label": "Advanced clip actions…"
       }
     },
     {
@@ -133,13 +133,13 @@
     {
       "op": "tap",
       "selector": {
-        "key": "Cancel"
+        "label": "Close"
       }
     },
     {
       "op": "tap",
       "selector": {
-        "key": "Export"
+        "key": "export-project"
       }
     },
     {

@@ -92,6 +92,37 @@ it is more than it is:
   command and the sidecar's path — and `Copy command` puts the argument vector
   on the clipboard so the render can be repeated.
 
+### The two rendered routes that exist today
+
+Both are sidecars: OR runs a tool, takes the media, and keeps the source file
+beside it. Neither adds a renderer or a runtime to the core.
+
+- **Lottie** — catalog id `lottie`, MIT (`puppeteer-lottie`, `lottie-web`).
+  `scripts/lottie-render` installs the npm package and draws the animation in a
+  browser, and `scripts/make_lottie_fixture.sh` renders
+  `scripts/lottie-render/or-badge.json` through it and records the result. The
+  animation file is the source: it is what the record's `source_manifest`
+  points at, so it can be reopened in the app that authored it and rendered
+  again to the same output path. `scripts/ui_scenarios/companion-lottie.json`
+  proves the round trip in the real app — import, `From Lottie`, the origin
+  dialog with the animation and the command, insert into the timeline, and the
+  origin still there afterwards.
+- **glTF** — catalog id `gltf`, MIT (`three.js`). `scripts/gltf-render` renders
+  a `.gltf` or `.glb` to a PNG sequence in a browser, `or tools run ffmpeg`
+  turns the frames into a clip, and `scripts/make_gltf_fixture.sh` records both
+  the model and the render. `scripts/ui_scenarios/companion-gltf.json` runs the
+  same journey as the Lottie one.
+
+The layer and keyframe structure is not imported in either route: what arrives
+is a render plus the source, which is the agreement the catalog makes for every
+companion. An image sequence is the alternative when a caller wants frames
+rather than a clip, and `scripts/lottie_frames.py` is a python-lottie variant
+that keeps the frames' alpha: `python3 scripts/lottie_frames.py
+scripts/lottie-render/or-badge.json OUT --frames 90 --fps 30` writes PNGs with
+`python-lottie` 0.7.2 and cairo (macOS needs
+`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`), and `or tools run ffmpeg`
+turns them into a clip. Neither route imports layers or keyframes.
+
 A flat render is never described as an editable composition. The source stays
 beside the output so it can be reopened in the companion and re-rendered; the
 project keeps the reference and the provenance.

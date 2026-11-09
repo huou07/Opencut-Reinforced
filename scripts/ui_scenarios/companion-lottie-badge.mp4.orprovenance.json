@@ -3,7 +3,7 @@
   "tool_id": "lottie",
   "tool_name": "Lottie renderer",
   "tool_category": "animation",
-  "tool_version": "v24.19.0",
+  "tool_version": "1.1.2",
   "command": [
     "node",
     "scripts/lottie-render/render.js",

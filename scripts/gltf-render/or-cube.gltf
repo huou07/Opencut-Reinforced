@@ -1,0 +1,106 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "or-gltf-fixture"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "cube"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "cube",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1
+          },
+          "indices": 2,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "graphite",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.22,
+          0.24,
+          0.28,
+          1.0
+        ],
+        "metallicFactor": 0.15,
+        "roughnessFactor": 0.55
+      }
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 648,
+      "uri": "data:application/octet-stream;base64,zcxMv83MTL/NzEw/zcxMP83MTL/NzEw/zcxMP83MTD/NzEw/zcxMv83MTD/NzEw/zcxMP83MTL/NzEy/zcxMv83MTL/NzEy/zcxMv83MTD/NzEy/zcxMP83MTD/NzEy/zcxMP83MTL/NzEw/zcxMP83MTL/NzEy/zcxMP83MTD/NzEy/zcxMP83MTD/NzEw/zcxMv83MTL/NzEy/zcxMv83MTL/NzEw/zcxMv83MTD/NzEw/zcxMv83MTD/NzEy/zcxMv83MTD/NzEw/zcxMP83MTD/NzEw/zcxMP83MTD/NzEy/zcxMv83MTD/NzEy/zcxMv83MTL/NzEy/zcxMP83MTL/NzEy/zcxMP83MTL/NzEw/zcxMv83MTL/NzEw/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 288,
+      "byteLength": 288,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        -0.8,
+        -0.8,
+        -0.8
+      ],
+      "max": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ]
+}

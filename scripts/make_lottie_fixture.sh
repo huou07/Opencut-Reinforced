@@ -24,12 +24,12 @@ if [ ! -d "$renderer/node_modules/puppeteer-lottie" ]; then
   (cd "$renderer" && npm install --no-audit --no-fund >/dev/null)
 fi
 
-node_version="$(node --version)"
+version="$(node -p "require('$renderer/node_modules/puppeteer-lottie/package.json').version")"
 arguments=("$animation" "$out" 640 360)
 (cd "$root" && node "$renderer/render.js" "${arguments[@]}" >/dev/null)
 
 record=(tools provenance write --tool lottie --output "$out"
-        --manifest "$animation" --version "$node_version"
+        --manifest "$animation" --version "$version"
         -- node "scripts/lottie-render/render.js" "${arguments[@]}")
 "$or" "${record[@]}" >/dev/null
 

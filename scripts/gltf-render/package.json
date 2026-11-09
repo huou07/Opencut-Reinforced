@@ -1,0 +1,14 @@
+{
+  "name": "or-gltf-render",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Renders a glTF or GLB file to a PNG sequence with Chromium and three.js; OR keeps no glTF runtime of its own.",
+  "license": "MIT",
+  "scripts": {
+    "render": "node render.js"
+  },
+  "dependencies": {
+    "puppeteer": "13.7.0",
+    "three": "0.137.0"
+  }
+}

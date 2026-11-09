@@ -1,0 +1,18 @@
+{
+  "schema": "or.tool-provenance/1",
+  "tool_id": "gltf",
+  "tool_name": "glTF renderer",
+  "tool_category": "three_d",
+  "tool_version": "0.137.0",
+  "command": [
+    "node",
+    "scripts/gltf-render/render.js",
+    "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/gltf-render/or-cube.gltf",
+    "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/target/gltf-fixture-frames",
+    "90",
+    "640",
+    "360"
+  ],
+  "source_manifest": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/gltf-render/or-cube.gltf",
+  "output": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-gltf-cube.mp4"
+}

@@ -577,6 +577,42 @@ pub const TOOLS: &[ToolDescriptor] = &[
         remove_hint: "Delete the renderer folder; it is installed per project and OR stores nothing else.",
         update_hint: "Run npm update inside the renderer folder.",
     },
+    ToolDescriptor {
+        id: "gltf",
+        name: "glTF renderer",
+        category: ToolCategory::ThreeD,
+        summary: "Draw a glTF or GLB model with a browser and save it as a video or an image sequence.",
+        benefit: "A model exported from Blender or another 3D tool becomes a clip without OR carrying a glTF engine: the model file stays the source and is recorded beside the render.",
+        license: "MIT (three.js)",
+        license_note: Some(
+            "Runs the model in a browser OR starts; OR bundles neither three.js nor a Chromium download.",
+        ),
+        homepage: "https://threejs.org",
+        install_page: "https://threejs.org/docs/#examples/en/loaders/GLTFLoader",
+        install_commands: &[InstallCommand {
+            platform: Platform::MacOs,
+            command: "npm install three",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }, InstallCommand {
+            platform: Platform::Windows,
+            command: "npm install three",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }, InstallCommand {
+            platform: Platform::Linux,
+            command: "npm install three",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }],
+        size_hint: "about 300 MB with the browser download",
+        runtime: "Node.js and a Chromium browser",
+        gui_program: None,
+        probe: CommandSpec::new("npx", &["--no-install", "three", "--version"]),
+        outputs: &[OutputKind::Gltf, OutputKind::Video, OutputKind::ImageSequence],
+        project_scoped: true,
+        removable: true,
+        platforms: ALL,
+        remove_hint: "Delete the renderer folder; it is installed per project and OR stores nothing else.",
+        update_hint: "Run npm update inside the renderer folder.",
+    },
 ];
 
 /// The catalog entry for an id, if the build carries one.

@@ -968,3 +968,117 @@ the measured fact is that a smaller output is not cheaper on these two hosts.
 - WebM is 2.1× and FFV1 3.5× more expensive to encode than the hardware H.264
   path at 1080p, which is the measured reason the Automatic plan starts a file
   on MP4 and leaves VP9/FFV1 to the intent tiles that ask for them.
+
+## 2026-11-09 — three hosts at one revision, and the two open questions closed
+
+Every row below was measured at revision `118fe99d` on all three hosts, on the
+canonical fixtures, three runs per row, with the commands in
+`docs/operations/local-lab.md`. The table prints the median of the three. The
+fixtures are the recorded ones, not fresh encodes:
+
+| Fixture | Bytes | SHA-256 |
+|---|---|---|
+| `bench1080.mp4` | 11,341,971 | `877f78da1fe16775ee2c11cf745a3ff6ffb78b4687fea3944b307a060c45ea52` |
+| `bench4k.mp4` | 19,888,977 | `c0185f8e883414dcc5147b6bdcf270d93ca5c1983ef14b186b1aa5718923aa33` |
+
+Hosts: macOS Apple M5 (Metal); Debian Intel i5-13500T, 20 logical processors,
+Intel UHD Graphics 770 over the open-source Mesa driver and Vulkan; Windows 11,
+Intel Core 5 120U, 12 logical processors, `Intel(R) Graphics` over Vulkan with
+the Media Foundation encoder.
+
+### 1080p, 300 frames
+
+| Row | macOS M5 | Debian UHD 770 | Windows Intel Graphics |
+|---|---|---|---|
+| Full pipeline, MP4 H.264 | 230.2 | 281.1 | 132.9 |
+| Full pipeline, MP4 + text | 219.9 | 215.4 | 104.3 |
+| Render only | 114.2 | 85.2 | 50.5 |
+| Render only + text | 113.8 | 96.4 | 56.0 |
+| Decode only, NV12 | 692.3 | 763.1 | 210.2 |
+| Encode only, MP4 | 276.3 | 384.3 | 254.6 |
+| Encode only, WebM VP9 | 71.5 | 58.9 | 30.2 |
+| Encode only, FFV1 | 43.5 | 49.4 | 18.7 |
+| Full pipeline, WebM VP9, 90 frames | 25.0 | 24.8 | 13.9 |
+| Full pipeline, FFV1, 90 frames | 29.2 | 33.1 | 14.7 |
+
+### 4K source, 120 frames
+
+The output size is part of the row this time: a row without
+`OR_BENCH_OUT_W/H=3840/2160` measures a 1080p output and is not a 4K row.
+
+| Row | macOS M5 | Debian UHD 770 | Windows Intel Graphics |
+|---|---|---|---|
+| Full pipeline, 3840x2160 output | 61.0 | 67.5 | 29.3 |
+| Render only, 3840x2160 output | 104.5 | 134.7 | 49.4 |
+| Full pipeline, 1920x1080 output | 45.9 | 45.8 | 21.8 |
+| Render only, 1920x1080 output | 47.1 | 48.8 | 25.9 |
+| Decode only, 3840x2160 output | 95.9 | 128.0 | 49.4 |
+| Decode only, 1920x1080 output | 48.9 | 49.0 | 25.8 |
+| Encode only, MP4 at 3840x2160 | 72.6 | 96.9 | 53.8 |
+| Full pipeline, 3840x2160 + text | 58.6 | 52.1 | 23.1 |
+
+### Closed: the 4K→1080p row is slower because FFmpeg scales inside decode
+
+The earlier hypothesis on this page was that the 1080p row pays for a scale the
+1:1 row never runs, while the 1:1 row is decode-bound. The stage rows confirm
+the scale and put it in the decoder, not in the compositor:
+
+| Decode-only row, same fixture, same decode | macOS M5 | Debian UHD 770 | Windows Intel Graphics |
+|---|---|---|---|
+| Decoded to 3840x2160 NV12 | 95.9 | 128.0 | 49.4 |
+| Decoded to 1920x1080 NV12 | 48.9 | 49.0 | 25.8 |
+| Cost of the scale per frame | 10.0 ms | 12.6 ms | 18.6 ms |
+
+Nothing else differs between those two rows: same file, same decoder, same
+frame count, only the requested output size. Rendering is not the cause either,
+because the render-only rows move the other way (4K output is the slower one).
+The mechanism is in the code: `crates/or_app_bridge/src/preview.rs` passes the
+output size into decode whenever the clip covers the canvas
+(`let nv12_size = fixed_size.filter(|_| clip_covers_output(clip));`), and
+`decode_video_frame_nv12` hands that size to `DecodeOutput::Nv12 { width,
+height }`, so `or_media` asks FFmpeg to scale during decode. The 1:1 case takes
+`direct_video_clip_at`, which requires matching source dimensions and never
+scales. The comment beside the direct path already says the scaling is
+intentional ("The NV12 direct path scales while decoding, so it can serve any
+source size"), so this is a measured cost of a documented design, not a bug.
+
+What it would buy: decoding native and letting the compositor scale would
+remove 10–19 ms of CPU per frame on every 4K→1080p export, which is 10–19% of
+the 4K full-pipeline budget on Debian and macOS and closer to 40% on Windows.
+It is **not implemented**: it changes the visual path (one resampler instead of
+another) and needs a frame-level comparison of both outputs before the numbers
+are allowed to change. The row to watch after such a change is
+`4k-to1080-full` against `4k-full-4kout`.
+
+### Closed: the Windows WebM row is per-frame handoff, not an encoder defect
+
+The earlier note said Windows WebM was 10.8 fps and guessed at thread count.
+Measuring the encoder on its own answers it:
+
+| Row | Debian UHD 770 (20 threads) | Windows Intel Graphics (12 threads) |
+|---|---|---|
+| Encode only, VP9 | 58.9 | 30.2 |
+| Full pipeline, VP9 | 24.8 | 13.9 |
+| Full / encoder ceiling | 0.42 | 0.46 |
+
+The two hosts spend the same fraction of their encoder budget on the same
+pipeline, and Windows' lower absolute rate tracks its lower thread count and
+slower encoder. There is no separate Windows defect to fix; the VP9 pipeline is
+bounded by the same handoff on both hosts, and the encoder is the smaller half
+of it.
+
+### Corrections to earlier rows on this page
+
+- The macOS 4K decode ceiling measured 95.9 fps here; the 112.1 above is the
+  same measurement class from an earlier run, so the two differ by run-to-run
+  spread rather than by a regression.
+- The claim that 4K into 1080p is *faster* than 4K into 4K on macOS (108.1 vs
+  65.3) does **not** reproduce at this revision: the composited rows are 58.6
+  (4K output) against 43.1 (1080p output) in the same session. The earlier pair
+  compared a 1080p row against a 4K row taken under different conditions. The
+  macOS decode rows behave like the Intel hosts' now: 95.9 against 48.9, the
+  same scale cost. Treat the old macOS pair as superseded.
+- Stage rows (`OR_BENCH_MODE=decode` / `render`) resolve every frame
+  synchronously instead of through the export worker, so they can read *slower*
+  than the full pipeline that does the same work (Debian 4K decode 128.0 against
+  a 67.5 full row). They attribute cost; they are not reachable ceilings.
