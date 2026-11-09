@@ -7,7 +7,7 @@ shared by the human interface, CLI automation and AI agents.
 
 ## Status
 
-**Pre-MVP with an active editor implementation, published as 0.1.27.** The
+**Pre-MVP with an active editor implementation, published as 0.1.28.** The
 application creates, opens, edits, saves and recovers `.orproj` projects on
 macOS, Windows, Linux and Android. A Rust-owned project session serves the
 Flutter UI and an attached CLI through the same validated commands. Users can

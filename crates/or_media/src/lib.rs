@@ -14,7 +14,8 @@ pub use decoder::{
 pub use encoder::{
     ExportCapability, ExportEncodeError, ExportWriterOptions, FfmpegExportProfile,
     FfmpegExportWriter, FfmpegSoftwareExportWriter, MatroskaFfv1PcmS16leWriter,
-    SoftwareExportProfile, describe_export_capability, probe_h264_encoders,
+    SoftwareExportProfile, check_export_destination, describe_export_capability,
+    probe_h264_encoders,
 };
 pub use snapshot_queue::{SnapshotItem, SnapshotQueue, SnapshotQueueSendError};
 

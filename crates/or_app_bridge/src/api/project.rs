@@ -1092,6 +1092,16 @@ impl ProjectHostHandle {
                 "choose a destination ending in .mp4, .mkv, or .webm",
             ));
         };
+        // The writer stages beside the destination, so a folder that refuses a
+        // new directory refuses the whole export. Answering here keeps the
+        // failure immediate and names the folder while the owner still has the
+        // export dialog in front of them.
+        if let Err(error) = or_media::check_export_destination(std::path::Path::new(&destination)) {
+            return export_job_view(ExportResponse::failure(
+                "EXPORT_DESTINATION_NOT_WRITABLE",
+                error.to_string(),
+            ));
+        }
         // The profile is a preference from Settings, resolved here so the export
         // job carries a typed decision instead of re-reading the setting later.
         let performance = match performance_profile

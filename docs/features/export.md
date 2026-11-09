@@ -117,6 +117,39 @@ MOV, H.265/AV1 delivery and other hardware encoders remain future work gated on
 licence, platform and build-configuration review. The package build enables only
 the selected profile's muxer and encoders.
 
+### Destination write, before any frame is rendered
+
+A failed export used to surface as `Operation not permitted (os error 1)` — the
+OS text for a folder the system refused, with nothing to act on. The writer
+stages a hidden `.name.or-export-<pid>-<n>` directory beside the destination and
+renames the finished file into place, so a folder that accepts the final file but
+not a new directory is not a case the design needs to handle; a folder that
+refuses both is now named:
+
+- `or_media::check_export_destination` runs in the bridge's `start_export`
+  before the job is queued. It rejects a directory, refuses a destination file it
+  cannot open for writing without truncating it, and proves the parent accepts a
+  new directory by creating and removing one. A refusal returns
+  `EXPORT_DESTINATION_NOT_WRITABLE` with the folder path, so the dialog answers
+  while it is still on screen instead of at the first frame.
+- `describe_staging_failure` owns the wording for a permission refusal
+  ("Choose a folder inside your home folder, such as Movies, or allow this app to
+  write there in System Settings, then export again."), a missing folder, and
+  anything else.
+- The macOS save panel starts in `~/Movies`. Desktop, Documents and Downloads are
+  withheld from an app until the owner allows it, and this build is ad-hoc signed
+  so a rebuild can look like a new app to that decision; Movies needs no grant.
+  The panel's return value grants nothing on its own — the app is not sandboxed,
+  and folder access stays the system's to allow.
+- A failure is repeated as a notice with a Dismiss action, because the top bar
+  keeps one short line and drops its text entirely on a compact layout.
+
+`scripts/ui_scenarios/export-blocked-destination.json` drives it: the scenario
+flag `exportWriteDenied` hands the export a folder the runner made write-denied
+(0500) and the journey waits for the folder-naming sentence and the remedy in the
+live semantics tree. It is a macOS/Linux journey — `chmod` is the mechanism, so a
+Windows run has no equivalent state to enter.
+
 ## Verification
 
 `scripts/ui_scenarios/export-text.json` imports a clip, adds a title over it and

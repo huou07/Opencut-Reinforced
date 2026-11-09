@@ -126,6 +126,12 @@ each one and the install command for your platform.
 - **The app opens but export fails for MP4.** The machine has no H.264 encoder
   the package can use. Use WebM (VP9/Opus) or Matroska (FFV1/PCM); the error text
   names the encoder that was missing.
+- **Export stops with "the system did not allow this app to write in …".** The
+  folder you chose is withheld from the app. Export into a folder under your home
+  folder (Movies is where the panel starts), or grant the app access to that
+  folder in **System Settings → Privacy & Security → Files and Folders**. A
+  rebuild can look like a new app to macOS, so the grant may be asked for again
+  after an update.
 - **Playback is silent in the Flatpak build.** The sandbox needs
   `--socket=pulseaudio`; the published manifest has it, a hand-built one may not.
 - **A speech model download fails.** The model is an optional download from

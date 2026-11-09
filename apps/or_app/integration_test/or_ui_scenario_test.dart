@@ -113,13 +113,26 @@ class _Locations {
 }
 
 class _Spec {
-  _Spec(this.name, this.viewport, this.steps, this.raw, this.pickList);
+  _Spec(
+    this.name,
+    this.viewport,
+    this.steps,
+    this.raw,
+    this.pickList, {
+    this.exportWriteDenied = false,
+  });
 
   final String name;
   final ({double width, double height})? viewport;
   final List<Map<String, Object?>> steps;
   final Map<String, Object?> raw;
   final List<String> pickList;
+
+  /// Hands the export a folder that refuses new entries, so the failure path a
+  /// protected macOS folder produces can be driven without the OS deciding for
+  /// the runner. Only the destination is affected; artifacts still land in the
+  /// scenario directory.
+  final bool exportWriteDenied;
 
   static _Spec load() {
     final path = _Locations.scenarioPath();
@@ -155,6 +168,7 @@ class _Spec {
       steps,
       decoded,
       picks,
+      exportWriteDenied: decoded['exportWriteDenied'] == true,
     );
   }
 }
@@ -268,6 +282,7 @@ class _Runner {
     picker = _FixturePicker(
       Directory(artifacts.replacements.path),
       spec.pickList,
+      exportWriteDenied: spec.exportWriteDenied,
     );
     await tester.pumpWidget(
       RepaintBoundary(
@@ -1407,7 +1422,11 @@ class _StepFailure implements Exception {
 /// synthetic fixtures from the artifact directory, so an import journey is a
 /// real import of a real file through the real Rust command path.
 class _FixturePicker extends FileSelectorProjectPicker {
-  _FixturePicker(this.directory, List<String> fixtures) {
+  _FixturePicker(
+    this.directory,
+    List<String> fixtures, {
+    this.exportWriteDenied = false,
+  }) {
     // `copy:<path>` fixtures come from the host so a journey can import real
     // video without the runner generating a container it cannot encode. The
     // file is copied into the scenario directory and treated as the picked
@@ -1561,11 +1580,32 @@ class _FixturePicker extends FileSelectorProjectPicker {
   @override
   bool get supportsExport => true;
 
+  /// When the scenario asks for it, the export is handed a folder that accepts
+  /// no new entries. The writer stages a hidden directory beside the
+  /// destination, so this reproduces the "the system did not allow this app to
+  /// write here" answer a protected macOS folder gives, without the harness
+  /// guessing at TCC state.
+  final bool exportWriteDenied;
+
   @override
   Future<String?> saveExportPath({
     required String suggestedName,
     required ExportProfile profile,
-  }) async => '${directory.path}/export.${profile.extension}';
+  }) async {
+    if (!exportWriteDenied) {
+      return '${directory.path}/export.${profile.extension}';
+    }
+    final blocked = Directory('${directory.path}/export-blocked')
+      ..createSync(recursive: true);
+    if (Platform.isWindows) {
+      return '${blocked.path}/export.${profile.extension}';
+    }
+    final chmod = Process.runSync('chmod', ['500', blocked.path]);
+    if (chmod.exitCode != 0) {
+      fail('the runner could not make ${blocked.path} write-denied');
+    }
+    return '${blocked.path}/export.${profile.extension}';
+  }
 
   @override
   Future<List<String>> openMediaSources() async => [_resolved];

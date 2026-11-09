@@ -1,16 +1,18 @@
 # Release and Distribution
 
-Last reviewed: 2026-11-08
+Last reviewed: 2026-11-09
 
 Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
 
-The published line is **0.1.27** (2026-11-09), cut from `main`. It is the first
-public build since 0.1.21: 0.1.24–0.1.26 were local iterations that were never
-tagged. What it carries is in `CHANGELOG.md`; the install steps are in
-[install.md](install.md).
+The published line is **0.1.28** (2026-11-09), cut from `main`. 0.1.27 was the
+first public build since 0.1.21 and 0.1.28 is the patch that followed it the
+same day: an export that cannot write where the owner asked now says which
+folder refused and what to do. 0.1.24–0.1.26 were local iterations that were
+never tagged. What each build carries is in `CHANGELOG.md`; the install steps
+are in [install.md](install.md).
 
 Five assets are published per release:
 
@@ -29,7 +31,8 @@ a missing or mismatched Flatpak is incomplete, not "four out of five".
 
 All five assets for 0.1.27 were built and installed on the three hosts before
 publication, from `main` at `9f86d514`, and uploaded after the tag run so the
-published bytes are the tested ones:
+published bytes are the tested ones. The 0.1.28 table replaces it below once
+that build is published.
 
 | Asset | Bytes | SHA-256 |
 | --- | --- | --- |

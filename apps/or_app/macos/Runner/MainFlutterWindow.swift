@@ -198,6 +198,18 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
   ) {
     let panel = NSSavePanel()
     panel.canCreateDirectories = true
+    // Opens in Movies rather than wherever the panel was last used. Desktop,
+    // Documents and Downloads are held back from an app until the owner allows
+    // it, and this build is ad-hoc signed, so every rebuild can look like a new
+    // app to that decision; an export saved into one of them then fails to
+    // write beside the chosen file with nothing but "Operation not permitted".
+    // Movies needs no grant and is where video already lives.
+    if let movies = FileManager.default.urls(
+      for: .moviesDirectory,
+      in: .userDomainMask
+    ).first, FileManager.default.fileExists(atPath: movies.path) {
+      panel.directoryURL = movies
+    }
     panel.nameFieldStringValue = suggestedName
     panel.prompt = "Export"
     // Neutral on purpose: the name field starts with the suggested file name
@@ -243,9 +255,12 @@ private final class MacOSScopedFileAccessPlugin: NSObject, FlutterPlugin {
     do {
       try bookmarks.store(urls: [destination.deletingLastPathComponent()])
     } catch {
-      // Reopening the folder next launch is a convenience; the save panel has
-      // already granted this process the right to write here, so a bookmark
-      // that cannot be stored must not cancel the export the owner confirmed.
+      // Reopening the folder next launch is a convenience; the panel already
+      // returned a destination the owner confirmed, so a bookmark that cannot
+      // be stored must not cancel that export. It grants no write rights on its
+      // own: this build is not sandboxed and folder access is still the
+      // system's to allow, which is why the writer names the folder it could
+      // not use instead of failing with a bare permission error.
       _ = error
     }
     result(destination.path)

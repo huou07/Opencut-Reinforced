@@ -1463,9 +1463,7 @@ fn create_staging_directory(destination: &Path) -> Result<PathBuf, ExportEncodeE
             Ok(()) => return Ok(directory),
             Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(ExportEncodeError(format!(
-                    "could not create export staging directory: {error}"
-                )));
+                return Err(ExportEncodeError(describe_staging_failure(parent, &error)));
             }
         }
     }
@@ -1499,6 +1497,85 @@ impl Drop for StagingDirectoryGuard {
 }
 
 #[cfg(unix)]
+/// Names the folder that refused the write and says what the owner can do
+/// about it, because the bare OS text ("Operation not permitted (os error 1)")
+/// leaves someone with no way to tell a full disk from a protected folder.
+///
+/// A macOS app that is not sandboxed still needs consent before it writes into
+/// Desktop, Documents, Downloads, an external volume or a folder another app
+/// owns; an ad-hoc signed build cannot rely on an earlier grant surviving the
+/// next build, so this is the error a fresh download hits first.
+fn describe_staging_failure(parent: &Path, error: &std::io::Error) -> String {
+    let folder = parent.display();
+    if error.kind() == ErrorKind::PermissionDenied {
+        return format!(
+            "the system did not allow this app to write in {folder} ({error}). \
+             Choose a folder inside your home folder, such as Movies, or allow this app to \
+             write there in System Settings, then export again."
+        );
+    }
+    if error.kind() == ErrorKind::NotFound {
+        return format!(
+            "the folder {folder} does not exist any more ({error}). Choose the destination again."
+        );
+    }
+    format!("could not write in {folder}: {error}")
+}
+
+/// Checks that an export can be written where the owner asked, before a job is
+/// queued.
+///
+/// The writer creates its staging directory beside the destination, so the
+/// question is whether that folder accepts a new directory. Asking first turns
+/// a slow export that dies at its first frame into an immediate, actionable
+/// answer while the dialog the owner just used is still on screen.
+pub fn check_export_destination(destination: &Path) -> Result<(), ExportEncodeError> {
+    if destination.is_dir() {
+        return Err(ExportEncodeError(
+            "Export destination is a folder. Choose a file name and try again.".to_string(),
+        ));
+    }
+    let parent = destination
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    // A file that already exists and belongs to someone else refuses the write
+    // even when its folder accepts it, and that failure only shows up once the
+    // encoder opens it. Opening without truncating answers the question without
+    // touching the bytes.
+    if destination.exists() {
+        match fs::OpenOptions::new().write(true).open(destination) {
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::PermissionDenied => {
+                return Err(ExportEncodeError(format!(
+                    "the file {} cannot be replaced ({error}). Choose a different name, or \
+                     delete it first if you no longer need it.",
+                    destination.display()
+                )));
+            }
+            Err(error) => {
+                return Err(ExportEncodeError(format!(
+                    "the file {} cannot be written ({error}). Choose a different name.",
+                    destination.display()
+                )));
+            }
+        }
+    }
+    let probe = parent.join(format!(
+        ".or-export-check-{}-{}",
+        std::process::id(),
+        STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    match create_private_directory(&probe) {
+        Ok(()) => {
+            let _ = fs::remove_dir(&probe);
+            Ok(())
+        }
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(ExportEncodeError(describe_staging_failure(parent, &error))),
+    }
+}
+
 fn create_private_directory(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::DirBuilderExt;
 
@@ -1601,5 +1678,112 @@ mod quality_tests {
             FfmpegExportProfile::MatroskaFfv1PcmS16le => capability.lossless_available,
         };
         assert!(preferred_available, "{preferred:?} is not available");
+    }
+}
+
+#[cfg(all(test, unix))]
+mod destination_tests {
+    use super::{
+        ExportWriterOptions, FfmpegExportProfile, FfmpegExportWriter, check_export_destination,
+    };
+    use std::os::unix::fs::PermissionsExt;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let directory =
+            std::env::temp_dir().join(format!("or-destination-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).expect("scratch");
+        directory
+    }
+
+    fn deny_writes(directory: &std::path::Path) {
+        let mut permissions = std::fs::metadata(directory)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o500);
+        std::fs::set_permissions(directory, permissions).expect("chmod");
+    }
+
+    fn allow_writes(directory: &std::path::Path) {
+        let mut permissions = std::fs::metadata(directory)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(directory, permissions).expect("chmod");
+    }
+
+    #[test]
+    fn a_writable_folder_passes_the_preflight_and_leaves_nothing_behind() {
+        let directory = scratch("writable");
+        let destination = directory.join("cut.mp4");
+        check_export_destination(&destination).expect("writable folder");
+        let leftovers: Vec<_> = std::fs::read_dir(&directory)
+            .expect("read")
+            .filter_map(Result::ok)
+            .map(|entry| entry.file_name())
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
+        allow_writes(&directory);
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn a_folder_that_refuses_writes_names_itself_and_says_what_to_do() {
+        let directory = scratch("readonly");
+        deny_writes(&directory);
+        let error = check_export_destination(&directory.join("cut.mp4"))
+            .expect_err("a read-only folder cannot stage");
+        let text = error.to_string();
+        assert!(text.contains(&directory.display().to_string()), "{text}");
+        assert!(text.contains("did not allow this app to write"), "{text}");
+        assert!(
+            text.contains("Choose a folder inside your home folder"),
+            "{text}"
+        );
+        allow_writes(&directory);
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn a_read_only_destination_file_is_named_rather_than_swallowed() {
+        let directory = scratch("readonly-file");
+        let destination = directory.join("cut.mp4");
+        std::fs::write(&destination, b"old export").expect("seed");
+        let mut permissions = std::fs::metadata(&destination)
+            .expect("metadata")
+            .permissions();
+        permissions.set_mode(0o400);
+        std::fs::set_permissions(&destination, permissions).expect("chmod");
+        let error = check_export_destination(&destination).expect_err("read-only file");
+        let text = error.to_string();
+        assert!(text.contains(&destination.display().to_string()), "{text}");
+        assert!(text.contains("cannot be replaced"), "{text}");
+        allow_writes(&directory);
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn the_writer_reports_the_same_guidance_when_it_is_the_first_to_fail() {
+        let directory = scratch("writer");
+        deny_writes(&directory);
+        let error = FfmpegExportWriter::create_with_options(
+            directory.join("cut.mp4"),
+            ExportWriterOptions {
+                profile: FfmpegExportProfile::MatroskaFfv1PcmS16le,
+                quality: or_core::ExportQuality::Quality,
+                performance: or_core::PerformanceProfile::Automatic,
+                preferred_h264_encoder: None,
+                width: 320,
+                height: 240,
+                frame_rate_numerator: 30,
+                frame_rate_denominator: 1,
+            },
+        )
+        .map(|_| ())
+        .expect_err("staging must fail");
+        let text = error.to_string();
+        assert!(text.contains("did not allow this app to write"), "{text}");
+        allow_writes(&directory);
+        let _ = std::fs::remove_dir_all(&directory);
     }
 }

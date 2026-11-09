@@ -13,6 +13,32 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.28 — 2026-11-09
+
+An export that failed because the destination folder refused the write used to
+stop with `Operation not permitted (os error 1)` and nothing else, which leaves
+the owner no way to tell a protected folder from a full disk.
+
+### Fixed
+
+- **Export names the folder it could not write in.** The writer stages beside
+  the destination, and that failure is now reported with the folder path plus
+  what to do ("Choose a folder inside your home folder, such as Movies, or
+  allow this app to write there in System Settings"). Verified on macOS by
+  driving the app against a folder that refuses new entries; measured before
+  the change, the same export printed only the OS error.
+- **The destination is checked before the job starts.** `or export` and the
+  export dialog now answer immediately when the folder refuses a new entry or
+  the chosen file cannot be replaced, instead of rendering frames first and
+  failing at the end.
+- **The export panel opens in Movies** rather than wherever it was last used.
+  Desktop, Documents and Downloads are withheld from an app until the owner
+  allows it, and an ad-hoc signed build can look like a new app to that
+  decision after every update; Movies needs no grant.
+- **A failed export is readable.** The same explanation is repeated as a notice
+  with a Dismiss action, because the top bar keeps only a short line and drops
+  its text entirely on a compact layout.
+
 ## 0.1.27 — 2026-11-09
 
 The first public build since 0.1.21. 0.1.24–0.1.26 were local iterations that

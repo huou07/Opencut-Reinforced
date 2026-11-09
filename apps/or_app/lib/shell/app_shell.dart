@@ -3152,8 +3152,27 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _handleExportChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    // A failed export's message is the whole answer — it names the folder the
+    // system refused and what to do next — but the top bar only keeps a short
+    // line (and drops the text entirely on a compact layout). The same text is
+    // repeated as a notice so the explanation is readable when the export is
+    // the only thing on screen.
+    final status = _export.status;
+    if (_export.failed && status != null) {
+      if (status != _lastExportFailure) {
+        _lastExportFailure = status;
+        OrSnackBar.show(context, status, duration: const Duration(seconds: 12));
+      }
+    } else {
+      _lastExportFailure = null;
+    }
   }
+
+  /// The last failed-export message already shown, so a rebuild does not stack
+  /// another notice on top of the one the owner is reading.
+  String? _lastExportFailure;
 
   Future<void> _cancelExport() => _export.cancel();
 

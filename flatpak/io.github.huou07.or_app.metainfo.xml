@@ -26,6 +26,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.28" date="2026-11-09">
+      <description>
+        <p>An export now names the folder the system refused and what to do about it, instead of stopping on a bare permission error. The export panel starts in Movies so a protected folder is not the default, and a failed export repeats its explanation as a notice that stays readable.</p>
+      </description>
+    </release>
     <release version="0.1.27" date="2026-11-09">
       <description>
         <p>Companion tools with recorded provenance, AI edit plans with edit styles and creative directions, Lottie and glTF sidecars, and a three-host export benchmark.</p>
