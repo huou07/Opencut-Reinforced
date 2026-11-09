@@ -110,30 +110,35 @@ class AppTopBar extends StatelessWidget {
                 ),
                 const SizedBox(width: OrSpacing.x2),
               ],
-              OrFocusRing(
-                radius: 8,
-                child: InkWell(
-                  key: const ValueKey('or-brand-home'),
-                  onTap: onHome,
-                  borderRadius: BorderRadius.circular(OrRadii.small),
-                  child: Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: OrColors.borderStrong),
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: const Text(
-                      'OR',
-                      style: TextStyle(
-                        fontSize: OrType.metadataCompactSize,
-                        fontWeight: FontWeight.w700,
+              // Measured 2026-11-09 at 320 px: with the brand box and divider
+              // in place the title had 10 px and its own save dot overflowed
+              // by 5. Below 360 px the box is redundant with the leading back
+              // control, so the title keeps the room instead.
+              if (!compact || constraints.maxWidth >= 360)
+                OrFocusRing(
+                  radius: 8,
+                  child: InkWell(
+                    key: const ValueKey('or-brand-home'),
+                    onTap: onHome,
+                    borderRadius: BorderRadius.circular(OrRadii.small),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: OrColors.borderStrong),
+                        borderRadius: BorderRadius.circular(7),
+                      ),
+                      child: const Text(
+                        'OR',
+                        style: TextStyle(
+                          fontSize: OrType.metadataCompactSize,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               if (showFullBrand) ...[
                 const SizedBox(width: OrSpacing.x3),
                 const Text(
@@ -144,9 +149,15 @@ class AppTopBar extends StatelessWidget {
                   ),
                 ),
               ],
-              const SizedBox(width: OrSpacing.x4),
-              Container(width: 1, height: 24, color: OrColors.border),
-              const SizedBox(width: OrSpacing.x4),
+              // Measured 2026-11-09 at 320 px in the compact editor: the
+              // brand block, divider and actions came to 302 px against 296 px
+              // of room, so the title row overflowed. The framing gaps shrink
+              // in the compact bar; no control is removed.
+              if (!compact || constraints.maxWidth >= 360) ...[
+                SizedBox(width: compact ? OrSpacing.x2 : OrSpacing.x4),
+                Container(width: 1, height: 24, color: OrColors.border),
+              ],
+              SizedBox(width: compact ? OrSpacing.x2 : OrSpacing.x4),
               Expanded(
                 child: Row(
                   children: [

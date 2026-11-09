@@ -480,6 +480,14 @@ pub const TOOLS: &[ToolDescriptor] = &[
         homepage: "https://www.remotion.dev",
         install_page: "https://www.remotion.dev/docs/",
         install_commands: &[InstallCommand {
+            platform: Platform::MacOs,
+            command: "npx create-video@latest",
+            note: "Per project, not per machine; needs Node.js and a browser download.",
+        }, InstallCommand {
+            platform: Platform::Windows,
+            command: "npx create-video@latest",
+            note: "Per project, not per machine; needs Node.js and a browser download.",
+        }, InstallCommand {
             platform: Platform::Linux,
             command: "npx create-video@latest",
             note: "Per project, not per machine; needs Node.js and a browser download.",
@@ -506,6 +514,14 @@ pub const TOOLS: &[ToolDescriptor] = &[
         homepage: "https://motioncanvas.io",
         install_page: "https://motioncanvas.io/docs/quickstart",
         install_commands: &[InstallCommand {
+            platform: Platform::MacOs,
+            command: "npm init @motion-canvas@latest",
+            note: "Per project, not per machine; needs Node.js.",
+        }, InstallCommand {
+            platform: Platform::Windows,
+            command: "npm init @motion-canvas@latest",
+            note: "Per project, not per machine; needs Node.js.",
+        }, InstallCommand {
             platform: Platform::Linux,
             command: "npm init @motion-canvas@latest",
             note: "Per project, not per machine; needs Node.js.",
@@ -524,6 +540,42 @@ pub const TOOLS: &[ToolDescriptor] = &[
         platforms: ALL,
         remove_hint: "Delete the project folder; Motion Canvas is installed per project and OR stores nothing else.",
         update_hint: "Run npm update inside the project.",
+    },
+    ToolDescriptor {
+        id: "lottie",
+        name: "Lottie renderer",
+        category: ToolCategory::Animation,
+        summary: "Draw a Lottie animation with a browser and save it as a video or an image sequence.",
+        benefit: "An After Effects animation renders without OR carrying a Lottie runtime: the animation file stays the source, and the render lands as a clip with that file recorded beside it.",
+        license: "MIT (puppeteer-lottie, lottie-web)",
+        license_note: Some(
+            "Runs the animation in a browser OR starts; OR bundles neither the renderer nor a Chromium download.",
+        ),
+        homepage: "https://github.com/transitive-bullshit/puppeteer-lottie",
+        install_page: "https://github.com/transitive-bullshit/puppeteer-lottie#readme",
+        install_commands: &[InstallCommand {
+            platform: Platform::MacOs,
+            command: "npm install puppeteer-lottie",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }, InstallCommand {
+            platform: Platform::Windows,
+            command: "npm install puppeteer-lottie",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }, InstallCommand {
+            platform: Platform::Linux,
+            command: "npm install puppeteer-lottie",
+            note: "Per project, not per machine; needs Node.js and a browser.",
+        }],
+        size_hint: "about 300 MB with the browser download",
+        runtime: "Node.js and a Chromium browser",
+        gui_program: None,
+        probe: CommandSpec::new("npx", &["--no-install", "puppeteer-lottie", "--version"]),
+        outputs: &[OutputKind::Lottie, OutputKind::Video, OutputKind::ImageSequence],
+        project_scoped: true,
+        removable: true,
+        platforms: ALL,
+        remove_hint: "Delete the renderer folder; it is installed per project and OR stores nothing else.",
+        update_hint: "Run npm update inside the renderer folder.",
     },
 ];
 

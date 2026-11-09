@@ -1,0 +1,17 @@
+{
+  "schema": "or.tool-provenance/1",
+  "tool_id": "lottie",
+  "tool_name": "Lottie renderer",
+  "tool_category": "animation",
+  "tool_version": "v24.19.0",
+  "command": [
+    "node",
+    "scripts/lottie-render/render.js",
+    "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/lottie-render/or-badge.json",
+    "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-lottie-badge.mp4",
+    "640",
+    "360"
+  ],
+  "source_manifest": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/lottie-render/or-badge.json",
+  "output": "/Users/meomeo/Documents/vibecode projects/Opencut Reinforced/scripts/ui_scenarios/companion-lottie-badge.mp4"
+}

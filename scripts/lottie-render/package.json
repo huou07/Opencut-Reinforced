@@ -1,0 +1,11 @@
+{
+  "name": "or-lottie-render",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Renders a Lottie animation to a video file for Opencut Reinforced, outside the app.",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer-lottie": "^1.0.9",
+    "puppeteer-lottie-cli": "^1.0.9"
+  }
+}
