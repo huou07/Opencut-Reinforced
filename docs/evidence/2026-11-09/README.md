@@ -216,8 +216,9 @@ Defects found and fixed:
    now name all three platforms.
 
 Selector mistakes in the audit scenarios themselves were fixed rather than
-worked around: the advanced clip sheet's buttons carry labels but no keys, and
-the export control is `export-project`, not `Export`.
+worked around: the advanced clip sheet's buttons carry labels but almost no
+keys, so `Close` gained `timeline-advanced-close` and both journeys select it by
+key; the export control is `export-project`, not `Export`.
 
 ### Benchmark
 
@@ -268,6 +269,24 @@ copy in `/Applications`, and smoke-tested: one 1470x923 window
 The Debian lane was run twice: the debug bundle first (deb 101 s, journey
 317 s, `RESULT: LOCAL_LANE=PASS`), then the release bundle for the shipped
 artifact (`deb` 87 s, `RESULT: LOCAL_LANE=PASS`).
+
+All three packages were rebuilt once more at `436a1c03`, because that revision
+carries one Dart change (`timeline-advanced-close`) after `e49cb478`; nothing
+else in `crates/`, `apps/` or `scripts/` moved between them
+(`git diff --stat e49cb478..436a1c03 -- crates apps scripts flatpak` reports only
+the Flatpak manifest). Final artifacts:
+
+| Artifact | Bytes | SHA-256 | Installed and smoke-tested |
+| --- | --- | --- | --- |
+| `dist/Opencut-Reinforced-0.1.27-arm64.dmg` | 38,066,213 | `d429858ad45d4e8d152391255945e332738a93b8e6952624d70f1d973a85ef7e` | `hdiutil verify` VALID |
+| `opencut-reinforced-linux-x64-release.deb` | 23,439,500 | `9e808b9fc3ca1cdcda1da01a809e0111dd3630a273eca425f5648a4c07aa3297` | lane `deb PASS 84.96 s` |
+| `opencut-reinforced-0.1.27-x86_64.flatpak` | 22,599,040 | `deda1623de06f83beebf86e4d7c05419c942005da929e8ecbe486a2e23991d1a` | `flatpak install --user`, metadata lists `pulseaudio` |
+| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,408,276 | `fb71d7ff2835613e377eecf247ee1f0445abe693c8b81f9f0a6793db69647331` | `/VERYSILENT` exit 0, `or version` 0.1.27, catalog lists `lottie`/`gltf` |
+| `or-windows-x64-release.zip` | 35,058,392 | `43d20867b3436f1baf165416194c9e0205b0dc32f2b3c2054477cf3902978cab` | lane ZIP install/replacement/removal PASS |
+
+The DMG was installed over `/Applications` and the setup over
+`%LOCALAPPDATA%\Programs\Opencut Reinforced`; the earlier `e49cb478` builds are
+superseded, not kept as claims.
 
 ### Flatpak: package PASS, sandbox runtime BLOCKED
 
@@ -382,8 +401,11 @@ resampler for another and needs a frame-level comparison first.
 
 ### Checkpoint for the next session
 
-State at the end of this session: all three hosts at `00e1f517`, working trees
+State at the end of this session: all three hosts at `436a1c03`, working trees
 clean (Windows has an untracked `.cargo/`), nothing pushed, no tag or release.
+The packages in `dist/` and on the two other hosts were rebuilt at that
+revision and installed; the macOS bundle was launched from the new DMG and its
+window captured (`docs/evidence/2026-11-09/macos/installed-final.png`).
 
 Ranked next steps, with the command that starts each:
 
