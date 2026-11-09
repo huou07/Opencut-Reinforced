@@ -330,7 +330,8 @@ class _ExternalToolsPanelState extends State<ExternalToolsPanel> {
                   onSetup: tool.installCommand == null
                       ? null
                       : () => _runSetup(tool, remove: false),
-                  onRemove: CompanionSetup.removalFor(tool.installCommand) == null
+                  onRemove:
+                      CompanionSetup.removalFor(tool.installCommand) == null
                       ? null
                       : () => _runSetup(tool, remove: true),
                   onToggle: () => setState(
@@ -659,9 +660,7 @@ class _ToolRow extends StatelessWidget {
                 FilledButton(
                   key: ValueKey('companion-tool-${tool.id}-setup'),
                   onPressed: settingUp ? null : onSetup,
-                  child: Text(
-                    tool.ready ? 'Run setup again' : 'Set up here',
-                  ),
+                  child: Text(tool.ready ? 'Run setup again' : 'Set up here'),
                 ),
               if (onSetup != null) const SizedBox(width: OrSpacing.x2),
               if (settingUp)

@@ -160,7 +160,10 @@ void main() {
     // path as an argument, so no shell ever parses it.
     final document = host.openCommandFor(r'C:\Users\ana\clip.mp4');
     expect(document.program, 'rundll32');
-    expect(document.arguments, [r'url.dll,FileProtocolHandler', r'C:\Users\ana\clip.mp4']);
+    expect(document.arguments, [
+      r'url.dll,FileProtocolHandler',
+      r'C:\Users\ana\clip.mp4',
+    ]);
     final folder = host.openCommandFor(r'C:\Users\ana\Downloads');
     expect(folder.program, 'rundll32');
   });
@@ -171,7 +174,8 @@ void main() {
       isMacOS: true,
       isLinux: false,
       environment: {'HOME': '/Users/ana'},
-      executablePath: '/Applications/Opencut Reinforced.app/Contents/MacOS/or_app',
+      executablePath:
+          '/Applications/Opencut Reinforced.app/Contents/MacOS/or_app',
     );
     expect(mac.openCommandFor('/tmp/x.mp4').program, 'open');
     const linux = HostPlatform(

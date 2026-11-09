@@ -36,9 +36,8 @@ void main() {
   test('output and the exit code come back to the caller', () async {
     if (Platform.isWindows) return;
     final lines = <String>[];
-    final result = await const CompanionSetup(
-      isWindows: false,
-    ).run('echo set-up-line; exit 3', onLine: lines.add);
+    final result = await const CompanionSetup(isWindows: false)
+        .run('echo set-up-line; exit 3', onLine: lines.add);
     expect(result.exitCode, 3);
     expect(result.succeeded, isFalse);
     expect(result.output, contains('set-up-line'));

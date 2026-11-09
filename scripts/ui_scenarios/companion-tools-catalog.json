@@ -5,7 +5,7 @@
     "width": 1440,
     "height": 900
   },
-  "description": "The companion catalog is readable and honest from the UI alone. Settings \u2192 Resources names how many of the catalog answer on this machine, each row states its own detection state and version, a ready tool can be re-checked, and a tool that is not installed shows its own install guidance and download page instead of pretending to be available. The journey does not install anything: the mission forbids changing this machine's toolchain, and the catalog's contract is that OR never downloads or installs from this screen.",
+  "description": "The companion catalog is readable and honest from the UI alone. Settings → Resources names how many of the catalog answer on this machine, each row states its own detection state and version, a ready tool can be re-checked, and a tool that is not installed shows its own install guidance and download page instead of pretending to be available. The journey does not install anything: the mission forbids changing this machine's toolchain, and the catalog's contract is that OR never downloads or installs from this screen. It also proves the one-click setup control exists for a tool that states its command.",
   "fixtures": [],
   "steps": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "op": "expect",
-      "label_regex": "Ready \u00b7 ",
+      "label_regex": "Ready · ",
       "detail": "a tool that answered is shown ready with the version it reported"
     },
     {
@@ -131,6 +131,25 @@
     {
       "op": "shot",
       "name": "catalog-rechecked"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "companion-tool-lottie"
+      }
+    },
+    {
+      "op": "pump"
+    },
+    {
+      "op": "expect",
+      "key": "companion-tool-lottie-setup",
+      "detail": "a tool whose catalog entry states a command can be set up from this screen instead of a terminal"
+    },
+    {
+      "op": "expect",
+      "key": "companion-tool-lottie-page",
+      "detail": "the download page stays available for a tool the app cannot install by itself"
     }
   ]
 }

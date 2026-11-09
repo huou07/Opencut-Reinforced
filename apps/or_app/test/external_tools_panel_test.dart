@@ -182,10 +182,7 @@ void main() {
     await tester.pumpWidget(
       _host(
         tools: [
-          _tool(
-            id: 'lottie',
-            installCommand: 'npm install puppeteer-lottie',
-          ),
+          _tool(id: 'lottie', installCommand: 'npm install puppeteer-lottie'),
         ],
       ),
     );

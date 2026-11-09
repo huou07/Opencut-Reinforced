@@ -139,9 +139,7 @@ class CompanionSetupResult {
     if (succeeded) {
       return 'Setup finished in ${elapsed.inSeconds}s.';
     }
-    final hint = output.isEmpty
-        ? 'it printed nothing'
-        : output.last;
+    final hint = output.isEmpty ? 'it printed nothing' : output.last;
     return 'Setup failed with exit code $exitCode: $hint';
   }
 }
