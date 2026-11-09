@@ -15,6 +15,7 @@ const FIXTURE: &str = "tests/fixtures/tiny.mkv";
 const AUDIO_FIXTURE: &str = "tests/fixtures/tiny.wav";
 const MP3_FIXTURE: &str = "tests/fixtures/cc0_music_excerpt.mp3";
 const PHONE_FIXTURE: &str = "tests/fixtures/tiny_h264_aac.mp4";
+const EMPTY_AUDIO_FIXTURE: &str = "tests/fixtures/or-ffv1-empty-audio.mkv";
 const BIG_BUCK_BUNNY_FIXTURE: &str = "tests/fixtures/big_buck_bunny_1080p_h264_aac.mp4";
 const PHONE_PORTRAIT_FIXTURE: &str = "tests/fixtures/phone_portrait_90_h264_aac.mp4";
 
@@ -804,4 +805,24 @@ fn granted_private_file_decodes_without_reopening_and_clones_have_independent_cu
     drop(first);
     drop(second);
     std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn software_decoder_treats_a_track_with_no_audio_packets_as_silence() {
+    // Matroska indexes keyframes, so a seek aimed at the audio stream of a file
+    // whose audio track carries no packets fails with a bare error that FFmpeg
+    // reports as "Operation not permitted". That failure used to abort an export
+    // before its first frame; the track has to read as silence instead.
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(EMPTY_AUDIO_FIXTURE);
+    let source = MediaSourceRef::local_file(file_uri(&path)).unwrap();
+    let decoder = SoftwareMediaDecoder::new(&source, budgets()).unwrap();
+    let snapshot = snapshot(time(0, 1), time(1, 2));
+    let queue = SnapshotQueue::new(snapshot, 16).unwrap();
+    let cancellation = CancellationToken::new();
+
+    let decoded = decoder
+        .decode_audio(snapshot, &queue, &cancellation)
+        .expect("an audio track with no packets decodes as silence, not an error");
+    assert_eq!(decoded, 0);
+    assert!(queue.try_pop_current().unwrap().is_none());
 }

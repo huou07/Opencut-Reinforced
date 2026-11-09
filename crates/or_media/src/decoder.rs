@@ -1402,19 +1402,37 @@ fn seek_to_time(
     let stream_index = i32::try_from(stream_index).map_err(|_| DecodeError::TimestampOverflow)?;
     // The wrapper's seek method only targets the global time base. Stream PTS
     // seeking is needed to select the preceding audio packet/keyframe exactly.
+    if seek_to_pts(input, stream_index, seek_pts) {
+        return Ok(());
+    }
+    // A stream seek asks the container for *that* stream's packet at the
+    // timestamp, and some containers index only their video track: a Matroska
+    // whose audio track declares a duration but carries no audio packets
+    // answers a stream seek with a bare failure, which FFmpeg renders as
+    // "Operation not permitted". Fall back to the container time base; a
+    // container that cannot seek at all (a pipe, an unindexed file) is not an
+    // error either, because the decode loops discard everything before the
+    // range they were asked for.
+    let micros = time_to_rate_units_floor(time, av_time_base_rate())?.max(0);
+    let _ = seek_to_pts(input, -1, micros);
+    Ok(())
+}
+
+/// The container-level seek timestamp unit: microseconds.
+fn av_time_base_rate() -> RationalRate {
+    RationalRate::new(1_000_000, 1).expect("the container time base is a valid rate")
+}
+
+fn seek_to_pts(input: &mut format::context::Input, stream_index: i32, pts: i64) -> bool {
     let result = unsafe {
         ffmpeg::ffi::av_seek_frame(
             input.as_mut_ptr(),
             stream_index,
-            seek_pts,
+            pts,
             ffmpeg::ffi::AVSEEK_FLAG_BACKWARD,
         )
     };
-    if result < 0 {
-        Err(DecodeError::Ffmpeg(FfmpegError::from(result)))
-    } else {
-        Ok(())
-    }
+    result >= 0
 }
 
 #[derive(Clone, Copy)]

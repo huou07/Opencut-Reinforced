@@ -39,6 +39,15 @@ exists to prove the import gate refuses a codec this build cannot decode instead
 of admitting a clip that would not play; on a host that can decode AV1 the
 scenario's expectation would need revisiting.
 
+`or-ffv1-empty-audio.mkv` is the shape an agent renderer wrote that broke
+exports: one second of FFV1 at 64x64 with a `pcm_s16le` audio stream that
+declares a duration and carries **no audio packets**. Generated with
+`ffmpeg -f lavfi -i color=c=red:s=64x64:r=10:d=1 -f lavfi -i
+anullsrc=r=48000:cl=stereo -map 0:v -map 1:a -c:v ffv1 -c:a pcm_s16le -af
+"atrim=0:0"`, SHA-256 `26f20eb001a9e663dfc052aa6317a3cac338c28dc4b101b2a25b8c7ca0b4cb46` (2,309 bytes). Matroska indexes keyframes only, so
+a seek aimed at stream 1 fails outright and FFmpeg renders that bare failure as
+"Operation not permitted"; the file keeps that regression covered.
+
 The packaged desktop product journey fetches the same 30-second source MP4
 from the immutable upstream revision above and verifies its size
 (`22718509` bytes) and SHA-256
