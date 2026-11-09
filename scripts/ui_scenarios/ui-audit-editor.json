@@ -1,0 +1,186 @@
+{
+  "name": "ui-audit-editor",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "description": "Reads the editor with one real clip on a track: every tool tab, the inspector, the assistant rail, the transport and the timeline toolbar. The audit needs to see what a first-time editor sees, not an empty project.",
+  "fixtures": [
+    "copy:scripts/ui_scenarios/companion-ffmpeg-shot.mp4"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Audit project"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "after-create"
+    },
+    {
+      "op": "shot",
+      "name": "after-create"
+    },
+    {
+      "op": "tree",
+      "name": "editor-empty"
+    },
+    {
+      "op": "shot",
+      "name": "editor-empty"
+    },
+    {
+      "op": "picker"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "companion-ffmpeg-shot.mp4",
+      "budget_ms": 60000
+    },
+    {
+      "op": "tree",
+      "name": "media-tab"
+    },
+    {
+      "op": "shot",
+      "name": "media-tab"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "expect_absent",
+      "key": "timeline-empty-import-media"
+    },
+    {
+      "op": "wait",
+      "text": "companion-ffmpeg-shot.mp4",
+      "budget_ms": 30000
+    },
+    {
+      "op": "tree",
+      "name": "clip-on-timeline"
+    },
+    {
+      "op": "shot",
+      "name": "clip-on-timeline"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-text"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "text-tab"
+    },
+    {
+      "op": "shot",
+      "name": "text-tab"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-audio"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "audio-tab"
+    },
+    {
+      "op": "shot",
+      "name": "audio-tab"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-motion"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "motion-tab"
+    },
+    {
+      "op": "shot",
+      "name": "motion-tab"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tool-media"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-assistant"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "assistant-rail"
+    },
+    {
+      "op": "shot",
+      "name": "assistant-rail"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "editor-tab-inspector"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "inspector"
+    },
+    {
+      "op": "shot",
+      "name": "inspector"
+    }
+  ]
+}

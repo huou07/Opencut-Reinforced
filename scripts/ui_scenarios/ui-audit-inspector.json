@@ -1,0 +1,154 @@
+{
+  "name": "ui-audit-inspector",
+  "harness": "or_ui",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "description": "Audits the surfaces a beginner reaches after the first clip lands: the clip inspector from top to bottom, the clip actions menu, and the export panel. Every screenshot is a surface the UI/UX review needs to judge.",
+  "fixtures": [
+    "copy:scripts/ui_scenarios/companion-ffmpeg-shot.mp4"
+  ],
+  "steps": [
+    {
+      "op": "tap",
+      "selector": {
+        "key": "nav-projects"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "projects-new-project"
+      }
+    },
+    {
+      "op": "enter_text",
+      "selector": {
+        "key": "new-project-name"
+      },
+      "value": "Audit inspector"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "confirm-new-project"
+      }
+    },
+    {
+      "op": "picker"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-empty-import-media"
+      }
+    },
+    {
+      "op": "wait",
+      "text": "companion-ffmpeg-shot.mp4",
+      "budget_ms": 60000
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^media-add-timeline-.*$"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-confirm-insert"
+      }
+    },
+    {
+      "op": "expect",
+      "key_regex": "^timeline-clip-[0-9a-f-]+$"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key_regex": "^timeline-clip-[0-9a-f-]+$"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "inspector-clip"
+    },
+    {
+      "op": "shot",
+      "name": "inspector-clip"
+    },
+    {
+      "op": "tree",
+      "name": "inspector-clip-lower"
+    },
+    {
+      "op": "shot",
+      "name": "inspector-clip-lower"
+    },
+    {
+      "op": "scroll_until",
+      "scroll": "inspector-scroll",
+      "dy": -300,
+      "steps": 6,
+      "key": "inspector-commit-bar"
+    },
+    {
+      "op": "tree",
+      "name": "inspector-clip-bottom"
+    },
+    {
+      "op": "shot",
+      "name": "inspector-clip-bottom"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "timeline-selection-actions"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "clip-actions-menu"
+    },
+    {
+      "op": "shot",
+      "name": "clip-actions-menu"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "label": "Advanced clip actions\u2026"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "clip-advanced"
+    },
+    {
+      "op": "shot",
+      "name": "clip-advanced"
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "Cancel"
+      }
+    },
+    {
+      "op": "tap",
+      "selector": {
+        "key": "Export"
+      }
+    },
+    {
+      "op": "tree",
+      "name": "export-panel"
+    },
+    {
+      "op": "shot",
+      "name": "export-panel"
+    }
+  ]
+}
