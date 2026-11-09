@@ -1,6 +1,6 @@
 # Quality Bar
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-09
 
 Scope: the attributes OR holds itself to, how each is measured, and which gaps
 are known. The current runtime target is the local macOS app on the owner's M5
@@ -577,6 +577,44 @@ The fake server and its scenario are throwaway files; they are not committed.
   this run.
 
 ## Known gaps
+
+### Session 2 (2026-11-09) — what is now measured, and what is still open
+
+Measured this increment, with evidence under
+[docs/evidence/2026-11-09/](../evidence/2026-11-09/README.md):
+
+- **Every claim travels with a host.** Companion-tool provenance, the MCP live
+  handshake and five GUI journeys pass on macOS, Debian and Windows; the Windows
+  runs happened in the console session (`schtasks /IT`), which is the only
+  desktop that host has. A journey that has not been re-run on a host is not a
+  claim about that host.
+- **Throughput is attributed, not just totalled.** Full-pipeline, render-only,
+  decode-only and encode-only rows exist for 1080p and 4K at both output sizes
+  on all three hosts, so a regression names its stage. The 4K→1080p penalty is
+  FFmpeg's scaler inside the decoder (10.0 ms macOS, 12.6 ms Debian, 18.6 ms
+  Windows per frame); decoding native and scaling later would remove it, and
+  that is recorded as a recommendation rather than implemented, because it
+  changes the visual path and needs a frame-level comparison first.
+- **A machine without a usable GPU still renders.** Forcing Debian's Vulkan
+  enumerations to lavapipe, then to nouveau-with-no-card, then to real Vulkan
+  produced three successful exports with identical output size (198.6, 197.9 and
+  197.8 fps on the 60-frame 1080p row), falling back to the OpenGL backend
+  instead of failing.
+
+Still open, stated as limits rather than as work in progress:
+
+- **Flatpak sandbox runtime is BLOCKED on this lab.** The package builds,
+  installs and reports its version and permissions, but `bwrap` cannot create
+  namespaces inside this Debian container (`CapEff: 0000000000000000`), so the
+  installed app has never been run inside the sandbox. A host that can run
+  `bwrap` is the missing condition.
+- **NVIDIA and AMD rates are UNVERIFIED.** No such device exists on the three
+  hosts. Detection, adapter reporting, the no-device fallback and the encoder
+  ladder are tested; the numbers are not.
+- **The packaged-app surface is thinner than the debug lane.** Journeys run
+  against the debug harness; the packaged bundle is covered by install, launch,
+  `or version`, `or tools list` and an export, not by the full journey set.
+
 
 0. Harness wall clock is not app latency. A temporary in-app stopwatch around
    `_openProjectLocation`/`_startProject` (file sink, one `reopen-twice` run on

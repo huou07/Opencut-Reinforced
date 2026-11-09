@@ -731,8 +731,8 @@ pub fn probe_tool(
             executable: None,
             version: None,
             detail: format!(
-                "{} is installed inside a project. OR reads it when that project is open; \
-                 the command below creates one.",
+                "{} is installed inside a project. OR uses it while that project is \
+                 open; run the setup command below in the project folder.",
                 descriptor.name
             ),
         };

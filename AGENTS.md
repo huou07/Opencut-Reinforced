@@ -133,6 +133,9 @@ any other rule to this file.
 - **Roadmap** — current owner-selected focus, acceptance target, deferred work.
   When: choosing what to work on next or checking whether work is in scope.
   Path: `docs/reference/roadmap.md`
+- **Install** — installing, permissions, graphics, uninstall and troubleshooting per platform.
+  When: installing a build, explaining a permission, or diagnosing a failed launch or export.
+  Path: `docs/reference/install.md`
 - **Export performance** — measured export and render rows per host, stage ceilings, and the commands that produce them.
   When: measuring export or render throughput, or comparing the same workload across hosts.
   Path: `docs/reference/export-performance.md`

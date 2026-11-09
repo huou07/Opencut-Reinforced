@@ -1,6 +1,6 @@
 # Technology Review — November 2026
 
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-09
 
 Scope: the adoption review of twenty named repositories plus the alternatives
 that were checked against them. It records what each one is, its licence, its
@@ -165,11 +165,23 @@ concrete route a deferred idea would take.
 | Remotion and Motion Canvas both treat a cut as data built from a composition, never as a baked file | An edit style turns the project's own media into a reviewed plan and then into real clips: one timeline insert per shot plus a title, each its own undo step, with the plan shown — shot order, lengths and why — before anything is written. Nothing is rendered and source media is never touched. | `apps/or_app/lib/library/edit_styles.dart`, `apps/or_app/lib/screens/edit_style_plan_dialog.dart`, `apps/or_app/lib/shell/app_shell.dart`, commit `562e74c7` |
 | Satori's core insight is that a style is structured data (type, colour, layout, captions) rather than an image | Creative directions carry exactly those axes as separate fields and print them as a brief an agent can consume; the renderer stays cosmic-text and wgpu instead of a second rasteriser. A kept copy can be edited section by section. | `apps/or_app/lib/library/creative_directions.dart`, `apps/or_app/lib/screens/creative_direction_editor_dialog.dart`, commit `886af845` |
 | The agent-skill repositories show that the reusable artifact is instructions, not code | OR's own skills live in the assistant workspace (`tooling/dsh-or-skills`), and the assistant reads the same creative directions the Library shows. GSAP's MIT skill text remains the only text from that group an OR skill could build on; ai-kit is unusable because its repository carries no licence file, and Remotion's skill text is licensed material. | `tooling/dsh-or-skills/skills`, `AGENTS.md` routing |
-| Three.js, Rive and dotLottie describe animated scenes richer than a keyframe graph | Deferred, with the route recorded: Three.js only as a pinned, offline sidecar that materialises into MotionScene or a clip; Rive only through the C++ runtime; Lottie only through the MIT Rust `dotlottie-rs` core if import becomes scope. No code from any of them is in the product. | decisions 2–4 above |
+| Three.js, Rive and dotLottie describe animated scenes richer than a keyframe graph | Lottie and glTF are now usable without moving a runtime into the core: both render through a pinned browser sidecar (`scripts/lottie-render` with puppeteer + lottie-web, `scripts/gltf-render` with three.js 0.137), write a video, and record their provenance so the library shows `From Lottie renderer` / `From glTF renderer`. The alpha-preserving python-lottie route ships beside them. Rive is still deferred: the C++ runtime would have to be owned. No renderer entered `or_core`. | `scripts/lottie-render/render.js`, `scripts/gltf-render/render.js`, `crates/or_core/src/external_tools.rs`, journeys `companion-lottie.json`, `companion-gltf.json` |
 | SVGO and resvg describe vector work OR cannot do yet | Deferred with the licence-clean route named: `resvg` (Apache-2.0 OR MIT) if SVG import lands, with `svgtypes`-style normalisation owned in Rust rather than a Node optimiser. | "Alternatives checked" above |
 | Mediabunny and Howler.js describe muxing and playback outside Rust | Not adopted; FFmpeg muxes and `cpal` plays. Nothing in the media path moved. | `crates/or_media`, `crates/or_audio` |
 
 What this does **not** claim: no third-party animation, 3D, vector or Lottie
-runtime entered the product, and none of the deferred routes has a prototype. The
-first four rows are the product changes; the last three are the honest state of
-the deferrals, with the evidence for each still in the tables above.
+runtime entered `or_core`; the Lottie and glTF routes are sidecars that shell out
+to Node and a browser, exactly as decision 2 allows, and Rive, resvg and
+Mediabunny remain deferred without a prototype. The renderer rows above are the
+product changes; the remaining rows are the honest state of the deferrals, with
+the evidence for each still in the tables above.
+
+The sidecar route was chosen over embedding for three reasons that the prototype
+tested: the licence is MIT on both sides and no new Rust dependency entered the
+tree, the maintenance cost is two scripts pinned to a Node version instead of a
+copied-in renderer, and it keeps the editability promise — the source project
+(the `.json` animation or the `.gltf` model) stays beside the rendered clip and
+is named in the provenance record, so a user can reopen it in the tool that made
+it. What it costs is honest: a Chromium download (about 300 MB with the Lottie
+renderer) and a Node dependency, both behind an explicit install step that
+Settings → External tools prints.

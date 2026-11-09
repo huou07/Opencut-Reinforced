@@ -13,6 +13,62 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.27 — 2026-11-09
+
+The first public build since 0.1.21. 0.1.24–0.1.26 were local iterations that
+were never tagged; everything they added is in this build.
+
+### Added
+- **Companion tools have a surface instead of a scavenger hunt.** Settings →
+  External tools lists ten programs — FFmpeg, Node, SVGO, Inkscape, Blender,
+  Audacity, Remotion, Motion Canvas, a Lottie renderer and a glTF renderer —
+  probes each one for presence and version, says honestly what OR does with it,
+  and prints the install command for the current platform when it is missing.
+  A ready tool runs from the same place or from `or tools run`, and a
+  project-scoped tool is read from the project that owns it rather than from the
+  machine.
+- **A companion result keeps its origin.** Writing a result through
+  `or tools provenance write` (or the matching MCP tool) stores a
+  `<media>.orprovenance.json` beside the media. The library shows "From
+  <tool>", the origin dialog shows the source project, the manifest, the exact
+  command and the tool version, and that record survives insertion into the
+  timeline. `or tools provenance read --json` returns the same record to an
+  agent.
+- **Lottie and glTF render through sidecars, not through the core.** Two
+  browser-sidecar scripts (`scripts/lottie-render`, `scripts/gltf-render`) drive
+  a Chromium page with puppeteer and three.js, write a video, and record their
+  provenance like any other companion tool. The alpha-preserving
+  `scripts/lottie_frames.py` route ships beside them for image sequences.
+- **An agent can plan an edit and have it land as clips.** `or.edit-plan/1`
+  documents are reviewed in the app before anything touches the timeline, and
+  creative directions (bundled and user-kept) feed that plan.
+- **A Flatpak build ships** beside the DMG, the `.deb` and the Windows
+  installer, with the audio socket its mixer needs.
+
+### Changed
+- **Performance answers one question: what should this machine use.** The
+  chooser collapsed to the single machine-fit mode, and re-detecting a backend
+  no longer reports a stale check time.
+- **The encode benchmark measures every profile** and splits the 4K stage rows,
+  so a regression is attributed to decode, scale, composite or encode instead of
+  to "export".
+
+### Fixed
+- **A 4K timeline scaled to 1080p is slower on purpose, and now it is explained
+  in `docs/reference/export-performance.md`:** the scaler runs inside FFmpeg's
+  decoder, measured at 10.0 ms, 12.6 ms and 18.6 ms per frame on the three
+  reference hosts.
+- **The bundled `whisper-cli` is built for macOS 13**, not for whatever SDK
+  happened to build it, so the DMG no longer refuses to launch on an older Mac.
+- **The compact top bar no longer overflows** at the 320×440 guard viewport; the
+  redundant brand mark gives its room to the title below 360 px.
+- **`remotion` and `motion-canvas` show an install command on macOS and
+  Windows**, which they previously did not, and a project-scoped tool now says
+  where to run its setup command instead of claiming a project appears by
+  itself.
+- **The advanced clip sheet's Close button is keyed** like every other control
+  in that sheet.
+
 ## 0.1.23 — 2026-11-08
 
 ### Added

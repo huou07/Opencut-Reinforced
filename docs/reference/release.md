@@ -6,38 +6,46 @@ Scope: what is published today, how each desktop release is built and verified,
 and what remains for a broader platform matrix.
 
 ## Current status
-The published line is **0.1.20** (2026-11-06), cut from one pull request whose
-`release-gate` went green and built by one tag run of `desktop-release.yml`. It
-is the line where a batch import can be stopped instead of waited out and where
-scenes ease with a real cubic Bézier curve (scene schema version 4, ADR 0014),
-on top of everything in 0.1.16–0.1.19: the guided first project, scene
-typography in schema version 2, the shape style with a corner radius and a
-two-stop gradient in schema version 3, measured export capability, machine
-facts, removable optional components, library licence credits, the
-preview/export parity lane, the Windows rooted-path fix, the packaged Linux lane
-fix, the Windows harness target, the Windows installer that updates and
-uninstalls over a running copy, and the scene easing curve. Its five assets —
+
+The published line is **0.1.27** (2026-11-09), cut from `main`. It is the first
+public build since 0.1.21: 0.1.24–0.1.26 were local iterations that were never
+tagged. What it carries is in `CHANGELOG.md`; the install steps are in
+[install.md](install.md).
+
+Five assets are published per release:
+
+| Asset | Built by |
+|---|---|
+| `Opencut-Reinforced-<version>-arm64.dmg` | `desktop-release.yml` (macos-15) |
+| `Opencut-Reinforced-<version>-linux-x64.deb` | `desktop-release.yml` (ubuntu-24.04) |
+| `Opencut-Reinforced-<version>-windows-x64-setup.exe` | `desktop-release.yml` (windows-latest) |
+| `Opencut-Reinforced-<version>-windows-x64.zip` | `desktop-release.yml` (windows-latest) |
+| `opencut-reinforced-<version>-x86_64.flatpak` | uploaded by hand — CI does not build it |
+
+The tag run publishes the four CI artifacts and writes `SHA256SUMS.txt`; the
+Flatpak is built locally with `scripts/package_linux_flatpak.sh` and attached to
+the same release, and its entry is appended to `SHA256SUMS.txt`. A release with
+a missing or mismatched Flatpak is incomplete, not "four out of five".
+
+The published **0.1.21** build remains the reference for the previous line, and
+the **0.1.23** artifacts under `dist/release-0.1.23/` are local-only history: they
+were built, installed and exercised in this checkout and never published. The
+0.1.20 notes below are kept because their install receipts still describe how the
+Windows installer and the `.deb` upgrade behave.
+
+Historical receipt — 0.1.20 (2026-11-06): five assets
 `Opencut-Reinforced-0.1.20-arm64.dmg` (37,340,205 B),
 `Opencut-Reinforced-0.1.20-linux-x64.deb` (26,100,464 B),
 `Opencut-Reinforced-0.1.20-windows-x64-setup.exe` (28,647,456 B),
 `Opencut-Reinforced-0.1.20-windows-x64.zip` (41,902,754 B) and
-`SHA256SUMS.txt` — were downloaded again after publication and matched their
-recorded SHA-256 values. Each was then opened from those bytes: the DMG mounted
-read-only ran `or version` (0.1.20) and carried an ad-hoc signature
-(`Identifier=io.github.huou07.orApp`), the `.deb` upgraded an installed 0.1.19
-with `dpkg -i` (`Setting up opencut-reinforced (0.1.20+e5e49c8b7b02)`) and ran
-`/opt/opencut-reinforced/or version` (0.1.20), and the `.setup.exe` upgraded the
+`SHA256SUMS.txt`, each downloaded again after publication and matched against
+its recorded SHA-256. The DMG mounted read-only ran `or version` (0.1.20) with an
+ad-hoc signature (`Identifier=io.github.huou07.orApp`); the `.deb` upgraded an
+installed 0.1.19 with `dpkg -i` (`Setting up opencut-reinforced (0.1.20+e5e49c8b7b02)`)
+and ran `/opt/opencut-reinforced/or version`; the `.setup.exe` upgraded an
 installed 0.1.19 in place on the Windows host with a running app closed by the
-installer (`or: stopping a running copy before touching files`), exiting 0 and
-reporting 0.1.20 afterwards.
-
-Beyond the published line, a **local-only 0.1.23 build** exists for the three
-hosts in this checkout (macOS arm64 DMG, Windows x64 setup + portable zip,
-Debian amd64 deb); it was built, installed and exercised locally and is not
-published: no tag, no hosted job, no GitHub release. Artifact names and SHA-256
-values are in `dist/release-0.1.23/README.md` and the per-host evidence in
-`docs/reference/mission-report.md`.
-
+installer (`or: stopping a running copy before touching files`), exited 0 and
+reported 0.1.20.
 
 Stable releases ship four desktop packages from one source tree:
 **macOS 13+ Apple Silicon** as a `.dmg`, **Linux x86_64** as a `.deb` and a

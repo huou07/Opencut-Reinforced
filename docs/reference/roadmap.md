@@ -1,12 +1,79 @@
 # Active Product Roadmap
 
-Last reviewed: 2026-11-05
+Last reviewed: 2026-11-09
 
 Scope: what the owner selected to build now, what acceptance means, and what is
 deferred. Requirements live in [product.md](product.md); capability contracts in
 [features/](../features/).
 
-## Current focus (owner restatement, 2026-11-05)
+## Current focus (owner restatement, 2026-11-09)
+
+The owner's 2026-11-09 mission is the first public release since 0.1.21, and it
+sets the bar for what "shipped" means from here: a feature is delivered when a
+user can reach it through the real interface, produce the right artefact, and
+still find the origin of that artefact afterwards. Local-only claims stop
+counting.
+
+Delivered in this increment, each with evidence under
+[docs/evidence/2026-11-09/](../evidence/2026-11-09/README.md):
+
+25. **Companion tools are a product surface (owner request, 2026-11-09).** Ten
+    programs — FFmpeg, Node, SVGO, Inkscape, Blender, Audacity, Remotion, Motion
+    Canvas, a Lottie renderer and a glTF renderer — have a catalog entry with
+    licence, output kinds, a probe, the install command per platform and the
+    runtime each one needs. Settings → External tools shows detection, version
+    and health, prints the install command when a tool is missing, and runs a
+    ready tool; `or tools run` is the same path from a terminal. A
+    project-scoped tool is read from the project that owns it, and a catalog
+    entry with only a Linux install line was a real defect that this pass fixed
+    for `remotion` and `motion-canvas`.
+26. **Provenance runs from tool output to the timeline (owner request,
+    2026-11-09).** A companion result written through `or tools provenance
+    write` gets a `<media>.orprovenance.json` record; the library shows "From
+    <tool>", the origin dialog shows the source project, manifest, exact command
+    and tool version, and the record survives insertion into the timeline. The
+    `companion-provenance`, `companion-tools-catalog`, `companion-lottie` and
+    `companion-gltf` journeys drive that on macOS, Debian and Windows, and the
+    MCP surface exposes the same read and write.
+27. **The whole interface was audited, not the new panel (owner request,
+    2026-11-09).** Twelve shipped journeys plus three sweeps read every surface
+    (Home, onboarding, projects, import, library, timeline, preview, inspector,
+    text, captions, animation, MotionScene, effects, audio, export, Performance,
+    Library, edit styles, creative directions, companion tools). Three real
+    defects were fixed: the compact top bar overflowed at 320×440, the advanced
+    clip sheet's Close button carried no key, and the project-scoped tool copy
+    told a user to run `npm install` where a project appears by itself.
+28. **The Rust workspace was reviewed against the quality bar (owner request,
+    2026-11-09).** Clippy is clean apart from a catalogued set of accepted
+    warnings, there is no `async fn` and therefore no lock held across an await,
+    poison recovery is deliberate and consistent, and the panic surface in
+    library code is one length-guarded `validate_png`. Unsafe blocks are
+    concentrated in the platform seams and each has a stated invariant.
+29. **Three hosts, one revision, comparable numbers (owner request,
+    2026-11-09).** Every row is a median of three runs at `118fe99d` on canonical
+    fixtures, split into full pipeline, render-only, decode-only and encode-only,
+    with 1080p and 4K at both output sizes. The two open questions in
+    [export-performance.md](export-performance.md) are answered: the 4K→1080p
+    slowdown is FFmpeg's scaler inside the decoder (10.0, 12.6 and 18.6 ms per
+    frame on the three hosts), and the Windows WebM rate is the same per-frame
+    handoff ratio as Debian rather than a thread-count accident.
+30. **Lottie and glTF render outside the core (owner request, 2026-11-09).** Both
+    go through a browser sidecar (`scripts/lottie-render`, `scripts/gltf-render`)
+    with a committed fixture, a provenance record and a journey; the
+    alpha-preserving python route ships beside them. OR still owns no animation
+    or 3D runtime, which is the decision
+    [technology-review.md](technology-review.md) recorded.
+31. **The remaining host questions were answered where the host allows it (owner
+    request, 2026-11-09).** The Windows GUI was reached through the console
+    session with `schtasks /IT` and five journeys passed there; the MCP handshake
+    now passes on all three hosts against a real descriptor; a machine with an
+    empty or broken Vulkan enumeration falls back to OpenGL and still exports;
+    the Flatpak manifest gained the audio socket its mixer needs. The Flatpak
+    sandbox runtime stays BLOCKED because this Debian host cannot create
+    namespaces, and real NVIDIA/AMD rates stay UNVERIFIED because no such device
+    exists here.
+
+## Focus delivered 2026-11-05 (owner restatement)
 
 The owner's 2026-11-05 mission turns OR into a professional, beginner-usable
 video platform on one shared codebase. The work is organised so each increment is
