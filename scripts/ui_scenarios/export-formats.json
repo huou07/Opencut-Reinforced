@@ -1,0 +1,185 @@
+{
+ "name": "export-formats",
+ "description": "Export the same cut as WebM VP9/Opus and Matroska FFV1/PCM from the real dialog, so the two non-MP4 profiles are proven through the UI and not only through the benchmark.",
+ "viewport": {
+  "width": 1440,
+  "height": 900
+ },
+ "fixtures": [
+  "copy:crates/or_media/tests/fixtures/tiny_h264_aac.mp4"
+ ],
+ "steps": [
+  {
+   "op": "tap",
+   "selector": {
+    "key": "nav-projects"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "projects-new-project"
+   }
+  },
+  {
+   "op": "enter_text",
+   "selector": {
+    "key": "new-project-name"
+   },
+   "value": "Packaged export"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "confirm-new-project"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "No timeline tracks",
+   "budget_ms": 15000
+  },
+  {
+   "op": "picker",
+   "next": "media"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-empty-add-video"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "media-import"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "tiny_h264",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key_regex": "^media-add-timeline-.*$"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Insert",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "timeline-confirm-insert"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "V1",
+   "budget_ms": 20000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-save"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Saved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "workspace-save"
+   }
+  },
+  {
+   "op": "wait_label",
+   "label_regex": "Saved",
+   "budget_ms": 15000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export video",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-intent-smaller"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Continue"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export complete",
+   "budget_ms": 240000
+  },
+  {
+   "op": "shot",
+   "name": "export-complete-webm"
+  },
+  {
+   "op": "tree",
+   "name": "export-complete-webm"
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-project"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export video",
+   "budget_ms": 10000
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "key": "export-intent-lossless"
+   }
+  },
+  {
+   "op": "tap",
+   "selector": {
+    "text": "Continue"
+   }
+  },
+  {
+   "op": "wait",
+   "text": "Export complete",
+   "budget_ms": 240000
+  },
+  {
+   "op": "shot",
+   "name": "export-complete-matroska"
+  },
+  {
+   "op": "tree",
+   "name": "export-complete-matroska"
+  }
+ ]
+}

@@ -241,10 +241,16 @@ success and still write a short clip).
 
 ## CLI and agent surface
 
-`or export start --attach project.json --destination PATH` enqueues the same job
+`or export start --attach ENDPOINT.json --destination PATH` enqueues the same job
 the Export dialog starts — same profiles, quality, short side and validation.
-The destination extension selects the container (`.mp4`, `.webm`, `.mkv`); an
-optional `--profile` must agree with it and the path must be absolute. The
+`--attach` takes the **endpoint descriptor** of a running project host (the file
+the app writes under its support directory, or the one `or session serve
+--descriptor` writes), not a project file; passing a project answers `local IPC
+endpoint descriptor is invalid`. The host that answers must own an export
+runtime: the desktop app does, and `or session serve` does not yet, so a CLI
+export today attaches to the app. The destination extension selects the
+container (`.mp4`, `.webm`, `.mkv`); an optional `--profile` must agree with it
+and the path must be absolute. The
 command waits for the terminal state; `--no-wait` returns the queued job. `or export
 status --job ID` and `or export cancel --job ID` poll or stop it. Because the
 queue is shared, a job the user started in the app can be polled by id. The

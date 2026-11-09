@@ -37,7 +37,7 @@ symlinks (`errno = 1314`), so the tests carry a skip reason instead of failing.
 
 ## UI journeys at the release commit
 
-macOS, all twenty-two shipped scenarios `RESULT: OR_UI=PASS`:
+macOS, all twenty-three shipped scenarios `RESULT: OR_UI=PASS`:
 
 `editor-journey`, `text-journey`, `keyframes`, `motion-scene-edit`,
 `audio-cleanup`, `reduce-noise`, `save-reopen`, `reopen-twice`, `export-encode`,
@@ -45,7 +45,13 @@ macOS, all twenty-two shipped scenarios `RESULT: OR_UI=PASS`:
 `companion-gltf`, `companion-tools-catalog`, `assistant-plan`,
 `style-assistant-plan`, `creative-direction-plan`, `templates-edit-style`,
 `performance-profiles`, `guided-beginner`, `compact-editor-journey`,
-`caption-import`.
+`caption-import`, `export-formats`.
+
+`export-formats` is the one that proves the two non-MP4 profiles through the
+real dialog rather than through the benchmark: the same cut exported as
+`export.webm` (`vp9` + `opus`, 1440x1080) and `export.mkv` (`ffv1` +
+`pcm_s16le`), both `ffprobe`d from `/tmp/or-export-formats/artifacts/replacements`
+after the run. `export-encode` covers MP4 H.264/AAC the same way.
 
 Windows, interactive desktop session 1 through a scheduled task:
 `editor-journey` PASS at `9f86d514` after installing the freshly built setup,
