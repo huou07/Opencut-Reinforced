@@ -614,6 +614,18 @@ fn create_new_project_round_trips_without_clobbering_existing_files() {
 /// timeline already points at. The project names the media by id and the
 /// library names it by path, so neither a re-render nor a new record beside it
 /// may cost the clip its place.
+/// The file URI the app writes, built the way `Uri.file(path)` builds it:
+/// forward slashes, and a third slash in front of an absolute Windows path.
+/// A raw `file://C:\...` is not the same string and does not survive parse.
+fn file_uri(path: &std::path::Path) -> String {
+    let text = path.display().to_string().replace('\\', "/");
+    if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    }
+}
+
 #[test]
 fn rerendering_a_companion_output_keeps_its_library_entry_and_clip() {
     let directory = TestDirectory::new();
@@ -628,7 +640,7 @@ fn rerendering_a_companion_output_keeps_its_library_entry_and_clip() {
         "id": "44444444-4444-4444-8444-444444444444",
         "source": {
             "kind": "local_file",
-            "uri": format!("file://{}", media_path.display()),
+            "uri": file_uri(&media_path),
         },
         "metadata": {
             "format_names": ["mp4"],
@@ -705,10 +717,7 @@ fn rerendering_a_companion_output_keeps_its_library_entry_and_clip() {
         .iter()
         .find(|item| item.id() == media_id)
         .expect("the library entry survives a re-render");
-    assert_eq!(
-        media.source().uri(),
-        format!("file://{}", media_path.display())
-    );
+    assert_eq!(media.source().uri(), file_uri(&media_path));
     let clip_after = reopened
         .timeline()
         .tracks()
