@@ -316,3 +316,26 @@ resampler for another and needs a frame-level comparison first.
   because those buttons carry no keys, unlike the rest of the app.
 - Windows GUI, Flatpak sandbox and NVIDIA/AMD rates stay BLOCKED/UNVERIFIED
   until a host can run them.
+
+### Checkpoint for the next session
+
+State at the end of this session: all three hosts at `00e1f517`, working trees
+clean (Windows has an untracked `.cargo/`), nothing pushed, no tag or release.
+
+Ranked next steps, with the command that starts each:
+
+1. **Windows GUI run** — needs a desktop session. Re-check first:
+   `ssh win11 'query session'` and `tasklist | findstr or_app.exe`. If a session
+   exists, run the scheduled-task pattern in `docs/operations/local-lab.md`
+   against `scripts/ui_scenarios/companion-provenance.json`.
+2. **Flatpak runtime** — needs a host where `bwrap` can create namespaces. Test
+   with `flatpak run --user --command=sh org.gnome.Sdk/x86_64/49 -c "ls /"`
+   before blaming the package; if that prints a listing, the OR package can be
+   judged on its own.
+3. **4K→1080p decode scale** — decode native, composite the scale, and compare
+   `4k-to1080-full` against `4k-full-4kout` plus a frame-level diff:
+   `OR_BENCH_SOURCE=/tmp/or-bench/bench4k.mp4 OR_BENCH_FRAMES=120`.
+4. **NVIDIA/AMD rows** — only a host with the device can produce them; the
+   adapter line in every bench row names what actually rendered.
+5. **Inspector keys** — give the advanced clip sheet's buttons `ValueKey`s like
+   the rest of the app so the sweep does not have to select them by label.
