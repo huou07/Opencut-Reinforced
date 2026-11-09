@@ -31,20 +31,17 @@ void main() {
   late String link;
 
   setUp(() {
-    if (symlinkSkip != null) {
-      return;
-    }
+    // The directories exist on every host; only the link may be unavailable, and
+    // the third case needs `real` even then.
     root = Directory.systemTemp.createTempSync('or-source-path-');
     real = Directory('${root.path}/library')..createSync();
     link = '${root.path}/linked';
-    Link(link).createSync(real.path);
-  });
-
-  tearDown(() {
     if (symlinkSkip == null) {
-      root.deleteSync(recursive: true);
+      Link(link).createSync(real.path);
     }
   });
+
+  tearDown(() => root.deleteSync(recursive: true));
 
   test(
     'a symlinked directory names the same file as its target',

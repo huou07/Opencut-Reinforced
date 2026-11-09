@@ -27,12 +27,19 @@ void main() {
   testWidgets('two projects with one name stay distinguishable by path', (
     tester,
   ) async {
-    final home = Platform.environment['HOME'] ?? '/home/tester';
+    // The list shortens a path with the home directory it knows about, which is
+    // HOME on macOS and Linux and USERPROFILE on Windows. The second project
+    // has to live outside that directory, so the platform that has no /tmp uses
+    // a drive-rooted path instead.
+    final home =
+        Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '/home/tester';
+    final elsewhere = Platform.isWindows
+        ? r'C:\or-repro\repro.orproj'
+        : '/tmp/or-repro/repro.orproj';
     await tester.pumpWidget(
-      _list([
-        _project('$home/Movies/repro.orproj'),
-        _project('/tmp/or-repro/repro.orproj'),
-      ]),
+      _list([_project('$home/Movies/repro.orproj'), _project(elsewhere)]),
     );
 
     expect(find.text('Repro'), findsNWidgets(2));
@@ -44,9 +51,6 @@ void main() {
       subtitles.any((line) => line.startsWith('~/Movies/repro.orproj · ')),
       isTrue,
     );
-    expect(
-      subtitles.any((line) => line.startsWith('/tmp/or-repro/repro.orproj · ')),
-      isTrue,
-    );
+    expect(subtitles.any((line) => line.startsWith('$elsewhere · ')), isTrue);
   });
 }
