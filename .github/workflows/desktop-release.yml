@@ -547,6 +547,36 @@ jobs:
           sha256sum ./* > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Verify the archives carry their licence texts
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The installers ship FFmpeg shared libraries and helper executables, so
+          # a build that forgets their licence texts publishes a licence violation.
+          # The packaging scripts stage the tree; this asserts the finished archive
+          # still has it, so a staging regression cannot reach the release page.
+          version="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' apps/or_app/pubspec.yaml | head -1)"
+          required=(
+            "licenses/FFmpeg/COPYING.LGPLv2.1"
+            "licenses/FFmpeg/FFmpeg-NOTICE.txt"
+            "licenses/Opus/COPYING"
+            "licenses/libvpx/LICENSE"
+            "licenses/libvpx/PATENTS"
+          )
+          deb="dist/Opencut-Reinforced-${version}-linux-x64.deb"
+          listing="$(dpkg-deb --contents "$deb")"
+          for path in "${required[@]}"; do
+            grep -qF "/opt/opencut-reinforced/$path" <<<"$listing" || {
+              echo "the Debian package is missing $path"; exit 1; }
+          done
+          zip="dist/Opencut-Reinforced-${version}-windows-x64.zip"
+          listing="$(unzip -Z1 "$zip")"
+          for path in "${required[@]}"; do
+            grep -qF "/$path" <<<"$listing" || {
+              echo "the Windows archive is missing $path"; exit 1; }
+          done
+          echo "licence texts present in both archives"
+
       - name: Create or update the release
         shell: bash
         env:

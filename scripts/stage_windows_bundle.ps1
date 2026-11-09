@@ -206,37 +206,40 @@ finally {
 }
 
 # Third-party licence texts. The package ships LGPL FFmpeg shared libraries,
-# ffmpeg.exe/ffprobe.exe (which carry libvpx and Opus), and the whisper.cpp
-# speech engine, so each of their licences has to travel with them: shipping the
-# binaries without the texts is a licence violation, and the Linux package has
-# staged the same layout for a while. The hosted job builds FFmpeg from a source
-# tree and the codec sources beside it, so those directories are searched by
-# name; a missing file fails the build here rather than in a published archive.
-function Resolve-LicenceSource {
-  param([string[]]$Candidates, [string]$Name, [string]$FileName)
+# ffmpeg.exe/ffprobe.exe (which statically link libvpx and Opus) and the
+# whisper.cpp speech engine, so each licence travels with the binaries: shipping
+# them without the texts is a licence violation, and the Debian package has
+# staged the same layout for a while. `scripts/ffmpeg-notice.txt` is the same
+# file `scripts/stage_codec_licences.sh` installs on Linux and macOS, so the two
+# packagers cannot state the obligation differently. A missing input fails the
+# build here rather than in a published archive.
+function Find-LicenceFile {
+  param([string[]]$Candidates, [string]$Name, [string[]]$FileNames)
   foreach ($candidate in $Candidates) {
     if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
-    $direct = Join-Path $candidate $FileName
-    if (Test-Path $direct -PathType Leaf) { return $direct }
-    $found = @(Get-ChildItem -Path $candidate -Filter $FileName -Recurse -File -Depth 2 -ErrorAction SilentlyContinue) | Select-Object -First 1
-    if ($null -ne $found) { return $found.FullName }
+    foreach ($fileName in $FileNames) {
+      $direct = Join-Path $candidate $fileName
+      if (Test-Path $direct -PathType Leaf) { return $direct }
+    }
+    foreach ($fileName in $FileNames) {
+      $found = @(Get-ChildItem -Path $candidate -Filter $fileName -Recurse -File -Depth 2 -ErrorAction SilentlyContinue) | Select-Object -First 1
+      if ($null -ne $found) { return $found.FullName }
+    }
   }
-  throw "$Name licence text not found (looked for $FileName under: $(($Candidates | Where-Object { $_ }) -join ', '))"
+  throw "$Name licence text not found (looked for $($FileNames -join ', ') under: $(($Candidates | Where-Object { $_ }) -join ', '))"
 }
 
-$ffmpegSources = @($env:FFMPEG_SOURCE_DIR)
-$ffmpegSources += @(Join-Path (Split-Path -Parent $FfmpegPrefix) 'ffmpeg-8.1.3')
-if ($env:RUNNER_TEMP) { $ffmpegSources += @((Join-Path $env:RUNNER_TEMP 'ffmpeg-8.1.3'), $env:RUNNER_TEMP) }
-$codecSources = @($env:CODEC_NOTICES_DIR)
-$codecSources += @((Join-Path (Split-Path -Parent $FfmpegPrefix) 'desktop-export-codecs'))
+$buildRoot = Split-Path -Parent $FfmpegPrefix
+$ffmpegSources = @($env:FFMPEG_SOURCE_DIR, (Join-Path $buildRoot 'ffmpeg-8.1.3'))
+if ($env:RUNNER_TEMP) { $ffmpegSources += @($env:RUNNER_TEMP, (Join-Path $env:RUNNER_TEMP 'ffmpeg-8.1.3')) }
+$codecSources = @($env:CODEC_NOTICES_DIR, (Join-Path $buildRoot 'desktop-export-codecs'))
 if ($env:RUNNER_TEMP) { $codecSources += @((Join-Path $env:RUNNER_TEMP 'desktop-export-codecs'), $env:RUNNER_TEMP) }
 
-$licenceFiles = @{
-  'licenses/FFmpeg/COPYING.LGPLv2.1' = (Resolve-LicenceSource -Candidates $ffmpegSources -Name 'FFmpeg' -FileName 'COPYING.LGPLv2.1')
-  'licenses/FFmpeg/FFmpeg-NOTICE.txt' = (Resolve-LicenceSource -Candidates $ffmpegSources -Name 'FFmpeg' -FileName 'NOTICE')
-  'licenses/libvpx/LICENSE' = (Resolve-LicenceSource -Candidates $codecSources -Name 'libvpx' -FileName 'LICENSE')
-  'licenses/libvpx/PATENTS' = (Resolve-LicenceSource -Candidates $codecSources -Name 'libvpx' -FileName 'PATENTS')
-  'licenses/Opus/COPYING' = (Resolve-LicenceSource -Candidates $codecSources -Name 'Opus' -FileName 'COPYING')
+$licenceFiles = [ordered]@{
+  'licenses/FFmpeg/COPYING.LGPLv2.1' = (Find-LicenceFile -Candidates $ffmpegSources -Name 'FFmpeg' -FileNames @('COPYING.LGPLv2.1', 'FFmpeg-COPYING.LGPLv2.1'))
+  'licenses/Opus/COPYING' = (Find-LicenceFile -Candidates $codecSources -Name 'Opus' -FileNames @('OPUS-COPYING', 'COPYING'))
+  'licenses/libvpx/LICENSE' = (Find-LicenceFile -Candidates $codecSources -Name 'libvpx' -FileNames @('LIBVPX-LICENSE', 'LICENSE'))
+  'licenses/libvpx/PATENTS' = (Find-LicenceFile -Candidates $codecSources -Name 'libvpx' -FileNames @('LIBVPX-PATENTS', 'PATENTS'))
 }
 foreach ($entry in $licenceFiles.GetEnumerator()) {
   $destination = Join-Path $Bundle $entry.Key
@@ -244,6 +247,12 @@ foreach ($entry in $licenceFiles.GetEnumerator()) {
   if (-not (Test-Path $directory)) { New-Item -ItemType Directory -Path $directory -Force | Out-Null }
   Copy-Item -Path $entry.Value -Destination $destination -Force
 }
+$noticeSource = Join-Path $RepoRoot 'scripts/ffmpeg-notice.txt'
+if (-not (Test-Path $noticeSource -PathType Leaf)) { throw "the FFmpeg notice text is missing: $noticeSource" }
+$ffmpegNoticeDir = Join-Path $Bundle 'licenses/FFmpeg'
+if (-not (Test-Path $ffmpegNoticeDir)) { New-Item -ItemType Directory -Path $ffmpegNoticeDir -Force | Out-Null }
+Copy-Item -Path $noticeSource -Destination (Join-Path $ffmpegNoticeDir 'FFmpeg-NOTICE.txt') -Force
+
 $whisperNoticeDir = Join-Path $Bundle 'licenses/whisper.cpp'
 if (-not (Test-Path $whisperNoticeDir)) { New-Item -ItemType Directory -Path $whisperNoticeDir -Force | Out-Null }
 Set-Content -Path (Join-Path $whisperNoticeDir 'LICENSE') -Encoding utf8 -Value @'

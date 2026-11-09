@@ -1,0 +1,13 @@
+This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
+The corresponding FFmpeg source archive and exact build configuration
+are distributed as Developer Preview release assets. FFmpeg shared
+libraries are separate files beside the Rust bridge and may be replaced
+with a compatible LGPL-compliant build under the applicable license terms.
+The ffmpeg and ffprobe programs beside the application binary are built
+from the same source and configuration for import, media previews,
+and WebM export. FFmpeg's WebM export statically links libvpx and
+libopus; their licenses and the libvpx patent notice are included in
+the adjacent Opus and libvpx directories.
+A package that contains a licenses/x264 directory additionally links
+libx264 (GPL-2.0-or-later) for H.264 delivery; that directory carries the
+x264 licence text and the source offer recorded in the release assets.

@@ -44,6 +44,7 @@
 #   oversight. The publish job separately asserts the paths inside the built
 #   archives: that is a check, not another producer, and should stay.
 set -euo pipefail
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # The contract. Paths are relative to the target directory. Ordered so the
 # first failure reported is the first thing a reader would look for.
@@ -66,22 +67,10 @@ OPTIONAL_LICENCE_PATHS=(
 # this build links FFmpeg and where the corresponding source is published. Keep
 # it identical in every artifact: a reader comparing two packages must not find
 # two different statements of the same obligation.
+# The notice is a file in this directory, not a heredoc, because the Windows
+# packager writes the same text and two copies of one obligation drift.
 write_ffmpeg_notice() {  # target-dir
-  cat > "$1/licenses/FFmpeg/FFmpeg-NOTICE.txt" <<'EOF'
-This application dynamically links FFmpeg 8.1.3 under LGPL-2.1-or-later.
-The corresponding FFmpeg source archive and exact build configuration
-are distributed as Developer Preview release assets. FFmpeg shared
-libraries are separate files beside the Rust bridge and may be replaced
-with a compatible LGPL-compliant build under the applicable license terms.
-The ffmpeg and ffprobe programs beside the application binary are built
-from the same source and configuration for import, media previews,
-and WebM export. FFmpeg's WebM export statically links libvpx and
-libopus; their licenses and the libvpx patent notice are included in
-the adjacent Opus and libvpx directories.
-A package that contains a licenses/x264 directory additionally links
-libx264 (GPL-2.0-or-later) for H.264 delivery; that directory carries the
-x264 licence text and the source offer recorded in the release assets.
-EOF
+  install -m 644 "$script_dir/ffmpeg-notice.txt" "$1/licenses/FFmpeg/FFmpeg-NOTICE.txt"
 }
 
 verify_layout() {  # target-dir
