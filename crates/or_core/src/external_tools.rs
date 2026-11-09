@@ -728,14 +728,12 @@ pub fn parse_version(output: &str) -> Option<String> {
             continue;
         }
         let mut version = String::from(major);
-        let mut dots = 0;
-        for part in parts {
+        for (dots, part) in parts.enumerate() {
             if dots == 2 || part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
                 break;
             }
             version.push('.');
             version.push_str(part);
-            dots += 1;
         }
         return Some(version);
     }
@@ -785,16 +783,14 @@ pub fn probe_tool(
                 &output.stdout
             };
             let version = output.success.then(|| parse_version(text)).flatten();
-            if output.success {
-                if let Some(version) = version {
-                    return ToolStatus {
-                        id: descriptor.id.to_owned(),
-                        state: ToolState::Ready,
-                        executable: Some(command.program.to_owned()),
-                        version: Some(version),
-                        detail: format!("{} answered.", descriptor.name),
-                    };
-                }
+            if let Some(found) = version.as_deref() {
+                return ToolStatus {
+                    id: descriptor.id.to_owned(),
+                    state: ToolState::Ready,
+                    executable: Some(command.program.to_owned()),
+                    version: Some(found.to_owned()),
+                    detail: format!("{} answered.", descriptor.name),
+                };
             }
             ToolStatus {
                 id: descriptor.id.to_owned(),

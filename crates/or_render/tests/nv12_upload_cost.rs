@@ -9,7 +9,7 @@
 //!
 //! `#[ignore]`d: a measurement lane, not a pass/fail test.
 use std::future::Future;
-use std::task::{Context, Poll, Wake, Waker};
+use std::task::{Context, Poll, Waker};
 use std::time::Instant;
 
 const WIDTH: u32 = 1920;
@@ -18,15 +18,13 @@ const PAD: u32 = 2048;
 const RUNS: usize = 20;
 const WARMUP: usize = 3;
 
-struct NoopWake;
-impl Wake for NoopWake {
-    fn wake(self: std::sync::Arc<Self>) {}
-}
+// `Waker::noop()` replaced the hand-written no-op waker these benchmark
+// harnesses used to carry.
 
 fn block_on<F: Future>(future: F) -> F::Output {
     let mut future = std::pin::pin!(future);
-    let waker = Waker::from(std::sync::Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
     loop {
         match future.as_mut().poll(&mut context) {
             Poll::Ready(value) => return value,
@@ -136,6 +134,10 @@ fn nv12_upload_cost() {
         memcpy_copy.len()
     });
 
+    // Row-wise repack, written out as the production path does it; the chunk
+    // size is a constant here so clippy prefers `as_chunks`, which would hide
+    // the lanes being measured.
+    #[allow(clippy::chunks_exact_to_as_chunks)]
     fn repack(luma: &[u8], chroma: &[u8], luma_padded: &mut [u8], chroma_padded: &mut [u8]) {
         for (target, source) in luma_padded
             .chunks_exact_mut(PAD as usize)

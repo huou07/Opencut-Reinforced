@@ -600,6 +600,6 @@ fn mcp_records_and_reads_a_companion_result() {
     assert_eq!(read["tool_name"], "FFmpeg");
     assert_eq!(read["tool_version"], "9.0.1");
     assert_eq!(read["source_manifest"], "shot.filtergraph");
-    assert_eq!(read["record"].is_null(), true);
+    assert!(read["record"].is_null());
     drop(host);
 }

@@ -1012,6 +1012,11 @@ impl Default for AudioSettings {
     }
 }
 
+// One value per clip, so the size difference between these variants is paid
+// once per clip rather than per frame. Boxing the visual settings would add an
+// allocation to every clip read on the render path to save bytes nobody
+// measures; clippy's threshold is about collections of the type, not this use.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -2807,10 +2812,12 @@ mod tests {
 
     #[test]
     fn an_animated_channel_overrides_only_its_own_property() {
-        let mut animation = ClipAnimation::default();
-        animation.opacity_basis_points = two_keyframes(KeyframeEasing::Linear);
-        animation.x_milli_canvas = KeyframeTrack {
-            keyframes: vec![keyframe(time(0, 1), -500)],
+        let animation = ClipAnimation {
+            opacity_basis_points: two_keyframes(KeyframeEasing::Linear),
+            x_milli_canvas: KeyframeTrack {
+                keyframes: vec![keyframe(time(0, 1), -500)],
+            },
+            ..ClipAnimation::default()
         };
         let (transform, opacity) =
             animation.sample(Transform::IDENTITY, Opacity::OPAQUE, time(1, 2));

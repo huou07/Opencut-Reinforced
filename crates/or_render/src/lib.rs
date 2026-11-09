@@ -1991,10 +1991,9 @@ impl Drop for PendingNv12Planes {
                 self.submission.clone(),
             ))
             .is_ok()
+            && let Some(mapping) = &self.mapping
         {
-            if let Some(mapping) = &self.mapping {
-                let _ = mapping.recv_timeout(std::time::Duration::from_secs(5));
-            }
+            let _ = mapping.recv_timeout(std::time::Duration::from_secs(5));
         }
         if let Some(lease) = self.lease.take() {
             lease.buffer.unmap();

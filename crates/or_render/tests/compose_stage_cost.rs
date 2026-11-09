@@ -12,7 +12,7 @@
 use or_render::{CompositorLayer, Nv12VideoLayer, RenderDevice, RenderSize, RgbaVideoLayer};
 use std::future::Future;
 
-use std::task::{Context, Poll, Wake, Waker};
+use std::task::{Context, Poll, Waker};
 use std::time::Instant;
 
 const WIDTH: u32 = 1920;
@@ -20,16 +20,10 @@ const HEIGHT: u32 = 1080;
 const WARMUP: usize = 3;
 const RUNS: usize = 20;
 
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: std::sync::Arc<Self>) {}
-}
-
 fn block_on<F: Future>(future: F) -> F::Output {
     let mut future = std::pin::pin!(future);
-    let waker = Waker::from(std::sync::Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
     loop {
         match future.as_mut().poll(&mut context) {
             Poll::Ready(value) => return value,

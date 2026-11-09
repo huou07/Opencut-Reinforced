@@ -198,7 +198,7 @@ fn only_the_profile_whose_encoder_takes_nv12_accepts_nv12_frames() {
     let directory = TestDirectory::new();
 
     let mp4 = FfmpegExportWriter::create_with_profile(
-        &directory.mp4_file(),
+        directory.mp4_file(),
         FfmpegExportProfile::Mp4H264Aac,
         64,
         48,
@@ -221,7 +221,7 @@ fn only_the_profile_whose_encoder_takes_nv12_accepts_nv12_frames() {
     );
 
     if let Ok(ffv1) = FfmpegExportWriter::create_with_profile(
-        &directory.file(),
+        directory.file(),
         FfmpegExportProfile::MatroskaFfv1PcmS16le,
         64,
         48,

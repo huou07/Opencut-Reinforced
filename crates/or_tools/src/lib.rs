@@ -142,7 +142,7 @@ pub fn run_tool(
     }
     let runner = SystemCommandRunner::with_timeout(timeout);
     let borrowed: Vec<&str> = arguments.iter().map(String::as_str).collect();
-    runner.run(&descriptor.probe.program, &borrowed)
+    runner.run(descriptor.probe.program, &borrowed)
 }
 
 /// Probes every catalog tool this platform supports.
