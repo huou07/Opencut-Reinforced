@@ -270,3 +270,19 @@ runtime BLOCKED by the host); setup 25,432,095 B
 `11b6e97ddabbe82cc95c043f553dc416280d31a3caeec9d4c3aae3edbb29c9a3` (`INSTALL_EXIT=0`,
 `or version` → 0.1.29); ZIP 35,089,008 B
 `c2dc8d8d63d7c622a1ae072082591da2767fc325c3cb157e655a6aaa9771dc24`.
+
+**Cross-host journeys at `bd6f6f11`.** The same three scenarios were driven on
+the other two hosts and each one reported `RESULT: OR_UI=PASS`: on Windows, from
+the interactive desktop session through the scheduled task, `editor-journey`,
+`companion-tools-catalog` and `export-encode`; on Debian, against the harness
+build with the lab environment, `editor-journey`, `companion-tools-catalog` and
+`export-encode`.
+
+**Published.** The tag `v0.1.29` points at `bd6f6f11`, GitHub created the
+release from CI's own builds, and those five files were replaced with the
+locally built and installed ones above (`gh release upload --clobber`) so the
+published bytes are the bytes that were exercised. Every asset was then fetched
+from
+https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.29/
+and `shasum -a 256 -c SHA256SUMS.txt` reported `OK` for all five. Release page:
+https://github.com/huou07/Opencut-Reinforced/releases/tag/v0.1.29
