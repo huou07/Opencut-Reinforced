@@ -207,3 +207,66 @@ belong to `5bf96750` and not `0fe5fa8f`.
 Version 0.1.28 and the same permissions, runtime still BLOCKED by the host;
 Windows setup exit 0 → `Opencut Reinforced 0.1.28`, desktop screenshot
 `docs/evidence/2026-11-09/windows/installed-0.1.28.png` (1536x864).
+
+## 0.1.29 — the export that failed for a reason nobody could see
+
+The owner reported an export that stopped working after 0.1.28, with
+`/Users/meomeo/Movies/13.orproj` as the failing project. 0.1.28 had explained a
+filesystem refusal; this one was not a filesystem refusal at all.
+
+**Reproduction.** The project opens through the UI harness as a `copy:` fixture:
+93 media, one video track with 34 FFV1 Matroska clips, two audio tracks, one
+caption track with 194 clips. Exporting it printed
+`FFmpeg operation failed: Operation not permitted`. Narrowing by track kind left
+only the video path failing, and a single imported FFV1 clip reproduced it.
+Instrumenting the export put the failure in `prepare_export_audio_cache`, and a
+unit-level reproduction put it in `decode_audio` → `seek_to_time`.
+
+**Cause.** The renders declare `pcm_s16le` with `duration` but carry **zero
+audio packets**; `ffprobe -count_packets` reports `N/A`. Matroska indexes only
+video keyframes, so `av_seek_frame(stream = 1)` answered `-1`, and FFmpeg renders
+that bare failure as errno 1 — "Operation not permitted".
+
+**Fix** (`773a499f`). The decoder seeks the container time base and falls back to
+decoding from the start, so the empty declared track reads as silence;
+`seek_to_pts` keeps the precise stream-level attempt first so the exact-range
+test still holds. A fixture (`crates/or_media/tests/fixtures/or-ffv1-empty-audio.mkv`,
+SHA-256 `26f20eb001a9e663dfc052aa6317a3cac338c28dc4b101b2a25b8c7ca0b4cb46`) and
+`software_decoder_treats_a_track_with_no_audio_packets_as_silence` hold it.
+
+**Proof on the owner's project.** `RESULT: OR_UI=PASS` in 95 s through the
+editor's own Export flow; the file is 43,001,495 B and `ffprobe` reports
+`h264 1920x1080 30/1`, `9000` packets, `aac` with `14064` packets,
+`duration=300.01`.
+
+**Also in 0.1.29:**
+- Windows opened every target through `cmd /c start`, so an update could land in
+  the "how do you want to open this file?" dialog; installers and executables now
+  start directly and documents go to the protocol handler
+  (`apps/or_app/lib/support/host_platform.dart` `openCommandFor`, covered by
+  `apps/or_app/test/host_platform_test.dart`).
+- The assistant dialog reported "not found" for a harness CLI whose ACP adapter
+  was missing; it now names the CLI and the adapter command, and detects on open.
+- Companion tools gained **Set up here** / **Uninstall**
+  (`apps/or_app/lib/updates/companion_setup.dart`) and `or tools setup|remove`.
+
+**Gates at `bd6f6f11`.** macOS: `cargo fmt --check`, `cargo clippy -D warnings`,
+whole-workspace `cargo test`, `flutter analyze`, 628 Flutter tests,
+`check-repo.sh` — all pass; Debian and Windows ran the same Rust + Flutter lanes.
+Journeys on macOS at this revision: `companion-tools-catalog`, `export-encode`,
+`editor-journey`, `companion-lottie`, `companion-provenance`,
+`motion-scene-edit` and the owner-project export all PASS. Two intermediate
+failures were environmental and are recorded here so the next reader does not
+misread them: a second app instance (`/Applications/.../or_app`) stole focus from
+the harness build, and two journey runs overlapped and locked
+`build/macos/Build/Intermediates.noindex/XCBuildData/build.db`.
+
+**Artifacts** (all built at `bd6f6f11`, installed and started on their host):
+DMG 37,530,096 B `583c09962076e5f12ee52fada58582fb6ce148ab5e0d27b2b5265220f0081c44`;
+DEB 23,456,576 B `202d31805ed10d8734bd1c95c1c897af5cd8c9f796801aaee621b2e20cb2b3b2`
+(`0.1.29+bd6f6f11c49b` installed); Flatpak 22,587,256 B
+`07ada7796315c9bb697469ad418b66e1cffa4cc7c8bfe771c1073be672a3eb95` (install PASS,
+runtime BLOCKED by the host); setup 25,432,095 B
+`11b6e97ddabbe82cc95c043f553dc416280d31a3caeec9d4c3aae3edbb29c9a3` (`INSTALL_EXIT=0`,
+`or version` → 0.1.29); ZIP 35,089,008 B
+`c2dc8d8d63d7c622a1ae072082591da2767fc325c3cb157e655a6aaa9771dc24`.

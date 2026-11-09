@@ -7,12 +7,14 @@ and what remains for a broader platform matrix.
 
 ## Current status
 
-The published line is **0.1.28** (2026-11-09), cut from `main`. 0.1.27 was the
-first public build since 0.1.21 and 0.1.28 is the patch that followed it the
-same day: an export that cannot write where the owner asked now says which
-folder refused and what to do. 0.1.24–0.1.26 were local iterations that were
-never tagged. What each build carries is in `CHANGELOG.md`; the install steps
-are in [install.md](install.md).
+The published line is **0.1.29** (2026-11-09), cut from `main`. It is the
+second patch of the day and the first one that removes a failure instead of
+explaining it: a timeline whose source declared an audio track with no packets
+failed every export with "Operation not permitted", and 0.1.29 decodes that
+track as silence instead. 0.1.27 was the first public build since 0.1.21;
+0.1.28 made an unwritable export destination readable; 0.1.24–0.1.26 were local
+iterations that were never tagged. What each build carries is in
+`CHANGELOG.md`; the install steps are in [install.md](install.md).
 
 Five assets are published per release:
 
@@ -29,17 +31,27 @@ Flatpak is built locally with `scripts/package_linux_flatpak.sh` and attached to
 the same release, and its entry is appended to `SHA256SUMS.txt`. A release with
 a missing or mismatched Flatpak is incomplete, not "four out of five".
 
-All five assets for 0.1.28 were built and installed on the three hosts before
-publication, from `main` at `5bf96750`, so the published bytes are the tested
+All five assets for 0.1.29 were built from `main` at
+`bd6f6f11c49b7528ce002d8dbe11dc99084f4872`, installed on the machine each one
+targets and started before publication, so the published bytes are the tested
 ones:
 
 | Asset | Bytes | SHA-256 |
 | --- | --- | --- |
-| `Opencut-Reinforced-0.1.28-arm64.dmg` | 37,523,733 | `cdec3da6fc00df4d80a8878c88448e6ff82aa82d4131d6cfa9537d2cbfb27e3e` |
-| `Opencut-Reinforced-0.1.28-linux-x64.deb` | 23,443,724 | `2fcb2c117b4d8bde250234d1472c4dc0563764571fc14a8ea69e7de1253c1b38` |
-| `Opencut-Reinforced-0.1.28-x86_64.flatpak` | 22,595,256 | `ee03812c77cc6c663eaf46b728f28a4678d31ded8ddcb8a8381bed6439261205` |
-| `Opencut-Reinforced-0.1.28-windows-x64-setup.exe` | 25,421,080 | `4b1206baf1808c1d98fcf067737fb4001df5df31588b1bb2d33662d180a57afd` |
-| `Opencut-Reinforced-0.1.28-windows-x64.zip` | 35,076,362 | `4f435926c93e5d273aa0f40e8230ffa5a7fa9acfca444ef08fc91526ff96e870` |
+| `Opencut-Reinforced-0.1.29-arm64.dmg` | 37,530,096 | `583c09962076e5f12ee52fada58582fb6ce148ab5e0d27b2b5265220f0081c44` |
+| `Opencut-Reinforced-0.1.29-linux-x64.deb` | 23,456,576 | `202d31805ed10d8734bd1c95c1c897af5cd8c9f796801aaee621b2e20cb2b3b2` |
+| `Opencut-Reinforced-0.1.29-x86_64.flatpak` | 22,587,256 | `07ada7796315c9bb697469ad418b66e1cffa4cc7c8bfe771c1073be672a3eb95` |
+| `Opencut-Reinforced-0.1.29-windows-x64-setup.exe` | 25,432,095 | `11b6e97ddabbe82cc95c043f553dc416280d31a3caeec9d4c3aae3edbb29c9a3` |
+| `Opencut-Reinforced-0.1.29-windows-x64.zip` | 35,089,008 | `c2dc8d8d63d7c622a1ae072082591da2767fc325c3cb157e655a6aaa9771dc24` |
+
+0.1.28 was built at `5bf96750` and its bytes were: DMG 37,523,733 B
+`cdec3da6fc00df4d80a8878c88448e6ff82aa82d4131d6cfa9537d2cbfb27e3e`, DEB
+23,443,724 B `2fcb2c117b4d8bde250234d1472c4dc0563764571fc14a8ea69e7de1253c1b38`,
+Flatpak 22,595,256 B
+`ee03812c77cc6c663eaf46b728f28a4678d31ded8ddcb8a8381bed6439261205`, setup
+25,421,080 B `4b1206baf1808c1d98fcf067737fb4001df5df31588b1bb2d33662d180a57afd`,
+ZIP 35,076,362 B
+`4f435926c93e5d273aa0f40e8230ffa5a7fa9acfca444ef08fc91526ff96e870`.
 
 0.1.27, the first public build since 0.1.21, was cut from `9f86d514` the same
 day and carried: DMG 37,528,069 B
