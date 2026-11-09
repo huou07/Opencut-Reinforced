@@ -183,3 +183,19 @@ deferred rather than done.
   [technology-review.md](../reference/technology-review.md).
 - There is no per-tool job log or cancellation yet; a launch reports its
   outcome and nothing more.
+
+### Setting a tool up from the app
+
+The panel states each tool's own command, and that same string is what the
+**Set up here** button runs (`apps/or_app/lib/updates/companion_setup.dart`):
+`/bin/sh -lc` on macOS and Linux so a Homebrew or npm install on `PATH` is
+found, `cmd /c` on Windows because `npm` is a `.cmd` shim. The command's output
+streams into the row, the exit code decides the message, and a successful run
+re-checks the tool — the state shown afterwards is what the probe found, never
+an assumption that the install worked.
+
+Removal is offered only where it can be derived (`npm install -g <pkg>` →
+`npm uninstall -g <pkg>`); every other tool keeps its written removal steps,
+because a guessed uninstall is worse than an honest instruction. The same two
+operations are on the command line as `or tools setup <id>` and
+`or tools remove <id>` (`crates/or_tools/src/lib.rs` `run_setup`).

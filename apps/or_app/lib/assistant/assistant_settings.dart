@@ -280,6 +280,28 @@ String harnessExecutableName(AssistantHarnessKind kind) => switch (kind) {
   AssistantHarnessKind.auto || AssistantHarnessKind.custom => '',
 };
 
+/// The plain CLI a harness kind is distributed as, when the ACP adapter that
+/// OR actually launches is a separate package.
+///
+/// Codex and Claude Code ship a CLI that speaks its own protocol; OR drives a
+/// harness over ACP, so a user who installed only the CLI has a working tool
+/// but no adapter. Naming the CLI lets the app say that instead of "not
+/// found", which reads as "you have nothing installed".
+String harnessBaseCommandName(AssistantHarnessKind kind) => switch (kind) {
+  AssistantHarnessKind.claudeCode => 'claude',
+  AssistantHarnessKind.codex => 'codex',
+  AssistantHarnessKind.opencode => 'opencode',
+  AssistantHarnessKind.dsh => 'dsh',
+  AssistantHarnessKind.auto || AssistantHarnessKind.custom => '',
+};
+
+/// Where a harness CLI or adapter may live.
+///
+/// Public so a caller that failed to launch can explain which places it looked
+/// instead of guessing.
+List<String> harnessSearchDirectories(HostPlatform host) =>
+    _harnessDirectories(host);
+
 /// The harness an installed executable belongs to, judged by its file name.
 ///
 /// Used to keep a detected path from standing in for a different harness the

@@ -133,4 +133,54 @@ void main() {
     expect(host.resolveExecutable(file.path), file.path);
     expect(host.resolveExecutable(p.join(root.path, 'missing')), isNull);
   });
+
+  test('a Windows install runs itself instead of going through cmd', () {
+    const host = HostPlatform(
+      isWindows: true,
+      isMacOS: false,
+      isLinux: false,
+      environment: {'USERPROFILE': r'C:\Users\ana'},
+      executablePath: r'C:\or\or_app.exe',
+    );
+    final installer = host.openCommandFor(
+      r'C:\Users\ana\Downloads\Opencut-Reinforced-0.1.29-windows-x64-setup.exe',
+    );
+    expect(installer.program, endsWith('-setup.exe'));
+    expect(installer.arguments, isEmpty);
+    final msi = host.openCommandFor(r'C:\Temp\Opencut Reinforced.msi');
+    expect(msi.program, endsWith('.msi'));
+    expect(msi.arguments, isEmpty);
+    const everySuffix = <String>['.exe', '.msi', '.com', '.bat', '.cmd'];
+    for (final suffix in everySuffix) {
+      final command = host.openCommandFor('C:/Temp/thing$suffix');
+      expect(command.program.toLowerCase(), isNot(contains('cmd ')));
+      expect(command.program, isNot('cmd'));
+    }
+    // A document or a folder is not a program: the protocol handler takes the
+    // path as an argument, so no shell ever parses it.
+    final document = host.openCommandFor(r'C:\Users\ana\clip.mp4');
+    expect(document.program, 'rundll32');
+    expect(document.arguments, [r'url.dll,FileProtocolHandler', r'C:\Users\ana\clip.mp4']);
+    final folder = host.openCommandFor(r'C:\Users\ana\Downloads');
+    expect(folder.program, 'rundll32');
+  });
+
+  test('macOS and Linux keep their own openers', () {
+    const mac = HostPlatform(
+      isWindows: false,
+      isMacOS: true,
+      isLinux: false,
+      environment: {'HOME': '/Users/ana'},
+      executablePath: '/Applications/Opencut Reinforced.app/Contents/MacOS/or_app',
+    );
+    expect(mac.openCommandFor('/tmp/x.mp4').program, 'open');
+    const linux = HostPlatform(
+      isWindows: false,
+      isMacOS: false,
+      isLinux: true,
+      environment: {'HOME': '/home/ana'},
+      executablePath: '/opt/opencut-reinforced/or_app',
+    );
+    expect(linux.openCommandFor('/tmp/x.mp4').program, 'xdg-open');
+  });
 }

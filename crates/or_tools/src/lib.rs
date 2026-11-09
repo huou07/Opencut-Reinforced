@@ -145,6 +145,113 @@ pub fn run_tool(
     runner.run(descriptor.probe.program, &borrowed)
 }
 
+/// The setup command for a tool on this platform, when one exists.
+pub fn setup_command(id: &str, platform: Platform) -> Result<String, String> {
+    let descriptor = tool(id).ok_or_else(|| format!("unknown companion tool: {id}"))?;
+    let install = descriptor.install_command(platform).ok_or_else(|| {
+        format!(
+            "{} has no setup command for {}",
+            descriptor.name,
+            platform_name(platform)
+        )
+    })?;
+    Ok(install.command.to_owned())
+}
+
+/// The command that undoes a setup command, when one can be derived.
+///
+/// `npm install -g x` pairs with `npm uninstall -g x`. Anything else — a system
+/// package manager, a vendor installer — is left to the tool's own removal
+/// hint, because guessing an uninstall is worse than an honest instruction.
+pub fn removal_command(install: &str) -> Option<String> {
+    let mut words = install.split_whitespace();
+    if words.next()? != "npm" {
+        return None;
+    }
+    let verb = words.next()?;
+    if !matches!(verb, "install" | "i" | "add") || words.next()? != "-g" {
+        return None;
+    }
+    let package: Vec<&str> = words.collect();
+    if package.is_empty() {
+        return None;
+    }
+    Some(format!("npm uninstall -g {}", package.join(" ")))
+}
+
+/// Runs a setup (or removal) command the way a terminal would.
+///
+/// The catalog states one shell command per platform, so this is the only place
+/// in the workspace that hands a string to a shell. It is reached only from an
+/// explicit user request (`or tools setup <id>`, or the panel's button), and the
+/// id must name a catalog tool, so the allow-list still holds.
+pub fn run_setup(id: &str, remove: bool, timeout: Duration) -> Result<CommandOutput, String> {
+    let platform = Platform::current();
+    let install = setup_command(id, platform)?;
+    let command = if remove {
+        removal_command(&install).ok_or_else(|| {
+            format!(
+                "no uninstall command is known for {id}; the removal steps are: {}",
+                tool(id)
+                    .map(|descriptor| descriptor.remove_hint)
+                    .unwrap_or("")
+            )
+        })?
+    } else {
+        install
+    };
+    let mut process = if platform == Platform::Windows {
+        let mut process = std::process::Command::new("cmd.exe");
+        process.arg("/C").arg(&command);
+        process
+    } else {
+        let mut process = std::process::Command::new("/bin/sh");
+        process.arg("-lc").arg(&command);
+        process
+    };
+    let mut child = process
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("{command}: {error}"))?;
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "{command} did not finish within {} seconds.",
+                        timeout.as_secs()
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(error) => return Err(format!("{command}: {error}")),
+        }
+    }
+    // The child has exited, so both pipes reach end-of-file and the output can
+    // be read without waiting on a process that would never answer.
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("{command}: {error}"))?;
+    Ok(CommandOutput {
+        success: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
+}
+
+fn platform_name(platform: Platform) -> &'static str {
+    match platform {
+        Platform::MacOs => "macOS",
+        Platform::Windows => "Windows",
+        Platform::Linux => "Linux",
+    }
+}
+
 /// Probes every catalog tool this platform supports.
 pub fn statuses(platform: Platform) -> Vec<ToolStatus> {
     probe_all(platform, &SystemCommandRunner::new())
@@ -251,5 +358,61 @@ mod run_tests {
         let error = run_tool("not-a-tool", &["--version".to_owned()], PROBE_TIMEOUT)
             .expect_err("unknown tools are rejected");
         assert!(error.contains("unknown companion tool"), "{error}");
+    }
+}
+
+#[cfg(test)]
+mod setup_tests {
+    use super::*;
+
+    #[test]
+    fn an_npm_install_pairs_with_its_own_uninstall() {
+        assert_eq!(
+            removal_command("npm install -g three").as_deref(),
+            Some("npm uninstall -g three")
+        );
+        assert_eq!(
+            removal_command("npm i -g puppeteer-lottie").as_deref(),
+            Some("npm uninstall -g puppeteer-lottie")
+        );
+        assert_eq!(removal_command("npm install puppeteer-lottie"), None);
+        assert_eq!(removal_command("sudo apt install blender"), None);
+        assert_eq!(removal_command(""), None);
+    }
+
+    #[test]
+    fn a_catalog_tool_reports_the_setup_command_for_a_platform() {
+        let command = setup_command("lottie", Platform::MacOs).expect("lottie has a setup command");
+        assert!(command.contains("npm install"), "{command}");
+        // The bundled tool still states the system command, for a machine
+        // where the package is missing.
+        let ffmpeg = setup_command("ffmpeg", Platform::Linux).expect("ffmpeg states one");
+        assert!(ffmpeg.contains("ffmpeg"), "{ffmpeg}");
+        assert!(setup_command("no-such-tool", Platform::Linux).is_err());
+    }
+
+    #[test]
+    fn a_shell_command_runs_and_its_output_comes_back() {
+        if Platform::current() == Platform::Windows {
+            return;
+        }
+        let output = run_shell_for_test("echo setup-line; exit 4").expect("the shell answered");
+        assert!(!output.success);
+        assert!(output.stdout.contains("setup-line"), "{output:?}");
+    }
+
+    /// `run_setup` reads a catalog command, so this helper exercises only the
+    /// shell half with an arbitrary string.
+    fn run_shell_for_test(command: &str) -> Result<CommandOutput, String> {
+        let output = std::process::Command::new("/bin/sh")
+            .arg("-lc")
+            .arg(command)
+            .output()
+            .map_err(|error| error.to_string())?;
+        Ok(CommandOutput {
+            success: output.status.success(),
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+        })
     }
 }

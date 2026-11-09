@@ -175,4 +175,50 @@ void main() {
 
     expect(find.text('Ready · 4.3.2'), findsOneWidget);
   });
+
+  testWidgets('a tool with a setup command can be set up from the panel', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        tools: [
+          _tool(
+            id: 'lottie',
+            installCommand: 'npm install puppeteer-lottie',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('companion-tool-lottie')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('companion-tool-lottie-setup')),
+      findsOneWidget,
+    );
+    expect(find.text('Set up here'), findsOneWidget);
+    // npm-global pairs get an uninstall; a per-project installer does not.
+    expect(
+      find.byKey(const ValueKey('companion-tool-lottie-remove')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('an npm-global tool offers its own uninstall', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        tools: [_tool(id: 'gltf', installCommand: 'npm install -g three')],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('companion-tool-gltf')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('companion-tool-gltf-remove')),
+      findsOneWidget,
+    );
+    expect(find.text('Uninstall'), findsOneWidget);
+  });
 }

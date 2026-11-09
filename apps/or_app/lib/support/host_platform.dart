@@ -202,16 +202,32 @@ class HostPlatform {
   /// The directory holding the running application binary.
   Directory get executableDirectory => File(executablePath).parent;
 
-  /// Opens a file, folder or HTTPS link with the host's default handler.
+  /// The program and arguments that hand [target] to the host.
   ///
-  /// Windows has no `xdg-open`: `start` is a shell builtin, so it runs through
-  /// `cmd`, and the empty first argument is the window title `start` insists on.
+  /// Public so a test can read the decision on any OS. Windows has no
+  /// `xdg-open`, and the usual stand-in — `cmd /c start "" <target>` — makes
+  /// the command interpreter parse the path, which is how an update ends in
+  /// the system's "how do you want to open this file?" dialog instead of
+  /// running: `start` reads the first quoted token as a window title, and a
+  /// program that goes through the shell loses its own quoting. Executables are
+  /// therefore started directly, and everything else goes to the shell's
+  /// protocol handler, which takes the path as an argument and parses nothing.
+  ({String program, List<String> arguments}) openCommandFor(String target) {
+    if (isMacOS) return (program: 'open', arguments: <String>[target]);
+    if (isLinux) return (program: 'xdg-open', arguments: <String>[target]);
+    final lower = target.toLowerCase();
+    const programSuffixes = <String>['.exe', '.msi', '.com', '.bat', '.cmd'];
+    final runsItself = programSuffixes.any(lower.endsWith);
+    if (runsItself) return (program: target, arguments: const <String>[]);
+    return (
+      program: 'rundll32',
+      arguments: <String>['url.dll,FileProtocolHandler', target],
+    );
+  }
+
+  /// Opens a file, folder or HTTPS link with the host's default handler.
   Future<void> openExternal(String target) async {
-    final (program, arguments) = isMacOS
-        ? ('open', <String>[target])
-        : isWindows
-        ? ('cmd', <String>['/c', 'start', '', target])
-        : ('xdg-open', <String>[target]);
+    final (:program, :arguments) = openCommandFor(target);
     final result = await Process.run(program, arguments);
     if (result.exitCode != 0) {
       throw ProcessException(

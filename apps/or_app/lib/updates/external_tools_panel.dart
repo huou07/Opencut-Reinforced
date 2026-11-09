@@ -6,6 +6,7 @@ import '../design/or_colors.dart';
 import '../design/or_spacing.dart';
 import '../design/or_typography.dart';
 import '../widgets/or_widgets.dart';
+import 'companion_setup.dart';
 import 'resource_center.dart';
 
 /// One external program as this screen shows it.
@@ -144,6 +145,8 @@ class ExternalToolsPanel extends StatefulWidget {
 class _ExternalToolsPanelState extends State<ExternalToolsPanel> {
   late Future<List<CompanionTool>> _tools;
   final Set<String> _checking = <String>{};
+  final Set<String> _settingUp = <String>{};
+  final Map<String, List<String>> _setupOutput = <String, List<String>>{};
   String? _expanded;
   String? _error;
 
@@ -176,6 +179,35 @@ class _ExternalToolsPanelState extends State<ExternalToolsPanel> {
     } finally {
       if (mounted) setState(() => _checking.remove(tool.id));
     }
+  }
+
+  /// Runs the tool's own setup (or removal) command in the app.
+  ///
+  /// The command is the one the panel shows, so what runs here and what the
+  /// instructions say cannot drift apart. Output is streamed into the row and
+  /// a successful run re-checks the tool, so the state on screen is the state
+  /// the probe found rather than an assumption that it worked.
+  Future<void> _runSetup(CompanionTool tool, {required bool remove}) async {
+    if (_settingUp.contains(tool.id)) return;
+    final command = remove
+        ? CompanionSetup.removalFor(tool.installCommand)
+        : tool.installCommand;
+    if (command == null) return;
+    setState(() {
+      _settingUp.add(tool.id);
+      _setupOutput[tool.id] = <String>[];
+    });
+    final result = await const CompanionSetup().run(
+      command,
+      onLine: (line) {
+        if (!mounted) return;
+        setState(() => (_setupOutput[tool.id] ??= <String>[]).add(line));
+      },
+    );
+    if (!mounted) return;
+    setState(() => _settingUp.remove(tool.id));
+    _notify(result.summary);
+    if (result.succeeded) await _check(tool);
   }
 
   Future<List<CompanionTool>> _replace(CompanionTool updated) async {
@@ -293,6 +325,14 @@ class _ExternalToolsPanelState extends State<ExternalToolsPanel> {
                   tool: tool,
                   expanded: _expanded == tool.id,
                   checking: _checking.contains(tool.id),
+                  settingUp: _settingUp.contains(tool.id),
+                  setupOutput: _setupOutput[tool.id] ?? const <String>[],
+                  onSetup: tool.installCommand == null
+                      ? null
+                      : () => _runSetup(tool, remove: false),
+                  onRemove: CompanionSetup.removalFor(tool.installCommand) == null
+                      ? null
+                      : () => _runSetup(tool, remove: true),
                   onToggle: () => setState(
                     () => _expanded = _expanded == tool.id ? null : tool.id,
                   ),
@@ -369,6 +409,10 @@ class _ToolRow extends StatelessWidget {
     required this.tool,
     required this.expanded,
     required this.checking,
+    required this.settingUp,
+    required this.setupOutput,
+    required this.onSetup,
+    required this.onRemove,
     required this.onToggle,
     required this.onCheck,
     required this.onLaunch,
@@ -381,6 +425,10 @@ class _ToolRow extends StatelessWidget {
   final CompanionTool tool;
   final bool expanded;
   final bool checking;
+  final bool settingUp;
+  final List<String> setupOutput;
+  final VoidCallback? onSetup;
+  final VoidCallback? onRemove;
   final VoidCallback onToggle;
   final VoidCallback onCheck;
   final VoidCallback onLaunch;
@@ -605,6 +653,57 @@ class _ToolRow extends StatelessWidget {
             ),
           ],
           const SizedBox(height: OrSpacing.x3),
+          Row(
+            children: [
+              if (onSetup != null)
+                FilledButton(
+                  key: ValueKey('companion-tool-${tool.id}-setup'),
+                  onPressed: settingUp ? null : onSetup,
+                  child: Text(
+                    tool.ready ? 'Run setup again' : 'Set up here',
+                  ),
+                ),
+              if (onSetup != null) const SizedBox(width: OrSpacing.x2),
+              if (settingUp)
+                const SizedBox.square(
+                  dimension: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (onRemove != null)
+                TextButton(
+                  key: ValueKey('companion-tool-${tool.id}-remove'),
+                  onPressed: onRemove,
+                  child: const Text('Uninstall'),
+                ),
+            ],
+          ),
+          if (settingUp || setupOutput.isNotEmpty) ...[
+            const SizedBox(height: OrSpacing.x2),
+            Container(
+              key: ValueKey('companion-tool-${tool.id}-setup-output'),
+              width: double.infinity,
+              padding: const EdgeInsets.all(OrSpacing.x2),
+              constraints: const BoxConstraints(maxHeight: 120),
+              decoration: BoxDecoration(
+                color: OrColors.surface,
+                borderRadius: BorderRadius.circular(OrRadii.control),
+                border: Border.all(color: OrColors.border),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  setupOutput.isEmpty
+                      ? 'Running ${tool.installCommand ?? ''}…'
+                      : setupOutput.join('\n'),
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: OrType.tinySize,
+                    color: OrColors.textSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: OrSpacing.x2),
           Wrap(
             spacing: OrSpacing.x2,
             runSpacing: OrSpacing.x2,

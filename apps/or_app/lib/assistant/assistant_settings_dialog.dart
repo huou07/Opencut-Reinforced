@@ -54,6 +54,14 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
   bool _detecting = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Detecting when the dialog opens means the answer is on screen without a
+    // button press; the button stays for a re-check after installing a harness.
+    unawaited(_detect());
+  }
+
+  @override
   void dispose() {
     _harness.dispose();
     _orCli.dispose();
@@ -104,9 +112,23 @@ class _AssistantSettingsDialogState extends State<AssistantSettingsDialog> {
       } else if (_harnessKind == AssistantHarnessKind.auto) {
         _detection = 'No ACP harness was found. Set the executable below.';
       } else {
-        _detection =
-            '${_harnessKind.label} was not found on this machine'
-            '${_installHint(_harnessKind)}.';
+        final host = HostPlatform.current();
+        final base = harnessBaseCommandName(_harnessKind);
+        final cli = base.isEmpty
+            ? null
+            : host.findExecutable(
+                base,
+                extraDirectories: harnessSearchDirectories(host),
+              );
+        // A CLI without its ACP adapter is the common Windows/macOS case: the
+        // tool is installed and usable from a terminal, but OR launches the
+        // adapter, so saying "not found" hides the half that is missing.
+        _detection = cli == null
+            ? '${_harnessKind.label} was not found on this machine'
+                  '${_installHint(_harnessKind)}.'
+            : '${_harnessKind.label} is installed at $cli, but OR drives a '
+                  'harness through its ACP adapter'
+                  '${_installHint(_harnessKind)}.';
       }
       if (orCli != null) _orCli.text = orCli;
     });

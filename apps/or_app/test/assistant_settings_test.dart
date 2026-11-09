@@ -288,11 +288,14 @@ void main() {
     );
 
     // A saved path can outlive the build it named. It used to disable the
-    // assistant outright; now it falls through to detection.
+    // assistant outright; now it falls through to detection. The stale path is
+    // built under the temporary root on purpose: a literal path from an
+    // installed package would exist on a machine that has that package, and
+    // then this case would assert the opposite of what it names.
+    final staleSaved =
+        '${root.path}/gone/Opencut Reinforced.app/Contents/MacOS/or';
     final movedStored = await resolveOrCliPath(
-      settings: AssistantSettings(
-        orCliPath: '/Applications/Opencut Reinforced.app/Contents/MacOS/or',
-      ),
+      settings: AssistantSettings(orCliPath: staleSaved),
       environment: {'PATH': ''},
       currentDirectory: besideExecutable.parent,
       executablePath: '${besideExecutable.parent.path}/or_app',

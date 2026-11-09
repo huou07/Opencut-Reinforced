@@ -13,6 +13,42 @@ releases exist. See [docs/reference/release.md](docs/reference/release.md) for h
 produced, and [docs/reference/roadmap.md](docs/reference/roadmap.md) for what the
 product still needs.
 
+## 0.1.29 — 2026-11-09
+
+**An export that failed is fixed at the cause, and companion tools can be set up
+in the app.** 0.1.28 only made the failure readable; this release removes it.
+
+### Fixed
+
+- **Export failed with "FFmpeg operation failed: Operation not permitted" on a
+  timeline whose source video declared an audio track with no audio packets.**
+  The renders produced by the assistant workspace are FFV1 in Matroska with a
+  `pcm_s16le` stream of zero packets, and Matroska indexes only video
+  keyframes, so seeking that stream answered `-1`, which FFmpeg reports as
+  "Operation not permitted". The decoder now seeks the container time base and
+  falls back to decoding from the start, so an empty declared track reads as
+  silence instead of aborting the export. Regression fixture
+  `crates/or_media/tests/fixtures/or-ffv1-empty-audio.mkv` and the test
+  `software_decoder_treats_a_track_with_no_audio_packets_as_silence`.
+- **Windows could ask which program to use to open `cmd` during an update.** The
+  host seam opened every target through `cmd /c start`, which makes the shell
+  parse the path. Executables and installers now start directly, and documents
+  and folders go to the shell's protocol handler, which takes the path as an
+  argument and parses nothing.
+- The assistant settings dialog reported "not found" for a harness whose CLI is
+  installed but whose ACP adapter is not. It now names the CLI it found and the
+  adapter command that is missing, and it detects as soon as the dialog opens.
+
+### Added
+
+- **Set up here**: a companion tool whose catalog entry states an install
+  command can be installed from Settings → Companion tools, with the command's
+  output shown in the panel. A successful run re-checks the tool, so the state
+  on screen is what the probe found. `npm` packages that are installed globally
+  get an **Uninstall** button that runs the matching `npm uninstall`.
+- `or tools setup <id>` and `or tools remove <id>` do the same from the command
+  line, so an agent has the same reach as the buttons.
+
 ## 0.1.28 — 2026-11-09
 
 An export that failed because the destination folder refused the write used to

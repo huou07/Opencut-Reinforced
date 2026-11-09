@@ -268,6 +268,41 @@ fn run_tools(args: &[OsString]) -> Result<String, String> {
                 _ => Err("Usage: or tools provenance <read|write> ... [--json]".to_owned()),
             }
         }
+        Some("setup") | Some("remove") => {
+            let remove = command.as_deref() == Some("remove");
+            let id = words.get(1).ok_or_else(|| {
+                format!(
+                    "tools {} needs a tool id\n\nUsage: or tools {} <id> [--json]",
+                    if remove { "remove" } else { "setup" },
+                    if remove { "remove" } else { "setup" }
+                )
+            })?;
+            let id = id.to_string_lossy().to_string();
+            let output = or_tools::run_setup(&id, remove, or_tools::RUN_TIMEOUT)?;
+            if json {
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "id": id,
+                    "removed": remove,
+                    "success": output.success,
+                    "stdout": output.stdout,
+                    "stderr": output.stderr,
+                }))
+                .map_err(|error| error.to_string())
+            } else {
+                let mut text = output.stdout;
+                if !output.stderr.is_empty() {
+                    text.push_str(&output.stderr);
+                }
+                if text.is_empty() {
+                    text = if output.success {
+                        format!("{} {}", id, if remove { "removed" } else { "set up" })
+                    } else {
+                        format!("{id} could not be {}", if remove { "removed" } else { "set up" })
+                    };
+                }
+                Ok(text)
+            }
+        }
         Some("run") => {
             let id = words.get(1).ok_or_else(|| {
                 "tools run needs a tool id\n\nUsage: or tools run <id> [-- args...]".to_owned()
