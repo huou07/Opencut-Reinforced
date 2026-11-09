@@ -260,3 +260,59 @@ itself a container. The condition needed to verify the sandbox path is a Debian
 (or other Linux) machine where `bwrap` can create namespaces, not a container in
 a container. Until then this stays **BLOCKED**, and the package build is **PASS**
 on its own.
+
+### Rust review
+
+The workspace was reviewed against the BeautifulRust guidance rather than
+reformatted. `cargo clippy --workspace --all-targets --all-features` reports no
+error, and the remaining warnings are catalogued with a decision instead of a
+blanket silence: the large `ClipSettings` variant (304 bytes, one value per
+clip, boxing would add an allocation per clip for no measured gain), a loop
+counter in `crates/or_core/src/external_tools.rs`, two collapsible `if`s, two
+needless borrows and a test-only `assert_eq!` with a literal bool.
+
+- Panic surface: the only non-generated `unwrap()` sites in library code are
+  inside `validate_png`, length-guarded by `if bytes.len() < 33`, so they cannot
+  panic on untrusted input.
+- Concurrency: there is no `async fn` in the workspace, every shared lock is a
+  `Mutex`/`Condvar` pair behind ports/admin.rs, and no guard is held across an
+  `.await` because there is none; poison recovery via `into_inner()` is a
+  deliberate choice recorded here rather than a defect.
+- Unsafe: 85 sites outside the generated bridge, concentrated in
+  `crates/or_ipc/src/windows.rs`, `crates/or_media/src/encoder.rs`,
+  `crates/or_app_bridge/src/viewer_texture.rs` and
+  `crates/or_media/src/seekable_io.rs`; each carries its own `// SAFETY:` note,
+  and no site was changed this session because none had evidence of a bug.
+- Defects fixed under review pressure: the `--json` provenance write (found by
+  the live handshake) and the dead `Platform::current()` binding in
+  `tools_check`.
+
+The one Rust change considered and deliberately **not** made is recorded in
+`docs/reference/export-performance.md`: decoding native and letting the
+compositor scale would speed up every 4K→1080p export, but it swaps one
+resampler for another and needs a frame-level comparison first.
+
+### Host limits, stated as limits
+
+- **Flatpak runtime**: BLOCKED by the host (see above). The package builds and
+  installs; the sandbox cannot start because the mission host is a container.
+- **Windows GUI**: BLOCKED by the host. SSH lands in session 0 (`tasklist`
+  reports `or_app.exe … Services 0`), so there is no desktop session, window
+  station or GPU surface; the package, installer, install, replacement and
+  removal all pass, and the CLI is smoke-tested, but no GUI run is claimed.
+- **NVIDIA / AMD**: UNVERIFIED, because none of the three hosts has such a
+  device. What was checked: the adapter report names the engine actually used
+  (`OR_EXPORT_BENCH_ADAPTER Intel(R) UHD Graphics 770 … Vulkan` on Debian,
+  `Intel(R) Graphics (Intel Corporation, Vulkan)` on Windows, Metal on macOS);
+  `or_render::RenderError` distinguishes no compiled backend, no adapter and no
+  device, and the bridge surfaces them as `RENDER_UNAVAILABLE` instead of
+  panicking; a chosen backend that fails to open falls back to the default
+  device. Nothing here is evidence about an NVIDIA or AMD device's rate.
+
+### Open work
+
+- The 4K→1080p decode-time scale: recommendation recorded, not implemented.
+- The `ui-audit-inspector.json` sweep reaches the advanced clip sheet by label
+  because those buttons carry no keys, unlike the rest of the app.
+- Windows GUI, Flatpak sandbox and NVIDIA/AMD rates stay BLOCKED/UNVERIFIED
+  until a host can run them.
