@@ -29,18 +29,27 @@ Flatpak is built locally with `scripts/package_linux_flatpak.sh` and attached to
 the same release, and its entry is appended to `SHA256SUMS.txt`. A release with
 a missing or mismatched Flatpak is incomplete, not "four out of five".
 
-All five assets for 0.1.27 were built and installed on the three hosts before
-publication, from `main` at `9f86d514`, and uploaded after the tag run so the
-published bytes are the tested ones. The 0.1.28 table replaces it below once
-that build is published.
+All five assets for 0.1.28 were built and installed on the three hosts before
+publication, from `main` at `5bf96750`, so the published bytes are the tested
+ones:
 
 | Asset | Bytes | SHA-256 |
 | --- | --- | --- |
-| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,069 | `1ea20060412969c5f4830c6ac610ec46f8bf2f08f338476204c9aa56b64305e9` |
-| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,449,884 | `0f374e1c9484ebd076d35b3a4a9f83956fc6e227f8aaa6ff5bdd7d4f9f9496bb` |
-| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,578,616 | `2c92391fd73ff49cbdb10669cbd7eaf8e0e257cde3bfd597ecce7e639115ac13` |
-| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,424,296 | `9542ec687a7d2cf8a26d96a074c8fb46e1c053311761e962c907f78ec959435c` |
-| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,625 | `21df2e7508546ad42e6c96bdb5123d84155010d891bbcfafabd4df9287abf649` |
+| `Opencut-Reinforced-0.1.28-arm64.dmg` | 37,523,778 | `b87cb24ec561f4d6957b1662746aebd8b2237065808dd425b27a6af715753de2` |
+| `Opencut-Reinforced-0.1.28-linux-x64.deb` | 23,442,776 | `da18e694a897fe715729e7ee81f61ee740bb1624c8f6d5eed941b685c389db53` |
+| `Opencut-Reinforced-0.1.28-x86_64.flatpak` | 22,595,568 | `d9f002097561b6d678710e11ccdd7da390ed0ef8df7b55d62c91815bca0d3ced` |
+| `Opencut-Reinforced-0.1.28-windows-x64-setup.exe` | 25,421,079 | `37a0d3d63f0cee3682034d4d8f91fedd9e201dc799f25b2c4908b264b26d2258` |
+| `Opencut-Reinforced-0.1.28-windows-x64.zip` | 35,076,362 | `0088e3d8e0c5df378e717b942e2624150e1c8ef630c9652f86e9c36996ea1082` |
+
+0.1.27, the first public build since 0.1.21, was cut from `9f86d514` the same
+day and carried: DMG 37,528,069 B
+`1ea20060412969c5f4830c6ac610ec46f8bf2f08f338476204c9aa56b64305e9`, DEB
+23,449,884 B `0f374e1c9484ebd076d35b3a4a9f83956fc6e227f8aaa6ff5bdd7d4f9f9496bb`,
+Flatpak 22,578,616 B
+`2c92391fd73ff49cbdb10669cbd7eaf8e0e257cde3bfd597ecce7e639115ac13`, setup
+25,424,296 B `9542ec687a7d2cf8a26d96a074c8fb46e1c053311761e962c907f78ec959435c`,
+ZIP 35,073,625 B
+`21df2e7508546ad42e6c96bdb5123d84155010d891bbcfafabd4df9287abf649`.
 
 The Flatpak **installs and declares its permissions** (`pulseaudio`, `dri`,
 `wayland`, `fallback-x11`, `xdg-documents|xdg-videos|xdg-download`) but its

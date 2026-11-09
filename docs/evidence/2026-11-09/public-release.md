@@ -121,3 +121,80 @@ observed running here.
 - Decoding 4K natively and scaling in the compositor would remove 10–19 ms per
   frame from 4K→1080p exports; recorded with a recommendation, deliberately not
   changed in this release.
+
+## 0.1.28 — the export that could not write where it was told (2026-11-09)
+
+Reported from a real session: an export ended with `Operation not permitted`,
+and `ffmpeg` was blamed because that is the only name the message contained.
+
+**Cause.** The writer stages a hidden `.name.or-export-<pid>-<n>` directory
+beside the destination and renames the finished file into place
+(`crates/or_media/src/encoder.rs::create_staging_directory`). When the folder
+refused that new directory the error was formatted as `could not create export
+staging directory: Operation not permitted (os error 1)` — no folder, no reason
+and nothing to do. macOS withholds Desktop, Documents, Downloads and external
+volumes from an app until the owner allows it, and this build is ad-hoc signed,
+so every rebuild can look like a new app to that decision; the panel also opened
+wherever it was last used, which is often one of those folders. The app itself
+was never sandboxed: `codesign -d --entitlements -` on the shipped bundle shows
+no `com.apple.security.app-sandbox`.
+
+**Fix** (commit `0fe5fa8f`, portable-helper follow-up `5bf96750`):
+
+- `describe_staging_failure` names the folder and the remedy, with macOS
+  pointing at System Settings and the other platforms at a folder under home.
+- `check_export_destination` runs in `start_export` before the job is queued: it
+  rejects a directory, refuses a destination file it cannot open for writing
+  without truncating it, and proves the folder accepts a new directory by
+  creating and removing one. A refusal returns
+  `EXPORT_DESTINATION_NOT_WRITABLE` while the dialog is still on screen.
+- The macOS save panel starts in `~/Movies`; its return value grants nothing on
+  its own, and the stale comment claiming otherwise was corrected.
+- A failed export repeats its explanation as a notice (12 s) with a close, since
+  the top bar keeps one short line and drops the text on a compact layout.
+- Four Rust tests (`destination_tests`) cover the writable case, the write-denied
+  folder, a read-only destination file, and the writer's own first-failure
+  message.
+
+**Proof through the UI, not the API.** New journey
+`scripts/ui_scenarios/export-blocked-destination.json` (23 steps) hands the
+export a folder the runner made `0500` via the new scenario flag
+`exportWriteDenied`, then waits for the folder-naming sentence and the remedy in
+the live semantics tree before capturing the tree and a screenshot. PASS on
+macOS (`/tmp/or-export-blocked2`) and on Debian (`/tmp/or-deb-export-blocked-destination`);
+on Windows the flag has no `chmod` equivalent, so the journey is not run there.
+`export-encode` and `export-formats` re-ran green in the same session, so the
+fix did not disturb a working export.
+
+**Build at `5bf9675042`** (all three hosts fast-forwarded to it by bundle):
+
+| Asset | Bytes | SHA-256 |
+| --- | --- | --- |
+| `Opencut-Reinforced-0.1.28-arm64.dmg` | 37,523,778 | `b87cb24ec561f4d6957b1662746aebd8b2237065808dd425b27a6af715753de2` |
+| `Opencut-Reinforced-0.1.28-linux-x64.deb` | 23,442,776 | `da18e694a897fe715729e7ee81f61ee740bb1624c8f6d5eed941b685c389db53` |
+| `Opencut-Reinforced-0.1.28-x86_64.flatpak` | 22,595,568 | `d9f002097561b6d678710e11ccdd7da390ed0ef8df7b55d62c91815bca0d3ced` |
+| `Opencut-Reinforced-0.1.28-windows-x64-setup.exe` | 25,421,079 | `37a0d3d63f0cee3682034d4d8f91fedd9e201dc799f25b2c4908b264b26d2258` |
+| `Opencut-Reinforced-0.1.28-windows-x64.zip` | 35,076,362 | `0088e3d8e0c5df378e717b942e2624150e1c8ef630c9652f86e9c36996ea1082` |
+
+Lane results at that commit: macOS `cargo test` suites green, `flutter test`
+`+621: All tests passed!`, `flutter analyze` clean, `cargo clippy -D warnings`
+clean; Debian `RESULT: LOCAL_LANE=PASS` (release DEB) plus the Flatpak build;
+Windows `WINDOWS_LANE=PASS` (build, stage, ZIP install/replacement/removal,
+setup). `bash scripts/check-repo.sh` passes.
+
+**A defect this release nearly shipped.** The first build of the fix failed on
+Windows only: the new helpers were inserted between `#[cfg(unix)]` and the
+function it guards, so `or_media` did not compile there (`the name
+create_private_directory is defined multiple times`, `cannot find unix in os`).
+The macOS lane and every journey were green at that commit; only the Windows
+lane caught it. `5bf96750` restores the attribute and words the remedy per
+platform. Both hosts were rebuilt afterwards, which is why the hashes above
+belong to `5bf96750` and not `0fe5fa8f`.
+
+**Installed and smoke tested at `5bf96750`:** macOS DMG → `/Applications`,
+`or version` → `Opencut Reinforced 0.1.28`, window `1470x923`, screenshot
+`docs/evidence/2026-11-09/macos/installed-0.1.28.png`; Debian `dpkg -i` →
+`/opt/opencut-reinforced/or version` 0.1.28; Flatpak `Changes complete.` with
+Version 0.1.28 and the same permissions, runtime still BLOCKED by the host;
+Windows setup exit 0 → `Opencut Reinforced 0.1.28`, desktop screenshot
+`docs/evidence/2026-11-09/windows/installed-0.1.28.png` (1536x864).
