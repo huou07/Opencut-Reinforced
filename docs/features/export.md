@@ -40,6 +40,23 @@ lists MP4/WebM/lossless as Ready or Unavailable with the encoder name. A build
 whose only working encoder is FFV1 says so rather than offering an MP4 export
 that would fail.
 
+### Small canvases and the Media Foundation floor
+
+Every candidate is probed at 64x64, which is enough to tell "this machine can
+open this encoder" but not "this machine can open it for *this* frame". Measured
+on the Windows 11 host (2026-11-09, `h264_mf`): a 128x128, 64x64 and 48x48 MP4
+export succeeds, and a 32x32 export fails at encoder open with
+`Generic error in an external library`. The probe alone therefore picked
+`h264_mf` for a canvas it cannot encode, and the failure surfaced as
+"this machine has no working H.264 encoder" — a false statement on a machine
+that had just encoded three files.
+
+`or_core::h264_canvas_floor` carries the measured floor (Media Foundation:
+48x48) and `apply_canvas_floor` marks a candidate as not opening, with the
+reason, when the export's canvas is below it. The plan then chooses an encoder
+that can really encode this frame; if none remains, the error names the canvas
+that was too small instead of claiming the machine has no encoder.
+
 ### Encoder, not a performance profile
 
 Performance has one mode: Automatic. The export dialog names the encoder the

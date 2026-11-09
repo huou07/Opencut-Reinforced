@@ -313,9 +313,10 @@ fn encoder_answers(encoder: codec::Codec) -> bool {
 fn pick_h264_encoder(plan: &or_core::ExportEncodingPlan) -> Result<H264Pick, ExportEncodeError> {
     let Some(name) = plan.h264_encoder.as_deref() else {
         let mut message = format!(
-            "this machine has no usable H.264 encoder (looked for {}), so MP4 \
-             cannot be encoded here. Export WebM instead, or install a package \
-             that links a hardware H.264 encoder for this platform.",
+            "no usable H.264 encoder for this export (looked for {}), so MP4 \
+             cannot be encoded here. Export WebM or Matroska instead, use a \
+             larger canvas if a probe below names a size limit, or install a \
+             package that links a hardware H.264 encoder for this platform.",
             H264_ENCODER_CANDIDATES.join(", ")
         );
         if !plan.notes.is_empty() {
@@ -343,8 +344,10 @@ fn pick_h264_encoder(plan: &or_core::ExportEncodingPlan) -> Result<H264Pick, Exp
 fn h264_open_error(encoder: &str, error: ffmpeg::Error) -> ExportEncodeError {
     ExportEncodeError(format!(
         "MP4 could not be encoded here: the {encoder} encoder did not open \
-         ({error}). This machine has no working H.264 encoder; export WebM or \
-         Matroska instead."
+         ({error}). The plan picked it, so this is the encoder failing at the \
+         export's own size or settings, not a missing one; Settings -> \
+         Performance lists what this machine opened. Export WebM or Matroska \
+         instead if the file matters more than the format."
     ))
 }
 
@@ -668,11 +671,14 @@ impl FfmpegExportWriter {
         // whether it wants a device surface pool. Resolving it here keeps the
         // probe out of the tuple below.
         let encoding_plan = if profile == FfmpegExportProfile::Mp4H264Aac {
-            let plan = or_core::plan_h264_encoding(
-                performance,
-                preferred_h264_encoder,
-                &probe_h264_encoders(),
-            );
+            // The probe opens each candidate at 64x64; a canvas below an
+            // encoder's measured floor has to be excluded here, or the plan
+            // picks an encoder that only opens at probe size and the export
+            // fails on its first frame with a misleading "no H.264 encoder".
+            let mut candidates = probe_h264_encoders();
+            or_core::apply_canvas_floor(&mut candidates, width, height);
+            let plan =
+                or_core::plan_h264_encoding(performance, preferred_h264_encoder, &candidates);
             Some(plan)
         } else {
             None

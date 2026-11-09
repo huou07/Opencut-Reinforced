@@ -479,19 +479,23 @@ pub const TOOLS: &[ToolDescriptor] = &[
         ),
         homepage: "https://www.remotion.dev",
         install_page: "https://www.remotion.dev/docs/",
-        install_commands: &[InstallCommand {
-            platform: Platform::MacOs,
-            command: "npx create-video@latest",
-            note: "Per project, not per machine; needs Node.js and a browser download.",
-        }, InstallCommand {
-            platform: Platform::Windows,
-            command: "npx create-video@latest",
-            note: "Per project, not per machine; needs Node.js and a browser download.",
-        }, InstallCommand {
-            platform: Platform::Linux,
-            command: "npx create-video@latest",
-            note: "Per project, not per machine; needs Node.js and a browser download.",
-        }],
+        install_commands: &[
+            InstallCommand {
+                platform: Platform::MacOs,
+                command: "npx create-video@latest",
+                note: "Per project, not per machine; needs Node.js and a browser download.",
+            },
+            InstallCommand {
+                platform: Platform::Windows,
+                command: "npx create-video@latest",
+                note: "Per project, not per machine; needs Node.js and a browser download.",
+            },
+            InstallCommand {
+                platform: Platform::Linux,
+                command: "npx create-video@latest",
+                note: "Per project, not per machine; needs Node.js and a browser download.",
+            },
+        ],
         size_hint: "about 300 MB per project with the browser",
         runtime: "Node.js and a bundled Chromium",
         gui_program: None,
@@ -513,19 +517,23 @@ pub const TOOLS: &[ToolDescriptor] = &[
         license_note: None,
         homepage: "https://motioncanvas.io",
         install_page: "https://motioncanvas.io/docs/quickstart",
-        install_commands: &[InstallCommand {
-            platform: Platform::MacOs,
-            command: "npm init @motion-canvas@latest",
-            note: "Per project, not per machine; needs Node.js.",
-        }, InstallCommand {
-            platform: Platform::Windows,
-            command: "npm init @motion-canvas@latest",
-            note: "Per project, not per machine; needs Node.js.",
-        }, InstallCommand {
-            platform: Platform::Linux,
-            command: "npm init @motion-canvas@latest",
-            note: "Per project, not per machine; needs Node.js.",
-        }],
+        install_commands: &[
+            InstallCommand {
+                platform: Platform::MacOs,
+                command: "npm init @motion-canvas@latest",
+                note: "Per project, not per machine; needs Node.js.",
+            },
+            InstallCommand {
+                platform: Platform::Windows,
+                command: "npm init @motion-canvas@latest",
+                note: "Per project, not per machine; needs Node.js.",
+            },
+            InstallCommand {
+                platform: Platform::Linux,
+                command: "npm init @motion-canvas@latest",
+                note: "Per project, not per machine; needs Node.js.",
+            },
+        ],
         size_hint: "about 150 MB per project",
         runtime: "Node.js",
         gui_program: None,
@@ -553,24 +561,32 @@ pub const TOOLS: &[ToolDescriptor] = &[
         ),
         homepage: "https://github.com/transitive-bullshit/puppeteer-lottie",
         install_page: "https://github.com/transitive-bullshit/puppeteer-lottie#readme",
-        install_commands: &[InstallCommand {
-            platform: Platform::MacOs,
-            command: "npm install puppeteer-lottie",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }, InstallCommand {
-            platform: Platform::Windows,
-            command: "npm install puppeteer-lottie",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }, InstallCommand {
-            platform: Platform::Linux,
-            command: "npm install puppeteer-lottie",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }],
+        install_commands: &[
+            InstallCommand {
+                platform: Platform::MacOs,
+                command: "npm install puppeteer-lottie",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+            InstallCommand {
+                platform: Platform::Windows,
+                command: "npm install puppeteer-lottie",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+            InstallCommand {
+                platform: Platform::Linux,
+                command: "npm install puppeteer-lottie",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+        ],
         size_hint: "about 300 MB with the browser download",
         runtime: "Node.js and a Chromium browser",
         gui_program: None,
         probe: CommandSpec::new("npx", &["--no-install", "puppeteer-lottie", "--version"]),
-        outputs: &[OutputKind::Lottie, OutputKind::Video, OutputKind::ImageSequence],
+        outputs: &[
+            OutputKind::Lottie,
+            OutputKind::Video,
+            OutputKind::ImageSequence,
+        ],
         project_scoped: true,
         removable: true,
         platforms: ALL,
@@ -589,24 +605,32 @@ pub const TOOLS: &[ToolDescriptor] = &[
         ),
         homepage: "https://threejs.org",
         install_page: "https://threejs.org/docs/#examples/en/loaders/GLTFLoader",
-        install_commands: &[InstallCommand {
-            platform: Platform::MacOs,
-            command: "npm install three",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }, InstallCommand {
-            platform: Platform::Windows,
-            command: "npm install three",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }, InstallCommand {
-            platform: Platform::Linux,
-            command: "npm install three",
-            note: "Per project, not per machine; needs Node.js and a browser.",
-        }],
+        install_commands: &[
+            InstallCommand {
+                platform: Platform::MacOs,
+                command: "npm install three",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+            InstallCommand {
+                platform: Platform::Windows,
+                command: "npm install three",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+            InstallCommand {
+                platform: Platform::Linux,
+                command: "npm install three",
+                note: "Per project, not per machine; needs Node.js and a browser.",
+            },
+        ],
         size_hint: "about 300 MB with the browser download",
         runtime: "Node.js and a Chromium browser",
         gui_program: None,
         probe: CommandSpec::new("npx", &["--no-install", "three", "--version"]),
-        outputs: &[OutputKind::Gltf, OutputKind::Video, OutputKind::ImageSequence],
+        outputs: &[
+            OutputKind::Gltf,
+            OutputKind::Video,
+            OutputKind::ImageSequence,
+        ],
         project_scoped: true,
         removable: true,
         platforms: ALL,

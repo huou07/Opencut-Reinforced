@@ -51,7 +51,8 @@ pub use external_tools::{
     tool, tools_for,
 };
 pub use hardware::{
-    DecoderCandidate, EncoderCandidate, ExportEncodingPlan, PerformanceProfile, plan_h264_encoding,
+    DecoderCandidate, EncoderCandidate, ExportEncodingPlan, PerformanceProfile, apply_canvas_floor,
+    plan_h264_encoding,
 };
 pub use jobs::{
     JobCancelError, JobCancelOutcome, JobContext, JobFailure, JobId, JobKind, JobManager,

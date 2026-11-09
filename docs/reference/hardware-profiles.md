@@ -182,3 +182,10 @@ The packaged release `or_app.exe` also starts in session 1 with a real
 desktop shot `shot-app.png`). That is launch evidence, not a second journey:
 the semantic steps above ran against the test binding, which renders the same
 widget tree on the same desktop.
+
+## Small canvases (2026-11-09, Windows 11 host)
+
+`h264_mf` opens at 48x48 and above and refuses 32x32 at export size even though
+the 64x64 probe succeeds; `or_core::h264_canvas_floor` records that floor and
+`apply_canvas_floor` excludes the candidate for a smaller canvas, so the plan
+falls through instead of failing at open. FFV1/PCM and WebM have no such floor.

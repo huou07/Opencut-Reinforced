@@ -118,6 +118,39 @@ fn is_platform_encoder(name: &str) -> bool {
     matches!(name, "h264_videotoolbox" | "h264_mf" | "h264_vaapi")
 }
 
+/// The smallest canvas each platform encoder will open, measured rather than
+/// assumed.
+///
+/// Media Foundation's H.264 MFT refuses a small surface: a 48x48 frame opens,
+/// a 32x32 frame fails at open with "Generic error in an external library".
+/// The probe runs at 64x64, so without this floor a tiny canvas would pick
+/// `h264_mf` from the probe and then fail the export with a message claiming
+/// the machine has no H.264 encoder at all.
+pub fn h264_canvas_floor(name: &str) -> Option<(u32, u32)> {
+    match name {
+        "h264_mf" => Some((48, 48)),
+        _ => None,
+    }
+}
+
+/// Marks every encoder whose measured floor is above this canvas as not
+/// opening, with the reason, so the plan chooses a candidate that can really
+/// encode this frame instead of one that only opens at probe size.
+pub fn apply_canvas_floor(candidates: &mut [EncoderCandidate], width: u32, height: u32) {
+    for candidate in candidates.iter_mut() {
+        let Some((floor_width, floor_height)) = h264_canvas_floor(&candidate.name) else {
+            continue;
+        };
+        if candidate.present && (width < floor_width || height < floor_height) {
+            candidate.opens = false;
+            candidate.note = Some(format!(
+                "{} needs a canvas of at least {floor_width}x{floor_height}; this export is {width}x{height}",
+                candidate.name
+            ));
+        }
+    }
+}
+
 /// Resolves the H.264 encoder an export job should open.
 ///
 /// An explicit `requested` name wins whenever it is present and opened: a
@@ -169,9 +202,20 @@ pub fn plan_h264_encoding(
         .or_else(|| usable.iter().copied().find(|candidate| candidate.hardware))
         .or_else(|| usable.first().copied());
 
+    // Every present-but-closed candidate explains itself, whether or not one of
+    // them was usable: a person reading "no encoder" needs the floor that
+    // excluded the platform encoder, not just the conclusion.
+    for candidate in candidates {
+        if candidate.present
+            && !candidate.opens
+            && let Some(note) = &candidate.note
+        {
+            notes.push(format!("{}: {note}", candidate.name));
+        }
+    }
+
     let Some(chosen) = chosen else {
-        let reason = "no H.264 encoder opened on this machine".to_owned();
-        notes.push(reason);
+        notes.push("no H.264 encoder opened on this machine".to_owned());
         return ExportEncodingPlan {
             profile,
             h264_encoder: None,
@@ -181,15 +225,6 @@ pub fn plan_h264_encoding(
             notes,
         };
     };
-
-    for candidate in candidates {
-        if candidate.present
-            && !candidate.opens
-            && let Some(note) = &candidate.note
-        {
-            notes.push(format!("{}: {note}", candidate.name));
-        }
-    }
 
     ExportEncodingPlan {
         profile,
@@ -203,7 +238,7 @@ pub fn plan_h264_encoding(
 
 #[cfg(test)]
 mod tests {
-    use super::{EncoderCandidate, PerformanceProfile, plan_h264_encoding};
+    use super::{EncoderCandidate, PerformanceProfile, apply_canvas_floor, plan_h264_encoding};
 
     fn candidate(name: &str, opens: bool, hardware: bool) -> EncoderCandidate {
         EncoderCandidate {
@@ -351,5 +386,51 @@ mod tests {
             &[candidate("libx264", true, false)],
         );
         assert_eq!(software.summary(), "libx264 (software)");
+    }
+
+    #[test]
+    fn a_canvas_below_the_media_foundation_floor_takes_it_out_of_the_plan() {
+        // Measured on the Windows host: h264_mf opens a 48x48 surface and
+        // refuses a 32x32 one at export size, although the 64x64 probe passes.
+        let mut candidates = vec![
+            candidate("h264_mf", true, true),
+            candidate("libx264", true, false),
+        ];
+        apply_canvas_floor(&mut candidates, 32, 32);
+        assert!(!candidates[0].opens, "h264_mf cannot encode 32x32");
+        assert!(
+            candidates[0]
+                .note
+                .as_deref()
+                .is_some_and(|note| note.contains("at least 48x48")),
+            "the reason names the floor: {:?}",
+            candidates[0].note
+        );
+        assert!(candidates[1].opens, "libx264 has no floor");
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
+        assert_eq!(plan.h264_encoder.as_deref(), Some("libx264"));
+    }
+
+    #[test]
+    fn a_canvas_at_the_floor_keeps_media_foundation() {
+        let mut candidates = vec![candidate("h264_mf", true, true)];
+        apply_canvas_floor(&mut candidates, 48, 48);
+        assert!(candidates[0].opens);
+        assert_eq!(candidates[0].note, None);
+    }
+
+    #[test]
+    fn a_tiny_canvas_with_no_other_encoder_plans_nothing_and_says_why() {
+        let mut candidates = vec![candidate("h264_mf", true, true)];
+        apply_canvas_floor(&mut candidates, 32, 32);
+        let plan = plan_h264_encoding(PerformanceProfile::Automatic, None, &candidates);
+        assert_eq!(plan.h264_encoder, None);
+        assert!(
+            plan.notes
+                .iter()
+                .any(|note| note.contains("at least 48x48")),
+            "the plan explains the floor instead of claiming no encoder exists: {:?}",
+            plan.notes
+        );
     }
 }
