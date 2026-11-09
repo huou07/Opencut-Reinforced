@@ -123,6 +123,15 @@ observed running here.
   changed in this release.
 
 ## 0.1.28 — the export that could not write where it was told (2026-11-09)
+**Uploaded bytes.** CI builds its own copies of the DMG, DEB, setup and ZIP while
+the Flatpak is only ever built here. The five assets uploaded to the release are
+the ones built, installed and smoke-tested on the three hosts at `5b676133`
+(`SHA256SUMS.txt` 537 B, written in dmg/deb/flatpak/setup/zip order), replacing
+CI's build with `gh release upload --clobber` so the published bytes are the
+tested ones. All five were then re-downloaded from
+`https://github.com/huou07/Opencut-Reinforced/releases/download/v0.1.28/…` and
+checked with `shasum -a 256 -c SHA256SUMS.txt` (five `OK`).
+
 
 Reported from a real session: an export ended with `Operation not permitted`,
 and `ffmpeg` was blamed because that is the only name the message contained.
