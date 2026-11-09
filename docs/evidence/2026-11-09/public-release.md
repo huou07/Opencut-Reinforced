@@ -170,11 +170,11 @@ fix did not disturb a working export.
 
 | Asset | Bytes | SHA-256 |
 | --- | --- | --- |
-| `Opencut-Reinforced-0.1.28-arm64.dmg` | 37,523,778 | `b87cb24ec561f4d6957b1662746aebd8b2237065808dd425b27a6af715753de2` |
-| `Opencut-Reinforced-0.1.28-linux-x64.deb` | 23,442,776 | `da18e694a897fe715729e7ee81f61ee740bb1624c8f6d5eed941b685c389db53` |
-| `Opencut-Reinforced-0.1.28-x86_64.flatpak` | 22,595,568 | `d9f002097561b6d678710e11ccdd7da390ed0ef8df7b55d62c91815bca0d3ced` |
-| `Opencut-Reinforced-0.1.28-windows-x64-setup.exe` | 25,421,079 | `37a0d3d63f0cee3682034d4d8f91fedd9e201dc799f25b2c4908b264b26d2258` |
-| `Opencut-Reinforced-0.1.28-windows-x64.zip` | 35,076,362 | `0088e3d8e0c5df378e717b942e2624150e1c8ef630c9652f86e9c36996ea1082` |
+| `Opencut-Reinforced-0.1.28-arm64.dmg` | 37,523,733 | `cdec3da6fc00df4d80a8878c88448e6ff82aa82d4131d6cfa9537d2cbfb27e3e` |
+| `Opencut-Reinforced-0.1.28-linux-x64.deb` | 23,443,724 | `2fcb2c117b4d8bde250234d1472c4dc0563764571fc14a8ea69e7de1253c1b38` |
+| `Opencut-Reinforced-0.1.28-x86_64.flatpak` | 22,595,256 | `ee03812c77cc6c663eaf46b728f28a4678d31ded8ddcb8a8381bed6439261205` |
+| `Opencut-Reinforced-0.1.28-windows-x64-setup.exe` | 25,421,080 | `4b1206baf1808c1d98fcf067737fb4001df5df31588b1bb2d33662d180a57afd` |
+| `Opencut-Reinforced-0.1.28-windows-x64.zip` | 35,076,362 | `4f435926c93e5d273aa0f40e8230ffa5a7fa9acfca444ef08fc91526ff96e870` |
 
 Lane results at that commit: macOS `cargo test` suites green, `flutter test`
 `+621: All tests passed!`, `flutter analyze` clean, `cargo clippy -D warnings`
