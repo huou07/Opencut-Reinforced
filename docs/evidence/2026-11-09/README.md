@@ -172,6 +172,17 @@ there used `./target/debug/or` from an older revision, which does not advertise
 `tools_provenance_read` — use the installed CLI or rebuild before believing a
 "server does not advertise" error.
 
+It passed a third time on Windows against the installed
+`%LOCALAPPDATA%\Programs\Opencut Reinforced\or.exe`
+(`initialize: server=opencut-reinforced version=0.1.27 protocol=2025-06-18`,
+`tools/list: 39 tools`, `project_status: 'MCP handshake Windows' revision=0
+dirty=False`, `2 of 10 ready (ffmpeg, node)`, `RESULT: OR_MCP_HANDSHAKE=PASS`).
+A hand-written descriptor cannot stand in for a live one — `EndpointDescriptor`
+requires the format token, a v4 auth UUID and a named-pipe endpoint — so the run
+starts `or session serve --file <project> --descriptor <path>` and lets the host
+write the descriptor (`win_mcp.ps1` on the Windows host, `/tmp/win_mcp.ps1`
+here).
+
 It found a real defect that compile checks and unit tests did not: `or tools
 provenance write … --json` printed a bare path, so the MCP layer failed with
 `the or CLI returned invalid JSON: expected value at line 1 column 1`. The verb
