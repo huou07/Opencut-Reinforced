@@ -250,7 +250,7 @@ copy in `/Applications`, and smoke-tested: one 1470x923 window
 | macOS DMG | PASS | copied over `/Applications` | window 1470x923; `or version`; `or tools list` names `lottie` and `gltf`; `whisper-cli` `minos 13.0` | PASS |
 | Debian DEB | PASS (`run_local_lane.sh linux --packaged --steps deb`) | `dpkg -i` over `0.1.27+21ca8876940b`, now `0.1.27+e49cb47871e0` | `/opt/opencut-reinforced/or version`, `or tools list` with the new entries, payload `or`/`ffmpeg`/`ffprobe`/`lib`/`licenses` | PASS |
 | Debian DEB, packaged journey | PASS | `.deb` extracted into a disposable root | `run_packaged_desktop_journey.py` against the installed payload | PASS |
-| Debian Flatpak | PASS | `flatpak install --user` (GNOME 49 runtime, 0.1.27) | launch | **BLOCKED by the host** |
+| Debian Flatpak | PASS | `flatpak install --user` (GNOME 49 runtime, 0.1.27); installed metadata lists `pulseaudio` | launch | **install PASS / runtime BLOCKED by the host** |
 | Windows setup + ZIP | PASS (`WINDOWS_LANE=PASS`) | `/VERYSILENT`; the lane's ZIP install/replacement/removal step also passed | `"$LOCALAPPDATA\Programs\Opencut Reinforced\or.exe" version` → 0.1.27, `or tools list` with `lottie` and `gltf` | PASS |
 | Windows GUI | PASS (scheduled task in console session 1) | — | catalog, provenance, Lottie, glTF and editor journeys, 1440x900 screenshots | **PASS** |
 
@@ -259,6 +259,18 @@ The Debian lane was run twice: the debug bundle first (deb 101 s, journey
 artifact (`deb` 87 s, `RESULT: LOCAL_LANE=PASS`).
 
 ### Flatpak: package PASS, sandbox runtime BLOCKED
+
+A manifest defect was found while reading the sandbox's own metadata: the
+`finish-args` had no audio socket, so `cpal` — which opens ALSA on Linux — would
+have found no device inside the sandbox and playback would have been silent.
+`flatpak/io.github.huou07.or_app.yml` now carries `--socket=pulseaudio` with the
+reason in a comment, the package was rebuilt
+(`dist/opencut-reinforced-0.1.27-x86_64.flatpak`, 22,599,040 B, SHA-256
+`deda1623de06f83beebf86e4d7c05419c942005da929e8ecbe486a2e23991d1a`) and
+reinstalled, and `flatpak info --user --show-permissions` now reports
+`sockets=x11;wayland;pulseaudio;fallback-x11`. The deployment is unchanged at
+76 MB, so the socket is the only difference the user would notice. This is
+still not a runtime claim: the sandbox cannot start on this host.
 
 The rebuilt Flatpak installs and reports `Version: 0.1.27`,
 `Runtime: org.gnome.Platform/x86_64/49`, but it cannot start on this host:
@@ -330,6 +342,21 @@ resampler for another and needs a frame-level comparison first.
   device, and the bridge surfaces them as `RENDER_UNAVAILABLE` instead of
   panicking; a chosen backend that fails to open falls back to the default
   device. Nothing here is evidence about an NVIDIA or AMD device's rate.
+
+  What could be tested, was. Debian ships `lvp_icd.json` (lavapipe) and
+  `nouveau_icd.json` (no NVIDIA card fitted), so the no-device path was run for
+  real by pointing `VK_ICD_FILENAMES` at them:
+
+  | `VK_ICD_FILENAMES` | Adapter line | Result |
+  | --- | --- | --- |
+  | `lvp_icd.json` (software Vulkan) | `Mesa Intel(R) UHD Graphics 770 (ADL-S GT1) (, Gl)` | 198.6 fps, exit 0, 2,519,018 B output |
+  | `nouveau_icd.json` (no device behind it) | same GL fallback | 197.9 fps, exit 0, 2,519,018 B output |
+  | unset (real Vulkan) | `Intel(R) UHD Graphics 770 (ADL-S GT1) (Intel open-source Mesa driver, Vulkan)` | 197.8 fps, same bytes |
+
+  So an empty or broken Vulkan enumeration degrades to the OpenGL backend with
+  identical output rather than crashing or exporting nothing — the software
+  path a machine without a usable GPU would take. It is still not a statement
+  about NVIDIA or AMD hardware performance.
 
 ### Open work
 
