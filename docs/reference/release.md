@@ -28,16 +28,16 @@ the same release, and its entry is appended to `SHA256SUMS.txt`. A release with
 a missing or mismatched Flatpak is incomplete, not "four out of five".
 
 All five assets for 0.1.27 were built and installed on the three hosts before
-publication, from `main` at `dc829d7c`, and uploaded after the tag run so the
+publication, from `main` at `9f86d514`, and uploaded after the tag run so the
 published bytes are the tested ones:
 
 | Asset | Bytes | SHA-256 |
 | --- | --- | --- |
-| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,006 | `22171092ad11232ca192a60495d28ab48e198837082c7723390b1142878f8b8f` |
-| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,439,512 | `a087d88d285a387bb5154f4c1bbd572cada68ff843c58b0aaaee77f6db1192f8` |
-| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,592,440 | `3d36aafc1ffd068ddcfc39eb6f081d82672faac842ed19277d558939c1f0a25c` |
-| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,420,752 | `37d323fd2c259b4a26688683d504cc72550d95db358266ef2fce419eaaa99a66` |
-| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,186 | `b4b8ee9b82966689f912afd40453b31215d7d877ad1d544b0af01f7b80db272e` |
+| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,069 | `1ea20060412969c5f4830c6ac610ec46f8bf2f08f338476204c9aa56b64305e9` |
+| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,449,884 | `0f374e1c9484ebd076d35b3a4a9f83956fc6e227f8aaa6ff5bdd7d4f9f9496bb` |
+| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,578,616 | `2c92391fd73ff49cbdb10669cbd7eaf8e0e257cde3bfd597ecce7e639115ac13` |
+| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,424,296 | `9542ec687a7d2cf8a26d96a074c8fb46e1c053311761e962c907f78ec959435c` |
+| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,625 | `21df2e7508546ad42e6c96bdb5123d84155010d891bbcfafabd4df9287abf649` |
 
 The Flatpak **installs and declares its permissions** (`pulseaudio`, `dri`,
 `wayland`, `fallback-x11`, `xdg-documents|xdg-videos|xdg-download`) but its

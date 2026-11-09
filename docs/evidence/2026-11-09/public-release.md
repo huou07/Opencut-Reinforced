@@ -1,18 +1,21 @@
 # Public release evidence — 0.1.27
 
-What was checked before the 0.1.27 tag, on branch `main` at `dc829d7c`. Every
+What was checked before the 0.1.27 tag, on branch `main` at `9f86d514`. Every
 row is a command that ran on the host in the column, not a claim about another
-build.
+build. The first pass through this gate ran at `dc829d7c` and found four
+failures the tag could not carry — unformatted Dart, a stale probe lock and two
+denied clippy lints — so every package below was rebuilt from `9f86d514` after
+they were fixed, and installed again.
 
 ## Revisions
 
 | Host | Branch | Commit |
 | --- | --- | --- |
-| macOS (Apple M5) | `main` | `dc829d7c` |
-| Debian (Intel i5-13500T, Intel UHD 770) | `main` | `dc829d7ccc8d` |
-| Windows 11 (Intel Core 5 120U) | `main` | `dc829d7c` |
+| macOS (Apple M5) | `main` | `9f86d514` |
+| Debian (Intel i5-13500T, Intel UHD 770) | `main` | `9f86d51480a6` |
+| Windows 11 (Intel Core 5 120U) | `main` | `9f86d514` |
 
-`main` was fast-forwarded from `97f4f25e` to the mission branch at `a98341bb`
+``main` was fast-forwarded from `97f4f25e` to the mission branch at `a98341bb`
 with `git branch backup/main-pre-merge-2026-11-09` and a bundle backup kept
 first; nothing was reset or rewritten.
 
@@ -45,7 +48,7 @@ macOS, all twenty-two shipped scenarios `RESULT: OR_UI=PASS`:
 `caption-import`.
 
 Windows, interactive desktop session 1 through a scheduled task:
-`editor-journey` PASS at `dc829d7c` after installing the freshly built setup,
+`editor-journey` PASS at `9f86d514` after installing the freshly built setup,
 plus `companion-provenance` PASS at `65f88f71` (the only Dart change after that
 is the motion starter strip, which Windows journeys do not visit and which
 `flutter test` covers).
@@ -78,22 +81,22 @@ checked by `scripts/run_local_lane.sh linux --packaged --steps deb,journey`.
    `%TEMP%\frb_native_assets_*` was removed. A host artefact, not a repository
    defect; noted so the next reader does not chase it.
 
-## Packages, built from `dc829d7c`
+## Packages, built from `9f86d514`
 
 | Artifact | Bytes | SHA-256 |
 | --- | --- | --- |
-| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,006 | `22171092ad11232ca192a60495d28ab48e198837082c7723390b1142878f8b8f` |
-| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,439,512 | `a087d88d285a387bb5154f4c1bbd572cada68ff843c58b0aaaee77f6db1192f8` |
-| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,592,440 | `3d36aafc1ffd068ddcfc39eb6f081d82672faac842ed19277d558939c1f0a25c` |
-| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,420,752 | `37d323fd2c259b4a26688683d504cc72550d95db358266ef2fce419eaaa99a66` |
-| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,186 | `b4b8ee9b82966689f912afd40453b31215d7d877ad1d544b0af01f7b80db272e` |
+| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,069 | `1ea20060412969c5f4830c6ac610ec46f8bf2f08f338476204c9aa56b64305e9` |
+| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,449,884 | `0f374e1c9484ebd076d35b3a4a9f83956fc6e227f8aaa6ff5bdd7d4f9f9496bb` |
+| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,578,616 | `2c92391fd73ff49cbdb10669cbd7eaf8e0e257cde3bfd597ecce7e639115ac13` |
+| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,424,296 | `9542ec687a7d2cf8a26d96a074c8fb46e1c053311761e962c907f78ec959435c` |
+| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,625 | `21df2e7508546ad42e6c96bdb5123d84155010d891bbcfafabd4df9287abf649` |
 
 ## Install and smoke, per host
 
 | Host | Install | Smoke |
 | --- | --- | --- |
 | macOS | DMG mounted, `hdiutil verify` VALID, app copied to `/Applications` | `or version` → `Opencut Reinforced 0.1.27`; `or tools list` shows the ten catalog entries |
-| Debian | `sudo dpkg -i` upgraded `0.1.27+436a1c0368c6` → `0.1.27+dc829d7ccc8d` | `/opt/opencut-reinforced/or version`, `or tools list` |
+| Debian | `sudo dpkg -i` upgraded `0.1.27+49ef86d5…` → `0.1.27+9f86d51480a6` | `/opt/opencut-reinforced/or version`, `or tools list` |
 | Windows | setup `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`, exit 0 | `or version`, `or tools list`, `editor-journey` PASS |
 | Flatpak | `flatpak install --user --reinstall` → "Changes complete" | `flatpak info --show-permissions` shows `sockets=x11;wayland;pulseaudio;fallback-x11`, `devices=dri`; `flatpak run` **BLOCKED** by the host |
 
