@@ -183,12 +183,18 @@ schtasks /Run /TN OrUiJourney
 type C:\Users\hp\ui-journey.log
 ```
 
-`win_ui_journey.ps1` calls
-`C:\Users\hp\AppData\Local\Programs\Python\Python312\python.exe scripts\or_ui.py --target windows run scripts\ui_scenarios\motion-starter.json`.
-The absolute interpreter matters: the msys64 Python cannot import `msvcrt`. The
-Windows test binding has no raster surface for `RepaintBoundary`, so a screenshot
-step records `*.unavailable.txt`; behavioural evidence is complete, pixels are
-missing by platform limit.
+`win_ui_run.ps1` takes `-Scenario` and `-Tag` and calls
+`C:\Users\hp\AppData\Local\Programs\Python\Python312\python.exe scripts\or_ui.py --target windows --report-dir C:\Users\hp\ui-ev-<tag> run scripts\ui_scenarios\<scenario>`,
+writing `C:\Users\hp\ui-<tag>.log` and `C:\Users\hp\ui-<tag>.done`. The
+absolute interpreter matters: the msys64 Python cannot import `msvcrt`. The
+task's `PATH` needs three prefixes beyond the defaults or the run dies
+building the harness: `Python312` (the Flutter tool shells back out to it),
+`VC\Tools\MSVC\<version>\bin\Hostx64\x64` (the CMake `INSTALL.vcxproj` step
+fails with `error MSB3073` without it) and the msys64/ffmpeg prefixes used
+everywhere else. Screenshots are real: the 2026-11-09 provenance run wrote
+1440x900 PNGs (`shot-library-origin-9.png`, `shot-origin-dialog-23.png`,
+`shot-clip-on-timeline-37.png`), so the older "no raster surface" note no
+longer holds on this binding.
 
 Benchmark: the same scheduled-task pattern with `win_bench552.ps1`, which builds
 the test binary, selects the newest `target\release\deps\or_app_bridge-*.exe`

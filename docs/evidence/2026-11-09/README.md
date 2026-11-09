@@ -120,15 +120,30 @@ release ran.
 
 ### Provenance, proven in the real app
 
-Four journeys drive the shipped app through the semantic harness on macOS, and
-one repeats the Lottie journey on Debian:
+Four journeys drive the shipped app through the semantic harness on all three
+hosts, and the core editor journey joins them on Windows:
 
-| Journey | Steps | macOS | Debian | What it proves |
-| --- | --- | --- | --- | --- |
-| `scripts/ui_scenarios/companion-tools-catalog.json` | 24 | PASS | not run | the catalog's states, versions, health checks, install guidance and the absent launch control for a headless tool |
-| `scripts/ui_scenarios/companion-provenance.json` | 37 | PASS | not run | an FFmpeg render, its record, the library row, the origin dialog and the clip that keeps the origin |
-| `scripts/ui_scenarios/companion-lottie.json` | 38 | PASS | PASS | the same, through the Lottie sidecar: the animation stays the source |
-| `scripts/ui_scenarios/companion-gltf.json` | 38 | PASS | not run | the same, through the glTF sidecar: the model stays the source |
+| Journey | Steps | macOS | Debian | Windows | What it proves |
+| --- | --- | --- | --- | --- | --- |
+| `scripts/ui_scenarios/companion-tools-catalog.json` | 24 | PASS | PASS | PASS | the catalog's states, versions, health checks, install guidance and the absent launch control for a headless tool |
+| `scripts/ui_scenarios/companion-provenance.json` | 37 | PASS | PASS | PASS | an FFmpeg render, its record, the library row, the origin dialog and the clip that keeps the origin |
+| `scripts/ui_scenarios/companion-lottie.json` | 38 | PASS | PASS | PASS | the same, through the Lottie sidecar: the animation stays the source |
+| `scripts/ui_scenarios/companion-gltf.json` | 38 | PASS | PASS | PASS | the same, through the glTF sidecar: the model stays the source |
+| `scripts/ui_scenarios/editor-journey.json` | 38 | PASS | PASS | PASS | import, insert, select, trim, seek and export through the shipped UI |
+
+The Windows column is a real desktop session, not a CLI substitute: the app ran
+the same scenarios through the same harness in the logged-on console session
+(`dwm.exe` and `explorer.exe` alive), started by `schtasks /IT` with
+`win_ui_run.ps1` / `win_ui_multi.ps1` and the full toolchain `PATH`. It wrote
+real 1440x900 screenshots into `docs/evidence/2026-11-09/windows/`
+(`shot-library-origin-9.png`, `shot-origin-dialog-23.png`,
+`shot-clip-on-timeline-37.png`, plus the Lottie dialog
+`lottie-shot-origin-dialog-23.png` and the editor sequence
+`shot-home-0.png`, `shot-editor-empty-9.png`, `shot-timeline-23.png`,
+`shot-export-setup-51.png`). The Windows bundle ships FFmpeg 9.0.1 and the
+origin dialog says so (`label: "Made by FFmpeg 9.0.1"` in
+`tree-origin-dialog.txt`), which is the record being honest about the host's
+own tool version rather than echoing the macOS one.
 
 The Fixtures are real renders, not stored samples: `scripts/make_provenance_fixture.sh`,
 `scripts/make_lottie_fixture.sh` and `scripts/make_gltf_fixture.sh` run the tool
@@ -173,6 +188,10 @@ Every shipped journey and every new sweep was run through the real app:
   `ui-audit-inspector.json` (27): PASS, with tree and screenshot artifacts for
   Home, Projects, Library, the six Settings sections, the editor's four tool
   panels, the inspector, the clip menu, the advanced clip sheet and export.
+
+The companion journeys and the core editor journey were then repeated on Debian
+and on the Windows desktop session (see the matrix above), so the highest-risk
+flows are proven on all three platforms rather than on macOS alone.
 
 Defects found and fixed:
 
@@ -233,7 +252,7 @@ copy in `/Applications`, and smoke-tested: one 1470x923 window
 | Debian DEB, packaged journey | PASS | `.deb` extracted into a disposable root | `run_packaged_desktop_journey.py` against the installed payload | PASS |
 | Debian Flatpak | PASS | `flatpak install --user` (GNOME 49 runtime, 0.1.27) | launch | **BLOCKED by the host** |
 | Windows setup + ZIP | PASS (`WINDOWS_LANE=PASS`) | `/VERYSILENT`; the lane's ZIP install/replacement/removal step also passed | `"$LOCALAPPDATA\Programs\Opencut Reinforced\or.exe" version` → 0.1.27, `or tools list` with `lottie` and `gltf` | PASS |
-| Windows GUI | — | — | no desktop session (`Services` session 0) | **BLOCKED by the host** |
+| Windows GUI | PASS (scheduled task in console session 1) | — | catalog, provenance, Lottie, glTF and editor journeys, 1440x900 screenshots | **PASS** |
 
 The Debian lane was run twice: the debug bundle first (deb 101 s, journey
 317 s, `RESULT: LOCAL_LANE=PASS`), then the release bundle for the shipped
@@ -296,10 +315,13 @@ resampler for another and needs a frame-level comparison first.
 
 - **Flatpak runtime**: BLOCKED by the host (see above). The package builds and
   installs; the sandbox cannot start because the mission host is a container.
-- **Windows GUI**: BLOCKED by the host. SSH lands in session 0 (`tasklist`
-  reports `or_app.exe … Services 0`), so there is no desktop session, window
-  station or GPU surface; the package, installer, install, replacement and
-  removal all pass, and the CLI is smoke-tested, but no GUI run is claimed.
+- **Windows GUI**: no longer blocked — the earlier reading was wrong. SSH yes
+  lands in session 0, but the machine has a logged-on console session 1
+  (`dwm.exe`, `explorer.exe`), and `schtasks /IT` reaches it. The recipe and
+  its toolchain `PATH` are now in `docs/operations/local-lab.md`; five journeys
+  pass there (catalog, provenance, Lottie, glTF, editor) with 1440x900
+  screenshots. The GUI claim therefore rests on the app itself, not on CLI
+  checks.
 - **NVIDIA / AMD**: UNVERIFIED, because none of the three hosts has such a
   device. What was checked: the adapter report names the engine actually used
   (`OR_EXPORT_BENCH_ADAPTER Intel(R) UHD Graphics 770 … Vulkan` on Debian,
@@ -314,8 +336,8 @@ resampler for another and needs a frame-level comparison first.
 - The 4K→1080p decode-time scale: recommendation recorded, not implemented.
 - The `ui-audit-inspector.json` sweep reaches the advanced clip sheet by label
   because those buttons carry no keys, unlike the rest of the app.
-- Windows GUI, Flatpak sandbox and NVIDIA/AMD rates stay BLOCKED/UNVERIFIED
-  until a host can run them.
+- Flatpak sandbox and NVIDIA/AMD rates stay BLOCKED/UNVERIFIED until a host
+  can run them; Windows GUI is closed (see above).
 
 ### Checkpoint for the next session
 
@@ -324,18 +346,14 @@ clean (Windows has an untracked `.cargo/`), nothing pushed, no tag or release.
 
 Ranked next steps, with the command that starts each:
 
-1. **Windows GUI run** — needs a desktop session. Re-check first:
-   `ssh win11 'query session'` and `tasklist | findstr or_app.exe`. If a session
-   exists, run the scheduled-task pattern in `docs/operations/local-lab.md`
-   against `scripts/ui_scenarios/companion-provenance.json`.
-2. **Flatpak runtime** — needs a host where `bwrap` can create namespaces. Test
+1. **Flatpak runtime** — needs a host where `bwrap` can create namespaces. Test
    with `flatpak run --user --command=sh org.gnome.Sdk/x86_64/49 -c "ls /"`
    before blaming the package; if that prints a listing, the OR package can be
    judged on its own.
-3. **4K→1080p decode scale** — decode native, composite the scale, and compare
+2. **4K→1080p decode scale** — decode native, composite the scale, and compare
    `4k-to1080-full` against `4k-full-4kout` plus a frame-level diff:
    `OR_BENCH_SOURCE=/tmp/or-bench/bench4k.mp4 OR_BENCH_FRAMES=120`.
-4. **NVIDIA/AMD rows** — only a host with the device can produce them; the
+3. **NVIDIA/AMD rows** — only a host with the device can produce them; the
    adapter line in every bench row names what actually rendered.
-5. **Inspector keys** — give the advanced clip sheet's buttons `ValueKey`s like
+4. **Inspector keys** — give the advanced clip sheet's buttons `ValueKey`s like
    the rest of the app so the sweep does not have to select them by label.
