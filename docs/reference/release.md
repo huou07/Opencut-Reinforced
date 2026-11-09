@@ -27,6 +27,25 @@ Flatpak is built locally with `scripts/package_linux_flatpak.sh` and attached to
 the same release, and its entry is appended to `SHA256SUMS.txt`. A release with
 a missing or mismatched Flatpak is incomplete, not "four out of five".
 
+All five assets for 0.1.27 were built and installed on the three hosts before
+publication, from `main` at `dc829d7c`, and uploaded after the tag run so the
+published bytes are the tested ones:
+
+| Asset | Bytes | SHA-256 |
+| --- | --- | --- |
+| `Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,006 | `22171092ad11232ca192a60495d28ab48e198837082c7723390b1142878f8b8f` |
+| `Opencut-Reinforced-0.1.27-linux-x64.deb` | 23,439,512 | `a087d88d285a387bb5154f4c1bbd572cada68ff843c58b0aaaee77f6db1192f8` |
+| `Opencut-Reinforced-0.1.27-x86_64.flatpak` | 22,592,440 | `3d36aafc1ffd068ddcfc39eb6f081d82672faac842ed19277d558939c1f0a25c` |
+| `Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,420,752 | `37d323fd2c259b4a26688683d504cc72550d95db358266ef2fce419eaaa99a66` |
+| `Opencut-Reinforced-0.1.27-windows-x64.zip` | 35,073,186 | `b4b8ee9b82966689f912afd40453b31215d7d877ad1d544b0af01f7b80db272e` |
+
+The Flatpak **installs and declares its permissions** (`pulseaudio`, `dri`,
+`wayland`, `fallback-x11`, `xdg-documents|xdg-videos|xdg-download`) but its
+sandboxed runtime is **BLOCKED** on the build host: `bwrap: Can't mkdir parents
+for /proc: Permission denied` for both the app and a stock `org.gnome.Sdk`
+control, with `CapEff: 0000000000000000`. It is published with that stated, not
+as a tested build. See `docs/evidence/2026-11-09/public-release.md`.
+
 The published **0.1.21** build remains the reference for the previous line, and
 the **0.1.23** artifacts under `dist/release-0.1.23/` are local-only history: they
 were built, installed and exercised in this checkout and never published. The

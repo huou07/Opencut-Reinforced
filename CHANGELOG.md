@@ -68,6 +68,18 @@ were never tagged; everything they added is in this build.
   itself.
 - **The advanced clip sheet's Close button is keyed** like every other control
   in that sheet.
+- **A tiny canvas no longer claims the machine has no H.264 encoder.** Windows
+  Media Foundation refuses an MP4 smaller than 48×48 while the capability probe
+  opens every candidate at 64×64, so a 32×32 export used to say "this machine
+  has no working H.264 encoder" on a host that had just written three files. The
+  plan now carries the encoder's canvas floor and names it.
+- **The Motion panel stops overflowing a short rail.** The four starter cards
+  are a chip strip and the asset rows keep their viewport, which is what pushed
+  imported images out of reach on Linux at 320×419.
+- **Every package now carries its licence texts.** The Windows ZIP shipped
+  FFmpeg, libvpx, Opus and `whisper.cpp` binaries with no licence files; the
+  stager writes them, and the release workflow fails if a published archive is
+  missing one.
 
 ## 0.1.23 — 2026-11-08
 
