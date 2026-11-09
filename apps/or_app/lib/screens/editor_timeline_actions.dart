@@ -227,6 +227,7 @@ Future<void> showTimelineClipActions({
                 overflowAlignment: OverflowBarAlignment.end,
                 children: [
                   TextButton(
+                    key: const ValueKey('timeline-advanced-close'),
                     onPressed: () => Navigator.of(dialogContext).pop(),
                     child: const Text('Close'),
                   ),

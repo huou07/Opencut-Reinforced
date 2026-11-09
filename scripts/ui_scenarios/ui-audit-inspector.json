@@ -133,7 +133,7 @@
     {
       "op": "tap",
       "selector": {
-        "label": "Close"
+        "key": "timeline-advanced-close"
       }
     },
     {
