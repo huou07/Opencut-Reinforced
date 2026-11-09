@@ -14,6 +14,11 @@ finish-args:
   - --share=network
   - --socket=wayland
   - --socket=fallback-x11
+  # cpal opens ALSA on Linux, and inside a sandbox ALSA reaches the host only
+  # through the sound server. Without this socket playback opens no device and
+  # the transport runs silent, which reads as a broken app rather than a
+  # missing permission.
+  - --socket=pulseaudio
   - --device=dri
   - --filesystem=xdg-documents
   - --filesystem=xdg-videos
