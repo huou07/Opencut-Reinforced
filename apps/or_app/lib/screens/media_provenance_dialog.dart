@@ -61,7 +61,11 @@ class _MediaProvenanceDialog extends StatelessWidget {
               ),
             if (item.provenanceManifest != null)
               _row('manifest', 'Scene or manifest', item.provenanceManifest!),
-            _row('output', 'Result file', item.provenanceOutput ?? item.sourceUri),
+            _row(
+              'output',
+              'Result file',
+              item.provenanceOutput ?? item.sourceUri,
+            ),
             if (command != null) _row('command', 'Command', command),
             if (item.provenanceRecord != null)
               _row('record', 'Record', item.provenanceRecord!),

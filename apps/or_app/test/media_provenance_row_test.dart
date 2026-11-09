@@ -127,7 +127,13 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _wrap(_item(tool: 'FFmpeg', version: '7.1.5', command: 'ffmpeg -i a.mov b.mp4')),
+      _wrap(
+        _item(
+          tool: 'FFmpeg',
+          version: '7.1.5',
+          command: 'ffmpeg -i a.mov b.mp4',
+        ),
+      ),
     );
     await tester.tap(find.byKey(const ValueKey('media-actions-m1')));
     await tester.pumpAndSettle();
