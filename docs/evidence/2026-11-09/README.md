@@ -97,3 +97,166 @@ Xvfb is not an installed-package result.
   Debian (`FFmpeg produced /tmp/x.mp4`).
 - Media library shows `From <tool> <version>` for a media file with a sidecar
   (`apps/or_app/test/media_provenance_row_test.dart`, 2 tests).
+
+## Session 2 — provenance, audit, benchmark, sidecars
+
+The 2026-11-09 session continued from `1476e77c` and did not rewrite anything it
+inherited. Four commits carry the work: `b39dc6b5` (a companion result's origin
+reaches the library, the dialog and the timeline), `118fe99d` (the audit sweeps
+that read every screen surface), `813ed9b2` (the Lottie sidecar, the compact
+layout fix, the missing install commands) and `e49cb478` (the glTF sidecar, the
+three-host benchmark table and the two closed performance questions).
+
+### Revision per host
+
+| Host | Path | Revision | Working tree |
+| --- | --- | --- | --- |
+| macOS M5 | this checkout | `e49cb478` | clean |
+| Debian (`ssh debian`) | `/home/huou07/or-mission` | `e49cb478` | clean |
+| Windows 11 (`ssh win11`) | `C:\Users\hp\src\or-mission` | `e49cb478` | clean except untracked `.cargo/` |
+
+Synced with a local git bundle; nothing was pushed, and no CI job, tag or
+release ran.
+
+### Provenance, proven in the real app
+
+Four journeys drive the shipped app through the semantic harness on macOS, and
+one repeats the Lottie journey on Debian:
+
+| Journey | Steps | macOS | Debian | What it proves |
+| --- | --- | --- | --- | --- |
+| `scripts/ui_scenarios/companion-tools-catalog.json` | 24 | PASS | not run | the catalog's states, versions, health checks, install guidance and the absent launch control for a headless tool |
+| `scripts/ui_scenarios/companion-provenance.json` | 37 | PASS | not run | an FFmpeg render, its record, the library row, the origin dialog and the clip that keeps the origin |
+| `scripts/ui_scenarios/companion-lottie.json` | 38 | PASS | PASS | the same, through the Lottie sidecar: the animation stays the source |
+| `scripts/ui_scenarios/companion-gltf.json` | 38 | PASS | not run | the same, through the glTF sidecar: the model stays the source |
+
+The Fixtures are real renders, not stored samples: `scripts/make_provenance_fixture.sh`,
+`scripts/make_lottie_fixture.sh` and `scripts/make_gltf_fixture.sh` run the tool
+and write the record with `or tools provenance write`, so the record names the
+host, the version and the argument vector that produced the file.
+
+The two sidecar records committed in this revision:
+
+| Fixture | Bytes | Record |
+| --- | --- | --- |
+| `scripts/ui_scenarios/companion-lottie-badge.mp4` | 17,868 | `lottie`, `Lottie renderer`, version `1.0.9`, manifest `scripts/lottie-render/or-badge.json` |
+| `scripts/ui_scenarios/companion-gltf-cube.mp4` | 65,826 | `gltf`, `glTF renderer`, version `0.137.0`, manifest `scripts/gltf-render/or-cube.gltf` |
+
+### Live MCP handshake, and the defect it found
+
+`scripts/mcp_live_handshake.py` starts `or mcp --pointer …` against a real
+`or session serve` descriptor and speaks the protocol: `initialize` (protocol
+`2025-06-18`, server `opencut-reinforced` 0.1.27), `tools/list` (39 tools),
+`project_status`, `tools_list`, `tools_provenance_read` and a
+`tools_provenance_write` round trip. Result: `RESULT: OR_MCP_HANDSHAKE=PASS`.
+
+The same handshake passed on Debian against the installed `0.1.27+e49cb47871e0`
+CLI (`initialize`, 39 tools, `project_status`, `tools_list` → `2 of 10 ready`,
+`RESULT: OR_MCP_HANDSHAKE=PASS`, clean `session shutdown`). The first attempt
+there used `./target/debug/or` from an older revision, which does not advertise
+`tools_provenance_read` — use the installed CLI or rebuild before believing a
+"server does not advertise" error.
+
+It found a real defect that compile checks and unit tests did not: `or tools
+provenance write … --json` printed a bare path, so the MCP layer failed with
+`the or CLI returned invalid JSON: expected value at line 1 column 1`. The verb
+now returns `{"file": SIDECAR, "record": …}` and `crates/or_cli/tests/mcp.rs`
+regression-tests the MCP path end to end.
+
+### UI audit
+
+Every shipped journey and every new sweep was run through the real app:
+
+- the 12 pre-existing journeys: 11 PASS; `compact-editor-journey` FAILED with
+  `A RenderFlex overflowed by 6.0 pixels on the right`, and passes after the fix;
+- `ui-audit-chrome.json` (27 steps), `ui-audit-editor.json` (36),
+  `ui-audit-inspector.json` (27): PASS, with tree and screenshot artifacts for
+  Home, Projects, Library, the six Settings sections, the editor's four tool
+  panels, the inspector, the clip menu, the advanced clip sheet and export.
+
+Defects found and fixed:
+
+1. **Compact top bar overflowed by 6 px at 320 px.** The fixed children came to
+   302 px against 296 px of usable width. The brand box and its divider now
+   render only at ≥360 px, where the leading back control already covers them;
+   `compact-editor-journey` passes at 320x440 and at 390x844.
+2. **Two catalog entries had no install line outside Linux.** `remotion` and
+   `motion-canvas` carried only a `Platform::Linux` command, so a macOS or
+   Windows user saw a tool with no installation guidance. All npm-based entries
+   now name all three platforms.
+
+Selector mistakes in the audit scenarios themselves were fixed rather than
+worked around: the advanced clip sheet's buttons carry labels but no keys, and
+the export control is `export-project`, not `Export`.
+
+### Benchmark
+
+The three-host table, the reviewer's method and both closed questions are in
+`docs/reference/export-performance.md` under "2026-11-09 — three hosts at one
+revision". Headline: 1080p full pipeline 230.2 fps (macOS M5), 281.1 (Debian
+UHD 770), 132.9 (Windows Intel Graphics); 4K full pipeline at 3840x2160 output
+61.0 / 67.5 / 29.3. The 4K→1080p slowdown is FFmpeg's `swscale` inside decode
+(10.0 / 12.6 / 18.6 ms per frame), and the Windows WebM row is the same
+per-frame handoff as Debian (0.46 against 0.42 of the VP9 ceiling).
+
+Fixtures were verified on all three hosts before measuring:
+`bench1080.mp4` 11,341,971 B `877f78da…`, `bench4k.mp4` 19,888,977 B
+`c0185f8e…`.
+
+### Packages
+
+Every package below was rebuilt at `e49cb478`, so the version stamp and the
+catalog inside match the revision the journeys and benchmarks ran on.
+
+| Package | Size (bytes) | SHA-256 |
+| --- | --- | --- |
+| `dist/Opencut-Reinforced-0.1.27-arm64.dmg` | 37,528,456 | `f06878928dd76d5db181e0fa5e30b66b61b7196013579addcbcc231603b0e26c` |
+| `dist/opencut-reinforced_0.1.27_amd64.deb` (Debian) | 23,443,656 | `743120c26e3d8c0e090e6f6c44c6f64e94fafdeccbf6ac6b73c232546306a55f` |
+| `dist/opencut-reinforced-0.1.27-x86_64.flatpak` (Debian) | 9,710,634 | `c91dc520cd5d49f2f3cc1ef70e211b980f59251a9c7b98dd2d7226dc574ca87f` |
+| `apps/or_app/build/windows/Opencut-Reinforced-0.1.27-windows-x64-setup.exe` | 25,408,581 | `1a91dbe4e787cb80f3ca5d5364bb21e15201ac994f16b562ef617645b84a506c` |
+| `apps/or_app/build/windows/or-windows-x64-release.zip` | 35,058,369 | `864c7811116598042494ce752a5b5a01b5bf3fb29a9148621571134f83573837` |
+
+The macOS DMG was rebuilt at `e49cb478` with `whisper-cli` from
+`scripts/build_macos_whisper_cli.sh` (`minos 13.0`), installed over the previous
+copy in `/Applications`, and smoke-tested: one 1470x923 window
+(`macos/installed-session2.png`), `or version` → `Opencut Reinforced 0.1.27`,
+`or tools list` → all nine catalog entries including `lottie` and `gltf`, and
+`whisper-cli` reports `minos 13.0`. It stays ad-hoc signed and not notarised, so
+`spctl` rejects it.
+
+### Install and smoke test, per package
+
+| Package | Build | Install | Smoke test | State |
+| --- | --- | --- | --- | --- |
+| macOS DMG | PASS | copied over `/Applications` | window 1470x923; `or version`; `or tools list` names `lottie` and `gltf`; `whisper-cli` `minos 13.0` | PASS |
+| Debian DEB | PASS (`run_local_lane.sh linux --packaged --steps deb`) | `dpkg -i` over `0.1.27+21ca8876940b`, now `0.1.27+e49cb47871e0` | `/opt/opencut-reinforced/or version`, `or tools list` with the new entries, payload `or`/`ffmpeg`/`ffprobe`/`lib`/`licenses` | PASS |
+| Debian DEB, packaged journey | PASS | `.deb` extracted into a disposable root | `run_packaged_desktop_journey.py` against the installed payload | PASS |
+| Debian Flatpak | PASS | `flatpak install --user` (GNOME 49 runtime, 0.1.27) | launch | **BLOCKED by the host** |
+| Windows setup + ZIP | PASS (`WINDOWS_LANE=PASS`) | `/VERYSILENT`; the lane's ZIP install/replacement/removal step also passed | `"$LOCALAPPDATA\Programs\Opencut Reinforced\or.exe" version` → 0.1.27, `or tools list` with `lottie` and `gltf` | PASS |
+| Windows GUI | — | — | no desktop session (`Services` session 0) | **BLOCKED by the host** |
+
+The Debian lane was run twice: the debug bundle first (deb 101 s, journey
+317 s, `RESULT: LOCAL_LANE=PASS`), then the release bundle for the shipped
+artifact (`deb` 87 s, `RESULT: LOCAL_LANE=PASS`).
+
+### Flatpak: package PASS, sandbox runtime BLOCKED
+
+The rebuilt Flatpak installs and reports `Version: 0.1.27`,
+`Runtime: org.gnome.Platform/x86_64/49`, but it cannot start on this host:
+
+```
+$ flatpak run --user --command=sh io.github.huou07.or_app -c "echo inside"
+error: opendir(/): Permission denied
+$ flatpak run --user --command=sh org.gnome.Sdk/x86_64/49 -c "echo stock"
+error: opendir(/): Permission denied
+$ flatpak install --user -y dist/opencut-reinforced-0.1.27-x86_64.flatpak
+bwrap: Can't mkdir parents for /proc: Permission denied
+```
+
+The stock GNOME SDK fails with the same error, so the refusal is not OR's
+manifest; `CapEff` inside the Debian host is `0000000000000000`, which is why the
+nested user-namespace sandbox cannot be created — the Debian mission host is
+itself a container. The condition needed to verify the sandbox path is a Debian
+(or other Linux) machine where `bwrap` can create namespaces, not a container in
+a container. Until then this stays **BLOCKED**, and the package build is **PASS**
+on its own.
