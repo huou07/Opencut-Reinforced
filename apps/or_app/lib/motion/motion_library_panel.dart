@@ -1226,6 +1226,11 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
   /// tells four title-shaped compositions apart, so hiding it behind a click
   /// would make the choice blind.
   Widget _starterList() {
+    // A strip, not four stacked cards. Stacked, the starters were taller than a
+    // short rail on Linux (their summaries wrap to two lines) and pushed the
+    // library's own rows out of the viewport; as chips they stay visible without
+    // competing with the assets a user came for. The summary hangs off the
+    // tooltip so the names alone stay scannable.
     return Container(
       padding: const EdgeInsets.all(OrSpacing.x2),
       decoration: BoxDecoration(
@@ -1245,54 +1250,47 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
             ),
           ),
           const SizedBox(height: OrSpacing.x1),
-          for (final starter in motionStarters)
-            Padding(
-              padding: const EdgeInsets.only(top: OrSpacing.x1),
-              child: InkWell(
-                key: ValueKey('motion-starter-${starter.id}'),
-                borderRadius: BorderRadius.circular(OrRadii.control),
-                onTap: controller.busy
-                    ? null
-                    : () => unawaited(_loadStarter(starter)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: OrSpacing.x1,
-                    vertical: OrSpacing.x1,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.movie_creation_outlined,
-                        size: 16,
-                        color: OrColors.textSecondary,
+          Wrap(
+            spacing: OrSpacing.x1,
+            runSpacing: OrSpacing.x1,
+            children: [
+              for (final starter in motionStarters)
+                Tooltip(
+                  message: starter.summary,
+                  child: InkWell(
+                    key: ValueKey('motion-starter-${starter.id}'),
+                    borderRadius: BorderRadius.circular(OrRadii.control),
+                    onTap: controller.busy
+                        ? null
+                        : () => unawaited(_loadStarter(starter)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: OrSpacing.x2,
+                        vertical: OrSpacing.x1,
                       ),
-                      const SizedBox(width: OrSpacing.x2),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              starter.name,
-                              style: TextStyle(
-                                color: OrColors.text,
-                                fontSize: OrType.bodySize,
-                              ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.movie_creation_outlined,
+                            size: 14,
+                            color: OrColors.textSecondary,
+                          ),
+                          const SizedBox(width: OrSpacing.x1),
+                          Text(
+                            starter.name,
+                            style: TextStyle(
+                              color: OrColors.text,
+                              fontSize: OrType.bodySize,
                             ),
-                            Text(
-                              starter.summary,
-                              style: TextStyle(
-                                color: OrColors.textMuted,
-                                fontSize: OrType.tinySize,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -1335,10 +1333,7 @@ class _MotionLibraryPanelState extends State<MotionLibraryPanel> {
               onPressed: controller.busy
                   ? null
                   : () => unawaited(showAddAssetSheet(context, controller)),
-              icon: const Icon(
-                Icons.add_photo_alternate_outlined,
-                size: 16,
-              ),
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
               label: const Text('Add asset'),
             ),
           ),
